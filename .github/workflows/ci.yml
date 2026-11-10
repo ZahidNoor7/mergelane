@@ -99,6 +99,7 @@ jobs:
         run: |
           version=$(node -p "require('../app/package.json').version")
           go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-daemon ./cmd/mergelane-daemon
+          go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-nmhost ./cmd/mergelane-nmhost
       - name: Build the arm64 DMG (ad-hoc signed)
         # electron-builder skips signing on pull requests unless told otherwise. Ad-hoc signing uses
         # no secrets, so forcing it is safe on any pull request, including forks.

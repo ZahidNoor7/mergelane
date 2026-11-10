@@ -261,3 +261,22 @@ until the owner overrides it.
     changes are not proven there.
   - Runs that already passed remain the evidence, listed in `docs/PROGRESS.md`.
   - Start a run with `gh workflow run ci.yml --ref <branch>`.
+
+## ADR-0021: Browser capture uses native messaging (supersedes ADR-0009)
+
+- Status: Owner (2026-11-10)
+- Context:
+  - Plexo's bridge is an HTTP server on `127.0.0.1:19288–19290` that any local program can reach.
+  - CLAUDE.md's architecture names native messaging.
+- Decision:
+  - The extension talks through native messaging to a small Go host, `mergelane-nmhost`, shipped in the app bundle.
+  - The host relays each message to the app over a 0600 Unix socket in the app's Application Support folder.
+  - The protocol is in `docs/BROWSER-BRIDGE.md`.
+  - The HTTP bridge is removed, including the packaging test's `/health`, which moves to the socket.
+  - The app writes the per-user host manifests for Chrome, Chromium and Firefox when it starts. No admin rights.
+- Consequences:
+  - No network port is open; websites can't reach the bridge; other user accounts can't reach the socket.
+  - Limit: a program running as the same user could still launch the host or connect to the socket itself.
+    No design can stop software that already runs as the user. The app checks the caller's extension ID as
+    defence in depth.
+  - The extension's Chrome ID is fixed by a `key` in its manifest.

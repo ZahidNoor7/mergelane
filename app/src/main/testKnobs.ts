@@ -18,6 +18,13 @@ export const testKnobs = {
   telegramFake: env['MERGELANE_E2E_TELEGRAM_FAKE'] === '1',
   /** Milliseconds the fake source's every chunk takes — a pause window for tests. */
   telegramDelayMs: positiveNumber('MERGELANE_E2E_TELEGRAM_DELAY_MS', 0),
+  /** The browser bridge's socket, instead of the one in userData (macOS caps socket paths at 104
+   * bytes, and a test's userData path is longer). */
+  browserSocket: env['MERGELANE_E2E_BROWSER_SOCKET'],
+  /** Where to find mergelane-nmhost, and the home folder whose browser profiles get its manifest,
+   * so a development build and the tests can register the host (nativeHost.ts). */
+  nativeHostBinary: env['MERGELANE_E2E_NMHOST_BINARY'],
+  nativeHostHome: env['MERGELANE_E2E_NMHOST_HOME'],
   /** A fake mergelane-daemon's socket, instead of the real one (e2e/systemMerge.spec.ts). */
   daemonSocket: env['MERGELANE_E2E_DAEMON_SOCKET'],
   /** Whether the helper counts as installed: '1' or '0'; unset checks /Library. */

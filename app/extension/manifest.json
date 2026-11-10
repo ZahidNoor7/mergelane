@@ -3,6 +3,7 @@
   "name": "Download with Mergelane",
   "short_name": "Mergelane",
   "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlqgmcUa061t4/Wl3D7K7gy2gAXDoxQTX+7GZcjCYYIYHQMmE+v4YLjQ3JhVt3gqVUUE3Fy5ObSjeW/pBh6l+Qk/f+wDMna90KHo/H8/cPUrVUO83TRNyQqjGKdVBckfac9O2GIjskEE6+yXt0V9b9K9qm5AQBnRb0yJSvSHyoaTTkMCmzox0vlmrbyD2Si1VyxF84GgznkU43Y/If6lJKnMyzmFXTn3Gi7EjeKrUh9aamhrjQhVJUlzSRPikqU/e8b6NfnjkWtBzRAcZ6J+SULmnA7IzUMCh0fo7mP2x0jySUMuKNxGFvJrxPjWFcNM+xKABNe01Y1LLkBEldrpZ2QIDAQAB",
   "description": "Send downloads from your browser to Mergelane Download Manager.",
   "homepage_url": "https://github.com/ZahidNoor7/mergelane",
   "icons": {
@@ -19,7 +20,18 @@
       "32": "icons/icon-32.png"
     }
   },
-  "options_ui": { "page": "options.html", "open_in_tab": true },
-  "permissions": ["alarms", "downloads", "contextMenus", "cookies", "storage", "tabs"],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "alarms",
+    "downloads",
+    "contextMenus",
+    "cookies",
+    "storage",
+    "tabs",
+    "nativeMessaging"
+  ],
   "host_permissions": ["<all_urls>"]
 }

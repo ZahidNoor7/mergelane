@@ -90,6 +90,10 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - name: Build the arm64 DMG (ad-hoc signed)
+        # electron-builder skips signing on pull requests unless told otherwise. Ad-hoc signing uses
+        # no secrets, so forcing it is safe on any pull request, including forks.
+        env:
+          CSC_FOR_PULL_REQUEST: 'true'
         run: npx electron-vite build && npx electron-builder --mac --publish never
       - name: Audit Electron fuses with REA
         run: node ../scripts/ci/audit-fuses.mjs dist/mac-arm64/Mergelane.app

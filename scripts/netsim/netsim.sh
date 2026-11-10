@@ -13,6 +13,8 @@
 #   netsim.sh up "<id>:<Mbit/s>:<delay ms>:<loss>" ...   e.g. up 1:20:10:0 2:50:10:0
 #   netsim.sh drop <id> loss|down      make a link silently lose everything, or take it down
 #   netsim.sh restore <id>             undo "drop <id> loss"
+#   netsim.sh via <id>                 also make the server reachable unpinned (the Mac's default
+#                                      route) through link <id>, as the real internet is
 #   netsim.sh down                     remove everything netsim created (idempotent)
 #   netsim.sh status
 set -uo pipefail
@@ -92,6 +94,14 @@ cmd_up() {
   log "up: server $SERVER_IP:80 via links $(link_ids | tr '\n' ' ')"
 }
 
+cmd_via() {
+  local id=${1:?usage: netsim.sh via <id>}
+  grep -q "^$id:" "$STATE_DIR/links" 2>/dev/null || die "no link $id"
+  run route -q -n add -host "$SERVER_IP" "10.77.$id.1"
+  echo "$id" >"$STATE_DIR/via"
+  log "server reachable unpinned through link $id"
+}
+
 cmd_drop() {
   local id=${1:?usage: netsim.sh drop <id> loss|down} mode=${2:-loss}
   grep -q "^$id:" "$STATE_DIR/links" 2>/dev/null || die "no link $id"
@@ -118,6 +128,7 @@ cmd_restore() {
 
 # Removes everything netsim may have created, whether or not 'up' finished. Never fails.
 cmd_down() {
+  route -q -n delete -host "$SERVER_IP" >/dev/null 2>&1
   pfctl -q -a "$ANCHOR" -F all 2>/dev/null
   if [ -s "$STATE_DIR/pf-token" ]; then pfctl -q -X "$(cat "$STATE_DIR/pf-token")" 2>/dev/null; fi
   for id in 1 2 3 4 5 6 7 8; do
@@ -145,7 +156,8 @@ case ${1:-} in
   up) shift && cmd_up "$@" ;;
   drop) shift && cmd_drop "$@" ;;
   restore) shift && cmd_restore "$@" ;;
+  via) shift && cmd_via "$@" ;;
   down) cmd_down ;;
   status) cmd_status ;;
-  *) die "usage: netsim.sh up|drop|restore|down|status" ;;
+  *) die "usage: netsim.sh up|via|drop|restore|down|status" ;;
 esac

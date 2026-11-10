@@ -23,6 +23,11 @@ function netsimSha(mib: number): string {
 
 test.describe('downloads over two simulated links @netsim', () => {
   test.skip(!SERVER, 'needs the simulated network (scripts/netsim/with-netsim.sh)')
+  // The app probes a link over the Mac's default route, as on the real internet; the streams are
+  // then pinned to each chosen link.
+  test.beforeAll(() => {
+    if (SERVER) execFileSync('sudo', ['bash', NETSIM, 'via', '1'], { stdio: 'inherit' })
+  })
   test.use({
     appEnv: {
       MERGELANE_E2E_INTERFACES: 'feth10=10.77.1.2,feth20=10.77.2.2',

@@ -3,7 +3,8 @@ import type {
   HttpStreamState,
   NetworkStatus,
   NzbSegmentState,
-  SpeedUnit
+  SpeedUnit,
+  StreamSegmentState
 } from '@shared/types'
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
@@ -18,12 +19,15 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
+/** A block a stream can hold: an HTTP chunk, an NZB's article, or a video's segment. */
+type Block = HttpBlockState | NzbSegmentState | StreamSegmentState
+
 interface NetworkRowProps {
   group: NetworkGroup
   visual: NetworkVisual
   sharePercent: number
   totalBytes?: number | null
-  blocks?: (HttpBlockState | NzbSegmentState)[]
+  blocks?: Block[]
   /** An NZB download's: its streams are connections to the news server, its blocks articles. */
   usenet?: boolean
   onSwitch: (enabled: boolean) => void
@@ -85,9 +89,9 @@ function ProgressBar({
 
 function streamProgress(
   stream: HttpStreamState,
-  blocks?: (HttpBlockState | NzbSegmentState)[]
+  blocks?: Block[]
 ): {
-  block: HttpBlockState | NzbSegmentState | undefined
+  block: Block | undefined
   done: boolean
   size: number
   downloaded: number
@@ -114,11 +118,16 @@ function HttpStreamRows({
 }: {
   group: HttpNetworkGroup
   visual: NetworkVisual
-  blocks?: (HttpBlockState | NzbSegmentState)[]
+  blocks?: Block[]
   usenet?: boolean
 }): React.JSX.Element {
   const formatSpeed = useFormatSpeed()
-  const [name, unit] = usenet ? ['Connection', 'Article'] : ['Stream', 'Chunk']
+  // A video's blocks are its segments.
+  const [name, unit] = usenet
+    ? ['Connection', 'Article']
+    : blocks?.[0]?.kind === 'stream'
+      ? ['Stream', 'Segment']
+      : ['Stream', 'Chunk']
   return (
     <>
       {group.streams.map((stream, index) => {

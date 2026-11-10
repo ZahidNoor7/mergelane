@@ -9,6 +9,7 @@ import { parseContentDispositionFilename } from './contentDisposition'
 import { describeNzb, downloadNzbFile, indexerError, readNzbFile, sniffXml } from './nzb/nzbFile'
 import { USENET_OFF, usenetEnabled } from './nzb/usenetServer'
 import { normalizeEtag } from './fileVersion'
+import { describeStream, streamProtocolOf } from './stream/streamPlan'
 import {
   describeTorrent,
   downloadTorrentFile,
@@ -176,9 +177,9 @@ function isNzbLink(headers: Headers, url: URL, fileName: string): boolean {
 }
 
 /** What a link would download: a file over HTTP(S), a torrent — a magnet link, a link to a
- * .torrent, or the path of a .torrent on this computer (opened or dropped on the window) — or an
- * NZB, by link or path, the same way. `browser`: what the browser it came from sends with it (see
- * BrowserContext). */
+ * .torrent, or the path of a .torrent on this computer (opened or dropped on the window) — an
+ * NZB, by link or path, the same way, or an HLS or DASH video (see stream/streamPlan.ts).
+ * `browser`: what the browser it came from sends with it (see BrowserContext). */
 export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promise<ProbeResult> {
   if (/^magnet:/i.test(rawUrl)) return describeTorrent(await fetchMagnetMetadata(rawUrl), rawUrl)
   if (isAbsolute(rawUrl) && /\.torrent$/i.test(rawUrl)) {
@@ -213,6 +214,25 @@ export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promis
   // A redirect still standing here had no Location to follow: it isn't the file.
   if (!response || response.statusCode === 0 || response.statusCode >= 300) {
     throw new Error(`Server responded with status ${response?.statusCode || 'unknown'}`)
+  }
+
+  // An HLS playlist or a DASH manifest: a video, put together from its segments. Checked before
+  // the XML sniff below, which an MPD would otherwise go to.
+  const protocol = streamProtocolOf(headerValue(response.headers, 'content-type'), current)
+  if (protocol) {
+    const signal = AbortSignal.timeout(PROBE_TIMEOUT_MS)
+    try {
+      return await describeStream(
+        protocol,
+        rawUrl,
+        current.toString(),
+        headerValue(response.headers, 'content-type') ?? null,
+        { headers: requestHeaders(current, browser), signal }
+      )
+    } catch (error) {
+      if (signal.aborted) throw new Error(NO_RESPONSE)
+      throw error
+    }
   }
 
   if (isTorrentLink(response.headers, current)) {

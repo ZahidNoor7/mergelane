@@ -22,6 +22,7 @@ import type {
   DownloadUpdate,
   HttpDownloadState,
   NzbDownloadState,
+  StreamDownloadState,
   TorrentDownloadState
 } from '../src/shared/types'
 import { Origin, sha256, type OriginOptions } from './origin'
@@ -43,6 +44,12 @@ export function expectTorrent(state: DownloadState): TorrentDownloadState {
 export function expectNzb(state: DownloadState): NzbDownloadState {
   expect(state.kind).toBe('nzb')
   if (state.kind !== 'nzb') throw new Error('Expected an NZB download')
+  return state
+}
+
+export function expectStream(state: DownloadState): StreamDownloadState {
+  expect(state.kind).toBe('stream')
+  if (state.kind !== 'stream') throw new Error('Expected a stream download')
   return state
 }
 
@@ -313,6 +320,7 @@ export class MergelaneApp {
       if (last?.status === 'completed') return last
       if (entry.kind === 'http') return { ...entry, blocks: [], streams: [] }
       if (entry.kind === 'nzb') return { ...entry, blocks: [], streams: [] }
+      if (entry.kind === 'stream') return { ...entry, blocks: [], streams: [] }
       if (entry.kind === 'telegram') return { ...entry, blocks: [], readers: [] }
       return { ...entry, pieces: [], peers: [] }
     })
@@ -389,7 +397,7 @@ export class MergelaneApp {
       (network) => `${network.id}:${network.status}${network.error ? ` (${network.error})` : ''}`
     )
     const connections = state
-      ? (state.kind === 'http' || state.kind === 'nzb'
+      ? (state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream'
           ? state.streams
           : state.kind === 'telegram'
             ? state.readers

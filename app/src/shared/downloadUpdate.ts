@@ -3,6 +3,7 @@ import type {
   DownloadUpdate,
   HttpDownloadUpdate,
   NzbDownloadUpdate,
+  StreamDownloadUpdate,
   TelegramDownloadUpdate,
   TorrentDownloadUpdate
 } from './types'
@@ -44,6 +45,15 @@ export function applyDownloadUpdate(
     const { state, blocks: changed } = update as NzbDownloadUpdate
     const blocks = withChanged(
       same?.kind === 'nzb' ? same.blocks : undefined,
+      changed,
+      state.totalBlocks
+    )
+    return blocks ? { ...state, blocks, seq } : current
+  }
+  if (update.state.kind === 'stream') {
+    const { state, blocks: changed } = update as StreamDownloadUpdate
+    const blocks = withChanged(
+      same?.kind === 'stream' ? same.blocks : undefined,
       changed,
       state.totalBlocks
     )

@@ -23,6 +23,8 @@ import {
   describeFileCount,
   fileExtensionBadge,
   formatBytes,
+  formatDuration,
+  streamQualityOptions,
   toDisplayPath
 } from '../utils/format'
 import { Button } from './ui/button'
@@ -143,6 +145,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [skippedFiles, setSkippedFiles] = useState<number[]>([])
   // For this download only: the next one starts on Auto again.
   const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
+  // An HLS or DASH video's quality, by variant id; null: the best, which its list starts with.
+  const [qualityChoice, setQualityChoice] = useState<string | null>(null)
   // The news server, for an NZB: undefined until it has been asked for, null when there's none.
   const [server, setServer] = useState<UsenetServer | null | undefined>(undefined)
   const [serverOpen, setServerOpen] = useState(false)
@@ -170,6 +174,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       setProbe({ status: 'idle' })
       setFileNameOverride(null)
       setSkippedFiles([])
+      setQualityChoice(null)
       return
     }
 
@@ -179,6 +184,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     if (given && given.url !== trimmed) dropLink(given.id, false)
     setFileNameOverride(null)
     setSkippedFiles([])
+    setQualityChoice(null)
     if (given?.url === trimmed && given.probe) {
       setProbe({ status: 'ready', result: given.probe })
       return
@@ -215,6 +221,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const ready = probe.status === 'ready' ? probe.result : null
   const torrent = ready?.kind === 'torrent' ? ready.torrent : null
   const nzb = ready?.kind === 'nzb' ? ready.nzb : null
+  const stream = ready?.kind === 'stream' ? ready.stream : null
+  const qualities = stream ? streamQualityOptions(stream.variants) : []
+  const quality = qualityChoice ?? qualities[0]?.id
 
   // Asked for once an NZB turns up: no other download needs it.
   const wantsServer = nzb !== null && server === undefined
@@ -238,7 +247,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     sizeToFetch !== null &&
     sizeToFetch > 0 &&
     sizeToFetch > availableFreeSpace
-  const multiChunkAllowed = ready !== null && ready.supportsRanges && ready.totalBytes !== null
+  // A stream's segments go over every network whatever its size: it is only known as they come.
+  const multiChunkAllowed =
+    ready !== null && (stream !== null || (ready.supportsRanges && ready.totalBytes !== null))
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
 
   const detectedIds = interfaces.map((iface) => iface.id)
@@ -370,11 +381,18 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             }
           : probe.result.kind === 'nzb'
             ? { ...common, kind: 'nzb', nzbHash: probe.result.nzb.hash }
-            : {
-                ...common,
-                kind: 'http',
-                streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
-              },
+            : probe.result.kind === 'stream'
+              ? {
+                  ...common,
+                  kind: 'stream',
+                  protocol: probe.result.stream.protocol,
+                  variantId: quality
+                }
+              : {
+                  ...common,
+                  kind: 'http',
+                  streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
+                },
         linkId
       )
       // Remembered for the next download, like the folder. Not a single-stream pick: that's one
@@ -549,7 +567,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         {ready && (
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
-              {(torrent && torrent.files.length > 1) || nzb ? 'DIR' : fileExtensionBadge(fileName)}
+              {(torrent && torrent.files.length > 1) || nzb
+                ? 'DIR'
+                : stream
+                  ? stream.protocol.toUpperCase()
+                  : fileExtensionBadge(fileName)}
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               {torrent ? (
@@ -568,10 +590,13 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 {[
                   torrent && describeFileCount(chosenFiles.length, torrent.files.length),
                   nzb && describeFileCount(nzb.files.length, nzb.files.length),
+                  stream?.durationSeconds !== undefined && formatDuration(stream.durationSeconds),
                   sizeToFetch !== null ? formatBytes(sizeToFetch) : 'size unknown',
                   nzb && 'from Usenet',
+                  stream && 'saved as MP4 or MKV',
                   !torrent &&
                     !nzb &&
+                    !stream &&
                     (isSingleStreamOnly
                       ? ready.supportsRanges
                         ? 'Uses one connection. The file size is unknown.'
@@ -591,6 +616,32 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             skipped={skippedFiles}
             onChange={setSkippedFiles}
           />
+        )}
+
+        {qualities.length > 1 && (
+          <div className="flex items-start gap-3">
+            <div className={cn(labelClass, 'pt-1')} id="new-download-quality">
+              Quality
+            </div>
+            <ToggleGroup
+              value={quality === undefined ? [] : [quality]}
+              onValueChange={(values) => {
+                if (values.length > 0) setQualityChoice(values[0])
+              }}
+              aria-labelledby="new-download-quality"
+              variant="pill"
+              size="xs"
+              spacing={1}
+              className="min-w-0 flex-1 flex-wrap"
+            >
+              {qualities.map((option) => (
+                // h-6: WCAG 2.5.8's 24px floor, as the Streams row's pills.
+                <ToggleGroupItem key={option.id} value={option.id} className="h-6 min-w-6 px-2">
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
         )}
 
         {nzb && server !== undefined && (
@@ -759,9 +810,10 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           </div>
         </div>
 
-        {/* A torrent's speed comes from its peers, an NZB's connections are the server's, and an
-            unsplittable file has one stream. */}
-        {ready && !torrent && !nzb && !isSingleStreamOnly && (
+        {/* A torrent's speed comes from its peers, an NZB's connections are the server's, a
+            video's segment requests are shared out by the app, and an unsplittable file has one
+            stream. */}
+        {ready && !torrent && !nzb && !stream && !isSingleStreamOnly && (
           <div className="flex items-center gap-3">
             <div className={labelClass} id="new-download-streams">
               Streams

@@ -218,8 +218,11 @@ async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<Brid
   if (/^magnet:/i.test(request.url)) return hold({ url: request.url })
 
   const checkedProbe = await checked(request, gone)
+  // A stream's name from the browser (its page's title, say) beats one made up from its link.
   const probe =
-    typeof checkedProbe !== 'string' && checkedProbe.kind === 'http' && request.fileName
+    typeof checkedProbe !== 'string' &&
+    (checkedProbe.kind === 'http' || checkedProbe.kind === 'stream') &&
+    request.fileName
       ? { ...checkedProbe, suggestedFileName: request.fileName }
       : checkedProbe
   if (typeof probe === 'string') return keep(probe)

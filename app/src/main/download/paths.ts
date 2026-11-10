@@ -112,6 +112,25 @@ export async function reserveDestinationPath(directory: string, fileName: string
 }
 
 /**
+ * Claims a stream download's name as reserveDestinationPath claims a file's, with a staging
+ * *folder*, <final name>.mergelane/, for its tracks' segments: the final file only appears once
+ * FFmpeg has joined them. Returns the final path.
+ */
+export async function reserveStagingFolder(directory: string, fileName: string): Promise<string> {
+  return claimName(
+    directory,
+    fileName,
+    { suffix: '.mergelane', extension: true },
+    async (candidate) => {
+      await mkdir(`${candidate}.mergelane`)
+      if (!(await pathExists(candidate))) return true
+      await rm(`${candidate}.mergelane`, { recursive: true, force: true })
+      return false
+    }
+  )
+}
+
+/**
  * Claims the final name itself, by exclusively creating it empty: a torrent is written in place,
  * as torrent clients do, so what's there from the start is its folder (or its one file). Being
  * new, it's this download's alone, never something already in the destination.

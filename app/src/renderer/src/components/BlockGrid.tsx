@@ -176,7 +176,9 @@ export function BlockGrid({
   pieces = false,
   articles = false
 }: BlockGridProps): React.JSX.Element {
-  const unit = pieces ? 'Piece' : articles ? 'Article' : 'Chunk'
+  // A video's blocks are its segments, sized as each comes in.
+  const segments = blocks?.[0]?.kind === 'stream'
+  const unit = pieces ? 'Piece' : articles ? 'Article' : segments ? 'Segment' : 'Chunk'
   const [gridWidth, setGridWidth] = useState(0)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
@@ -286,7 +288,9 @@ export function BlockGrid({
           : ''
       readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} verified${provisional} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
     } else {
-      readout = `${blocks.length} ${unit.toLowerCase()}s · ${articles ? 'about ' : ''}${formatBytes(chunkBytes)} each`
+      readout = segments
+        ? `${blocks.length} segments`
+        : `${blocks.length} ${unit.toLowerCase()}s · ${articles ? 'about ' : ''}${formatBytes(chunkBytes)} each`
     }
 
     return (

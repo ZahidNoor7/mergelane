@@ -22,6 +22,9 @@ func Octets(idx int) (in, out uint64, ok bool) {
 	if idx <= 0 {
 		return 0, 0, false
 	}
+	// x/net/route can't parse RTM_IFINFO2 (if_data64), so this reads the sysctl directly. Go keeps
+	// deprecated syscall functions working (Go 1 compatibility).
+	//lint:ignore SA1019 no non-deprecated way to fetch NET_RT_IFLIST2 with if_data64 counters
 	rib, err := syscall.RouteRIB(unix.NET_RT_IFLIST2, idx)
 	if err != nil {
 		return 0, 0, false

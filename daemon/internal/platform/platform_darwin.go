@@ -16,6 +16,10 @@ func IsAdmin() bool { return os.Geteuid() == 0 }
 // released by the kernel when the process dies, so a crash never leaves a stale lock behind.
 const lockPath = "/var/run/mergelane-daemon.lock"
 
+// lockFile is never read: holding the reference keeps the locked file open (and the lock held)
+// for the life of the process.
+//
+//lint:ignore U1000 the reference itself is the point
 var lockFile *os.File
 
 // SingleInstance is false if another mergelane-daemon already owns the utun.

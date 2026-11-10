@@ -12,6 +12,8 @@ import (
 
 	"github.com/ZahidNoor7/mergelane/daemon/internal/logx"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/rib"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/routemark"
 )
 
 const openHint = "needs root"
@@ -19,12 +21,15 @@ const openHint = "needs root"
 // macOS only accepts "utun" or "utunN" as a TUN name; "utun" lets the kernel pick the number.
 func init() {
 	openName = "utun"
-	staleHook = cleanupScoped
+	staleHook = cleanupMarked
 	keepDevice = true
 }
 
 // configure gives the new utun its addresses and capture routes, and returns its index.
 // ponytail: shells out to ifconfig/route (once per on/off); PF_ROUTE messages if that ever matters.
+//
+// Mergelane: every route added here and in syncScoped carries route(8)'s -proto2 (RTF_PROTO2), via
+// routemark, so cleanup can tell our routes from everyone else's (ADR-0006).
 func configure(name string, _ int, ip4 netip.Prefix) (int, error) {
 	ifc, err := net.InterfaceByName(name)
 	if err != nil {
@@ -39,7 +44,7 @@ func configure(name string, _ int, ip4 netip.Prefix) (int, error) {
 		return ifc.Index, err
 	}
 	for _, dst := range routes4 {
-		if err := run("/sbin/route", "-q", "-n", "add", "-inet", dst, "-interface", name); err != nil {
+		if err := run("/sbin/route", routemark.AddArgs(routemark.Capture(netip.MustParsePrefix(dst), name))...); err != nil {
 			return ifc.Index, err
 		}
 	}
@@ -49,7 +54,7 @@ func configure(name string, _ int, ip4 netip.Prefix) (int, error) {
 		return ifc.Index, nil
 	}
 	for _, dst := range routes6 {
-		if err := run("/sbin/route", "-q", "-n", "add", "-inet6", dst, "-interface", name); err != nil {
+		if err := run("/sbin/route", routemark.AddArgs(routemark.Capture(netip.MustParsePrefix(dst), name))...); err != nil {
 			logx.Printf("warning: IPv6 route %s: %v\n", dst, err)
 		}
 	}
@@ -58,17 +63,30 @@ func configure(name string, _ int, ip4 netip.Prefix) (int, error) {
 
 // delRoutes removes the capturing routes. Closing the utun removes them anyway, but deleting
 // them first stops capture before the stack goes away.
+//
+// Mergelane: XNU's RTM_DELETE finds the entry by destination and netmask only, whatever interface
+// holds it, so upstream's unconditional "route delete 0.0.0.0/1 -interface utunN" would also remove
+// another VPN's 0/1 that had replaced ours. Only the capture routes the table shows on our utun are
+// deleted now. If the table cannot be read, it falls back to upstream's deletes, so capture never
+// outlives Off.
 func delRoutes(idx int) {
 	defer stopScopedSync()
 	ifc, err := net.InterfaceByIndex(idx)
 	if err != nil {
 		return // adapter already gone, and its routes with it
 	}
+	var capture []routemark.Route
 	for _, dst := range routes4 {
-		run("/sbin/route", "-q", "-n", "delete", "-inet", dst, "-interface", ifc.Name)
+		capture = append(capture, routemark.Capture(netip.MustParsePrefix(dst), ifc.Name))
 	}
 	for _, dst := range routes6 {
-		run("/sbin/route", "-q", "-n", "delete", "-inet6", dst, "-interface", ifc.Name)
+		capture = append(capture, routemark.Capture(netip.MustParsePrefix(dst), ifc.Name))
+	}
+	if table, err := rib.Read(); err == nil {
+		capture = routemark.Installed(table, capture)
+	}
+	for _, r := range capture {
+		run("/sbin/route", routemark.DeleteArgs(r)...)
 	}
 }
 
@@ -98,12 +116,14 @@ var scoped struct {
 	stop  chan struct{}        // non-nil while capture is on
 }
 
+// scopedArgs builds "-q -n <verb> -inet[6] default <gw>[%<name>] -ifscope <name>" as before; adds now
+// also carry -proto2 (routemark), so cleanup can find them after a crash.
 func scopedArgs(verb string, k scopedKey, gw string) []string {
-	fam := "-inet"
-	if k.v6 {
-		fam, gw = "-inet6", gw+"%"+k.name
+	r := routemark.ScopedDefault(k.v6, gw, k.name)
+	if verb == "add" {
+		return routemark.AddArgs(r)
 	}
-	return []string{"-q", "-n", verb, fam, "default", gw, "-ifscope", k.name}
+	return routemark.DeleteArgs(r)
 }
 
 func startScopedSync() error {
@@ -213,23 +233,24 @@ func syncScoped(stop chan struct{}) error {
 	return first
 }
 
-// cleanupScoped removes scoped defaults a crashed run left behind: on a primary adapter any scoped
-// default that just repeats its unscoped one is ours, since macOS makes none there.
-func cleanupScoped() {
-	routes, err := nics.DefaultRoutes()
+// cleanupMarked removes routes a crashed run left behind: the scoped defaults (they survive kill -9,
+// while the capture routes die with the utun), and the capture routes of an adapter that is still
+// there, as when `mergelane-daemon cleanup` runs beside a live daemon.
+//
+// Mergelane: upstream's cleanupScoped deleted any scoped default on a primary adapter that repeated
+// its unscoped one, taking it to be ours because macOS makes none there; that could also remove a route
+// the user or another program added (ADR-0006). Now only routes carrying our -proto2 marker go
+// (routemark.Leftovers), and upstream's rule still holds that a scoped default on an adapter that is
+// no longer primary is left to macOS (#20).
+func cleanupMarked() {
+	routes, err := rib.Read()
 	if err != nil {
+		logx.Printf("warning: cleanup: %v\n", err)
 		return
 	}
-	unscoped := map[scopedKey]string{}
-	for _, r := range routes {
-		if !r.Scoped && r.GW != nil && realName.MatchString(r.Name) {
-			unscoped[scopedKey{r.Name, r.V6}] = r.GW.String()
-		}
-	}
-	for _, r := range routes {
-		k := scopedKey{r.Name, r.V6}
-		if gw, ok := unscoped[k]; ok && r.Scoped && r.GW != nil && r.GW.String() == gw {
-			run("/sbin/route", scopedArgs("delete", k, gw)...)
+	for _, args := range routemark.CleanupCommands(routemark.Leftovers(routes)) {
+		if err := run("/sbin/route", args...); err != nil {
+			logx.Printf("warning: cleanup: %v\n", err)
 		}
 	}
 }

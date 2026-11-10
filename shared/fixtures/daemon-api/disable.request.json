@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "id": "3",
+  "method": "disable",
+  "params": {
+    "reason": "Turned off from the menu bar."
+  }
+}

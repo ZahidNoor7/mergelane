@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "2",
+  "ok": false,
+  "error": {
+    "code": "NOT_ROOT",
+    "message": "mergelane-daemon must run as root to change routes."
+  }
+}

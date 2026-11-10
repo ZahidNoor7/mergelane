@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "id": "2",
+  "ok": true,
+  "result": {
+    "state": "starting",
+    "since": "2026-11-10T09:32:00+05:00",
+    "version": "0.1.0",
+    "protocol": 1
+  }
+}

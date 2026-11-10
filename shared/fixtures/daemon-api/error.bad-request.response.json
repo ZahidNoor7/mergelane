@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "9",
+  "ok": false,
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "mbps must be between 0 and 1000000"
+  }
+}

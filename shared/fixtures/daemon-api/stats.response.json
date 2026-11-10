@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "id": "6",
+  "ok": true,
+  "result": {
+    "at": "2026-11-10T09:35:01.5Z",
+    "links": [
+      {
+        "name": "en0",
+        "rxBps": 2500000,
+        "txBps": 120000,
+        "linkRxBps": 2650000,
+        "linkTxBps": 131000.5,
+        "activeFlows": 9,
+        "totalFlows": 214,
+        "weight": 0.62,
+        "failed": 0
+      },
+      {
+        "name": "en7",
+        "rxBps": 1500000,
+        "txBps": 80000,
+        "linkRxBps": 1500000,
+        "linkTxBps": 80000,
+        "activeFlows": 5,
+        "totalFlows": 130,
+        "weight": 0.38,
+        "failed": 2
+      }
+    ]
+  }
+}

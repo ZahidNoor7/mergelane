@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "",
+  "ok": false,
+  "error": {
+    "code": "NOT_AUTHORIZED",
+    "message": "this user is not allowed to control mergelane-daemon"
+  }
+}

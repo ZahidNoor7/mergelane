@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "6",
+  "ok": false,
+  "error": {
+    "code": "INTERNAL",
+    "message": "reading interface counters: sysctl: operation not permitted"
+  }
+}

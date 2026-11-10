@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every macOS job runs on xcode-27 (macOS 27, arm64): see docs/DECISIONS.md ADR-0004.
+# Jobs for the app, daemon, packaging and simulated networks are added by their milestones.
+jobs:
+  repo-checks:
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test the repository checks
+        run: bash scripts/ci/check-repo.test.sh
+      - name: Check this repository
+        run: bash scripts/ci/check-repo.sh

@@ -31,6 +31,8 @@ jobs:
           node-version: 22
       - name: Test the CI scripts
         run: node --test --experimental-test-coverage scripts/ci/*.test.mjs
+      - name: Test the release-notes script
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' --test-coverage-lines=90 scripts/release/notes.test.mjs
       - name: Test the media-tools fetch script
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/fetch.mjs' --test-coverage-lines=90 scripts/media-tools/fetch.test.mjs
 

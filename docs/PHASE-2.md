@@ -61,7 +61,7 @@ paused today (ADR-0020), so Phase 2 cannot finish until the owner turns it back 
 
 ### M2.5 Releases
 
-- A GitHub release workflow on tags:
+- A GitHub release workflow, run by hand (CI is paused; `docs/RELEASING.md`):
   - an ad-hoc-signed DMG and zip;
   - release notes with the install steps;
   - the packaging test and the REA fuse audit before upload.

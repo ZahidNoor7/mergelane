@@ -100,9 +100,32 @@ Last updated: 2026-11-11
   - unplugging, sleep and wake;
   - IPv6 capture in the simulator (still open from the M2.4 plan).
 
+**M2.2 YouTube: done, pending CI** (branch `m2.2-youtube`).
+- **YouTube, option A** (ADR-0026, ADR-0030):
+  - yt-dlp only, with no cookies or tokens; DRM formats dropped;
+  - each network asks for its own addresses through a pinned loopback proxy, then downloads its share;
+  - the extension's "Send this video to Mergelane".
+- **Deno 2.9.8** ships as yt-dlp's JavaScript runtime (ADR-0029).
+- **Our own FFmpeg** (ADR-0028): built from FFmpeg's signed 9.0.2 source, LGPL, stream copy only, 4.1 MB.
+- **yt-dlp's unpacked build** (ADR-0031): it starts in 0.25 s instead of about 24 s, after a one-time first start.
+- **Sources:** every release attaches the yt-dlp and FFmpeg source, plus our FFmpeg build script (ADR-0027).
+- **Tests:**
+  - full smoke suite: 428 passed, 1 skipped (existing);
+  - script tests: 128 passed;
+  - the live YouTube test passed locally (one public test video, temp folder);
+  - coverage: YouTube modules 99.4–100%, `fetch.mjs` 99.3%, `sources.mjs` 97.6%, `notes.mjs` 99.5%.
+- **Not proven yet** (needs CI or real hardware):
+  - two networks with different public IPs;
+  - the real `electron-builder` signing of the yt-dlp folder;
+  - the FFmpeg build on the CI runner.
+- **Open before the first public release:** the notices of the third-party code built into Deno (ADR-0029).
+
 **Owner choices for Phase 2:**
-- CI stays paused (ADR-0020).
-- YouTube: review first, no YouTube code until the owner picks an approach.
+- CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11).
+- YouTube: option A with hard limits (ADR-0026); Deno shipped.
+- FFmpeg: our own LGPL build (ADR-0028); sources attached to every release (ADR-0027).
+- Probes and the quarantine test accepted (ADR-0008, ADR-0013); Telegram to be removed (ADR-0012).
+- Chrome Web Store: later, once Phase 2's installer works.
 - Keep the `m1.4-pinning` branch.
 
 ### Phase 1 closed, pending the owner's approval
@@ -136,8 +159,7 @@ CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
 
 ### Blockers and open questions
 
-- **Owner questions Q2–Q4** in `docs/PHASE-1.md` §4. Work proceeds on the recommended option (ADR-0008,
-  ADR-0012, ADR-0013).
+- **Owner questions Q2–Q4** in `docs/PHASE-1.md` §4: answered on 2026-11-11 (ADR-0008, ADR-0012, ADR-0013).
 - **Link recovery** after `ifconfig down` and `up` doesn't work in the harness yet (ADR-0015). It is not a
   Phase 1 criterion.
 - **The helper runs only after the app is approved** (ADR-0019). The admin-prompt install still needs

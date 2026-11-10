@@ -1,7 +1,8 @@
 # Phase 2: MVP (proposal)
 
 Status: **approved and started 2026-11-10.**
-- **Done:** M2.1 (PR #5), M2.2 (PR #6), M2.3 (PR #7), M2.4 (this branch; IPv6 capture in the simulator still open).
+- **Done:** M2.1 (PR #5), M2.2 (PR #6), M2.3 (PR #7), M2.4 (PR #8; IPv6 capture in the simulator still open), and
+  M2.2's YouTube part (branch `m2.2-youtube`).
 - **Owner choices:**
   - native messaging;
   - YouTube reviewed before any code;

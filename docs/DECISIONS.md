@@ -410,7 +410,10 @@ until the owner overrides it.
       `FCF986EA15E6E293A5644F10B4322F04D67658D8`, as published on ffmpeg.org);
     - `--disable-everything`, then only what stream copy needs:
       - demuxers mov, mpegts, matroska, aac, mp3, ac3 and eac3, and muxers mp4 and matroska;
-      - parsers, a few decoders that read stream parameters, the needed bitstream filters, and the file protocol;
+      - parsers, a few decoders that read stream parameters, and the needed bitstream filters;
+      - the `file` protocol for the media, and `pipe`, for the mux module's `-progress pipe:1` (inputs stay limited to
+        `file` by `-protocol_whitelist file`). Leaving `pipe` out broke every join through the app, which the first
+        52-combination check, run without `-progress`, did not catch; `e2e/mux.spec.ts` now checks the protocol list;
     - no network, no devices and no outside libraries beyond macOS's zlib and system frameworks;
     - not `--enable-gpl` or `--enable-version3`, so the program is **LGPL version 2.1 or later**. The script
       refuses a build that reports anything else.
@@ -424,8 +427,9 @@ until the owner overrides it.
       and MKV;
     - MPEG-TS with H.264 or HEVC, rewrapped into both.
 - Consequences:
-  - The exact Corresponding Source is one tarball plus one script.
-  - Each app build compiles FFmpeg. The result is cached in `app/resources/bin`.
+  - The exact Corresponding Source is one tarball plus one script. Two separate builds gave the same SHA-256.
+  - Each app build compiles FFmpeg (the first fetch takes about 80 s in all). The result is cached in
+    `app/resources/bin`, keyed by the tarball, the script and the program's hash.
   - Anything beyond stream copy, such as re-encoding, would need this build to grow.
 
 ## ADR-0029: Deno ships as a third pinned program
@@ -473,6 +477,13 @@ until the owner overrides it.
   first run.
 - Consequences:
   - The fetch script installs a folder rather than one file.
+  - The published zip stores three symlinks inside `_internal/Python.framework` as plain copies (yt-dlp's
+    `build.yml` zips without `-y`), and codesign then refuses the folder ("bundle format is ambiguous"). The fetch
+    turns each copy back into its link, only when it is byte-identical to the target (listed as `links` in
+    `tools.json`). With that, a mock app signed as electron-builder signs verified, all 107 Mach-O files included.
+  - Measured on the owner's Mac: the first start after a fresh install takes about 21–25 s (macOS's one-time check
+    of new programs; 0.6 s of CPU), then 0.25 s. Re-signed with the hardened runtime: 0.32 s, then 0.25 s. The first
+    start after a user installs the quarantined DMG is not measured yet.
   - Packaging re-signs every Mach-O file inside it.
   - The licence analysis is unchanged: the program as a whole is GPL-3.0-or-later, and its source is the same
     `yt-dlp.tar.gz`.

@@ -1,11 +1,11 @@
 // The live YouTube smoke test: the real, pinned yt-dlp and Deno against YouTube itself, over this
-// Mac's real network, then the real FFmpeg (ADR-0026). Everything else in the suite uses a fake
-// yt-dlp; this is the one test that shows YouTube still works with the versions we pin.
+// Mac's real network, then the app's own FFmpeg (ADR-0026, ADR-0028). Everything else in the suite
+// uses a fake yt-dlp; this is the one test that shows YouTube still works with the versions we pin.
 //
 // It downloads one small public video, the one yt-dlp's own download tests use
 // (test/test_overwrites.py at 2026.10.26: "Me at the zoo", 19 seconds), into the test's temporary
-// folder, which is deleted afterwards. It never runs unless asked for, so a normal or @smoke run
-// never reaches YouTube:
+// folder, which is deleted afterwards. The result is read back with the full, test-only FFmpeg (see
+// streamMedia.ts). It never runs unless asked for, so a normal or @smoke run never reaches YouTube:
 //
 //   MERGELANE_YOUTUBE_LIVE=1 env -u ELECTRON_RUN_AS_NODE npx playwright test --grep @youtube-live
 //
@@ -16,7 +16,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { StartStreamDownloadRequest } from '../src/shared/types'
 import { expect, expectStream, PROJECT_ROOT, test } from './fixtures'
-import { FFMPEG, inspect } from './streamMedia'
+import { APP_FFMPEG, NEEDS_FFMPEG, inspect } from './streamMedia'
 
 /** From yt-dlp's test suite at the pinned tag (test/test_overwrites.py). */
 const VIDEO = 'https://www.youtube.com/watch?v=jNQXAC9IVRw'
@@ -38,8 +38,9 @@ test.use({
   appEnv: {
     // The real network, pinned with IP_BOUND_IF like any other.
     MERGELANE_E2E_INTERFACES: NETWORK,
-    MERGELANE_FFMPEG_PATH: process.env.MERGELANE_FFMPEG_PATH || FFMPEG || '',
-    MERGELANE_YTDLP_PATH: process.env.MERGELANE_YTDLP_PATH || join(BIN, 'yt-dlp'),
+    MERGELANE_FFMPEG_PATH: APP_FFMPEG ?? '',
+    // The unpacked build's program, inside its folder (ADR-0031).
+    MERGELANE_YTDLP_PATH: process.env.MERGELANE_YTDLP_PATH || join(BIN, 'yt-dlp', 'yt-dlp_macos'),
     MERGELANE_DENO_PATH: process.env.MERGELANE_DENO_PATH || join(BIN, 'deno'),
     // yt-dlp and YouTube take their time; nothing here should give up on them early.
     MERGELANE_E2E_STALL_MS: '30000',
@@ -51,6 +52,7 @@ test.use({
 test.describe('YouTube, live @youtube-live', () => {
   test.skip(!LIVE, 'reaches YouTube: run with MERGELANE_YOUTUBE_LIVE=1')
   test.skip(!NETWORK, 'needs this Mac’s LAN address (see global-setup.ts)')
+  test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
 
   test('yt-dlp and Deno find a public video, and Mergelane downloads and joins it', async ({
     mergelane,

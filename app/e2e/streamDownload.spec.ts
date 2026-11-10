@@ -1,7 +1,8 @@
 // HLS and DASH downloads end to end, in the app: the link checked, the quality picked, the
 // segments fetched over the networks chosen, paused and resumed, joined into one file by FFmpeg.
-// The streams are real media made with FFmpeg (see streamMedia.ts), served from a local server
-// that logs which segments it was asked for and over which network.
+// The streams are real media made with a full FFmpeg (see streamMedia.ts), served from a local
+// server that logs which segments it was asked for and over which network; the app joins them with
+// its own FFmpeg.
 
 import { existsSync } from 'node:fs'
 import { readdir, writeFile } from 'node:fs/promises'
@@ -9,8 +10,9 @@ import { join } from 'node:path'
 import type { StartStreamDownloadRequest } from '../src/shared/types'
 import { expect, expectStream, LAN_ADDRESS, test, type MergelaneApp } from './fixtures'
 import {
-  FFMPEG,
-  NO_FFMPEG,
+  APP_FFMPEG,
+  NEEDS_FFMPEG,
+  NEEDS_FIXTURE_FFMPEG,
   PATHS,
   SECONDS,
   StreamServer,
@@ -19,11 +21,11 @@ import {
   streamMedia
 } from './streamMedia'
 
-test.use({ appEnv: { MERGELANE_FFMPEG_PATH: FFMPEG ?? '' } })
+test.use({ appEnv: { MERGELANE_FFMPEG_PATH: APP_FFMPEG ?? '' } })
 
 let server: StreamServer
 test.beforeEach(async () => {
-  if (FFMPEG !== null) server = await new StreamServer(await streamMedia()).start()
+  if (!NEEDS_FIXTURE_FFMPEG) server = await new StreamServer(await streamMedia()).start()
 })
 test.afterEach(async () => server?.stop())
 test.afterAll(removeStreamMedia)
@@ -65,7 +67,7 @@ async function waitFor(check: () => boolean, timeoutMs = 15_000): Promise<void> 
 const segmentIndex = (path: string): number => Number(/seg(\d+)\.ts$/.exec(path)?.[1] ?? -1)
 
 test.describe('stream downloads @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
   test('an HLS stream becomes one file with its video and audio', async ({ mergelane, dirs }) => {
     // Left by an FFmpeg run a crash cut short: swept when a stream download starts.
     const stale = join(dirs.dest, 'old.mp4.0123abcd.mergelane-mux')
@@ -238,7 +240,7 @@ test.describe('stream downloads @smoke', () => {
 })
 
 test.describe('stream downloads without FFmpeg @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FIXTURE_FFMPEG, NEEDS_FIXTURE_FFMPEG)
   test.use({ appEnv: { MERGELANE_FFMPEG_PATH: '/nonexistent/ffmpeg' } })
 
   test('fail at once, saying FFmpeg is missing', async ({ mergelane, dirs }) => {

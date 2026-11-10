@@ -7,9 +7,10 @@
 //   through the --proxy it was given (an HTTP CONNECT tunnel) or directly, and writes that address
 //   into each URL's `ip`. It records every run (its arguments, environment and folder) in
 //   calls.jsonl, and can fail as yt-dlp does, hang, or print too much.
-// - YoutubeServer, which serves real media made with FFmpeg as YouTube serves formats: byte ranges
-//   of one file each, refused (403) when the request comes from another address than the one in
-//   its `ip`, or after its `expire`. It logs every request, and can hold or refuse some.
+// - YoutubeServer, which serves real media (made with the full, test-only FFmpeg) as YouTube
+//   serves formats: byte ranges of one file each, refused (403) when the request comes from another
+//   address than the one in its `ip`, or after its `expire`. It logs every request, and can hold or
+//   refuse some.
 
 import { execFile } from 'node:child_process'
 import { appendFileSync, chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -19,7 +20,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { FFMPEG, NO_FFMPEG } from './streamMedia'
+import { fixtureFfmpeg } from './streamMedia'
 
 const run = promisify(execFile)
 
@@ -204,9 +205,11 @@ export class FakeYtDlp {
 /** Seconds of media. */
 export const YT_SECONDS = 4
 
+/** Made with the full, test-only FFmpeg (see streamMedia.ts): the app's can't encode. */
 async function ff(args: string[], cwd: string): Promise<void> {
-  if (FFMPEG === null) throw new Error(NO_FFMPEG)
-  await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args], { cwd })
+  await run(fixtureFfmpeg(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args], {
+    cwd
+  })
 }
 
 /** A YouTube-like set of files: H.264 video without sound at two sizes, and AAC sound. */

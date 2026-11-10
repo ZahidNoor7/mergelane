@@ -11,18 +11,19 @@ import { fileURLToPath } from 'node:url'
 import {
   assetNames,
   buildNotes,
+  bundledPrograms,
   changelogSection,
   checkRelease,
   checksumTable,
   DEFAULTS,
   findSection,
-  gplSources,
   honestLimits,
   installSection,
   main,
   missingAssets,
   parseChecksums,
   sections,
+  sourceAssets,
   VERSION
 } from './notes.mjs'
 
@@ -244,40 +245,78 @@ describe('checksums', () => {
       'Mergelane-0.3.0-arm64-mac.zip'
     ])
   })
+
+  test('with the manifest, every source archive and build script the notes name must be listed', () => {
+    const entries = parseChecksums(read(fixture('SHA256SUMS')))
+    assert.deepEqual(missingAssets(entries, '0.2.0', MANIFEST), [])
+    assert.deepEqual(missingAssets(entries.slice(0, 3), '0.2.0', MANIFEST), [
+      'ffmpeg-9.0.2-source.tar.xz',
+      'ffmpeg-9.0.2-build-ffmpeg.sh'
+    ])
+  })
 })
 
-describe('GPL source links', () => {
-  test('one entry per tool from the fixture manifest, with its source, hash and build script', () => {
+describe('the programs inside the app, and their source', () => {
+  test('one entry per tool: its licence, the attached source and build script, and upstream', () => {
     assert.equal(
-      gplSources(MANIFEST),
+      bundledPrograms(MANIFEST),
       [
         '- **yt-dlp 2026.10.26**: GPL-3.0-or-later for this bundled executable',
-        '  - Source: <https://example.org/yt-dlp/yt-dlp.tar.gz> (SHA-256 `21f942d258d25cc4e60b4982a25c423460f0bebb835f38e6dfd1fcb140087f95`)',
-        '- **FFmpeg 9.0.2**: GPL-3.0-or-later',
-        '  - Source: <https://example.org/ffmpeg/ffmpeg-9.0.2.tar.xz>',
-        '  - Build script: <https://example.org/ffmpeg/build-script>'
+        '  - Source code: `yt-dlp-2026.10.26-source.tar.gz`, attached to this release (SHA-256 `21f942d258d25cc4e60b4982a25c423460f0bebb835f38e6dfd1fcb140087f95`)',
+        '  - Upstream: <https://example.org/yt-dlp/yt-dlp.tar.gz>',
+        '- **FFmpeg 9.0.2**: LGPL-2.1-or-later',
+        '  - Source code: `ffmpeg-9.0.2-source.tar.xz`, attached to this release (SHA-256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`)',
+        "  - Build script: `ffmpeg-9.0.2-build-ffmpeg.sh`, attached to this release (`scripts/media-tools/build-ffmpeg.sh` in this version's source code)",
+        '  - Upstream: <https://example.org/ffmpeg/ffmpeg-9.0.2.tar.xz>',
+        '- **Deno 2.9.8**: MIT',
+        '  - Source code: <https://example.org/deno/deno_src.tar.gz> (not attached: its licence does not ask for it)'
       ].join('\n')
     )
+    assert.deepEqual(sourceAssets(MANIFEST), [
+      'yt-dlp-2026.10.26-source.tar.gz',
+      'ffmpeg-9.0.2-source.tar.xz',
+      'ffmpeg-9.0.2-build-ffmpeg.sh'
+    ])
   })
 
-  test("the repository's own tools.json gives a source link for every tool", () => {
+  test("the repository's own tools.json: yt-dlp GPL, FFmpeg LGPL, Deno MIT, sources attached", () => {
     const manifest = JSON.parse(read(DEFAULTS.manifest))
-    const text = gplSources(manifest)
+    const text = bundledPrograms(manifest)
     for (const tool of manifest.tools) assert.ok(text.includes(`<${tool.sourceUrl}>`), tool.name)
+    assert.match(text, /^- \*\*yt-dlp [\d.]+\*\*: GPL-3\.0-or-later\b/m)
+    assert.match(text, /^- \*\*FFmpeg [\d.]+\*\*: LGPL-2\.1-or-later\b/m)
+    assert.match(text, /^- \*\*Deno [\d.]+\*\*: MIT$/m)
+    // ADR-0027: yt-dlp's and FFmpeg's source, and FFmpeg's build script, travel with the release.
+    const ffmpeg = manifest.tools.find((tool) => tool.name === 'ffmpeg')
+    const ytdlp = manifest.tools.find((tool) => tool.name === 'yt-dlp')
+    assert.deepEqual(sourceAssets(manifest), [
+      `yt-dlp-${ytdlp.version}-source.tar.gz`,
+      `ffmpeg-${ffmpeg.version}-source.tar.xz`,
+      `ffmpeg-${ffmpeg.version}-build-ffmpeg.sh`
+    ])
   })
 
   test('a tool without an https source link stops the notes', () => {
     const [ytdlp, ffmpeg] = MANIFEST.tools
     const without = { tools: [ytdlp, { ...ffmpeg, sourceUrl: undefined }] }
-    assert.throws(() => gplSources(without), /ffmpeg has no https sourceUrl/)
+    assert.throws(() => bundledPrograms(without), /ffmpeg has no https sourceUrl/)
     const plainHttp = { tools: [{ ...ytdlp, sourceUrl: 'http://example.org/src.tar.gz' }] }
-    assert.throws(() => gplSources(plainHttp), /yt-dlp has no https sourceUrl/)
-    assert.throws(() => gplSources({ tools: [null] }), /a tool has no https sourceUrl/)
+    assert.throws(() => bundledPrograms(plainHttp), /yt-dlp has no https sourceUrl/)
+    assert.throws(() => bundledPrograms({ tools: [null] }), /a tool has no https sourceUrl/)
+  })
+
+  test('a GPL or LGPL program whose source is not pinned stops the notes', () => {
+    const [ytdlp, ffmpeg] = MANIFEST.tools
+    assert.throws(
+      () => bundledPrograms({ tools: [ytdlp, { ...ffmpeg, sourceSha256: undefined }] }),
+      /ffmpeg is LGPL-2\.1-or-later, but the media-tools manifest pins no sourceSha256/
+    )
   })
 
   test('a manifest without tools stops the notes', () => {
     for (const manifest of [undefined, {}, { tools: [] }, { tools: 'yt-dlp' }]) {
-      assert.throws(() => gplSources(manifest), /has no "tools" list/)
+      assert.throws(() => bundledPrograms(manifest), /has no "tools" list/)
+      assert.throws(() => sourceAssets(manifest), /has no "tools" list/)
     }
   })
 })
@@ -298,7 +337,7 @@ describe('the notes', () => {
     }
   })
 
-  test('the sections come in order: changes, install, limits, checksums, GPL sources', () => {
+  test('the sections come in order: changes, install, limits, checksums, programs', () => {
     const notes = buildNotes({
       version: '0.2.0',
       changes: changelogSection(CHANGELOG, '0.2.0'),
@@ -315,15 +354,22 @@ describe('the notes', () => {
       '**One connection always uses one link.**',
       '## Checksums',
       `| \`Mergelane-0.2.0-arm64.dmg\` | \`${SHA_A}\` |`,
+      '| `ffmpeg-9.0.2-build-ffmpeg.sh` |',
       '## Open-source programs inside the app',
-      '<https://example.org/ffmpeg/ffmpeg-9.0.2.tar.xz>'
+      'each shipped as\na separate executable under its own licence',
+      '- **yt-dlp 2026.10.26**',
+      '- **FFmpeg 9.0.2**: LGPL-2.1-or-later',
+      '<https://example.org/ffmpeg/ffmpeg-9.0.2.tar.xz>',
+      '- **Deno 2.9.8**: MIT'
     ].map((marker) => {
       const at = notes.indexOf(marker)
       assert.ok(at >= 0, `missing: ${marker}`)
       return at
     })
     assert.deepEqual(order, [...order].sort((a, b) => a - b))
-    assert.ok(notes.endsWith('<https://example.org/ffmpeg/build-script>\n'))
+    assert.ok(notes.includes('The source code of each program under the GPL or the LGPL is attached'))
+    assert.ok(!notes.includes('GNU General Public License. Their'), 'no longer says every program is GPL')
+    assert.ok(notes.endsWith('(not attached: its licence does not ask for it)\n'))
   })
 })
 
@@ -377,7 +423,12 @@ describe('command line (exit codes)', () => {
   })
 
   test("a checksum file without this version's zip: exit 1", () => {
-    const sums = scratchFile(`${SHA_A}  Mergelane-0.2.0-arm64.dmg\n`)
+    const sums = scratchFile(
+      read(fixture('SHA256SUMS'))
+        .split('\n')
+        .filter((line) => !line.endsWith('-mac.zip'))
+        .join('\n')
+    )
     const { code, err } = run(['--version', '0.2.0', '--checksums', sums])
     assert.equal(code, 1)
     assert.equal(err, 'release-notes: the checksum file does not list Mergelane-0.2.0-arm64-mac.zip')
@@ -401,6 +452,16 @@ describe('command line (exit codes)', () => {
     ])
     assert.equal(code, 1)
     assert.match(err, /README\.md has no "## \.\.\. \(honest limits\)" section/)
+  })
+
+  test('a checksum file without the attached sources: exit 1', () => {
+    const sums = scratchFile(read(fixture('SHA256SUMS')).split('\n').slice(0, 2).join('\n'))
+    const { code, err } = run(['--version', '0.2.0', '--checksums', sums])
+    assert.equal(code, 1)
+    assert.equal(
+      err,
+      'release-notes: the checksum file does not list yt-dlp-2026.10.26-source.tar.gz or ffmpeg-9.0.2-source.tar.xz or ffmpeg-9.0.2-build-ffmpeg.sh'
+    )
   })
 
   test('a manifest without a source link: exit 1', () => {

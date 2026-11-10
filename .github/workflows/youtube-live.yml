@@ -1,9 +1,9 @@
 name: youtube-live
 
 # The live YouTube smoke test (app/e2e/youtubeLive.spec.ts, ADR-0026): the pinned yt-dlp and Deno
-# against YouTube itself, then Mergelane's own download and FFmpeg join, for one small public video
-# from yt-dlp's own test suite. It is the early warning that YouTube changed and the pinned yt-dlp
-# needs an update. On failure it opens an issue (one at a time).
+# against YouTube itself, then Mergelane's own download and the join by our own FFmpeg (ADR-0028),
+# for one small public video from yt-dlp's own test suite. It is the early warning that YouTube
+# changed and the pinned yt-dlp needs an update. On failure it opens an issue (one at a time).
 #
 # Runs only when started by hand, from the Actions tab or `gh workflow run youtube-live.yml`, while
 # CI is paused (docs/DECISIONS.md ADR-0020). When CI resumes, add a nightly run:
@@ -35,12 +35,17 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      # FFmpeg is compiled from its pinned source (ADR-0028) with the image's Xcode command line tools;
+      # the cache keeps the result until its source or build script changes.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: app/resources/bin
-          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**') }}
-      - name: Fetch yt-dlp, FFmpeg and Deno (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**', 'scripts/media-tools/build-ffmpeg.sh', 'scripts/media-tools/fetch.mjs') }}
+      - name: Fetch yt-dlp and Deno, and build FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
         run: node ../scripts/media-tools/fetch.mjs
+      # The test reads the joined video back with a full FFmpeg (test-only): ours can't.
+      - name: Install a full FFmpeg to check the result
+        run: brew install ffmpeg
       - name: Download one public video from YouTube
         env:
           MERGELANE_YOUTUBE_LIVE: '1'

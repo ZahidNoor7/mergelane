@@ -27,7 +27,7 @@ import { YoutubeError, ytDlpFailure } from './errors'
  *   proxy from the environment is used either.
  *
  * It runs with a minimal environment (no HOME of the user's: a private folder that is deleted
- * after, as are Deno's caches and the folder PyInstaller unpacks yt-dlp into), a time limit after
+ * after, as are Deno's caches and its temporary files), a time limit after
  * which it and everything it started are killed, and a cap on what it may print.
  */
 
@@ -98,8 +98,8 @@ export function ytDlpEnv(workDir: string): NodeJS.ProcessEnv {
   return {
     PATH: '/usr/bin:/bin',
     HOME: join(workDir, 'home'),
-    // PyInstaller's one-file program unpacks itself here; a run that is killed leaves it behind,
-    // in a folder this removes.
+    // Python's temporary files go here (a single-file PyInstaller build would also unpack itself
+    // here); whatever a killed run leaves behind is in a folder this removes.
     TMPDIR: join(workDir, 'tmp'),
     LANG: 'en_US.UTF-8',
     LC_ALL: 'en_US.UTF-8',
@@ -113,7 +113,7 @@ export function ytDlpEnv(workDir: string): NodeJS.ProcessEnv {
   }
 }
 
-/** Kills the process group: yt-dlp's one-file program runs Python in a child of its own, and
+/** Kills the process group: PyInstaller's bootloader may run Python in a child of its own, and
  * Python runs Deno. */
 function killGroup(pid: number | undefined, signal: NodeJS.Signals): void {
   if (pid === undefined) return

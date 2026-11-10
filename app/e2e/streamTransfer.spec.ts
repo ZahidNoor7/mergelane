@@ -54,8 +54,9 @@ import {
   sweepMuxLeftovers
 } from '../src/main/download/stream/streamTransfer'
 import {
-  FFMPEG,
-  NO_FFMPEG,
+  APP_FFMPEG,
+  NEEDS_FFMPEG,
+  NEEDS_FIXTURE_FFMPEG,
   PATHS,
   SECONDS,
   StreamServer,
@@ -216,7 +217,7 @@ test.describe('DASH tracks as media playlists @smoke', () => {
 // ---- Resolving and describing ------------------------------------------------------------------
 
 test.describe('resolving streams @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FIXTURE_FFMPEG, NEEDS_FIXTURE_FFMPEG)
   let server: StreamServer
   test.beforeAll(async () => {
     server = await new StreamServer(await streamMedia()).start()
@@ -655,7 +656,7 @@ async function harness(options: HarnessOptions): Promise<Harness> {
     scheduleUpdate: () => {},
     getProxyForInterface: () => undefined
   }
-  const ffmpeg = options.ffmpeg === undefined ? FFMPEG : options.ffmpeg
+  const ffmpeg = options.ffmpeg === undefined ? APP_FFMPEG : options.ffmpeg
   const transfer: StreamTransfer = new StreamTransfer(target, host, {
     ffmpeg: async () =>
       ffmpeg
@@ -713,7 +714,7 @@ async function waitFor(check: () => boolean, timeoutMs = 10_000): Promise<void> 
 const segmentIndex = (path: string): number => Number(/seg(\d+)\.ts$/.exec(path)?.[1] ?? -1)
 
 test.describe('the stream transfer @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
   let server: StreamServer
   test.beforeEach(async () => {
     server = await new StreamServer(await streamMedia()).start()

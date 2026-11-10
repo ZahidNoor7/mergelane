@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import type { StartStreamDownloadRequest } from '../src/shared/types'
 import { YOUTUBE_PLAYLIST } from '../src/shared/youtube'
 import { expect, expectStream, LAN_ADDRESS, test, type MergelaneApp } from './fixtures'
-import { FFMPEG, NO_FFMPEG, inspect } from './streamMedia'
+import { APP_FFMPEG, NEEDS_FFMPEG, inspect } from './streamMedia'
 import {
   FORMAT_HEADERS,
   FakeYtDlp,
@@ -42,7 +42,7 @@ const SIGN_IN =
 
 test.use({
   appEnv: {
-    MERGELANE_FFMPEG_PATH: FFMPEG ?? '',
+    MERGELANE_FFMPEG_PATH: APP_FFMPEG ?? '',
     MERGELANE_YTDLP_PATH: join(FAKE_DIR, 'yt-dlp'),
     MERGELANE_DENO_PATH: join(FAKE_DIR, 'deno')
   }
@@ -50,7 +50,7 @@ test.use({
 
 let server: YoutubeServer
 test.beforeEach(async () => {
-  if (FFMPEG === null) return
+  if (NEEDS_FFMPEG) return
   server = await new YoutubeServer(await youtubeMedia()).start()
   fake = new FakeYtDlp(FAKE_DIR)
   fake.serve(server)
@@ -112,7 +112,7 @@ async function textsUnder(dir: string): Promise<string[]> {
 }
 
 test.describe('YouTube downloads @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
 
   test('a pasted YouTube link offers its qualities with their sizes, and downloads the one picked', async ({
     mergelane,

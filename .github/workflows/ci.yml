@@ -33,8 +33,12 @@ jobs:
         run: node --test --experimental-test-coverage scripts/ci/*.test.mjs
       - name: Test the release-notes script
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' --test-coverage-lines=90 scripts/release/notes.test.mjs
+      # Builds tiny Mach-O fixtures with clang and runs fake build scripts: no download, no FFmpeg
+      # compile.
       - name: Test the media-tools fetch script
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/fetch.mjs' --test-coverage-lines=90 scripts/media-tools/fetch.test.mjs
+      - name: Test the media-tools sources script
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/sources.mjs' --test-coverage-lines=90 scripts/media-tools/sources.test.mjs
 
   app-checks:
     runs-on: xcode-27
@@ -70,6 +74,18 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      # Two FFmpegs (app/e2e/streamMedia.ts): the app's own, the one under test, built from the
+      # pinned source by fetch.mjs (ADR-0028; cached, rebuilt when its source or build script
+      # changes); and Homebrew's full FFmpeg, test-only, which makes the sample media and reads the
+      # results back (ours can't encode). The image ships Homebrew but not FFmpeg.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: app/resources/bin
+          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**', 'scripts/media-tools/build-ffmpeg.sh', 'scripts/media-tools/fetch.mjs') }}
+      - name: Fetch yt-dlp and Deno, and build FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+        run: node ../scripts/media-tools/fetch.mjs
+      - name: Install a full FFmpeg for the test media
+        run: brew install ffmpeg
       - run: npm run test:e2e:smoke
       - name: Upload Playwright report
         if: failure()
@@ -104,11 +120,13 @@ jobs:
           version=$(node -p "require('../app/package.json').version")
           go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-daemon ./cmd/mergelane-daemon
           go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-nmhost ./cmd/mergelane-nmhost
+      # FFmpeg is compiled from its pinned source here (ADR-0028), with the image's Xcode command line
+      # tools (clang, make); the cache keeps the result until its source or build script changes.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: app/resources/bin
-          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**') }}
-      - name: Fetch yt-dlp and FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**', 'scripts/media-tools/build-ffmpeg.sh', 'scripts/media-tools/fetch.mjs') }}
+      - name: Fetch yt-dlp and Deno, and build FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
         run: node ../scripts/media-tools/fetch.mjs
       - name: Build the arm64 DMG (ad-hoc signed)
         # electron-builder skips signing on pull requests unless told otherwise. Ad-hoc signing uses

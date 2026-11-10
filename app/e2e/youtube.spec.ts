@@ -70,7 +70,7 @@ import {
   youtubePrograms,
   type YoutubeTools
 } from '../src/main/download/stream/youtubeStream'
-import { FFMPEG, NO_FFMPEG, inspect } from './streamMedia'
+import { APP_FFMPEG, NEEDS_FFMPEG, NEEDS_FIXTURE_FFMPEG, inspect } from './streamMedia'
 import {
   FORMAT_HEADERS,
   FakeYtDlp,
@@ -1167,7 +1167,7 @@ const missingTool = (name: string) => async () => ({
 })
 
 test.describe('YouTube in the probe and the plan @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FIXTURE_FFMPEG, NEEDS_FIXTURE_FFMPEG)
   let fake: FakeYtDlp
   let server: YoutubeServer
   let tools: YoutubeTools
@@ -1420,7 +1420,10 @@ async function harness(options: {
     getProxyForInterface: () => undefined
   }
   const transfer: StreamTransfer = new StreamTransfer(target, host, {
-    ffmpeg: async () => ({ path: FFMPEG!, source: 'override' }),
+    ffmpeg: async () =>
+      APP_FFMPEG
+        ? { path: APP_FFMPEG, source: 'override' }
+        : { path: null, source: 'override', candidate: '', reason: NEEDS_FFMPEG },
     timeoutMs: 3000,
     connectTimeoutMs: 2000,
     streamsPerNetwork: 2,
@@ -1464,7 +1467,7 @@ const rangeOf = (range: string | undefined): [number, number] => {
 }
 
 test.describe('YouTube downloads in the stream transfer @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
   let fake: FakeYtDlp
   let server: YoutubeServer
   let tools: YoutubeTools
@@ -1684,7 +1687,7 @@ test.describe('YouTube downloads in the stream transfer @smoke', () => {
 // Signed addresses are never written to disk: the segment downloader's resume record keeps only a
 // hash of the track's own addresses.
 test.describe('what a YouTube download keeps on disk @smoke', () => {
-  test.skip(FFMPEG === null, NO_FFMPEG)
+  test.skip(!!NEEDS_FIXTURE_FFMPEG, NEEDS_FIXTURE_FFMPEG)
   test('its parts and resume record hold no signed address', async () => {
     const fake = new FakeYtDlp(await fakeDir())
     const server = await new YoutubeServer(await youtubeMedia()).start()

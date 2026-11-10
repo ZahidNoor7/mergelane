@@ -73,8 +73,8 @@ jobs:
           package-manager-cache: false
 
       # The release-notes script's own tests, with the 90% line-coverage floor. They also check that
-      # README.md still has the honest-limits section and that tools.json has a source link for
-      # every GPL program, which the notes copy.
+      # README.md still has the honest-limits section and that tools.json pins the source of every
+      # GPL or LGPL program (yt-dlp, FFmpeg), which the notes name and the release attaches.
       - name: Test the release-notes script
         working-directory: .
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' --test-coverage-lines=90 scripts/release/notes.test.mjs
@@ -136,10 +136,14 @@ jobs:
           go build -trimpath -ldflags "-X main.version=$VERSION" -o bin/mergelane-daemon ./cmd/mergelane-daemon
           go build -trimpath -ldflags "-X main.version=$VERSION" -o bin/mergelane-nmhost ./cmd/mergelane-nmhost
 
-      # yt-dlp and FFmpeg are GPL programs fetched at build time and never committed (CLAUDE.md).
-      # The script checks each download against its pinned SHA-256 before anything becomes
-      # executable, and copies the licence texts next to them (docs/MEDIA-TOOLS.md).
-      - name: Fetch yt-dlp and FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+      # yt-dlp (GPL), Deno (MIT) and FFmpeg (LGPL) come in at build time and are never committed
+      # (CLAUDE.md). The script checks each download against its pinned SHA-256 before anything
+      # becomes executable, and copies the licence texts next to them (docs/MEDIA-TOOLS.md). yt-dlp is
+      # its unpacked folder build (ADR-0031). FFmpeg is compiled here from its pinned source release
+      # by scripts/media-tools/build-ffmpeg.sh (ADR-0028), with the image's Xcode command line tools
+      # (clang and make; the xcode-27 image lists Xcode Command Line Tools 27.2). No cache: fresh, like
+      # every other input of a release.
+      - name: Fetch yt-dlp and Deno, and build FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
         run: node ../scripts/media-tools/fetch.mjs
 
       # Same command as ci.yml. electron-builder.yml asks for identity '-' (ad-hoc signing, ADR-0003)
@@ -176,22 +180,36 @@ jobs:
           fi
           rm -rf "$unzipped"
 
+      # The source code that the bundled programs' licences ask us to offer (ADR-0027): FFmpeg's
+      # source release with our build script (LGPL, ADR-0028), and yt-dlp's source (GPL). Each archive
+      # is checked against its pinned SHA-256 in tools.json; a GPL-family program without one stops
+      # the release. Deno is MIT and needs none.
+      - name: Collect the source of the bundled programs
+        working-directory: .
+        run: node scripts/media-tools/sources.mjs app/dist/sources
+
       # SHA256SUMS lists bare file names (it runs inside dist), so users can check a download with
       # `shasum -a 256` and the notes can show the same values. It is uploaded with the release.
       - name: Compute the checksums
         working-directory: app/dist
-        run: shasum -a 256 "Mergelane-$VERSION-arm64.dmg" "Mergelane-$VERSION-arm64-mac.zip" | tee SHA256SUMS
+        run: |
+          {
+            shasum -a 256 "Mergelane-$VERSION-arm64.dmg" "Mergelane-$VERSION-arm64-mac.zip"
+            (cd sources && shasum -a 256 -- *)
+          } | tee SHA256SUMS
 
       # CHANGELOG.md's section for the version, the requirements and install steps (CLAUDE.md: they
-      # must be on the release page), README.md's honest limits, the checksums, and the source links
-      # the GPL asks for (scripts/media-tools/tools.json). Shown in the run's summary as well, so
-      # they can be read before opening the draft.
+      # must be on the release page), README.md's honest limits, the checksums, and the programs
+      # inside the app with their licences and the attached source files (scripts/media-tools/
+      # tools.json). It stops if SHA256SUMS lacks a file the notes name. Shown in the run's summary
+      # as well, so they can be read before opening the draft.
       - name: Write the release notes
         run: |
           node ../scripts/release/notes.mjs --version "$VERSION" --checksums dist/SHA256SUMS --out "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
 
-      # Creates the release for tag v<version> and uploads the DMG, the zip and SHA256SUMS.
+      # Creates the release for tag v<version> and uploads the DMG, the zip, SHA256SUMS and the
+      # source archives.
       # --target is the commit just built and tested: if the tag doesn't exist yet, it is created
       # there, not at the newest commit of the default branch (gh's manual). --draft (the default)
       # keeps the release unpublished until the owner reviews and publishes it. A version with a
@@ -211,4 +229,5 @@ jobs:
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             "dist/Mergelane-$VERSION-arm64.dmg" \
             "dist/Mergelane-$VERSION-arm64-mac.zip" \
-            dist/SHA256SUMS
+            dist/SHA256SUMS \
+            dist/sources/*

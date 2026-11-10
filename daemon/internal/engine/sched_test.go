@@ -272,9 +272,9 @@ func TestProbeAgainstLocalListener(t *testing.T) {
 			c.Close()
 		}
 	}()
-	old := probeTargets[Fam4]
-	defer func() { probeTargets[Fam4] = old }()
-	probeTargets[Fam4] = []string{ln.Addr().String()}
+	old := currentProbeTargets(Fam4)
+	defer SetProbeTargets(Fam4, old)
+	SetProbeTargets(Fam4, []string{ln.Addr().String()})
 
 	s := NewScheduler([]nics.Nic{nic("A", "127.0.0.2", 1)})
 	if !probe(s.slots[0], Fam4) {

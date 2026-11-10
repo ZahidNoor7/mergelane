@@ -115,6 +115,7 @@ func (sl *Slot) ip(f Family) net.IP {
 
 type SlotStats struct {
 	Name              string
+	Index             int // interface index
 	IP                string
 	IP6               string
 	State             string // IPv4 probe state, "-" if the adapter has no IPv4
@@ -505,7 +506,7 @@ func (s *Scheduler) Snapshot() []SlotStats {
 	for _, sl := range s.slots {
 		a := sl.addr.Load()
 		st := SlotStats{
-			Name: sl.Name, State: "-", State6: "-", Present: sl.present,
+			Name: sl.Name, Index: sl.Index, State: "-", State6: "-", Present: sl.present,
 			Weight: sl.weight[Fam4], Weight6: sl.weight[Fam6],
 			Active: sl.active.Load(), Total: sl.total.Load(), Failed: sl.failed.Load(),
 			BytesIn:  sl.bytesIn[Fam4].Load() + sl.bytesIn[Fam6].Load(),

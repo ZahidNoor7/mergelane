@@ -37,24 +37,24 @@ jobs:
         working-directory: spike/s1
         run: npm ci
 
-      - name: T1-T4 fake links (pf rdr + reply-to)
+      - name: T1-T4 fake links, default 50-slot queues
         continue-on-error: true
-        run: bash spike/s1/run-links.sh replyto
+        timeout-minutes: 5
+        run: QUEUE=50 bash spike/s1/run-links.sh asym
 
-      - name: T1-T4 fake links (pf rdr, replies over lo0)
+      - name: T1-T4 fake links, 100-slot queues
         continue-on-error: true
-        run: bash spike/s1/run-links.sh asym
-
-      - name: T5 fake VPN and kill -9
-        continue-on-error: true
-        run: bash spike/s1/vpn.sh
+        timeout-minutes: 5
+        run: QUEUE=100 bash spike/s1/run-links.sh asym
 
       - name: T6 Gatekeeper with a quarantined ad-hoc app
         continue-on-error: true
+        timeout-minutes: 5
         run: bash spike/s1/gatekeeper.sh
 
       - name: T7 LaunchDaemon KeepAlive after kill -9
         continue-on-error: true
+        timeout-minutes: 3
         run: sudo bash spike/s1/launchd.sh
 
       - name: Teardown

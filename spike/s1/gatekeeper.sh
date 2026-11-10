@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Spike S1: how does Gatekeeper treat a quarantined, ad-hoc-signed app copied out of a DMG?
 set -u
+# Run a command, killing it after N seconds (macOS has no timeout(1)). A quarantined launch can wait
+# forever on a Gatekeeper dialog nobody will click.
+limit() {
+  local secs=$1
+  shift
+  perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+  echo "  -> exit $?"
+}
 WORK=${RUNNER_TEMP:-$(mktemp -d)}/s1-gatekeeper
 rm -rf "$WORK" && mkdir -p "$WORK/src" "$WORK/Applications"
 MARK=/private/tmp/mergelane-s1-gk
@@ -60,17 +68,16 @@ echo "=== syspolicy_check distribution (if present)"
 command -v syspolicy_check >/dev/null && syspolicy_check distribution "$COPY" 2>&1 | head -20
 
 echo "=== launch quarantined via open"
-open -n "$COPY" --args open 2>&1; echo "open exit $?"
-sleep 5
+limit 15 open -n -W "$COPY" --args open
 echo "=== launch quarantined by direct exec"
-"$COPY/Contents/MacOS/s1hello" exec 2>&1; echo "exec exit $?"
+limit 15 "$COPY/Contents/MacOS/s1hello" exec
 ls -l "$MARK".* 2>/dev/null || echo "no markers yet"
-log show --last 2m --style compact --predicate 'process == "syspolicyd" OR subsystem == "com.apple.syspolicy"' 2>/dev/null | grep -i s1hello | tail -10
+pkill -f s1hello 2>/dev/null
 
 echo "=== remove quarantine (documented install step) and launch via open"
 xattr -dr com.apple.quarantine "$COPY"
-open -n "$COPY" --args afterxattr 2>&1; echo "open exit $?"
-sleep 5
+spctl --assess --type execute -vv "$COPY" 2>&1; echo "spctl exit $?"
+limit 30 open -n -W "$COPY" --args afterxattr
 ls -l "$MARK".* 2>/dev/null
 for f in "$MARK".*; do [ -f "$f" ] && echo "$f: $(cat "$f")"; done
 exit 0

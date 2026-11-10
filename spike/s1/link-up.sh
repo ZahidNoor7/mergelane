@@ -44,10 +44,13 @@ for N in 1 2; do
 done
 
 # Link 1 = 20 Mbit/s, link 2 = 50 Mbit/s, 10 ms each way. Pipe 1N1 = towards the client, 1N2 = away.
-run dnctl pipe 111 config bw 20Mbit/s delay 10
-run dnctl pipe 112 config bw 20Mbit/s delay 10
-run dnctl pipe 121 config bw 50Mbit/s delay 10
-run dnctl pipe 122 config bw 50Mbit/s delay 10
+# QUEUE: dummynet's default 50-slot queue is smaller than a 50 Mbit/s link's bandwidth-delay
+# product, which caps TCP well below the configured rate. Override with QUEUE=... to compare.
+Q=${QUEUE:-100}
+run dnctl pipe 111 config bw 20Mbit/s delay 10 queue "$Q"
+run dnctl pipe 112 config bw 20Mbit/s delay 10 queue "$Q"
+run dnctl pipe 121 config bw 50Mbit/s delay 10 queue "$Q"
+run dnctl pipe 122 config bw 50Mbit/s delay 10 queue "$Q"
 
 RULES=$(mktemp)
 {
@@ -60,11 +63,9 @@ RULES=$(mktemp)
     echo "dummynet out quick on feth20 all pipe 122"
   else
     echo "dummynet out quick on lo0 inet proto tcp from 10.77.99.1 port 8081 to any pipe 111"
-    echo "dummynet out quick on lo0 inet proto tcp from 198.51.100.10 port 80 to 10.77.1.2 pipe 111"
-    echo "dummynet out quick on feth10 all pipe 112"
+    echo "dummynet out quick on feth10 inet proto tcp all pipe 112"
     echo "dummynet out quick on lo0 inet proto tcp from 10.77.99.1 port 8082 to any pipe 121"
-    echo "dummynet out quick on lo0 inet proto tcp from 198.51.100.10 port 80 to 10.77.2.2 pipe 121"
-    echo "dummynet out quick on feth20 all pipe 122"
+    echo "dummynet out quick on feth20 inet proto tcp all pipe 122"
   fi
   if [ "$VARIANT" = replyto ]; then
     echo "pass in quick on feth11 reply-to (feth11 10.77.1.2) inet proto tcp from any to 10.77.99.1 port 8081 keep state"

@@ -79,6 +79,9 @@ ARCHS=$(lipo -archs "$APP/Contents/MacOS/Mergelane")
 for f in LICENSE THIRD-PARTY-NOTICES.md; do
   [ -s "$APP/Contents/Resources/$f" ] || fail "Contents/Resources/$f is missing"
 done
+HELPER="$APP/Contents/Resources/mergelane-daemon"
+[ -x "$HELPER" ] || fail "the bundled helper Contents/Resources/mergelane-daemon is missing"
+[ "$(lipo -archs "$HELPER")" = "arm64" ] || fail "the bundled helper is not arm64-only"
 
 step "Gatekeeper: rejected as unnotarised (so Open Anyway is offered), not as damaged"
 VERDICT=$(spctl --assess --type execute -vv "$APP" 2>&1 || true)
@@ -93,6 +96,11 @@ fi
 
 step "Install step from the README: remove quarantine, then open the app"
 xattr -dr com.apple.quarantine "$APP"
+# Inside a still-quarantined bundle macOS kills the helper (seen on macOS 27), so it is checked only
+# after the documented approval, which is also when the app can run it to install it.
+helper_version=$("$HELPER" version) || fail "the bundled helper does not run after approval"
+[[ "$helper_version" == "mergelane-daemon $VERSION" ]] || fail "the bundled helper says '$helper_version'"
+echo "bundled helper: $helper_version"
 open -n "$APP"
 
 step "Wait for GET /health to report ready (up to ${READY_TIMEOUT_S}s)"

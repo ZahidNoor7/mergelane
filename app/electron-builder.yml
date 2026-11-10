@@ -28,6 +28,10 @@ extraResources:
     to: LICENSE
   - from: ../THIRD-PARTY-NOTICES.md
     to: THIRD-PARTY-NOTICES.md
+  # The system-wide merge helper, built from ../daemon before packaging (see the CI package job).
+  # The app installs it once as a LaunchDaemon through an admin prompt (main/daemon/daemon.ts).
+  - from: ../daemon/bin/mergelane-daemon
+    to: mergelane-daemon
 mac:
   # Only the zips go by this name: the dmg has its own (dmg.artifactName).
   artifactName: ${productName}-${version}-${arch}-mac.${ext}

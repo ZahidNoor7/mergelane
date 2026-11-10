@@ -89,6 +89,15 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - name: Build the helper that ships inside the app
+        working-directory: daemon
+        run: |
+          version=$(node -p "require('../app/package.json').version")
+          go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-daemon ./cmd/mergelane-daemon
       - name: Build the arm64 DMG (ad-hoc signed)
         run: npx electron-vite build && npx electron-builder --mac --publish never
       - name: Audit Electron fuses with REA

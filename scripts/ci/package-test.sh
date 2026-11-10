@@ -108,6 +108,12 @@ echo "bundled helper: $helper_version"
 nmhost_version=$("$NMHOST" --version) || fail "the bundled browser host does not run after approval"
 [[ "$nmhost_version" == "mergelane-nmhost $VERSION" ]] || fail "the bundled browser host says '$nmhost_version'"
 echo "bundled browser host: $nmhost_version"
+# Re-signed ad-hoc with the hardened runtime by electron-builder; they must still run.
+"$APP/Contents/Resources/yt-dlp" --version >/dev/null || fail "the bundled yt-dlp does not run"
+"$APP/Contents/Resources/ffmpeg" -version >/dev/null || fail "the bundled ffmpeg does not run"
+for f in licenses/ffmpeg/COPYING.GPLv3 licenses/yt-dlp/GPL-3.0.txt; do
+  [ -s "$APP/Contents/Resources/$f" ] || fail "$f is missing from the bundle"
+done
 open -n "$APP"
 
 step "Wait for the bridge socket's health message to report ready (up to ${READY_TIMEOUT_S}s)"

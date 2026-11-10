@@ -1,0 +1,41 @@
+{
+  "$comment": "Media tools fetched at build time by fetch.mjs, pinned by SHA-256. The binaries are never committed. Read docs/MEDIA-TOOLS.md before changing anything here.",
+  "tools": [
+    {
+      "name": "yt-dlp",
+      "version": "2026.10.26",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos",
+      "sha256": "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa",
+      "archive": "none",
+      "license": "GPL-3.0-or-later for this PyInstaller-bundled executable as a whole; yt-dlp's own code is Unlicense",
+      "licenseUrl": "https://github.com/yt-dlp/yt-dlp/blob/2026.10.26/LICENSE",
+      "licenseFiles": [
+        "licenses/yt-dlp/LICENSE",
+        "licenses/yt-dlp/THIRD_PARTY_LICENSES.txt",
+        "licenses/yt-dlp/GPL-3.0.txt"
+      ],
+      "sourceUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.tar.gz",
+      "sourceSha256": "21f942d258d25cc4e60b4982a25c423460f0bebb835f38e6dfd1fcb140087f95",
+      "checksumSource": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/SHA2-256SUMS"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "9.0.2",
+      "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
+      "sha256": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
+      "archive": "zip",
+      "archivePath": "ffmpeg",
+      "binarySha256": "2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384",
+      "license": "GPL-3.0-or-later (configured with --enable-gpl --enable-version3)",
+      "licenseUrl": "https://github.com/FFmpeg/FFmpeg/blob/n9.0.2/LICENSE.md",
+      "licenseFiles": [
+        "licenses/ffmpeg/LICENSE.md",
+        "licenses/ffmpeg/COPYING.GPLv3",
+        "licenses/ffmpeg/BUILD-VERSIONS.txt"
+      ],
+      "sourceUrl": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "checksumSource": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip.sha256",
+      "buildScriptUrl": "https://git.martin-riedl.de/ffmpeg/build-script"
+    }
+  ]
+}

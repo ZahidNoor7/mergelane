@@ -98,8 +98,37 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Separately shipped executables (from Phase 2)
+## Separately shipped executables
 
-FFmpeg (GPL) and yt-dlp (Unlicense) will ship as separate executables inside the app bundle. They are
-fetched at build time with pinned SHA-256 checksums and are never committed to this repository. Their licence
-texts and the matching source offer will be added here and to the bundle when they are introduced.
+Mergelane runs these programs as separate executables. They keep their own licences and are not part of Mergelane's
+MIT-licensed code.
+
+- They are downloaded at build time by `scripts/media-tools/fetch.mjs`, checked against the SHA-256 checksums pinned
+  in `scripts/media-tools/tools.json`, and never committed to this repository.
+- Their licence texts are in the app bundle under `Contents/Resources/licenses/`.
+- See `docs/MEDIA-TOOLS.md`.
+
+### yt-dlp 2026.10.26
+
+- Program: the official `yt-dlp_macos` release, https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26
+  (SHA-256 `0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa`), shipped as `Contents/Resources/yt-dlp`.
+- Licence:
+  - yt-dlp's own code is released under the Unlicense.
+  - This executable bundles Python and other third-party components, so as a whole it is licensed under the GNU
+    General Public License, version 3 or later (yt-dlp README, "Licensing").
+  - Texts: `licenses/yt-dlp/LICENSE`, `licenses/yt-dlp/THIRD_PARTY_LICENSES.txt`, `licenses/yt-dlp/GPL-3.0.txt`.
+- Source: https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.tar.gz
+  (SHA-256 `21f942d258d25cc4e60b4982a25c423460f0bebb835f38e6dfd1fcb140087f95`). Sources of the bundled components are
+  available from the projects listed in `THIRD_PARTY_LICENSES.txt`.
+
+### FFmpeg 9.0.2
+
+- Program: the static macOS arm64 release build by Martin Riedl, https://ffmpeg.martin-riedl.de
+  (zip SHA-256 `c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924`), shipped as `Contents/Resources/ffmpeg`.
+- Licence:
+  - GNU General Public License, version 3 or later: configured with `--enable-gpl --enable-version3`, and includes
+    GPL libraries such as x264 and x265.
+  - Texts: `licenses/ffmpeg/LICENSE.md`, `licenses/ffmpeg/COPYING.GPLv3`.
+  - The configure line and library versions are in `licenses/ffmpeg/BUILD-VERSIONS.txt`.
+- Source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz. Build script: https://git.martin-riedl.de/ffmpeg/build-script.
+- This software is based in part on the work of the Independent JPEG Group.

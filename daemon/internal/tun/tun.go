@@ -22,12 +22,12 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/proxy/reject"
 	"github.com/xjasonlyu/tun2socks/v2/tunnel"
 
-	"net-merge/internal/engine"
-	"net-merge/internal/logx"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/logx"
 )
 
 const (
-	tunName = "net-merge"
+	tunName = "mergelane"
 	// A ULA on purpose. The OS's source-address policy (RFC 6724, on Windows and in glibc) prefers
 	// IPv4 over IPv6 when the only IPv6 source on the route is a ULA, so dual-stack sites go over
 	// IPv4 and spread across every adapter, while IPv6-only sites (and explicit IPv6) still work
@@ -279,7 +279,7 @@ func (t *Tun) teardown() {
 	t.dev, t.stk, t.idx, t.on = nil, nil, 0, false
 }
 
-// CleanupStale removes routes left on a surviving net-merge adapter (e.g. after a crash).
+// CleanupStale removes routes left on a surviving mergelane-daemon adapter (e.g. after a crash).
 func CleanupStale() {
 	if staleHook != nil {
 		staleHook()

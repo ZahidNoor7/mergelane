@@ -17,14 +17,14 @@ type Nic struct {
 	Weight float64
 }
 
-// Skip is an adapter that was seen but not used, with the reason (shown by `net-merge list`).
+// Skip is an adapter that was seen but not used, with the reason (shown by `mergelane-daemon list`).
 type Skip struct{ Name, Reason string }
 
 // Second line of defence after the adapter type check: virtual adapters that report as plain
 // Ethernet (virtual switches, VPN TAP drivers, VM host-only adapters, container bridges), matched
 // by name or driver description. The anchored names are Linux interface naming conventions.
 var (
-	virtualName = regexp.MustCompile(`(?i)loopback|vethernet|wsl|tailscale|zerotier|wintun|net-merge|docker|podman|^veth|^virbr|^br-|^vboxnet|^vmnet|^vnet\d|^lxc|^lxdbr|^cni|^flannel|^wg\d|^tun\d|^tap\d|^zt`)
+	virtualName = regexp.MustCompile(`(?i)loopback|vethernet|wsl|tailscale|zerotier|wintun|net-merge|mergelane|docker|podman|^veth|^virbr|^br-|^vboxnet|^vmnet|^vnet\d|^lxc|^lxdbr|^cni|^flannel|^wg\d|^tun\d|^tap\d|^zt`)
 	virtualDesc = regexp.MustCompile(`(?i)virtual|vpn|\btap\b|tap-|tunnel|wintun|wireguard|tailscale|zerotier|openvpn|anyconnect|fortinet|vmware|npcap|miniport|teredo|isatap|6to4|pseudo`)
 )
 

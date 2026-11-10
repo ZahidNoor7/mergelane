@@ -7,21 +7,21 @@ import (
 	"runtime"
 	"time"
 
-	"net-merge/internal/engine"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
 )
 
 // The elevated process can't be signalled from a normal shell, so control goes through files in
 // a per-user directory: status.json (written once a second while on) and marker files
 // ("on", "off", "quit") that the running instance consumes.
 
-// macStateDir is where the macOS tray keeps its status and markers. It is under /var/run because
-// the tray runs as root but is driven by a normal user, so the directory has to be root-owned.
-const macStateDir = "/var/run/net-merge"
+// macStateDir is where the daemon keeps its status and control socket. It is under /var/run because
+// the daemon runs as root but is driven by a normal user, so the directory has to be root-owned.
+const macStateDir = "/var/run/mergelane"
 
 // macLimitsDir is where the caps live on macOS: /var/run is emptied at boot, and a metered-tether
 // cap that forgets itself after a reboot is worse than no cap at all. Application Support is the
 // usual place for a setting that has to stay.
-const macLimitsDir = "/Library/Application Support/net-merge"
+const macLimitsDir = "/Library/Application Support/Mergelane/daemon"
 
 type Status struct {
 	PID     int
@@ -42,7 +42,7 @@ func DefaultDir() string {
 	if err != nil {
 		base = os.TempDir()
 	}
-	return filepath.Join(base, "net-merge")
+	return filepath.Join(base, "mergelane")
 }
 
 // Prepare creates the state dir, with markers going in a sticky world-writable ctl/ inside it, so

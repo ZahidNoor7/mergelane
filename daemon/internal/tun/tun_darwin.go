@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"net-merge/internal/logx"
-	"net-merge/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/logx"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 )
 
 const openHint = "needs root"

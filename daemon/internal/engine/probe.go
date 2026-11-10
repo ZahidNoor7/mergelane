@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"net-merge/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 )
 
 // Internet reachability probes: a TCP connect to a well-known anycast IP, bound to the NIC.

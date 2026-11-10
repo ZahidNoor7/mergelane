@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"net-merge/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 )
 
 // slotConn counts a pinned TCP flow's bytes and releases its slot on Close. It exposes

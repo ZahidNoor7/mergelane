@@ -1,13 +1,10 @@
+// Package platform holds the macOS process plumbing the daemon needs: the root check, the
+// single-instance lock and log redirection.
 package platform
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"os/exec"
-	"strings"
-	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -17,11 +14,11 @@ func IsAdmin() bool { return os.Geteuid() == 0 }
 
 // The single-instance lock is a flock on a root-created file: visible to every user, and
 // released by the kernel when the process dies, so a crash never leaves a stale lock behind.
-const lockPath = "/var/run/net-merge.lock"
+const lockPath = "/var/run/mergelane-daemon.lock"
 
 var lockFile *os.File
 
-// SingleInstance is false if another net-merge (run or tray) already owns the utun.
+// SingleInstance is false if another mergelane-daemon already owns the utun.
 // The file is intentionally kept open for the life of the process.
 func SingleInstance() bool {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
@@ -36,7 +33,7 @@ func SingleInstance() bool {
 	return true
 }
 
-// InstanceRunning reports whether a net-merge holds the lock; works for any user, since the
+// InstanceRunning reports whether a mergelane-daemon holds the lock; works for any user, since the
 // file is world-readable and flock doesn't need write access.
 func InstanceRunning() bool {
 	f, err := os.Open(lockPath)
@@ -52,97 +49,10 @@ func InstanceRunning() bool {
 }
 
 // RedirectStd points stdout/stderr (including the runtime's panic output) at f, for a process
-// started with no terminal (LaunchAgent).
+// started with no terminal (launchd).
 func RedirectStd(f *os.File) {
 	os.Stdout, os.Stderr = f, f
-	log.SetOutput(f) // the std logger captured the old stderr at init; the tray library logs through it
+	log.SetOutput(f) // the std logger captured the old stderr at init
 	unix.Dup2(int(f.Fd()), 1)
 	unix.Dup2(int(f.Fd()), 2)
-}
-
-// Where `net-merge install` puts the root-owned copy that sudoers allows: /usr/local/bin when only
-// root can write there, else /opt/net-merge/bin (Intel Macs, where Homebrew owns /usr/local/bin).
-const (
-	exePreferred = "/usr/local/bin/net-merge"
-	exeFallback  = "/opt/net-merge/bin/net-merge"
-)
-
-// InstalledExe is the root-owned copy `net-merge install` made.
-func InstalledExe() string {
-	if _, err := os.Stat(exeFallback); err == nil {
-		return exeFallback
-	}
-	return exePreferred
-}
-
-// RelaunchElevated replaces this process with itself run as root: sudo in a terminal, the
-// administrator password dialog otherwise. It only returns on failure.
-func RelaunchElevated(args []string, hidden bool) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if HasConsole() {
-		return syscall.Exec("/usr/bin/sudo", append([]string{"sudo", exe}, args...), os.Environ())
-	}
-	cmd := shQuote(exe)
-	for _, a := range args {
-		cmd += " " + shQuote(a)
-	}
-	// Detached: the dialog returns at once and the root process keeps running without us.
-	script := `do shell script "` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(cmd+" >/dev/null 2>&1 &") + `" with administrator privileges`
-	if out, err := exec.Command("/usr/bin/osascript", "-e", script).CombinedOutput(); err != nil {
-		return fmt.Errorf("administrator prompt failed: %s", strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// RelaunchTray is RelaunchElevated for the tray, but first tries the passwordless sudoers rule
-// that `sudo net-merge install` sets up. That rule matches exactly `net-merge tray`, so it only
-// applies when the tray was started without flags.
-func RelaunchTray(args []string, hidden bool) error {
-	if len(args) == 1 && args[0] == "tray" {
-		if exe := InstalledExe(); exec.Command("/usr/bin/sudo", "-n", "-l", exe, "tray").Run() == nil {
-			return syscall.Exec("/usr/bin/sudo", []string{"sudo", "-n", exe, "tray"}, os.Environ())
-		}
-	}
-	return RelaunchElevated(args, hidden)
-}
-
-func shQuote(s string) string { return `'` + strings.ReplaceAll(s, `'`, `'\''`) + `'` }
-
-// HasConsole reports whether stderr is a terminal.
-func HasConsole() bool {
-	_, err := unix.IoctlGetTermios(2, unix.TIOCGETA)
-	return err == nil
-}
-
-// ShowError reports a fatal error to a user with no terminal, as a notification (the error is
-// in the log file either way).
-func ShowError(msg string) {
-	exec.Command("/usr/bin/osascript",
-		"-e", "on run argv", "-e", `display notification (item 1 of argv) with title "net-merge"`, "-e", "end run",
-		msg).Run()
-}
-
-// CheckDriver is a no-op: utun is built into macOS.
-func CheckDriver() error { return nil }
-
-// WaitForTray is a no-op: the menu bar exists as soon as the login session does.
-func WaitForTray(max time.Duration) bool { return true }
-
-// OpenURL shows url in the default browser. The tray runs as root (see autostart_darwin.go), and root
-// has no GUI session of its own, so when sudo tells us who signed in, hand the URL to that user.
-func OpenURL(url string) error {
-	if u, err := signInUser(); err == nil {
-		if exec.Command("/bin/launchctl", "asuser", u.Uid, "open", url).Run() == nil {
-			return nil
-		}
-	}
-	cmd := exec.Command("open", url)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go cmd.Wait()
-	return nil
 }

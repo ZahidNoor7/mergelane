@@ -79,7 +79,7 @@ func TestLimitsSurviveARebootOnMacOS(t *testing.T) {
 	}
 }
 
-// `net-merge limit` reads limits.json every 50 ms while it waits for the running instance to save
+// `mergelane-daemon limit` reads limits.json every 50 ms while it waits for the running instance to save
 // the new cap. On Windows a rename over a file someone has open fails ("Access is denied"), so a
 // save that lands during one of those reads has to wait for it instead of failing.
 func TestSaveLimitsWhileTheFileIsOpen(t *testing.T) {

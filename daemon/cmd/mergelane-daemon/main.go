@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"sort"
@@ -12,32 +11,26 @@ import (
 	"syscall"
 	"time"
 
-	"net-merge/internal/engine"
-	"net-merge/internal/icon"
-	"net-merge/internal/logx"
-	"net-merge/internal/nics"
-	"net-merge/internal/platform"
-	"net-merge/internal/state"
-	"net-merge/internal/tun"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/logx"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/platform"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/state"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/tun"
 )
 
-const usage = `net-merge: use all your network adapters at once.
+const usage = `mergelane-daemon: merges every internet link the Mac has, system-wide.
 
-  net-merge tray       tray icon: its menu turns system-wide ON/OFF and shows speeds
-  net-merge run        system-wide ON in a console window (asks for admin/root); Ctrl+C or "off" turns it OFF
-  net-merge on|off     turn system-wide mode on/off in a running tray (off also works for run)
-  net-merge quit       turn it off and exit the tray
-  net-merge status     show whether it is on, and per-adapter load
-  net-merge limit <adapter> <Mbit/s>   cap an adapter (0 or unlimited removes the cap)
-  net-merge limit      list the saved speed limits
-  net-merge socks      plain SOCKS5 proxy on 127.0.0.1:1080 (no admin, per-app)
-  net-merge list       show detected adapters
-  net-merge autostart on|off|status   start the tray at sign-in (Windows: no UAC prompt)
-  net-merge cleanup    remove leftover routes after a crash (admin/root)
-  net-merge install    macOS: sudo net-merge install lets the tray start without a password
-  net-merge version
+  mergelane-daemon run        system-wide merging until stopped (root)
+  mergelane-daemon off        turn a running instance off
+  mergelane-daemon status     show whether it is on, and per-link load
+  mergelane-daemon limit <link> <Mbit/s>   cap a link (0 or unlimited removes the cap)
+  mergelane-daemon limit      list the saved speed limits
+  mergelane-daemon list       show detected links
+  mergelane-daemon cleanup    remove routes left behind after a crash (root)
+  mergelane-daemon version
 
-Flags for run/socks: -include "WiFi,Ethernet 3"  -weight "Name=3"  -auto-weight=false  -stats 5s
+Flags for run: -include "en0,en5"  -weight "en0=3"  -auto-weight=false  -stats 5s
 `
 
 type weightFlags map[string]float64
@@ -131,7 +124,7 @@ func (c *common) boot(mode func() string) (*engine.Scheduler, *engine.Balancer, 
 		return nil, nil, err
 	}
 	if len(nics) == 0 {
-		return nil, nil, fmt.Errorf("no usable IPv4 adapters found (try: net-merge list)")
+		return nil, nil, fmt.Errorf("no usable IPv4 links found (try: mergelane-daemon list)")
 	}
 	sched := engine.NewScheduler(nics)
 	sched.SetAuto(c.auto && len(c.weights) == 0)
@@ -203,70 +196,40 @@ func formatNICs(snap []engine.SlotStats) string {
 		if !s.Present {
 			gone = " (gone)"
 		}
-		// "link" is the adapter's total traffic by any app (Windows' counters); "via net-merge" is the
-		// part net-merge relayed. Apps that bind to adapters directly (qBittorrent) only show in "link".
+		// "link" is the interface's total traffic by any app; "via mergelane" is the part the daemon
+		// relayed. Apps that bind to interfaces directly (like Mergelane's downloader) only show in "link".
 		lim := ""
 		if s.LimitMbps > 0 {
 			lim = "  limit " + limitPhrase(s.LimitMbps)
 		}
-		fmt.Fprintf(&sb, "%-14s v4 %-11s v6 %-11s link down %6.1f up %5.1f Mbit/s  via net-merge %6.1f  active %3d  total %5d  w %.2f/%.2f  failed %d%s%s\n",
+		fmt.Fprintf(&sb, "%-14s v4 %-11s v6 %-11s link down %6.1f up %5.1f Mbit/s  via mergelane %6.1f  active %3d  total %5d  w %.2f/%.2f  failed %d%s%s\n",
 			s.Name, s.State, s.State6, s.LinkIn*8/1e6, s.LinkOut*8/1e6, (s.RateIn+s.RateOut)*8/1e6, s.Active, s.Total, s.Weight, s.Weight6, s.Failed, lim, gone)
 	}
 	return sb.String()
 }
 
-// Set at build time: -X main.version=... and, for the windowless tray build, -X main.defaultCmd=tray.
-var (
-	version    = "dev"
-	defaultCmd = ""
-)
+// Set at build time: -X main.version=...
+var version = "dev"
 
 func main() {
 	var cmd string
 	var args []string
-	switch {
-	case len(os.Args) >= 2:
-		cmd, args = os.Args[1], os.Args[2:]
-	case defaultCmd != "":
-		cmd = defaultCmd
-	default:
+	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
+	cmd, args = os.Args[1], os.Args[2:]
 	switch cmd {
 	case "version":
-		fmt.Println("net-merge", version)
-	case "install", "uninstall":
-		if err := platform.Install(cmd == "uninstall"); err != nil {
-			die(err)
-		}
-	case "autostart":
-		if len(args) != 1 || (args[0] != "on" && args[0] != "off" && args[0] != "status") {
-			fmt.Fprintln(os.Stderr, "usage: net-merge autostart on|off|status")
-			os.Exit(2)
-		}
-		if err := platform.Autostart(args[0]); err != nil {
-			die(err)
-		}
-	case "_icon": // build helper: writes the tray icon as an .ico
-		if len(args) != 1 {
-			os.Exit(2)
-		}
-		if err := os.WriteFile(args[0], icon.ICO(true), 0o644); err != nil {
-			die(err)
-		}
-	case "tray":
-		cmdTray(args)
+		fmt.Println("mergelane-daemon", version)
 	case "run":
 		cmdRun(args)
-	case "on", "off", "quit":
+	case "off":
 		cmdControl(cmd, args)
 	case "status":
 		cmdStatus(args)
 	case "limit":
 		cmdLimit(args)
-	case "socks":
-		cmdSocks(args)
 	case "list":
 		cmdList(args)
 	case "cleanup":
@@ -279,10 +242,13 @@ func main() {
 
 func die(err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
-	if !platform.HasConsole() {
-		platform.ShowError(err.Error())
-	}
 	os.Exit(1)
+}
+
+func requireRoot(what string) {
+	if !platform.IsAdmin() {
+		die(fmt.Errorf("%s must run as root", what))
+	}
 }
 
 func cmdList(args []string) {
@@ -305,57 +271,21 @@ func cmdList(args []string) {
 	}
 }
 
-func cmdSocks(args []string) {
-	fs := flag.NewFlagSet("socks", flag.ExitOnError)
-	var c common
-	c.register(fs)
-	listen := fs.String("listen", "127.0.0.1:1080", "SOCKS5 listen address")
-	fs.Parse(args)
-	if err := c.setup(); err != nil {
-		die(err)
-	}
-	_, bal, err := c.boot(nil)
-	if err != nil {
-		die(err)
-	}
-	ln, err := net.Listen("tcp4", *listen)
-	if err != nil {
-		die(err)
-	}
-	logx.Printf("net-merge SOCKS5 listening on %s\n", *listen)
-	die(engine.ServeSocks5(ln, bal))
-}
-
 func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	var c common
 	c.register(fs)
-	hidden := fs.Bool("hidden", false, "when elevating, hide the new console window")
 	crashAfter := fs.Duration("crash-after", 0, "test only: exit abruptly (no cleanup) after this long")
 	runFor := fs.Duration("for", 0, "turn off automatically after this long (0 = until stopped)")
 	fs.Parse(args)
 
-	if !platform.IsAdmin() {
-		// Re-run elevated, handing over where to log and keep state.
-		child := append([]string{"run"}, args...)
-		child = append(child, "-state-dir", c.stateDir)
-		state.Prepare(c.stateDir) // as this user, so `net-merge off` can still drop markers in it
-		if err := platform.RelaunchElevated(child, *hidden); err != nil {
-			die(fmt.Errorf("could not start elevated: %w", err))
-		}
-		fmt.Println("Approve the UAC prompt. System-wide mode runs in the new window; `net-merge off` turns it off.")
-		return
-	}
+	requireRoot("run")
 	if !platform.SingleInstance() {
-		fmt.Println("net-merge is already running (check the system tray, or run `net-merge off`).")
+		fmt.Println("mergelane-daemon is already running (`mergelane-daemon off` turns it off).")
 		return
 	}
 	if err := c.setup(); err != nil {
 		die(err)
-	}
-	if err := platform.CheckDriver(); err != nil {
-		logx.Printf("error: %v\n", err)
-		os.Exit(1)
 	}
 	state.TakeMarker(c.stateDir, "off") // drop a stale marker
 
@@ -370,7 +300,7 @@ func cmdRun(args []string) {
 		logx.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
-	logx.Printf("net-merge is ON: all IPv4 traffic is balanced across the adapters above. Ctrl+C or `net-merge off` to stop.\n")
+	logx.Printf("mergelane-daemon is ON: all IPv4 traffic is balanced across the links above. Ctrl+C or `mergelane-daemon off` to stop.\n")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -404,20 +334,20 @@ func cmdRun(args []string) {
 	}
 	t.Close()
 	state.Clear(c.stateDir)
-	logx.Printf("net-merge is OFF.\n")
+	logx.Printf("mergelane-daemon is OFF.\n")
 }
 
-// cmdControl implements `on`, `off` and `quit` against a running tray/run instance.
+// cmdControl implements `off` against a running instance.
 func cmdControl(name string, args []string) {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	dir := fs.String("state-dir", state.DefaultDir(), "state directory")
 	fs.Parse(args)
 	if !platform.InstanceRunning() {
 		if name == "off" || name == "quit" {
-			fmt.Println("net-merge is not running (already off).")
+			fmt.Println("mergelane-daemon is not running (already off).")
 			return
 		}
-		die(fmt.Errorf("net-merge is not running; start it with `net-merge tray`"))
+		die(fmt.Errorf("mergelane-daemon is not running"))
 	}
 	_, wasOn := state.Read(*dir)
 	if err := state.SendMarker(*dir, name); err != nil {
@@ -429,15 +359,15 @@ func cmdControl(name string, args []string) {
 		_, on := state.Read(*dir)
 		switch {
 		case name == "on" && on == want:
-			fmt.Println("net-merge is ON.")
+			fmt.Println("mergelane-daemon is ON.")
 			return
 		case name != "on" && !on:
-			fmt.Println("net-merge is OFF.")
+			fmt.Println("mergelane-daemon is OFF.")
 			return
 		}
 	}
 	_ = wasOn
-	die(fmt.Errorf("sent %q but it did not take effect (does this instance support it? run: net-merge tray)", name))
+	die(fmt.Errorf("sent %q but it did not take effect", name))
 }
 
 func cmdStatus(args []string) {
@@ -446,10 +376,10 @@ func cmdStatus(args []string) {
 	fs.Parse(args)
 	st, on := state.Read(*dir)
 	if !on {
-		fmt.Println("net-merge is OFF.")
+		fmt.Println("mergelane-daemon is OFF.")
 		return
 	}
-	fmt.Printf("net-merge is ON (%s, pid %d, up %s)\nIPv6: %s\n%s", st.Mode, st.PID, time.Since(st.Since).Truncate(time.Second), st.V6, formatNICs(st.NICs))
+	fmt.Printf("mergelane-daemon is ON (%s, pid %d, up %s)\nIPv6: %s\n%s", st.Mode, st.PID, time.Since(st.Since).Truncate(time.Second), st.V6, formatNICs(st.NICs))
 }
 
 // cmdLimit lists the saved caps, or sets one. A running instance gets the change through a marker
@@ -481,7 +411,7 @@ func cmdLimit(args []string) {
 		return
 	}
 	if len(rest) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: net-merge limit <adapter> <Mbit/s>   (0, off or unlimited removes the cap)")
+		fmt.Fprintln(os.Stderr, "usage: mergelane-daemon limit <link> <Mbit/s>   (0, off or unlimited removes the cap)")
 		os.Exit(2)
 	}
 	name := strings.TrimSpace(rest[0])
@@ -496,11 +426,11 @@ func cmdLimit(args []string) {
 	if live {
 		fmt.Printf("%s: %s.\n", name, limitPhrase(mbitPerSec))
 	} else {
-		fmt.Printf("%s: %s. It takes effect the next time net-merge starts.\n", name, limitPhrase(mbitPerSec))
+		fmt.Printf("%s: %s. It takes effect the next time mergelane-daemon starts.\n", name, limitPhrase(mbitPerSec))
 	}
 }
 
-// limitWait is how long `net-merge limit` waits for a running instance to apply and save the cap.
+// limitWait is how long `mergelane-daemon limit` waits for a running instance to apply and save the cap.
 var limitWait = 4 * time.Second
 
 // limitApply saves a cap. With a running instance the request goes through ctl/ and the instance
@@ -546,12 +476,7 @@ func limitPhrase(mbitPerSec float64) string {
 }
 
 func cmdCleanup() {
-	if !platform.IsAdmin() {
-		if err := platform.RelaunchElevated([]string{"cleanup"}, false); err != nil {
-			die(err)
-		}
-		return
-	}
+	requireRoot("cleanup")
 	tun.CleanupStale()
 	fmt.Println("done.")
 }

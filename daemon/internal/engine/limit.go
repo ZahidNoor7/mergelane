@@ -80,7 +80,7 @@ func (b *bucket) take(n int) {
 const LimitMaxMbps = 1e6
 
 // ParseLimit reads a cap written by a person: "10", "7.5", "0", "off" or "unlimited". It returns
-// 0 for no cap. Both the tray and `net-merge limit` use it, so both accept the same spellings and
+// 0 for no cap. Both the tray and `mergelane-daemon limit` use it, so both accept the same spellings and
 // reject the same nonsense.
 func ParseLimit(s string) (float64, error) {
 	t := strings.TrimSpace(s)

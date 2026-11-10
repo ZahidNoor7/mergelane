@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"net-merge/internal/nics"
+	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 )
 
 // Balancer dials outbound flows through the Scheduler. Front-ends (SOCKS5 now, TUN later)

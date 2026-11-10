@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronRight, Plus, Search, Send, X } from 'lucide-react'
+import { Activity, ChevronRight, Plus, Search, Send, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DownloadContextMenu } from '../components/DownloadContextMenu'
@@ -40,6 +40,7 @@ import {
   wantedBytes
 } from '../utils/format'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { DASHBOARD_BUTTON_ID } from '../utils/dashboard'
 import {
   availableActions,
   isFinished,
@@ -279,6 +280,24 @@ export function DownloadsScreen(): React.JSX.Element {
             </InputGroup>
           </div>
           <ScheduleIndicator onClick={openSchedule} />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  id={DASHBOARD_BUTTON_ID}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setView({ name: 'dashboard' })}
+                  aria-label="Dashboard"
+                  className="px-2.5"
+                >
+                  <Activity className="size-3.5" />
+                  <span className="hidden lg:inline">Dashboard</span>
+                </Button>
+              }
+            />
+            <TooltipContent>Speeds, networks and system merge</TooltipContent>
+          </Tooltip>
           <NetworksMenu
             onOpenLimits={(page) => {
               setShowSchedule(false)

@@ -36,6 +36,11 @@ All notable changes to Mergelane are recorded here. The format follows
 - The extension lists the videos a page loads and hands one to Mergelane.
 - yt-dlp and FFmpeg ship inside the app, fetched at build time with pinned checksums.
 - A release workflow, run by hand.
+- A Dashboard, opened from the downloads list: every unfinished download with its progress, the total speed and
+  when all will be done; each network's speed and condition (up, limited, paused by a data limit, no connection);
+  failover (networks that dropped or came back since the app opened, and links system merge finds without
+  internet); system merge with each link's merged traffic charted; and the honest limits of combined speed.
+  Built on a design system set first (`design-system/mergelane/`).
 
 ### Changed
 

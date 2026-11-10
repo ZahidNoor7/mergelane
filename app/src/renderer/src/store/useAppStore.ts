@@ -13,18 +13,22 @@ import type {
   ThemeSource
 } from '@shared/types'
 import { create } from 'zustand'
+import { appendNetworkEvents, type NetworkEvent } from '../utils/dashboard'
 
 export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** What the window shows: the list of downloads, or one download. */
-export type View = { name: 'list' } | { name: 'download'; id: string }
+/** What the window shows: the list of downloads, one download, or the dashboard. */
+export type View = { name: 'list' } | { name: 'download'; id: string } | { name: 'dashboard' }
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
   interfacesStatus: LoadStatus
   interfacesError: string | null
+  /** Networks that dropped, came back or turned up since the window opened, oldest first (the
+   * dashboard's failover list). Not saved: it starts empty each launch. */
+  networkEvents: NetworkEvent[]
   /** User customizations (name/color) per network interface id — persisted in the main process. */
   networkPreferences: NetworkPreferences
 
@@ -119,6 +123,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   interfaces: [],
   interfacesStatus: 'idle',
   interfacesError: null,
+  networkEvents: [],
   networkPreferences: initial.networkPreferences,
   themeSource: initial.themeSource,
 
@@ -162,8 +167,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  receiveInterfaces: (interfaces) =>
-    set({ interfaces, interfacesStatus: 'ready', interfacesError: null }),
+  receiveInterfaces: (interfaces) => {
+    const { interfaces: previous, interfacesStatus, networkEvents } = get()
+    set({
+      interfaces,
+      interfacesStatus: 'ready',
+      interfacesError: null,
+      // The first list is what was there all along, not a change.
+      networkEvents:
+        interfacesStatus === 'ready'
+          ? appendNetworkEvents(networkEvents, previous, interfaces, Date.now())
+          : networkEvents
+    })
+  },
 
   // An explicit `undefined` in `patch` clears that field; main drops an entry left with neither.
   setNetworkPreference: (id, patch) => {

@@ -10,6 +10,7 @@ import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
+import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadingScreen } from './screens/DownloadingScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
@@ -39,9 +40,10 @@ function renderDownload(download: DownloadState | FinishedDownload): React.JSX.E
   }
 }
 
-/** The download shown, or the list. Only this re-renders on a progress update — App, the title
- * bar, the status bar and the dialogs around it don't. */
+/** The download shown, the dashboard, or the list. Only this re-renders on a progress update —
+ * App, the title bar, the status bar and the dialogs around it don't. */
 function CurrentScreen(): React.JSX.Element {
+  const dashboard = useAppStore((store) => store.view.name === 'dashboard')
   // Just the one shown: an update to any other download leaves this selector's result alone.
   const shown = useAppStore((store) => {
     const { view } = store
@@ -50,6 +52,7 @@ function CurrentScreen(): React.JSX.Element {
     return store.downloads[view.id] ?? store.history.find((entry) => entry.id === view.id) ?? null
   })
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
+  if (dashboard) return <DashboardScreen />
   return shown && !cancelled ? renderDownload(shown) : <DownloadsScreen />
 }
 

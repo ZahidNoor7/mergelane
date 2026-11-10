@@ -30,6 +30,8 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
 - **No account, no servers, no telemetry.** Everything runs on your Mac. The only network request Mergelane makes
   on its own is the update check against GitHub Releases.
 
+The app says the same on its Dashboard, under **About combined speed**, next to the speeds it describes.
+
 ## Installing (once a release exists)
 
 Mergelane is not yet signed with an Apple Developer ID, so macOS asks you to confirm it once:

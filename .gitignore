@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+release/
+*.dmg
+*.zip
+/daemon/bin/
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+*.coverprofile
+coverage.out
+
+# Third-party executables fetched at build time (never committed)
+/app/resources/bin/
+
+# Caches
+.eslintcache
+.turbo/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS and editor
+.DS_Store
+.idea/
+
+# Secrets (never commit)
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.cer

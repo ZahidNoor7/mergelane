@@ -297,3 +297,14 @@ until the owner overrides it.
   - Both ship as separate GPL-3.0-or-later executables, with their licence texts in the bundle.
   - Trust in the FFmpeg build rests on one maintainer's server; building FFmpeg in CI ourselves is the alternative.
   - Fetched by `scripts/media-tools/fetch.mjs`, which verifies every hash before anything becomes executable.
+
+## ADR-0023: The extension offers streams the page already loads (option D); YouTube pending
+
+- Status: Proposed (2026-11-10). YouTube approach still open (`docs/YOUTUBE-REVIEW.md`).
+- Decision:
+  - The extension observes the HLS and DASH manifests a tab loads (headers only) and lists them in its popup.
+  - The user hands one to Mergelane, which treats it like any other link. There is no site-specific logic.
+  - YouTube hosts (`youtube.com`, `youtube-nocookie.com`, `youtu.be`, `googlevideo.com`) are not listed until the
+    owner chooses an approach.
+- Limits: manifests fetched by a site's service worker, built in JavaScript, served from `blob:` URLs or answered
+  from Chrome's memory cache are not seen.

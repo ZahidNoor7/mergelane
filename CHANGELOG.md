@@ -31,6 +31,12 @@ All notable changes to Mergelane are recorded here. The format follows
 - Browser capture through Chrome's native messaging (`mergelane-nmhost`): the extension hands downloads to the app over
   a private channel. Mergelane registers the host with Chrome, Chromium and Firefox when it starts.
 
+- Video downloads from HLS (`.m3u8`) and DASH (`.mpd`) links, with a quality picker. They are fetched over every
+  selected network, then joined into MP4 or MKV by FFmpeg. Live and protected (DRM) streams are refused.
+- The extension lists the videos a page loads and hands one to Mergelane.
+- yt-dlp and FFmpeg ship inside the app, fetched at build time with pinned checksums.
+- A release workflow, run by hand.
+
 ### Changed
 
 - The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.

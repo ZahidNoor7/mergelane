@@ -61,8 +61,15 @@ Last updated: 2026-11-10
   - HLS module: 56 tests, 98–100% coverage;
   - DASH module: 49 tests, 100% coverage;
   - yt-dlp and FFmpeg fetch with pinned checksums (ADR-0022, `docs/MEDIA-TOOLS.md`): 29 tests, 98.6% coverage.
-- **In progress:**
-  - HLS and DASH wired into downloads and the UI.
+- **Also done:**
+  - HLS and DASH links download for real: a quality picker, segments over the selected networks, pause and resume
+    (also across a relaunch), then muxed by FFmpeg;
+  - the extension lists the videos a page loads (ADR-0023; YouTube hosts excluded for now);
+  - a manual release workflow (`docs/RELEASING.md`).
+- **Local test result:** full smoke suite, 360 passed.
+- **Incident, resolved:** an early version of a stream UI test saved 12 test videos into the owner's
+  `~/Downloads`. They were deleted by name, the test now uses its own folder, and the folder was checked
+  afterwards.
 - **Also done:**
   - FFmpeg muxing: 35 tests, 100% line coverage;
   - the daemon's `run` made testable (M2.0): 92.5% coverage.

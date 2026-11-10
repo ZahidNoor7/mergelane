@@ -152,3 +152,27 @@ jobs:
       - name: Clean up after a failure
         if: always()
         run: sudo bash scripts/netsim/netsim.sh down
+
+  # Phase 1 acceptance criteria 3, 4, 5 and the system half of 6, on simulated links.
+  daemon-acceptance:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    needs: [daemon, netsim]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Daemon acceptance on a 20 and a 50 Mbit/s link
+        run: bash scripts/netsim/with-netsim.sh "1:20:10:0 2:50:10:0" -- bash scripts/acceptance/daemon.sh
+      - name: Clean up after a failure
+        if: always()
+        run: |
+          sudo pkill -f mergelane-acceptance-bin || true
+          sudo /tmp/mergelane-acceptance-bin/mergelane-daemon uninstall || true
+          sudo /tmp/mergelane-acceptance-bin/mergelane-daemon cleanup || true
+          sudo bash scripts/netsim/netsim.sh down

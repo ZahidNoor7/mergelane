@@ -216,3 +216,14 @@ until the owner overrides it.
 - Related finding: `scutil --nc list` does not show a VPN made from a plain process's `utun`, so the VPN guard
   must read the routing table and cannot rely on `scutil` alone. The runner also has `utun0`–`utun3` without
   routes, so a `utun` with no default, `0/1` or `128/1` route must not count as a VPN.
+
+## ADR-0020: CI paused, runs by hand only
+
+- Status: Owner (2026-11-10)
+- Decision: At the owner's request, `.github/workflows/ci.yml` runs only on `workflow_dispatch`. Pushes and pull
+  requests trigger nothing until the owner asks to resume (the original triggers are noted in the file).
+- Consequences:
+  - The kickoff requires the Phase 1 acceptance criteria to be shown passing in CI. While CI is paused, new
+    changes are not proven there.
+  - Runs that already passed remain the evidence, listed in `docs/PROGRESS.md`.
+  - Start a run with `gh workflow run ci.yml --ref <branch>`.

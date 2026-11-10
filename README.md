@@ -49,6 +49,20 @@ xattr -dr com.apple.quarantine /Applications/Mergelane.app
 System-wide merging needs a small helper (`mergelane-daemon`) that runs as a system service. Mergelane asks for
 your administrator password once to install it. You can remove it from Mergelane's settings at any time.
 
+## Browser extension (Chrome)
+
+The extension hands downloads you click in Chrome to Mergelane. It talks to Mergelane only through Chrome's native
+messaging, so there is no open network port, and Mergelane registers itself with Chrome when it starts. Until the
+extension is published, load it by hand:
+
+1. Build it: `cd app && npm ci && npm run build:extension`.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose
+   `app/extension/dist/chrome`.
+3. Open Mergelane once, so Chrome learns where to find it. After that the extension's icon shows whether it's
+   connected.
+
+You can also paste any direct download link into **New download** without the extension.
+
 ## Building from source
 
 Build instructions will be added with the first app milestone (see `docs/PHASE-1.md`).

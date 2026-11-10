@@ -17,6 +17,17 @@ All notable changes to Mergelane are recorded here. The format follows
 - CI jobs for the app: lint, typecheck and format; Playwright smoke tests on macOS; a packaging test that
   installs the DMG like a user and waits for the ready state; an REA audit of the Electron fuses.
 
+- `mergelane-daemon`, from Net Merge 0.3.7, macOS only:
+  - a root LaunchDaemon with a versioned control API over a Unix socket, checking each caller's uid;
+  - a VPN guard that refuses to merge alongside another VPN and turns merging off when one appears;
+  - marked routes, so cleanup touches only Mergelane's own;
+  - dead links detected within 5 s.
+- Downloads pin each network's connections with `IP_BOUND_IF`, so they stay on their link while system merging
+  is on.
+- A System merge switch with live per-link traffic in the networks menu; the app installs the helper once with
+  an administrator password.
+- A simulated-network test harness, plus acceptance tests for Phase 1's criteria.
+
 ### Changed
 
 - Automatic updates are off until updates can be checked through the GitHub Releases API (ADR-0010).

@@ -115,20 +115,98 @@ until the owner overrides it.
 - Context: macOS minutes on private repos are billed, and that conflicts with "no paid services".
 - Decision: The repository is public, so standard GitHub-hosted runners are free.
 
-## ADR-0012: Telegram source removed from the app
+## ADR-0012: Telegram source kept, unchanged, for now
 
-- Status: Proposed (2026-11-10). Owner question open (PHASE-1 §4 Q4).
-- Context: Plexo's Telegram source needs build-time API credentials that are Plexo's secrets, plus a Telegram
-  account. CLAUDE.md rules out accounts.
-- Decision: Remove the Telegram source, its UI and its tests during the M1.2 rebrand.
-- Consequences: Simpler app with no third-party account flow. It can return later with user-supplied API keys
-  if the owner wants it.
+- Status: Proposed (2026-11-10, revised the same day). Owner question open (PHASE-1 §4 Q4).
+- Context:
+  - Plexo's Telegram source needs a Telegram account plus API credentials. Plexo injects its own at build
+    time; Mergelane has none, so users must enter their own.
+  - Removing the feature touches about 25 files, including UI, and widens the diff against upstream
+    (ADR-0001).
+- Decision: Keep it unchanged in Phase 1. It works only with the user's own Telegram API ID; Mergelane itself
+  still has no accounts.
+- Consequences: The owner decides before Phase 2 whether it stays.
 
 ## ADR-0013: Packaging test launches after the documented quarantine removal
 
-- Status: Proposed (2026-11-10). Owner question open (PHASE-1 §4 Q2). Spike S1 result pending.
+- Status: Proposed (2026-11-10). Owner question open (PHASE-1 §4 Q2). Confirmed by spike S1.
 - Decision: The packaging test proves that:
   - the signature verifies;
   - Gatekeeper's verdict on the quarantined app is "not notarised", not "damaged";
   - the app reaches its ready state after `xattr -dr com.apple.quarantine`, the documented install step.
-- Consequences: The one manual click ("Open Anyway") is not automated.
+- Evidence (spike S1, `xcode-27` runner, macOS 27.0.1):
+  - For a quarantined ad-hoc app, `spctl --assess` says `rejected`.
+  - `syspolicy_check distribution` reports "Adhoc Signed App" (warning) and "Notary Ticket Missing" (fatal),
+    not damage.
+  - `open` on the quarantined app waits on the Gatekeeper dialog until killed.
+  - After `xattr -dr com.apple.quarantine`, `open` launches it.
+- Consequences: The one manual click ("Open Anyway") is not automated. `scripts/ci/package-test.sh`
+  implements this test.
+
+## ADR-0014: The browser extension stays under `app/extension` in Phase 1
+
+- Status: Proposed (2026-11-10)
+- Context:
+  - The kickoff lists a top-level `extension/`.
+  - Plexo's extension imports the app's shared types (`src/shared/browserBridge.ts`, `types.ts`) and fonts,
+    and builds and typechecks with the app's Vite, TypeScript and ESLint.
+  - Moving it would need its own package and a second install of the same toolchain, or npm workspaces,
+    which changes Plexo's lockfile and packaging.
+- Decision: Keep it at `app/extension` in Phase 1, following CLAUDE.md's "keep upstream structure where it
+  already works".
+- Consequences: Revisit in Phase 2 with the native-messaging decision (ADR-0009), which reworks the extension
+  anyway.
+
+## ADR-0015: Simulated links use `feth` pairs, pf `rdr` and dummynet (spike S1)
+
+- Status: Proposed (2026-11-10). Evidence: spike S1 runs 1 and 2 on `xcode-27`.
+- Decision: Each fake link N has these parts:
+  - `fethN0` (client side, `10.77.N.2/24`), peered with `fethN1` (far side, `10.77.10N.1/30`).
+  - A static ARP entry for the gateway `10.77.N.1` on `fethN0`, pointing at `fethN1`.
+  - A scoped route `198.51.100.0/24 via 10.77.N.1 -ifscope fethN0`.
+  - pf `rdr on fethN1` sends the "internet" server `198.51.100.10:80` to a local server on `10.77.99.1:808N`.
+    Replies return over `lo0`.
+  - Shaping uses dummynet pipes in the anchor `com.apple/<name>`, applied on `fethN0` out and `lo0` out.
+  - pf is enabled with a reference token (`pfctl -E` / `-X`).
+- Evidence:
+  - Sockets pinned with `IP_BOUND_IF` reach the server through each link, and the server sees each link's own
+    source address.
+  - Two links together carry more than either alone (38.9 Mbit/s against 16.1 and 23.8).
+  - Silent loss (`plr 1`) stops one link while the other continues.
+  - An unpinned socket cannot reach the server, because the routes are scoped.
+- Limits found:
+  - Measured rates sit below the configured ones (16/20 and 24/50 Mbit/s with 100-slot queues), so acceptance
+    tests compare against a measured single-link baseline, not the configured rate.
+  - After `ifconfig down` and `up`, a link did not carry traffic again even with its route and ARP entry
+    re-added. Link recovery is not a Phase 1 criterion, so M1.5 investigates it.
+  - pf `reply-to` does not work here: `arp -s` refuses a local address.
+
+## ADR-0016: Harden Electron fuses, and audit them with REA in CI
+
+- Status: Proposed (2026-11-10)
+- Context: An REA (`rea-agents` 6.8.0, added at the owner's request) audit of the first packaged build found
+  every Electron fuse at its default. That includes `RunAsNode` enabled, which lets anyone run the signed app
+  as a plain Node.js interpreter.
+- Decision:
+  - `electronFuses` in `app/electron-builder.yml` turns off `runAsNode`, the `NODE_OPTIONS` variable and the
+    `--inspect` arguments.
+  - It turns on cookie encryption, embedded ASAR integrity validation and only-load-from-ASAR.
+  - `grantFileProtocolExtraPrivileges` stays at its default, because the UI loads from `file://`.
+  - The CI `package` job runs `scripts/ci/audit-fuses.mjs`, which reads the fuse bytes with REA and fails on
+    any difference.
+- Consequences:
+  - `process.fork` from the main process would not work; the app uses none.
+  - The audit downloads a pinned REA package in CI. It is a test tool only, never shipped.
+
+## ADR-0017: launchd restarts the daemon within about a second (spike S1)
+
+- Status: Proposed (2026-11-10)
+- Evidence: A system LaunchDaemon with `KeepAlive` and `ThrottleInterval 1` restarted 1 s after `kill -9` on
+  the runner.
+- Context: A process-owned `utun` and its `0/1` and `128/1` routes disappear when the owning process is killed
+  with `kill -9`, and connectivity stays intact.
+- Decision: The daemon's plist uses `KeepAlive` with a short `ThrottleInterval`. Its startup cleanup
+  (ADR-0006, ADR-0007) removes any marked routes left behind.
+- Related finding: `scutil --nc list` does not show a VPN made from a plain process's `utun`, so the VPN guard
+  must read the routing table and cannot rely on `scutil` alone. The runner also has `utun0`–`utun3` without
+  routes, so a `utun` with no default, `0/1` or `128/1` route must not count as a VPN.

@@ -11,6 +11,20 @@ settled by spike S1 before the work that depends on it starts.
 
 ---
 
+## Updates since the plan was approved
+
+- D1–D10 below became ADR-0001 to ADR-0010 in `docs/DECISIONS.md`.
+- Spike S1 ran on `xcode-27` (macOS 27.0.1). Its findings are in ADR-0013, ADR-0015 and ADR-0017. The fake-link
+  design in §6 is confirmed with one change: replies return over `lo0`, since pf `reply-to` does not work.
+- M1.2 deviations:
+  - Telegram is kept unchanged (ADR-0012).
+  - The extension stays at `app/extension` (ADR-0014).
+  - Small inline Windows/Linux branches stay, to keep upstream fixes easy to replay; build targets and
+    Windows-only assets are removed.
+- An REA audit (added at the owner's request) led to hardened Electron fuses and a CI fuse audit (ADR-0016).
+- Criterion 2's threshold is now relative: both links must beat a measured single-link baseline, because
+  dummynet on the runner delivers less than the configured rate (ADR-0015).
+
 ## 1. Goal
 
 Prove the risky parts on real CI before building the MVP:

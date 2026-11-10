@@ -53,7 +53,7 @@ Why 1, 2 and the app part of 6 are open: the owner paused CI (ADR-0020) while th
 - **Coverage of the daemon's `run` command:** unit tests cover everything except `run`. The root acceptance run
   measured 38.7% of that package. Raising it needs `run` split into testable parts.
 - **Extension stays inside `app/`:** the kickoff's top-level `extension/` was deferred to Phase 2 (ADR-0014).
-- **Telegram:** kept, not removed (ADR-0012).
+- **Telegram:** kept, not removed (ADR-0012). Removed later, on 2026-11-11, at the owner's request.
 
 ## Risks found
 

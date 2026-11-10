@@ -125,8 +125,12 @@ until the owner overrides it.
 
 ## ADR-0012: Telegram source kept, unchanged, for now
 
-- Status: Superseded (2026-11-11). The owner chose to remove the Telegram source (PHASE-1 §4 Q4). The removal
-  follows the YouTube work, so the two changes don't clash.
+- Status: Superseded (2026-11-11). The owner chose to remove the Telegram source (PHASE-1 §4 Q4). Removed on branch
+  `m2.6-remove-telegram`:
+  - the source, its dialog and its build-time credentials are gone, with the `telegram`, `qrcode` and `big-integer`
+    packages, which only it used;
+  - Telegram entries an older build saved are dropped when loaded, and their partial data is cleared, never the
+    user's finished files (`e2e/recovery.spec.ts`).
 - Context:
   - Plexo's Telegram source needs a Telegram account plus API credentials. Plexo injects its own at build
     time; Mergelane has none, so users must enter their own.

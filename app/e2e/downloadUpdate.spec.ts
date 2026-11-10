@@ -3,6 +3,10 @@ import { applyDownloadUpdate } from '../src/shared/downloadUpdate'
 import type {
   HttpBlockState,
   HttpDownloadUpdate,
+  NzbDownloadUpdate,
+  NzbSegmentState,
+  StreamDownloadUpdate,
+  StreamSegmentState,
   TorrentDownloadUpdate,
   TorrentPieceState
 } from '../src/shared/types'
@@ -120,5 +124,56 @@ test.describe('download updates', () => {
     if (next?.kind !== 'torrent') throw new Error('Expected torrent state')
     expect(next.pieces.map((entry) => entry.provisionalBytes)).toEqual([0, 40])
     expect(next.peers).toEqual([])
+  })
+
+  test('NZB and stream updates merge into a download of their own kind, never another', () => {
+    const { state: http } = full(1)
+    const segment = (index: number, bytesDownloaded = 0): NzbSegmentState => ({
+      ...block(index, bytesDownloaded),
+      kind: 'nzb'
+    })
+    const part = (index: number, bytesDownloaded = 0): StreamSegmentState => ({
+      ...block(index, bytesDownloaded),
+      kind: 'stream'
+    })
+    const nzbUpdate = (seq: number, blocks: NzbSegmentState[]): NzbDownloadUpdate => ({
+      seq,
+      state: { ...http, kind: 'nzb', nzbFiles: [], missingBytes: 0, server: 'news.example.test' },
+      blocks
+    })
+    const streamUpdate = (seq: number, blocks: StreamSegmentState[]): StreamDownloadUpdate => ({
+      seq,
+      state: { ...http, kind: 'stream', protocol: 'hls', trackSegments: [4], codecs: [] },
+      blocks
+    })
+
+    const nzb = applyDownloadUpdate(
+      null,
+      nzbUpdate(
+        1,
+        [0, 1, 2, 3].map((index) => segment(index))
+      )
+    )
+    const nzbNext = applyDownloadUpdate(nzb, nzbUpdate(2, [segment(2, 60)]))
+    if (nzbNext?.kind !== 'nzb') throw new Error('Expected NZB state')
+    expect(nzbNext.blocks.map((entry) => entry.bytesDownloaded)).toEqual([0, 0, 60, 0])
+
+    const stream = applyDownloadUpdate(
+      null,
+      streamUpdate(
+        1,
+        [0, 1, 2, 3].map((index) => part(index))
+      )
+    )
+    const streamNext = applyDownloadUpdate(stream, streamUpdate(2, [part(0, 100)]))
+    if (streamNext?.kind !== 'stream') throw new Error('Expected stream state')
+    expect(streamNext.blocks.map((entry) => entry.bytesDownloaded)).toEqual([100, 0, 0, 0])
+
+    // Changed blocks of one kind never land on a download of another kind under the same id:
+    // without a snapshot of their own, they wait for one.
+    const httpStart = applyDownloadUpdate(null, full(1))
+    expect(applyDownloadUpdate(httpStart, nzbUpdate(2, [segment(1, 10)]))).toBe(httpStart)
+    expect(applyDownloadUpdate(httpStart, streamUpdate(2, [part(1, 10)]))).toBe(httpStart)
+    expect(applyDownloadUpdate(nzb, update(2, [block(1, 10)]))).toBe(nzb)
   })
 })

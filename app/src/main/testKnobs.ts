@@ -13,11 +13,6 @@ function positiveNumber(name: string, fallback: number): number {
 
 export const testKnobs = {
   userDataDir: env['MERGELANE_USER_DATA'],
-  /** The Telegram service's e2e double (src/main/telegram/fake.ts): instant sign-in, fake
-   * Saved Messages media, and a file source that inflicts the DC's faults on demand. */
-  telegramFake: env['MERGELANE_E2E_TELEGRAM_FAKE'] === '1',
-  /** Milliseconds the fake source's every chunk takes — a pause window for tests. */
-  telegramDelayMs: positiveNumber('MERGELANE_E2E_TELEGRAM_DELAY_MS', 0),
   /** The browser bridge's socket, instead of the one in userData (macOS caps socket paths at 104
    * bytes, and a test's userData path is longer). */
   browserSocket: env['MERGELANE_E2E_BROWSER_SOCKET'],

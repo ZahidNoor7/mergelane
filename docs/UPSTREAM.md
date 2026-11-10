@@ -42,7 +42,17 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
   koffi, replacing the `localAddress`-only path.
 - Bridge: added `GET /health` (ready signal for packaging tests).
 - Updater: auto-install disabled (ADR-0010).
-- Telegram: kept unchanged for now (ADR-0012).
+- Telegram source removed (owner decision 2026-11-11, superseding ADR-0012; branch `m2.6-remove-telegram`):
+  - Deleted `src/main/telegram/`, `src/main/download/telegramTransfer.ts`, `TelegramDialog.tsx` and
+    `e2e/telegram.spec.ts`.
+  - Removed the Telegram parts of the download manager, transfer, history, shared types, IPC channels and
+    contract, preload, IPC handlers, test knobs, renderer store, the Downloads toolbar and empty state, the
+    finished-download view, `e2e/fixtures.ts`, and the build-time `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`
+    defines in `electron.vite.config.ts`.
+  - Dropped the `telegram`, `qrcode`, `big-integer` and `@types/qrcode` dependencies, which only it used.
+  - Telegram downloads and history entries saved by an older build are dropped on load, like any saved
+    download this version can't restore (`e2e/recovery.spec.ts`).
+  - When replaying Plexo fixes, skip changes to the deleted files.
 - The extension stays at `app/extension` in Phase 1 (ADR-0014).
 - Electron fuses hardened at package time (ADR-0016).
 - Removed: Plexo's website (`docs/`), its workflows, the release-notes script and its spec, the website download

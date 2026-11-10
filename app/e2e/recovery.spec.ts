@@ -190,6 +190,121 @@ test.describe('persisted state on disk @smoke', () => {
     await mergelane.waitForHttpStatus('completed')
   })
 
+  // The Telegram source was removed (ADR-0012, superseded). A build that still had it may have
+  // saved a Telegram download and finished ones in history: this version neither restores nor
+  // lists them, and never shows them as a broken row.
+  test('Telegram downloads an older build saved are dropped, partial data and all', async ({
+    mergelane,
+    serve,
+    dirs
+  }) => {
+    // A finished download and a paused one of this version's, which must stay.
+    const done = await serve({ size: 4 * BLOCK, seed: 41 })
+    await mergelane.start(done.url(), done.sha256)
+    const finished = await mergelane.waitForStatus('completed')
+    const { id } = await pausedDownload(mergelane, serve, 42)
+    await mergelane.quit()
+    const root = join(dirs.userData, 'downloads')
+
+    // A paused Telegram download, as that build saved it: the paused download's manifest with
+    // the Telegram fields, and its staging file beside the destination.
+    const pausedId = '00000000-0000-4000-8000-000000000012'
+    const staging = join(dirs.dest, 'clip.mp4.mergelane')
+    const manifest = JSON.parse(await readFile(join(root, id, 'manifest.json'), 'utf-8'))
+    const { peakStreams: omitted, ...httpState } = manifest.state
+    void omitted
+    const telegramNetworks = httpState.networks.map((network: object) => ({
+      ...network,
+      transfer: 'telegram'
+    }))
+    await mkdir(join(root, pausedId))
+    await writeFile(
+      join(root, pausedId, 'manifest.json'),
+      JSON.stringify({
+        ...manifest,
+        partialPath: staging,
+        requestPayload: {
+          ...manifest.requestPayload,
+          kind: 'telegram',
+          url: 'telegram://saved-messages/1',
+          messageId: 1,
+          mediaType: 'video',
+          suggestedFileName: 'clip.mp4'
+        },
+        state: {
+          ...httpState,
+          id: pausedId,
+          kind: 'telegram',
+          url: 'telegram://saved-messages/1',
+          fileName: 'clip.mp4',
+          destinationPath: join(dirs.dest, 'clip.mp4'),
+          networks: telegramNetworks,
+          peakReaders: 1
+        }
+      })
+    )
+    await writeFile(staging, seededBytes(BLOCK, 43))
+
+    // A finished Telegram download in history, newest first, its file still on disk.
+    const historyPath = join(dirs.userData, 'history.json')
+    const history = JSON.parse(await readFile(historyPath, 'utf-8'))
+    expect(history.map((entry: { id: string }) => entry.id)).toEqual([finished.id])
+    const { peakStreams: omittedPeak, ...finishedEntry } = history[0]
+    void omittedPeak
+    const finishedId = '00000000-0000-4000-8000-000000000013'
+    const photo = join(dirs.dest, 'shot.jpg')
+    await writeFile(photo, 'the user’s photo')
+    await writeFile(
+      historyPath,
+      JSON.stringify([
+        {
+          ...finishedEntry,
+          id: finishedId,
+          kind: 'telegram',
+          url: 'telegram://saved-messages/2',
+          fileName: 'shot.jpg',
+          destinationPath: photo,
+          networks: finishedEntry.networks.map((network: object) => ({
+            ...network,
+            transfer: 'telegram'
+          })),
+          peakReaders: 1,
+          completedAt: Date.now()
+        },
+        ...history
+      ])
+    )
+
+    await mergelane.launch()
+    // Neither is restored or listed; this version's downloads are.
+    expect((await mergelane.api.listDownloads()).map((update) => update.state.id)).toEqual([id])
+    expect((await mergelane.api.listHistory()).map((entry) => entry.id)).toEqual([finished.id])
+    // And the window shows no row for either.
+    await expect(
+      mergelane.page.getByRole('button', { name: `Open ${finished.fileName}` })
+    ).toBeVisible()
+    await expect(mergelane.page.getByRole('button', { name: 'Open shot.jpg' })).toHaveCount(0)
+    await expect(mergelane.page.getByText('clip.mp4')).toHaveCount(0)
+    // The paused one is cleared, partial data and all, as any download this version can't
+    // restore is.
+    for (const gone of [join(root, pausedId), staging]) {
+      await expect.poll(() => existsSync(gone), { message: `${gone} cleared` }).toBe(false)
+    }
+    // The finished one's file is the user's: it stays.
+    expect(await readFile(photo, 'utf-8')).toBe('the user’s photo')
+    // Ours, not the download's: out of the way of the end-of-test check for stray files.
+    await rm(photo)
+
+    // The next save of history leaves the dropped entry out for good.
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
+    await expect
+      .poll(async () =>
+        JSON.parse(await readFile(historyPath, 'utf-8')).map((entry: { id: string }) => entry.id)
+      )
+      .toEqual([id, finished.id])
+  })
+
   test('a staging file cut short while the app was closed is fetched again', async ({
     mergelane,
     serve

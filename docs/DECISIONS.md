@@ -132,3 +132,14 @@ until the owner overrides it.
   - Gatekeeper's verdict on the quarantined app is "not notarised", not "damaged";
   - the app reaches its ready state after `xattr -dr com.apple.quarantine`, the documented install step.
 - Consequences: The one manual click ("Open Anyway") is not automated.
+
+## ADR-0020: CI paused, runs by hand only
+
+- Status: Owner (2026-11-10)
+- Decision: At the owner's request, `.github/workflows/ci.yml` runs only on `workflow_dispatch`. Pushes and pull
+  requests trigger nothing until the owner asks to resume (the original triggers are noted in the file).
+- Consequences:
+  - The kickoff requires the Phase 1 acceptance criteria to be shown passing in CI. While CI is paused, new
+    changes are not proven there.
+  - Runs that already passed remain the evidence, listed in `docs/PROGRESS.md`.
+  - Start a run with `gh workflow run ci.yml --ref <branch>`.

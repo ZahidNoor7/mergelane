@@ -1,9 +1,10 @@
 name: ci
 
+# Paused by the owner on 2026-11-10 (docs/DECISIONS.md ADR-0020): runs only when started by hand,
+# from the Actions tab or `gh workflow run ci.yml --ref <branch>`. To resume, restore:
+#   push: { branches: [main] }
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:

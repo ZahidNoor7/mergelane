@@ -22,8 +22,9 @@ import { testKnobs } from './testKnobs'
 // ADR-0021): the browser starts mergelane-nmhost, which relays each message here over a Unix
 // socket only this user can open. No network port is open, and web pages can't reach it.
 
-/** A request line, extension message included; anything longer is refused. */
-const MAX_LINE_BYTES = 1024 * 1024
+/** A request line: an extension message (at most 1 MiB, the host's limit) plus the host's small
+ * envelope around it; anything longer is refused. */
+const MAX_LINE_BYTES = 1024 * 1024 + 4096
 // The extension confirms within milliseconds of an answer; an unconfirmed offer is dropped.
 const HANDOFF_MS = 15_000
 

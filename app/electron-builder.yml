@@ -69,6 +69,17 @@ mac:
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
 npmRebuild: false
+# Electron fuses, flipped at package time, before signing. An REA audit of the first build found them
+# all at Electron's defaults; with runAsNode on, anyone could run the signed app as a plain Node.js
+# interpreter. The app never forks Node processes. It loads its UI with loadFile (file://), so
+# grantFileProtocolExtraPrivileges stays at its default.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 # Where a future update check looks (docs/DECISIONS.md ADR-0010). Builds never publish themselves
 # (--publish never).
 publish:

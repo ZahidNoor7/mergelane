@@ -13,6 +13,8 @@ settled by spike S1 before the work that depends on it starts.
 
 ## Updates since the plan was approved
 
+- Phase 1 is closed, pending the owner's approval. See `docs/PHASE-1-REPORT.md`.
+
 - D1–D10 below became ADR-0001 to ADR-0010 in `docs/DECISIONS.md`.
 - Spike S1 ran on `xcode-27` (macOS 27.0.1). Its findings are in ADR-0013, ADR-0015 and ADR-0017. The fake-link
   design in §6 is confirmed with one change: replies return over `lo0`, since pf `reply-to` does not work.

@@ -38,7 +38,14 @@ Last updated: 2026-11-10
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
-### In progress / not yet proven in CI
+### Phase 1 closed, pending the owner's approval
+
+The report is `docs/PHASE-1-REPORT.md` and the proposed next phase is `docs/PHASE-2.md`. On 2026-11-10 the owner
+chose to record criteria 1 (for PR #4's build), 2 and the app part of 6 as unproven for now, instead of
+starting one manual CI run. The latest build is installed on the owner's Mac (`/Applications/Mergelane.app`); the
+helper is not installed yet.
+
+### Not yet proven in CI
 
 CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
 
@@ -53,8 +60,10 @@ CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
 
 ### Next
 
-- Re-run CI by hand on `m1.4-system-merge` to prove criteria 1, 2 and 6 (app part); then the Phase 1 summary
-  PR.
+- Owner: review `docs/PHASE-1-REPORT.md` and `docs/PHASE-2.md`, merge PRs #1–#4 in order, and answer the
+  Phase 2 questions.
+- When CI is back on: prove criteria 1, 2 and the app part of 6 with
+  `gh workflow run ci.yml --ref m1.4-system-merge`.
 - **Daemon `run` coverage:** unit tests cover all of `cmd/mergelane-daemon` except `run`. The root acceptance
   run measured 38.7% of that package (only clean exits write counters). Raising it means splitting `run`'s
   wiring from its privileged steps.

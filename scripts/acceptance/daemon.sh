@@ -57,7 +57,8 @@ start_daemon() {
     "$DAEMON" status >/dev/null 2>&1 && break
     sleep 0.1
   done
-  DAEMON_PID=$(pgrep -f "$BIN/mergelane-daemon run" | head -1)
+  # The daemon itself, not the sudo that started it (killing sudo would leave the daemon running).
+  DAEMON_PID=$(pgrep -f "^$BIN/mergelane-daemon run" | head -1)
   "$DAEMON" status || return 1
 }
 
@@ -186,7 +187,7 @@ sudo bash "$ROOT/scripts/netsim/netsim.sh" restore 2
 
 step "A clean stop turns merging off and removes its routes"
 sudo kill -TERM "$DAEMON_PID" # also writes this run's coverage counters
-for _ in $(seq 1 50); do pgrep -f "$BIN/mergelane-daemon run" >/dev/null || break; sleep 0.1; done
+for _ in $(seq 1 50); do pgrep -f "^$BIN/mergelane-daemon run" >/dev/null || break; sleep 0.1; done
 if capture_routes | grep -q .; then fail "capture routes left after SIGTERM"; else pass "SIGTERM: no capture routes left"; fi
 
 step "Criterion 4: kill -9 leaves no Mergelane routes; connectivity intact"
@@ -195,8 +196,10 @@ wait_links_up || fail "links not up"
 "$DAEMON" on >/dev/null || fail "enable failed"
 UTUN=$(our_utun)
 capture_routes | grep -q "$UTUN" || fail "capture routes missing before the kill"
+echo "kill -9 daemon pid $DAEMON_PID"
 sudo kill -9 "$DAEMON_PID"
 sleep 1
+pgrep -fl "^$BIN/mergelane-daemon run" && fail "the daemon survived kill -9"
 if capture_routes | grep -q .; then fail "capture routes survived kill -9"; else pass "capture routes died with the daemon"; fi
 echo "marked routes left before cleanup (removed by the next start, ADR-0007):"
 marked_routes
@@ -223,7 +226,7 @@ sudo "$DAEMON" uninstall && pass "uninstalled" || fail "uninstall failed"
 if diff <(echo "$BEFORE") <(routes); then pass "routing table unchanged after uninstall"; else fail "routing differs after uninstall"; fi
 
 step "Coverage of the daemon binary in these runs"
-go tool covdata percent -i="$COVER" 2>/dev/null | grep -E 'cmd/mergelane-daemon|internal/(control|tun|api|vpnguard|routemark|rib|launchd)\s' || true
+(cd "$ROOT/daemon" && go tool covdata percent -i="$COVER") || echo "(no coverage data)"
 
 echo
 if [ "$FAILED" -eq 0 ]; then echo "daemon acceptance: PASS"; else echo "daemon acceptance: $FAILED FAILED"; fi

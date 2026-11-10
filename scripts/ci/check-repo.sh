@@ -29,8 +29,8 @@ done
 
 TRACKED=$(git -C "$ROOT" ls-files)
 
-# 3. FFmpeg and yt-dlp ship as separate executables fetched at build time; they are never committed.
-bundled=$(printf '%s\n' "$TRACKED" | grep -E '(^|/)(ffmpeg|ffprobe|yt-dlp|yt-dlp_macos)(\.exe)?$' || true)
+# 3. FFmpeg, yt-dlp and Deno ship as separate executables fetched at build time; they are never committed.
+bundled=$(printf '%s\n' "$TRACKED" | grep -E '(^|/)(ffmpeg|ffprobe|yt-dlp|yt-dlp_macos|deno)(\.exe)?$' || true)
 [ -n "$bundled" ] && fail "third-party executable committed (fetch it at build time instead): $bundled"
 
 # 4. No compiled binaries in the repository.

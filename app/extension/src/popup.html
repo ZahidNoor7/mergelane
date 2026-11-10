@@ -43,6 +43,29 @@
         gap: 10px;
         border-bottom: 0.5px solid var(--border);
       }
+      #video {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      #video h2,
+      #video p {
+        margin: 0;
+      }
+      #video-name {
+        font-size: 12.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #video-status {
+        font-size: 12px;
+      }
+      #video-status:empty {
+        display: none;
+      }
       #media {
         padding: 12px 14px 6px;
         border-bottom: 0.5px solid var(--border);
@@ -103,6 +126,9 @@
         min-width: 88px;
         transition: transform 0.1s ease-out;
       }
+      #video-send {
+        width: 100%;
+      }
       /* Answers the press itself, not its release. */
       .media-send:active:not([aria-disabled='true']) {
         transform: scale(0.97);
@@ -112,6 +138,10 @@
       }
       .media-send[aria-busy='true'] {
         color: var(--text2);
+      }
+      #video-send[aria-busy='true'] {
+        color: var(--accent-on);
+        opacity: 0.75;
       }
       .media-send.sent {
         border-color: transparent;
@@ -173,6 +203,15 @@
         >
       </div>
     </div>
+
+    <section id="video" aria-labelledby="video-title" hidden>
+      <h2 class="title" id="video-title">YouTube video</h2>
+      <p id="video-name"></p>
+      <button type="button" class="primary media-send" id="video-send">
+        Send this video to Mergelane
+      </button>
+      <p class="muted" id="video-status" role="status" aria-atomic="true"></p>
+    </section>
 
     <section id="media" aria-labelledby="media-title" hidden>
       <h2 class="title" id="media-title">Videos on this page</h2>

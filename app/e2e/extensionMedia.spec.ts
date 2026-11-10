@@ -131,6 +131,10 @@ function startServer(): Promise<void> {
     if (url.pathname === '/page') {
       response.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' })
       response.end(PAGE)
+    } else if (url.pathname === '/watch') {
+      // A stand-in for a YouTube watch page: only its address and title matter.
+      response.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' })
+      response.end('<!doctype html><title>Me at the zoo - YouTube</title><p>video')
     } else if (url.pathname.startsWith('/media/')) {
       served.push(`${url.hostname}${url.pathname}`)
       // ?refuse: only the player gets it. Mergelane's check asks for a byte range, the page doesn't.
@@ -479,7 +483,7 @@ test.describe('Videos on this page @extension', () => {
     await expect.poll(() => badgeOf(mixed.tabId)).toBe('')
   })
 
-  test('YouTube and googlevideo streams are not listed (pending the owner’s decision)', async () => {
+  test('YouTube and googlevideo streams are not listed: a YouTube video goes by its page', async () => {
     const youtube = at(GOOGLEVIDEO_HOST, '/media/yt/manifest.m3u8')
     const control = at('127.0.0.1', '/media/yt-control/master.m3u8')
     const elsewhere = await visit(pageAt('127.0.0.1', youtube, control))
@@ -493,5 +497,57 @@ test.describe('Videos on this page @extension', () => {
     expect(served).toContain(`${YOUTUBE_HOST}/media/yt/watch.mpd`)
     expect(await listedBy(popup, onYoutube.tabId)).toBeNull()
     expect(await badgeOf(onYoutube.tabId)).toBe('')
+  })
+  test.describe('on a YouTube video’s page', () => {
+    // New download asks yt-dlp about the video it is sent; there is none here, so nothing in this
+    // test can reach YouTube.
+    test.use({
+      appEnv: { MERGELANE_E2E_BROWSER_SOCKET: SOCKET, MERGELANE_YTDLP_PATH: '/nonexistent/yt-dlp' }
+    })
+
+    test('the popup offers “Send this video to Mergelane”, which hands over its address only', async ({
+      mergelane
+    }) => {
+      const id = 'jNQXAC9IVRw'
+      const page = await newPage()
+      await page.goto(at(YOUTUBE_HOST, `/watch?v=${id}&list=PL0123&t=4s`))
+      const popup = await openPopup(await tabIdOf(page))
+      const video = popup.getByRole('region', { name: 'YouTube video' })
+      await expect(video).toContainText('Me at the zoo')
+      await expect(video).not.toContainText('- YouTube')
+
+      await expect
+        .poll(() => nativeMessage({ type: 'ping' }), { timeout: 15_000 })
+        .toMatchObject({ ok: true, app: 'mergelane' })
+      await video.getByRole('button', { name: 'Send this video to Mergelane' }).click()
+      // Its name changes as it goes: found by its place from here on.
+      const send = video.getByRole('button')
+      // The watch page alone: no playlist, no time, no cookies, no page.
+      await expect(mergelane.page.getByRole('textbox', { name: 'Link' })).toHaveValue(
+        `https://www.youtube.com/watch?v=${id}`,
+        { timeout: 20_000 }
+      )
+      await expect(send).toHaveText('Sent to Mergelane')
+      await expect(send).toHaveAttribute('aria-disabled', 'true')
+      await expect(video.getByRole('status')).toHaveText(
+        'Sent to Mergelane. Pick the quality in its New download window.'
+      )
+      await expect(
+        mergelane.page.getByText('Mergelane needs yt-dlp to download from YouTube', {
+          exact: false
+        })
+      ).toBeVisible()
+
+      // Any other page: no such offer.
+      const elsewhere = await visit(pageAt('127.0.0.1'))
+      const other = await openPopup(elsewhere.tabId)
+      await expect(other.getByText('Mergelane', { exact: true })).toBeVisible()
+      await expect(other.getByRole('region', { name: 'YouTube video' })).toBeHidden()
+      const playlist = await newPage()
+      await playlist.goto(at(YOUTUBE_HOST, '/watch?list=PL0123'))
+      const listPopup = await openPopup(await tabIdOf(playlist))
+      await expect(listPopup.getByText('Mergelane', { exact: true })).toBeVisible()
+      await expect(listPopup.getByRole('region', { name: 'YouTube video' })).toBeHidden()
+    })
   })
 })

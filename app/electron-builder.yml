@@ -20,7 +20,7 @@ files:
   - '!node_modules/node-datachannel/**'
   - '!node_modules/webrtc-polyfill/**'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  # yt-dlp and FFmpeg ship through extraResources below, not inside app.asar.
+  # yt-dlp, FFmpeg and Deno ship through extraResources below, not inside app.asar.
   - '!resources/bin/**'
 asarUnpack:
   - resources/**
@@ -43,6 +43,11 @@ extraResources:
     to: yt-dlp
   - from: resources/bin/ffmpeg
     to: ffmpeg
+  # Deno, the JavaScript runtime yt-dlp runs YouTube's player challenges in (ADR-0026). Fetched the
+  # same way; the app itself can't act as Node (ADR-0016). Re-signed with the hardened runtime and
+  # entitlementsInherit, whose allow-jit V8 needs.
+  - from: resources/bin/deno
+    to: deno
   - from: resources/bin/licenses
     to: licenses
 mac:

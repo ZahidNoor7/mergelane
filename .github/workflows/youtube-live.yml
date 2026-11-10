@@ -1,0 +1,78 @@
+name: youtube-live
+
+# The live YouTube smoke test (app/e2e/youtubeLive.spec.ts, ADR-0026): the pinned yt-dlp and Deno
+# against YouTube itself, then Mergelane's own download and FFmpeg join, for one small public video
+# from yt-dlp's own test suite. It is the early warning that YouTube changed and the pinned yt-dlp
+# needs an update. On failure it opens an issue (one at a time).
+#
+# Runs only when started by hand, from the Actions tab or `gh workflow run youtube-live.yml`, while
+# CI is paused (docs/DECISIONS.md ADR-0020). When CI resumes, add a nightly run:
+#   schedule:
+#     - cron: '17 3 * * *'
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: youtube-live
+  cancel-in-progress: false
+
+jobs:
+  youtube-live:
+    # macOS 27, arm64: see docs/DECISIONS.md ADR-0004.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: app/resources/bin
+          key: media-tools-${{ hashFiles('scripts/media-tools/tools.json', 'scripts/media-tools/licenses/**') }}
+      - name: Fetch yt-dlp, FFmpeg and Deno (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+        run: node ../scripts/media-tools/fetch.mjs
+      - name: Download one public video from YouTube
+        env:
+          MERGELANE_YOUTUBE_LIVE: '1'
+        run: npx playwright test e2e/youtubeLive.spec.ts --grep @youtube-live
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: youtube-live-report
+          path: app/playwright-report
+          retention-days: 14
+
+  report:
+    needs: youtube-live
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue, unless one is already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title='YouTube live smoke test failed'
+          open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "An issue is already open for this."
+            exit 0
+          fi
+          gh issue create --title "$title" --body "The live YouTube smoke test (app/e2e/youtubeLive.spec.ts) failed: $RUN_URL
+
+          YouTube may have changed. Check whether a newer yt-dlp release fixes it, and update the pin in scripts/media-tools/tools.json (docs/MEDIA-TOOLS.md, Updating a pinned version)."

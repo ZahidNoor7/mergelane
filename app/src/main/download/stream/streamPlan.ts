@@ -201,6 +201,8 @@ export async function resolveStream(
   variantId: string | undefined,
   options: StreamFetchOptions = {}
 ): Promise<ResolvedStream> {
+  // yt-dlp, not a manifest, says what a YouTube video takes (see youtubeStream.ts).
+  if (protocol === 'youtube') throw new TypeError('A YouTube video has no manifest to read')
   if (protocol === 'hls') {
     const resolved = await resolveHls(url, {
       fetch: options.fetch,

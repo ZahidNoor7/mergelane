@@ -23,8 +23,24 @@ export interface NetworkRoute {
 
 export type RemoteAddress = { address: string; family: IpFamily }
 
-/** Test seam for an AAAA-only hostname without modifying system DNS. */
-type ResolveHost = (host: string) => Promise<RemoteAddress[]>
+/** Test seam for an AAAA-only hostname without modifying system DNS; also how a connection keeps
+ * to one address family (see oneFamily). */
+export type ResolveHost = (host: string) => Promise<RemoteAddress[]>
+
+/** The system's addresses for a host, in its order. */
+async function systemLookup(name: string): Promise<RemoteAddress[]> {
+  return (await lookup(name, { all: true, order: 'verbatim' })) as RemoteAddress[]
+}
+
+/** A resolver that keeps to one address family, the one `family()` names when the connection is
+ * opened: for a server that ties what it hands out to the address that asked (YouTube's media
+ * addresses), so every connection over a network leaves from the same one. */
+export function oneFamily(family: () => IpFamily): ResolveHost {
+  return async (name) => {
+    const wanted = family()
+    return (await systemLookup(name)).filter((address) => address.family === wanted)
+  }
+}
 
 /** URL.hostname brackets IPv6 literals; sockets and isIP expect the unbracketed address. */
 export function targetHost(target: URL): string {
@@ -33,8 +49,7 @@ export function targetHost(target: URL): string {
 
 async function resolveTarget(
   host: string,
-  resolveHost: ResolveHost = async (name) =>
-    (await lookup(name, { all: true, order: 'verbatim' })) as RemoteAddress[]
+  resolveHost: ResolveHost = systemLookup
 ): Promise<RemoteAddress[]> {
   const literalFamily = isIP(host)
   if (literalFamily) return [{ address: host, family: literalFamily as IpFamily }]
@@ -348,9 +363,10 @@ async function connectOnInterface(
 }
 
 /**
- * A socket to `host` through `iface` for a protocol other than HTTP (NNTP, see nzb/nntp.ts):
- * raced over the network's routes as an HTTP stream's is, with TLS on top when `tls` is set,
- * verified against `host`, and through the network's `proxy` when one is set.
+ * A socket to `host` through `iface` for a protocol other than HTTP (NNTP, see nzb/nntp.ts; the
+ * tunnels of YouTube's loopback proxy, see media/youtube/proxy.ts): raced over the network's
+ * routes as an HTTP stream's is, with TLS on top when `tls` is set, verified against `host`, and
+ * through the network's `proxy` when one is set. `resolveHost` replaces the system's lookup.
  */
 export function connectThrough(
   iface: NetworkInterfaceInfo,
@@ -359,13 +375,14 @@ export function connectThrough(
   tls: boolean,
   timeoutMs: number,
   signal: AbortSignal,
-  proxy?: ProxyConfig
+  proxy?: ProxyConfig,
+  resolveHost?: ResolveHost
 ): Promise<Socket> {
   const secure = tls
     ? (socket: Socket): Socket =>
         tlsConnect({ socket, servername: isIP(host) ? undefined : host, host })
     : null
-  return connectOnInterface(iface, host, port, secure, timeoutMs, signal, undefined, proxy)
+  return connectOnInterface(iface, host, port, secure, timeoutMs, signal, resolveHost, proxy)
 }
 
 /** What a request passes its agent: Node hands a request's options to the agent's

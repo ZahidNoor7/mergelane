@@ -55,8 +55,12 @@ function root(): Promise<string> {
   return (rootPromise ??= mkdtemp(join(tmpdir(), 'mergelane-mux-')))
 }
 
+// Fully parallel, a worker can be handed more of this file's tests after its afterAll: the folder
+// is made again on demand (as in streamTransfer.spec.ts).
 test.afterAll(async () => {
-  if (rootPromise) await rm(await rootPromise, { recursive: true, force: true })
+  const removed = rootPromise
+  rootPromise = undefined
+  if (removed) await rm(await removed, { recursive: true, force: true })
 })
 
 /** A fresh, empty folder for one test. */

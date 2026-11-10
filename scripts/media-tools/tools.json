@@ -36,6 +36,23 @@
       "sourceUrl": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
       "checksumSource": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip.sha256",
       "buildScriptUrl": "https://git.martin-riedl.de/ffmpeg/build-script"
+    },
+    {
+      "name": "deno",
+      "version": "2.9.8",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip",
+      "sha256": "9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e",
+      "archive": "zip",
+      "archivePath": "deno",
+      "binarySha256": "d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/denoland/deno/blob/v2.9.8/LICENSE.md",
+      "licenseFiles": [
+        "licenses/deno/LICENSE.md"
+      ],
+      "sourceUrl": "https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz",
+      "checksumSource": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip.sha256sum",
+      "binaryChecksumSource": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.sha256sum"
     }
   ]
 }

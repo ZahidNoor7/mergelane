@@ -1,5 +1,6 @@
 import { api } from './api'
 import type { BridgeAddRequest } from '../../src/shared/browserBridge'
+import { youtubeLink } from '../../src/shared/youtube'
 import type { HandOver, MediaRequest } from './media'
 import { mediaOf, styleBadge, watchMedia } from './mediaWatch'
 import { browserContext, confirm, reach, send, storeOf, wake, type Reach } from './mergelane'
@@ -126,6 +127,15 @@ async function sendMedia(tabId: number, url: string): Promise<HandOver> {
   })
 }
 
+/** The YouTube video tab `tabId` shows, clicked in the popup. Only its address goes: no cookies, no
+ * page, nothing of the browser's (ADR-0026). Mergelane's yt-dlp looks it up. */
+async function sendVideo(tabId: number): Promise<HandOver> {
+  const tab = await api.tabs.get(tabId).catch(() => undefined)
+  const video = tab?.url ? youtubeLink(tab.url) : null
+  if (video?.kind !== 'video') return 'kept'
+  return handOver({ url: video.url })
+}
+
 // Run on install and on every browser start: menus and alarms don't always survive a restart.
 function setUp(): void {
   createMenu()
@@ -176,6 +186,11 @@ api.runtime.onMessage.addListener((message, sender, reply) => {
   const { tabId, url } = (media.sendMedia ?? {}) as { tabId?: unknown; url?: unknown }
   if (typeof tabId === 'number' && typeof url === 'string') {
     void sendMedia(tabId, url).then(reply)
+    return true
+  }
+  const { tabId: videoTab } = (media.sendVideo ?? {}) as { tabId?: unknown }
+  if (typeof videoTab === 'number') {
+    void sendVideo(videoTab).then(reply)
     return true
   }
   return undefined

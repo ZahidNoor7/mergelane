@@ -97,6 +97,12 @@ before(async () => {
   execFileSync('/usr/bin/tar', ['-czf', join(build, 'tool.tar.gz'), '-C', build, 'pkg'])
   bodies.zip = readFileSync(join(build, 'tool.zip'))
   bodies.tar = readFileSync(join(build, 'tool.tar.gz'))
+  // Deno's release zip holds the program alone, at its top level.
+  mkdirSync(join(build, 'deno-zip'))
+  compile('arm64', join(build, 'deno-zip', 'deno'))
+  bodies.deno = readFileSync(join(build, 'deno-zip', 'deno'))
+  execFileSync('/usr/bin/ditto', ['-c', '-k', join(build, 'deno-zip', 'deno'), join(build, 'deno.zip')])
+  bodies.denoZip = readFileSync(join(build, 'deno.zip'))
 
   // An archive whose "executable" sits behind a symlink that leads out of the archive.
   const outside = join(root, 'outside')
@@ -117,6 +123,7 @@ before(async () => {
     '/text': (res) => res.end(bodies.text),
     '/tool.zip': (res) => res.end(bodies.zip),
     '/tool.tar.gz': (res) => res.end(bodies.tar),
+    '/deno.zip': (res) => res.end(bodies.denoZip),
     '/evil.tar.gz': (res) => res.end(bodies.evil),
     // A relative redirect, then an absolute one, as GitHub's release downloads do.
     '/hop1': (res) => res.writeHead(302, { location: '/hop2' }).end(),
@@ -151,7 +158,7 @@ describe('the committed manifest', () => {
     const manifest = await loadManifest(DEFAULT_MANIFEST)
     assert.deepEqual(
       manifest.tools.map((t) => t.name),
-      ['yt-dlp', 'ffmpeg']
+      ['yt-dlp', 'ffmpeg', 'deno']
     )
     for (const t of manifest.tools) {
       assert.ok(t.url.startsWith('https://'), t.url)
@@ -163,6 +170,72 @@ describe('the committed manifest', () => {
 
   test('installs into app/resources/bin by default', () => {
     assert.ok(DEFAULT_OUT_DIR.endsWith(join('app', 'resources', 'bin')), DEFAULT_OUT_DIR)
+  })
+})
+
+describe('Deno, the JavaScript runtime yt-dlp needs for YouTube', () => {
+  const pinned = async () =>
+    (await loadManifest(DEFAULT_MANIFEST)).tools.find((entry) => entry.name === 'deno')
+
+  test('is pinned to the publisher’s checksums of the arm64 zip and of the program in it', async () => {
+    const deno = await pinned()
+    const release = `https://github.com/denoland/deno/releases/download/v${deno.version}`
+    assert.match(deno.version, /^\d+\.\d+\.\d+$/)
+    assert.equal(deno.url, `${release}/deno-aarch64-apple-darwin.zip`)
+    assert.equal(deno.archive, 'zip')
+    assert.equal(deno.archivePath, 'deno')
+    // The zip's hash is in deno-aarch64-apple-darwin.zip.sha256sum, the program's in
+    // deno-aarch64-apple-darwin.sha256sum: both published with the release.
+    assert.equal(deno.checksumSource, `${release}/deno-aarch64-apple-darwin.zip.sha256sum`)
+    assert.equal(deno.binaryChecksumSource, `${release}/deno-aarch64-apple-darwin.sha256sum`)
+    assert.match(deno.sha256, /^[0-9a-f]{64}$/)
+    assert.match(deno.binarySha256, /^[0-9a-f]{64}$/)
+    assert.notEqual(deno.sha256, deno.binarySha256)
+  })
+
+  test('is MIT: its licence text is committed, and there is no source to attach', async () => {
+    const deno = await pinned()
+    assert.equal(deno.license, 'MIT')
+    assert.deepEqual(deno.licenseFiles, ['licenses/deno/LICENSE.md'])
+    const text = readFileSync(join(HERE, 'licenses', 'deno', 'LICENSE.md'), 'utf8')
+    assert.match(text, /^MIT License\n\nCopyright 2018-\d{4} the Deno authors\n/)
+    // sources.mjs downloads the source of every tool with a sourceSha256 for each release; an MIT
+    // program needs none (ADR-0027).
+    assert.equal(deno.sourceSha256, undefined)
+    assert.ok(deno.sourceUrl.startsWith('https://github.com/denoland/deno/'), deno.sourceUrl)
+  })
+
+  test('installs from a zip that holds the program at its top level, as Deno’s does', async () => {
+    const entry = tool({
+      name: 'deno',
+      url: `${base}/deno.zip`,
+      sha256: hashOf(bodies.denoZip),
+      archive: 'zip',
+      archivePath: 'deno',
+      binarySha256: hashOf(bodies.deno)
+    })
+    const outDir = freshOut()
+    assert.equal(await fetchTool(entry, { outDir, manifestDir }), 'installed')
+    assert.equal(await sha256File(join(outDir, 'deno')), hashOf(bodies.deno))
+    assert.equal(mode(join(outDir, 'deno')), 0o755)
+    assert.deepEqual(readdirSync(join(outDir, 'licenses')), ['deno'])
+    // Checked on the program's own hash from then on, not downloaded again.
+    const before = hits['/deno.zip']
+    assert.equal(await fetchTool(entry, { outDir, manifestDir }), 'up-to-date')
+    assert.equal(hits['/deno.zip'], before)
+
+    // A zip that matches its pin but holds another program is refused, and nothing is installed.
+    const elsewhere = freshOut()
+    await assert.rejects(
+      fetchTool({ ...entry, binarySha256: hashOf('another deno') }, { outDir: elsewhere, manifestDir }),
+      /deno: SHA-256 mismatch for deno in the archive/
+    )
+    assert.deepEqual(readdirSync(elsewhere), [])
+    // And a zip that doesn't match its pin isn't even opened.
+    await assert.rejects(
+      fetchTool({ ...entry, sha256: hashOf('another zip') }, { outDir: freshOut(), manifestDir }),
+      /deno: SHA-256 mismatch for http:\/\/127\.0\.0\.1:\d+\/deno\.zip/
+    )
   })
 })
 

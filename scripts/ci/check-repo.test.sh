@@ -65,6 +65,10 @@ mkdir -p "$F/vendor" && echo "x" >"$F/vendor/yt-dlp.exe" && git -C "$F" add -A
 expect "committed yt-dlp.exe" 1 "third-party executable committed" "$F"
 
 make_fixture "$F"
+mkdir -p "$F/app/resources/bin" && echo "not really deno" >"$F/app/resources/bin/deno" && git -C "$F" add -A
+expect "committed deno" 1 "third-party executable committed" "$F"
+
+make_fixture "$F"
 cp /usr/bin/true "$F/helper" && git -C "$F" add -A
 expect "committed universal Mach-O binary" 1 "compiled binary committed: helper" "$F"
 

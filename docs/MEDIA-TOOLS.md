@@ -1,12 +1,13 @@
-# Media tools: yt-dlp and FFmpeg
+# Media tools: yt-dlp, FFmpeg and Deno
 
-Mergelane uses two outside programs for video:
+Mergelane uses three outside programs for video:
 
-- **yt-dlp** finds and downloads video from websites.
+- **yt-dlp** finds a YouTube video's formats (ADR-0026). Mergelane downloads them itself.
 - **FFmpeg** joins separate audio and video tracks, and turns HLS and DASH streams into normal files.
+- **Deno** is the JavaScript runtime yt-dlp runs YouTube's player challenges in (see "Deno" below).
 
-CLAUDE.md requires that both ship only as separate programs inside the app, fetched when the app is built, checked
-against pinned SHA-256 checksums, and never committed to git. This page says which exact builds we use, why, and
+CLAUDE.md requires that all of them ship only as separate programs inside the app, fetched when the app is built,
+checked against pinned SHA-256 checksums, and never committed to git. This page says which exact builds we use, why, and
 what their licences ask of us.
 
 ## In short
@@ -47,8 +48,23 @@ We use the official release from https://github.com/yt-dlp/yt-dlp/releases/tag/2
   yt-dlp also signs `SHA2-256SUMS` with GPG; that signature was not checked here because GPG is not installed.
 - It is ad-hoc signed (no Apple Developer ID). Mergelane re-signs everything in its bundle anyway.
 
-Not part of this change, but worth knowing for the YouTube review: yt-dlp's README says full YouTube support now also
-needs `yt-dlp-ejs` and a JavaScript runtime such as Deno or Node.js.
+For YouTube, yt-dlp also needs `yt-dlp-ejs` (its challenge-solver scripts) and a JavaScript runtime. Checked on
+2026-11-11 against the pinned program:
+
+- **The scripts are built into `yt-dlp_macos`.** Its `--verbose` header lists `yt_dlp_ejs-0.8.0` among its libraries,
+  and the README says of `--remote-components`: "This option is currently not needed if you are using an official
+  executable". yt-dlp checks the scripts against SHA3-512 hashes kept in its own code
+  (`yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py`, version 0.8.0), so they are pinned with the program.
+- **Nothing is fetched at run time.** Mergelane passes `--no-remote-components`; yt-dlp would otherwise only fetch
+  scripts from npm or GitHub when told to (`ejs:npm`, `ejs:github`, which are off by default).
+- **The runtime is ours.** `--no-js-runtimes --js-runtimes deno:<path>` enables only the bundled Deno (the header
+  then reads `JS runtimes: deno-2.9.8`). yt-dlp runs it as `deno run --ext=js --no-code-cache --no-prompt
+  --no-remote --no-lock --node-modules-dir=none --no-config --no-npm --cached-only -`
+  (`jsc/_builtin/deno.py`).
+- **It starts slowly.** `yt-dlp_macos` is a PyInstaller "one-file" program: every run unpacks itself into a new
+  temporary folder. On this Mac each run took about 24 seconds before doing anything (`--version` included), while
+  the unpacked `yt-dlp_macos.zip` took 24 seconds once and 0.25 seconds after. Each YouTube video costs at least
+  two runs (New download, then one per network as it downloads). See the open questions.
 
 ## FFmpeg: which build and why
 
@@ -75,6 +91,35 @@ What was checked on the chosen download:
 The trust trade-off: Martin Riedl's server is a one-person project and ffmpeg.org does not link to it. We rely on him
 for what is inside the build. The pinned checksums mean the file can never change under us without the build failing,
 and the Developer ID signature identifies who built it.
+
+## Deno: which file and why
+
+yt-dlp needs a JavaScript runtime for YouTube (README, "Dependencies": "A JavaScript runtime/engine like deno
+(recommended)"). The app itself can't be it: its `runAsNode` fuse is off (ADR-0016).
+
+| | Deno |
+|---|---|
+| Version | 2.9.8 (latest stable release on 2026-11-11, published 2026-10-21) |
+| Comes from | Deno's own GitHub release, https://github.com/denoland/deno/releases/tag/v2.9.8 |
+| File | `deno-aarch64-apple-darwin.zip` (38.8 MB), containing one 81.5 MB program, `deno` |
+| Runs on Apple silicon | Yes: arm64 only (`lipo -archs`) |
+| Checksums published by the source | Yes: `deno-aarch64-apple-darwin.zip.sha256sum` for the zip, `deno-aarch64-apple-darwin.sha256sum` for the program |
+| Licence | MIT |
+
+What was checked on the download (2026-11-11):
+
+- The zip's SHA-256, `9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e`, matches its `.sha256sum`
+  file and GitHub's record of the upload.
+- The program's SHA-256, `d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba`, matches the release's
+  `deno-aarch64-apple-darwin.sha256sum`. Both are pinned in `tools.json`.
+- It is signed with Deno's Developer ID ("Deno Land Inc. (2H4KBF436B)"), links only macOS's own libraries
+  (`otool -L`), and `deno --version` printed `deno 2.9.8 (stable, release, aarch64-apple-darwin)`.
+- Re-signed ad-hoc with the hardened runtime and the app's `entitlements.mac.plist` (as electron-builder does), it
+  still runs JavaScript with the flags yt-dlp uses: V8 needs the `allow-jit` entitlement, which that file has. The
+  packaging test checks this on the real bundle.
+- Deno writes caches it can't be told not to into `DENO_DIR` (yt-dlp's code says "Can't avoid analysis cache").
+  Mergelane points `DENO_DIR` at a folder of its own for each yt-dlp run and deletes it after, and sets
+  `DENO_NO_UPDATE_CHECK` and `DENO_NO_PROMPT` (all from `deno --help`, "Environment variables").
 
 ## Licences, in plain words
 
@@ -116,6 +161,16 @@ This is a summary for planning, not legal advice.
   is shipped, the documentation must state that "this software is based in part on the work of the Independent JPEG
   Group". That sentence goes in `THIRD-PARTY-NOTICES.md`.
 - Texts: `licenses/ffmpeg/LICENSE.md` and `licenses/ffmpeg/COPYING.GPLv3`, both from FFmpeg's `n9.0.2` tag.
+
+### Deno
+
+- Deno is released under the **MIT** licence: `licenses/deno/LICENSE.md`, from the `v2.9.8` tag. It asks only that
+  the notice ships with the program, which the fetch script and the packaging config do.
+- Being MIT, it needs no source offer (ADR-0027), so `tools.json` gives no `sourceSha256` for it and the release
+  doesn't attach its source.
+- The program also contains V8 (BSD-3-Clause), TypeScript (Apache-2.0) and many Rust libraries under their own
+  permissive licences. Deno's release publishes no list of them, and they are not collected here yet (see the open
+  questions).
 
 ### What the GPL means for Mergelane
 
@@ -171,6 +226,14 @@ node --test --experimental-test-coverage --test-coverage-include='scripts/media-
 
 Do this in a scratch folder, never in the repository.
 
+- **Deno:** `gh api repos/denoland/deno/releases/latest`. Download `deno-aarch64-apple-darwin.zip`, its
+  `.zip.sha256sum` and `deno-aarch64-apple-darwin.sha256sum` from that release. Check the zip against the first,
+  unpack it with `ditto -x -k`, check the program against the second, and run `lipo -archs` and `deno --version`. In
+  `tools.json`, update `version`, `url`, `sha256`, `binarySha256`, `sourceUrl`, `checksumSource` and
+  `binaryChecksumSource`. Replace `licenses/deno/LICENSE.md` with the file from the new tag. yt-dlp 2026.10.26 needs
+  Deno 2.3.0 or later (`MIN_SUPPORTED_VERSION` in `yt_dlp/utils/_jsruntime.py`); check that again when either
+  changes.
+
 1. **yt-dlp:** `gh api repos/yt-dlp/yt-dlp/releases/latest`. Download `yt-dlp_macos` and `SHA2-256SUMS` from that
    release, check that `shasum -a 256 yt-dlp_macos` matches its line in `SHA2-256SUMS`, and run
    `lipo -archs` on it. In `tools.json`, update `version`, `url`, `sha256`, `sourceUrl`, `sourceSha256` (the
@@ -188,7 +251,8 @@ Do this in a scratch folder, never in the repository.
 ## Where they go in the app
 
 The fetch writes to `app/resources/bin/` (ignored by git). Packaging then copies the programs to
-`Mergelane.app/Contents/Resources/yt-dlp` and `…/ffmpeg`, and the licence texts to `…/Contents/Resources/licenses/`
+`Mergelane.app/Contents/Resources/yt-dlp`, `…/ffmpeg` and `…/deno`, and the licence texts to
+`…/Contents/Resources/licenses/`
 (the `electron-builder.yml` change is proposed, not yet applied). In development, the app can run them from
 `app/resources/bin/`.
 
@@ -202,7 +266,13 @@ The fetch writes to `app/resources/bin/` (ignored by git). Packaging then copies
    matching ffprobe 9.0.2. Add it as a third pinned tool? (It was not downloaded or checked here.)
 4. **yt-dlp format:** keep the single-file `yt-dlp_macos`, or switch to the unpacked `yt-dlp_macos.zip`, which starts
    faster? The packaging test should run the bundled `yt-dlp --version` either way, because Mergelane re-signs it with
-   the hardened runtime.
+   the hardened runtime. Measured since (see "yt-dlp: which file and why"): the single file took about 24 seconds per
+   run on this Mac, the unpacked one 0.25 seconds after its first run (SHA-256
+   `20d98fa608998eff87d1d35a6e9fb65e4b874639a6cc89addc19da3becde3ef1`, in the same `SHA2-256SUMS`). Switching needs
+   the fetch script to install a folder (134 files) rather than one program. Recommended, but ADR-0022 names the
+   single file, so it is your call.
+7. **Deno's bundled components:** collect the licence notices of what is built into Deno (V8, TypeScript and its Rust
+   libraries) into `licenses/deno/`, as for FFmpeg's libraries in question 5?
 5. **Per-library notices for FFmpeg:** the build bundles about thirty libraries, several under BSD, MIT or Apache
    licences that ask for their notices to be shipped. Collect each library's licence text into
    `licenses/ffmpeg/` as a follow-up?

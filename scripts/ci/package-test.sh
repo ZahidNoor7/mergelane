@@ -114,6 +114,19 @@ echo "bundled browser host: $nmhost_version"
 for f in licenses/ffmpeg/COPYING.GPLv3 licenses/yt-dlp/GPL-3.0.txt; do
   [ -s "$APP/Contents/Resources/$f" ] || fail "$f is missing from the bundle"
 done
+# Deno, which yt-dlp runs YouTube's player challenges in (ADR-0026): arm64 only, and it must still
+# run, with JIT, once re-signed with the hardened runtime.
+DENO="$APP/Contents/Resources/deno"
+[ -x "$DENO" ] || fail "the bundled deno is missing"
+[ "$(lipo -archs "$DENO")" = "arm64" ] || fail "the bundled deno is not arm64-only"
+deno_version=$(DENO_NO_UPDATE_CHECK=1 DENO_DIR="$WORK/deno" "$DENO" --version | head -n 1) ||
+  fail "the bundled deno does not run"
+echo "bundled deno: $deno_version"
+deno_sum=$(printf 'console.log(1 + 2)' |
+  DENO_NO_UPDATE_CHECK=1 DENO_DIR="$WORK/deno" "$DENO" run --ext=js --no-prompt --no-remote --no-config -) ||
+  fail "the bundled deno cannot run JavaScript"
+[ "$deno_sum" = "3" ] || fail "the bundled deno printed '$deno_sum' for 1 + 2"
+[ -s "$APP/Contents/Resources/licenses/deno/LICENSE.md" ] || fail "licenses/deno/LICENSE.md is missing from the bundle"
 open -n "$APP"
 
 step "Wait for the bridge socket's health message to report ready (up to ${READY_TIMEOUT_S}s)"

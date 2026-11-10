@@ -3,18 +3,24 @@ import { access, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 
 /** The outside programs Mergelane runs (docs/MEDIA-TOOLS.md). They ship as separate executables
- * and are never linked into the app (CLAUDE.md, Licensing). */
-export type MediaTool = 'ffmpeg' | 'yt-dlp'
+ * and are never linked into the app (CLAUDE.md, Licensing). Deno is the JavaScript runtime yt-dlp
+ * runs YouTube's player challenges in (ADR-0026). */
+export type MediaTool = 'ffmpeg' | 'yt-dlp' | 'deno'
 
 /** Environment variables that point a development build or the test suite at another copy of a
  * tool. A packaged app ignores them, as it ignores every test knob (see src/main/testKnobs.ts),
  * so a shipped app can't be steered into running some other program through its environment. */
 export const TOOL_PATH_ENV: Readonly<Record<MediaTool, string>> = {
   ffmpeg: 'MERGELANE_FFMPEG_PATH',
-  'yt-dlp': 'MERGELANE_YTDLP_PATH'
+  'yt-dlp': 'MERGELANE_YTDLP_PATH',
+  deno: 'MERGELANE_DENO_PATH'
 }
 
-const TOOL_LABEL: Readonly<Record<MediaTool, string>> = { ffmpeg: 'FFmpeg', 'yt-dlp': 'yt-dlp' }
+const TOOL_LABEL: Readonly<Record<MediaTool, string>> = {
+  ffmpeg: 'FFmpeg',
+  'yt-dlp': 'yt-dlp',
+  deno: 'Deno'
+}
 
 /** Where the app runs from. Injected rather than read from `electron`, so this module also runs in
  * plain Node (the e2e suite's Layer B). In the main process pass `app.isPackaged`,
@@ -63,8 +69,8 @@ const HINT: Readonly<Record<ToolSource, string>> = {
 }
 
 /**
- * Finds a media tool: `$MERGELANE_FFMPEG_PATH` / `$MERGELANE_YTDLP_PATH` when set (development and
- * tests only; it must be an absolute path), else `<resourcesPath>/<tool>` when packaged, else
+ * Finds a media tool: its variable in {@link TOOL_PATH_ENV} when set (development and tests only;
+ * it must be an absolute path), else `<resourcesPath>/<tool>` when packaged, else
  * `<appRoot>/resources/bin/<tool>`. The file must exist, be a regular file and be executable.
  *
  * Never throws for a missing tool: it resolves `{ path: null, reason }` with a sentence fit for

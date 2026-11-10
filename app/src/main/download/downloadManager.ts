@@ -89,10 +89,14 @@ import {
   resolveStream,
   streamContainer,
   streamFileName,
-  trackShape
+  trackShape,
+  type ResolvedStream
 } from './stream/streamPlan'
 import { StreamTransfer } from './stream/streamTransfer'
+import { planYoutube } from './stream/youtubeStream'
 import { resolveToolPath } from '../media/mux'
+import { youtubeTools } from '../mediaTools'
+import { YOUTUBE_NOT_A_VIDEO, youtubeLink } from '../../shared/youtube'
 import {
   clearSpeeds,
   delay,
@@ -882,7 +886,8 @@ export class DownloadManager {
         timeoutMs: testKnobs.stallTimeoutMs,
         connectTimeoutMs: testKnobs.connectTimeoutMs,
         streamsPerNetwork: testStreamsPerNetwork() ?? STREAM_REQUESTS_PER_NETWORK,
-        retryDelayMs: testKnobs.retryBaseDelayMs
+        retryDelayMs: testKnobs.retryBaseDelayMs,
+        youtube: youtubeTools
       })
     })
     return runtime
@@ -1487,28 +1492,54 @@ export class DownloadManager {
   /** A stream download, set up to start: its manifest read for the quality picked, its segments
    * planned, and its name claimed with the container its codecs call for (see
    * reserveStagingFolder). What the stream refuses (live, protected, too many segments) is said
-   * here, before anything is downloaded. */
+   * here, before anything is downloaded. A YouTube video is planned from what yt-dlp said of it
+   * (see planYoutube); each network asks for its own addresses once it runs. */
   private async startStream(
     id: string,
     requestPayload: StartStreamDownloadRequest,
     available: NetworkInterfaceInfo[],
     selected: NetworkInterfaceInfo[]
   ): Promise<StreamDownloadRuntime> {
-    const target = new URL(requestPayload.url)
-    const usable = compatibleInterfaces(
-      selected,
-      await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
-    )
-    if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
-    const resolved = await resolveStream(
-      requestPayload.url,
-      requestPayload.protocol,
-      requestPayload.variantId,
-      {
-        headers: requestHeaders(target, requestPayload.browser),
-        signal: AbortSignal.timeout(testKnobs.stallTimeoutMs)
+    let usable = selected
+    let resolved: ResolvedStream
+    let knownBytes = 0
+    if (requestPayload.protocol === 'youtube') {
+      const link = youtubeLink(requestPayload.url)
+      if (link?.kind !== 'video') throw new Error(link?.reason ?? YOUTUBE_NOT_A_VIDEO)
+      const plan = await planYoutube(link.url, requestPayload.variantId, youtubeTools)
+      // Never a cookie of the browser's for YouTube (ADR-0026). The formats picked are saved, not
+      // "the best", so a resumed download asks for the same ones.
+      const { browser: omitted, ...rest } = requestPayload
+      void omitted
+      requestPayload = { ...rest, url: link.url, variantId: plan.variantId }
+      resolved = {
+        protocol: 'youtube',
+        tracks: plan.tracks,
+        codecs: plan.codecs,
+        quality: plan.quality,
+        ...(plan.video.durationSeconds !== undefined && {
+          durationSeconds: plan.video.durationSeconds
+        })
       }
-    )
+      knownBytes = plan.choice.main.size + (plan.choice.audio?.size ?? 0)
+      await ensureDiskSpace(requestPayload.destinationDir, knownBytes)
+    } else {
+      const target = new URL(requestPayload.url)
+      usable = compatibleInterfaces(
+        selected,
+        await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
+      )
+      if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
+      resolved = await resolveStream(
+        requestPayload.url,
+        requestPayload.protocol,
+        requestPayload.variantId,
+        {
+          headers: requestHeaders(target, requestPayload.browser),
+          signal: AbortSignal.timeout(testKnobs.stallTimeoutMs)
+        }
+      )
+    }
     const tracks = planTracks(resolved.tracks)
     const blocks = planStreamBlocks(tracks)
     const destinationPath = await reserveStagingFolder(
@@ -1523,7 +1554,7 @@ export class DownloadManager {
       url: requestPayload.url,
       fileName: basename(destinationPath),
       destinationPath,
-      totalBytes: 0,
+      totalBytes: knownBytes,
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       status: 'downloading',

@@ -132,3 +132,38 @@ MIT-licensed code.
   - The configure line and library versions are in `licenses/ffmpeg/BUILD-VERSIONS.txt`.
 - Source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz. Build script: https://git.martin-riedl.de/ffmpeg/build-script.
 - This software is based in part on the work of the Independent JPEG Group.
+
+### Deno 2.9.8
+
+- Program: the official `deno-aarch64-apple-darwin.zip` release, https://github.com/denoland/deno/releases/tag/v2.9.8
+  (zip SHA-256 `9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e`, program SHA-256
+  `d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba`), shipped as `Contents/Resources/deno`. yt-dlp
+  runs it to solve YouTube's player challenges; Mergelane never runs it otherwise.
+- Licence: MIT. Text: `licenses/deno/LICENSE.md`.
+
+```text
+MIT License
+
+Copyright 2018-2026 the Deno authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+- The program includes V8 (BSD-3-Clause), TypeScript (Apache-2.0) and Rust libraries under their own permissive
+  licences; their notices are not yet collected here (see `docs/MEDIA-TOOLS.md`, open questions).
+- Source: https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz.

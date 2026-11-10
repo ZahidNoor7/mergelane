@@ -37,6 +37,13 @@ All notable changes to Mergelane are recorded here. The format follows
 - yt-dlp and FFmpeg ship inside the app, fetched at build time with pinned checksums.
 - A release workflow, run by hand.
 
+- System merge, for daily use:
+  - an optional "Turn back on after a crash" setting, off by default;
+  - networks that come back after unplugging, sleep or a reconnected phone are checked again from scratch, and
+    their routes are re-synced;
+  - the helper keeps a history of the last 50 network changes, shown in the app;
+  - new helper commands: `events` and `auto-resume on|off`.
+
 ### Changed
 
 - The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.

@@ -76,6 +76,7 @@ until the owner overrides it.
   - On every start the daemon runs cleanup and stays disabled until asked to enable.
   - The app explains that system merge was turned off after an unexpected stop.
 - Consequences: A crash costs the user a click. Auto re-enable may come back behind a setting in Phase 2.
+- Update (2026-11-11): the optional setting now exists, off by default (ADR-0024). With it off, this ADR still applies.
 
 ## ADR-0008: Faster link health checks
 
@@ -308,3 +309,53 @@ until the owner overrides it.
     owner chooses an approach.
 - Limits: manifests fetched by a site's service worker, built in JavaScript, served from `blob:` URLs or answered
   from Chrome's memory cache are not seen.
+
+## ADR-0024: Optional auto-resume after a crash (follows ADR-0007)
+
+- Status: Proposed (2026-11-11). Implemented in M2.4 (`daemon/internal/state/prefs.go`, `control.Resume`,
+  `cmd/mergelane-daemon/run.go`).
+- Decision:
+  - A new `setAutoResume {enabled}` setting, off by default. The daemon saves it in `prefs.json` in its state
+    directory, together with:
+    - `wantOn`: the user's last explicit choice (on or off);
+    - `cleanExit`: written false at start, true on SIGTERM or SIGINT.
+  - A start counts as a crash only when the previous run did not exit cleanly and either left marked routes or
+    had `wantOn` set. With no `prefs.json`, the routing table decides alone, as before.
+  - After a crash with the setting on, the daemon waits up to 10 s for a link to pass its probe, then runs every
+    check that `enable` runs (VPN guard, usable links) and turns merging back on. If any check fails, merging
+    stays off and the status reason says why.
+  - A clean restart always starts off: a reboot, a logout, or a helper update.
+- Consequences:
+  - With the user's consent, a crash no longer costs a click.
+  - Marked routes left after a clean exit are still cleaned up, but are no longer reported as a crash.
+  - After a helper update the daemon starts off, so the app turns merging back on itself if it was on before
+    the update.
+  - Tested in unit tests only. A real `kill -9`, launchd restart and route re-install needs the root acceptance
+    run in CI, which is paused (ADR-0020).
+
+## ADR-0025: Links that come back, and the link-event log
+
+- Status: Proposed (2026-11-11). Implemented in M2.4 (`daemon/internal/engine`, `daemon/internal/tun`,
+  `daemon/internal/nics`).
+- Context: after unplugging, sleep and wake, or a USB tether reconnecting, a link can disappear and return,
+  sometimes with a new interface index. Probe results from before the return could mark it down again, and the
+  scoped-route sync could forget or duplicate its own routes.
+- Decision:
+  - A link that vanishes and returns, or returns with a new interface index, starts again from scratch: state
+    unknown, cooldown cleared, counters reset, probed at the next tick. Probe results from before the return are
+    discarded when they arrive.
+  - The interface index is kept with the link's addresses and swapped atomically, so every pinned dial reads the
+    current index.
+  - The scoped-route sync tells its own routes from macOS's by the route marker (`RTF_PROTO2`, ADR-0018):
+    - macOS's own scoped default: left alone;
+    - ours with the right gateway: adopted, even if the sync had lost track of it;
+    - ours with an old gateway: replaced;
+    - a link whose only default route is scoped: left to macOS.
+  - The daemon keeps the last 50 link changes in memory and serves them through a new `events` method (protocol
+    v1, additive), oldest first. States: `up`, `unknown`, `down`, `gone`. Reasons: `found`, `lost`, `returned`,
+    `address`, `probe-ok`, `probe-failed`.
+- Consequences:
+  - Failover history can be shown in the app, from the daemon's own record.
+  - The history is lost when the daemon restarts.
+  - How the macOS kernel treats these routes on real interfaces (down and up, a network change, a tether with
+    a new index) could not be checked against an official source. It must be confirmed on the hardware runner.

@@ -1,9 +1,10 @@
 name: ci
 
+# Paused by the owner on 2026-11-10 (docs/DECISIONS.md ADR-0020): runs only when started by hand,
+# from the Actions tab or `gh workflow run ci.yml --ref <branch>`. To resume, restore:
+#   push: { branches: [main] }
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -99,6 +100,10 @@ jobs:
           version=$(node -p "require('../app/package.json').version")
           go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-daemon ./cmd/mergelane-daemon
       - name: Build the arm64 DMG (ad-hoc signed)
+        # electron-builder skips signing on pull requests unless told otherwise. Ad-hoc signing uses
+        # no secrets, so forcing it is safe on any pull request, including forks.
+        env:
+          CSC_FOR_PULL_REQUEST: 'true'
         run: npx electron-vite build && npx electron-builder --mac --publish never
       - name: Audit Electron fuses with REA
         run: node ../scripts/ci/audit-fuses.mjs dist/mac-arm64/Mergelane.app

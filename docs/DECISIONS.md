@@ -250,3 +250,14 @@ until the owner overrides it.
     `/Library/PrivilegedHelperTools`.
   - `package-test.sh` checks the helper after the approval step.
 - Consequences: The admin-prompt install is still to be confirmed on real hardware (Phase 3 hardware runner).
+
+## ADR-0020: CI paused, runs by hand only
+
+- Status: Owner (2026-11-10)
+- Decision: At the owner's request, `.github/workflows/ci.yml` runs only on `workflow_dispatch`. Pushes and pull
+  requests trigger nothing until the owner asks to resume (the original triggers are noted in the file).
+- Consequences:
+  - The kickoff requires the Phase 1 acceptance criteria to be shown passing in CI. While CI is paused, new
+    changes are not proven there.
+  - Runs that already passed remain the evidence, listed in `docs/PROGRESS.md`.
+  - Start a run with `gh workflow run ci.yml --ref <branch>`.

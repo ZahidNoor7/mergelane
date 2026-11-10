@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "state": "off",
+    "reason": "System merge was turned off after Mergelane's helper stopped unexpectedly. Turn it on again when you're ready. It wasn't turned back on automatically: Another VPN is active: utun4 carries the default route. Turn it off to use system merge.",
+    "since": "2026-11-10T09:31:12.25Z",
+    "version": "0.1.0",
+    "protocol": 1,
+    "autoResume": true
+  }
+}

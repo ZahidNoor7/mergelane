@@ -177,8 +177,13 @@ func signalContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
+// resumeWait is how long auto-resume waits, after a crash, for a link to pass its internet probe.
+// A var for tests.
+var resumeWait = 10 * time.Second
+
 // runDaemon serves the control socket, merging off, until SIGINT or SIGTERM, then turns merging off
-// and removes the utun.
+// and removes the utun. After a crash it turns merging back on by itself if the user allowed it
+// (auto-resume, the ADR-0007 follow-up).
 func runDaemon(c runConfig, d runDeps) error {
 	if err := requireRoot("run", d.isRoot); err != nil {
 		return err
@@ -203,13 +208,32 @@ func runDaemon(c runConfig, d runDeps) error {
 	}
 	engine.SetProbeTargets(engine.Fam4, c.probes)
 
-	// Start clean, and say so if the last run didn't get to (ADR-0007).
-	startReason := ""
-	if countLeftovers(d.readRoutes) > 0 {
-		startReason = control.ReasonCrash
+	// Start clean, and say so if the last run didn't get to (ADR-0007). A run that died while merging
+	// was on leaves marked routes behind, or at least never marked its exit clean while the user
+	// wanted merging on (a power loss takes the routes with it). After a clean exit, leftover routes
+	// are not a crash: Off can leave one on purpose (#20, routemark.Leftovers), and the adapter may be
+	// primary again by now.
+	prefs, err := state.LoadPrefs(c.stateDir)
+	if err != nil {
+		logx.Printf("warning: %v (ignored)\n", err)
+	}
+	leftovers := countLeftovers(d.readRoutes) > 0
+	if leftovers {
 		logx.Printf("previous run left routes behind; cleaning up\n")
 	}
+	crashed := !prefs.CleanExit && (leftovers || prefs.WantOn)
+	if crashed && !leftovers {
+		logx.Printf("previous run stopped unexpectedly while merging was wanted on\n")
+	}
+	startReason := ""
+	if crashed {
+		startReason = control.ReasonCrash
+	}
 	d.cleanup()
+	store := state.NewPrefsStore(c.stateDir, prefs)
+	if err := store.Update(func(p *state.Prefs) { p.CleanExit = false }); err != nil {
+		logx.Printf("warning: saving prefs: %v\n", err)
+	}
 
 	found, err := d.discover(c.include, c.weights)
 	if err != nil {
@@ -241,6 +265,10 @@ func runDaemon(c runConfig, d runDeps) error {
 		Guard:       d.guard,
 		SaveLimits:  func(m map[string]float64) error { return state.SaveLimits(c.stateDir, m) },
 		StartReason: startReason,
+		Prefs:       control.Prefs{AutoResume: prefs.AutoResume, WantOn: prefs.WantOn},
+		SavePrefs: func(p control.Prefs) error {
+			return store.Update(func(s *state.Prefs) { s.AutoResume, s.WantOn = p.AutoResume, p.WantOn })
+		},
 	})
 	go ctl.Watch(ctx, time.Second)
 	srv, err := d.listen(c.socketPath, 0o666, authorizer(c.allowedUID), ctl)
@@ -248,9 +276,28 @@ func runDaemon(c runConfig, d runDeps) error {
 		return err
 	}
 	logx.Printf("mergelane-daemon %s listening on %s (merging off)\n", version, srv.Path())
+	resumed := make(chan struct{})
+	if crashed && prefs.AutoResume {
+		logx.Printf("auto-resume is on: merging turns back on once a link is up\n")
+		wait := resumeWait
+		go func() {
+			defer close(resumed)
+			if ctl.Resume(ctx, wait) {
+				logx.Printf("merging turned back on after the restart\n")
+			} else if st, _ := ctl.Status(ctx); ctx.Err() == nil && st.State == api.StateOff {
+				logx.Printf("auto-resume: %s\n", st.Reason)
+			}
+		}()
+	} else {
+		close(resumed)
+	}
 	<-ctx.Done()
 	ctl.Shutdown()
+	<-resumed
 	srv.Close()
+	if err := store.Update(func(p *state.Prefs) { p.CleanExit = true }); err != nil {
+		logx.Printf("warning: saving prefs: %v\n", err)
+	}
 	logx.Printf("mergelane-daemon stopped\n")
 	return nil
 }

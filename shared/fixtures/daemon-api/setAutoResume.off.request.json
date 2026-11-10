@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "id": "14",
+  "method": "setAutoResume",
+  "params": {
+    "enabled": false
+  }
+}

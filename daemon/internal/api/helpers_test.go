@@ -25,10 +25,12 @@ type fakeHandler struct {
 	statusFn func(context.Context) (Status, error)
 	links    []Link
 	stats    []LinkStats
+	events   []LinkEvent
 
 	mu       sync.Mutex
 	disables []DisableParams
 	limits   []SetLimitParams
+	resumes  []SetAutoResumeParams
 }
 
 func (f *fakeHandler) Status(ctx context.Context) (Status, error) {
@@ -62,6 +64,17 @@ func (f *fakeHandler) SetLimit(_ context.Context, p SetLimitParams) (SetLimitRes
 	f.limits = append(f.limits, p)
 	f.mu.Unlock()
 	return SetLimitResult(p), f.err
+}
+
+func (f *fakeHandler) SetAutoResume(_ context.Context, p SetAutoResumeParams) (Status, error) {
+	f.mu.Lock()
+	f.resumes = append(f.resumes, p)
+	f.mu.Unlock()
+	return Status{State: StateOff, Version: "test", AutoResume: p.Enabled}, f.err
+}
+
+func (f *fakeHandler) Events(context.Context) (EventsResult, error) {
+	return EventsResult{Events: f.events}, f.err
 }
 
 // sockPath returns a fresh socket path. t.TempDir() is used when the path fits in sun_path (104

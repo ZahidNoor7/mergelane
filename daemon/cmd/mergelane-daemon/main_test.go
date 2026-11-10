@@ -39,6 +39,15 @@ func (h fakeHandler) SetLimit(_ context.Context, p api.SetLimitParams) (api.SetL
 	h.limits[p.Link] = p.Mbps
 	return api.SetLimitResult(p), nil
 }
+func (h fakeHandler) SetAutoResume(_ context.Context, p api.SetAutoResumeParams) (api.Status, error) {
+	h.limits["auto-resume"] = map[bool]float64{false: 0, true: 1}[p.Enabled] // recorded beside the caps
+	return api.Status{State: api.StateOff, Version: "t", AutoResume: p.Enabled}, nil
+}
+func (fakeHandler) Events(context.Context) (api.EventsResult, error) {
+	return api.EventsResult{Events: []api.LinkEvent{
+		{At: time.Date(2026, 11, 10, 9, 41, 7, 0, time.Local), Link: "en0", From: api.LinkUp, To: api.LinkDown, Reason: api.EventProbeFailed},
+	}}, nil
+}
 
 // serve starts the control API on a short temp socket path (sun_path is 104 bytes on macOS).
 func serve(t *testing.T, h api.Handler) string {
@@ -90,6 +99,12 @@ func TestClientCommandsTalkToTheDaemon(t *testing.T) {
 		{"limit", []string{"en5", "25"}, 0, "en5: 25 Mbit/s\n"},
 		{"limit", []string{"en5", "fast"}, 1, ""},
 		{"limit", []string{"en5"}, 1, "usage: mergelane-daemon limit"},
+		{"events", nil, 0, "2026-11-10 09:41:07  en0      up      -> down     probe-failed\n"},
+		{"auto-resume", []string{"on"}, 0, "system merge: off (daemon t, protocol 1)\nauto-resume after a crash: on\n"},
+		{"auto-resume", []string{"off"}, 0, "system merge: off (daemon t, protocol 1)\n"},
+		{"auto-resume", nil, 1, "usage: mergelane-daemon auto-resume on|off"},
+		{"auto-resume", []string{"maybe"}, 1, "usage: mergelane-daemon auto-resume on|off"},
+		{"auto-resume", []string{"on", "now"}, 1, "usage: mergelane-daemon auto-resume on|off"},
 	}
 	for _, c := range cases {
 		code, out, errOut := run(c.cmd, append([]string{"-socket", sock}, c.args...)...)
@@ -99,6 +114,15 @@ func TestClientCommandsTalkToTheDaemon(t *testing.T) {
 	}
 	if h.limits["en5"] != 25 {
 		t.Fatalf("limit not applied: %v", h.limits)
+	}
+	if v, ok := h.limits["auto-resume"]; !ok || v != 0 {
+		t.Fatalf("auto-resume not sent: %v", h.limits)
+	}
+}
+
+func TestFormatEventsWithoutEvents(t *testing.T) {
+	if got := formatEvents(nil); got != "No link changes since the daemon started.\n" {
+		t.Fatalf("formatEvents(nil) = %q", got)
 	}
 }
 

@@ -60,7 +60,7 @@ func probe(sl *Slot, f Family) bool {
 	results := make(chan bool, len(targets))
 	for _, t := range targets {
 		go func() {
-			d := net.Dialer{LocalAddr: &net.TCPAddr{IP: ip}, Control: nics.ForceEgress(sl.Index, f == Fam6), Timeout: probeTimeout}
+			d := net.Dialer{LocalAddr: &net.TCPAddr{IP: ip}, Control: nics.ForceEgress(sl.Index(), f == Fam6), Timeout: probeTimeout}
 			c, err := d.Dial(network, t)
 			if err == nil {
 				c.Close()
@@ -85,8 +85,9 @@ func (s *Scheduler) Suspect(sl *Slot, f Family) {
 }
 
 type probeJob struct {
-	sl *Slot
-	f  Family
+	sl  *Slot
+	f   Family
+	gen uint64 // sl.probeGen[f] when the probe started
 }
 
 // RunProbes checks every adapter's internet access per address family: new ones immediately,
@@ -105,7 +106,7 @@ func (s *Scheduler) RunProbes(stop <-chan struct{}) {
 		for _, j := range s.probeDue() {
 			go func() {
 				defer j.sl.probing[j.f].Store(false)
-				s.SetState(j.sl, j.f, probe(j.sl, j.f))
+				s.probeDone(j, probe(j.sl, j.f))
 			}()
 		}
 	}
@@ -135,9 +136,20 @@ func (s *Scheduler) probeDue() []probeJob {
 			if now.Sub(sl.lastProbe[f]) >= every {
 				sl.lastProbe[f] = now
 				sl.probing[f].Store(true)
-				due = append(due, probeJob{sl, f})
+				due = append(due, probeJob{sl, f, sl.probeGen[f]})
 			}
 		}
 	}
 	return due
+}
+
+// probeDone records a probe's result, unless the link was reset while it ran (it came back, or got
+// a new address): the result is about the old link, and a fresh probe follows. Mergelane (M2.4).
+func (s *Scheduler) probeDone(j probeJob, up bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if j.sl.probeGen[j.f] != j.gen {
+		return
+	}
+	s.setStateLocked(j.sl, j.f, up)
 }

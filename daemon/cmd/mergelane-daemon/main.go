@@ -31,8 +31,9 @@ const usage = `mergelane-daemon: merges every internet link the Mac has, system-
   mergelane-daemon install --uid <uid> [--source <binary>]   install as a LaunchDaemon (root)
   mergelane-daemon uninstall                 remove the LaunchDaemon and its routes (root)
   mergelane-daemon cleanup                   remove routes left behind after a crash (root)
-  mergelane-daemon status | on | off | links | stats
+  mergelane-daemon status | on | off | links | stats | events
   mergelane-daemon limit <link> <Mbit/s>     cap a link (0 removes the cap)
+  mergelane-daemon auto-resume on|off        turn merging back on by itself after a crash (off by default)
   mergelane-daemon list                      show detected links
   mergelane-daemon version
 `
@@ -64,7 +65,7 @@ func dispatch(cmd string, args []string, stdout, stderr io.Writer) int {
 		err = cmdCleanup(stdout)
 	case "list":
 		err = cmdList(args, stdout)
-	case "status", "on", "off", "links", "stats", "limit":
+	case "status", "on", "off", "links", "stats", "limit", "events", "auto-resume":
 		err = cmdClient(cmd, args, stdout)
 	default:
 		fmt.Fprint(stderr, usage)
@@ -266,6 +267,9 @@ func cmdClient(cmd string, args []string, out io.Writer) error {
 	if cmd == "limit" && len(rest) != 2 {
 		return fmt.Errorf("usage: mergelane-daemon limit <link> <Mbit/s>")
 	}
+	if cmd == "auto-resume" && (len(rest) != 1 || rest[0] != "on" && rest[0] != "off") {
+		return fmt.Errorf("usage: mergelane-daemon auto-resume on|off")
+	}
 	cl, err := api.Dial(*socketPath)
 	if err != nil {
 		return fmt.Errorf("mergelane-daemon isn't running or isn't reachable: %w", err)
@@ -314,6 +318,18 @@ func cmdClient(cmd string, args []string, out io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(out, "%s: %s\n", res.Link, limitPhrase(res.Mbps))
+	case "events":
+		res, err := cl.Events(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(out, formatEvents(res.Events))
+	case "auto-resume":
+		st, err := cl.SetAutoResume(ctx, rest[0] == "on")
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(out, formatStatus(st))
 	}
 	return nil
 }
@@ -323,7 +339,21 @@ func formatStatus(st api.Status) string {
 	if st.Reason != "" {
 		s += "reason: " + st.Reason + "\n"
 	}
+	if st.AutoResume {
+		s += "auto-resume after a crash: on\n"
+	}
 	return s
+}
+
+func formatEvents(events []api.LinkEvent) string {
+	if len(events) == 0 {
+		return "No link changes since the daemon started.\n"
+	}
+	var sb strings.Builder
+	for _, e := range events {
+		fmt.Fprintf(&sb, "%s  %-8s %-7s -> %-7s  %s\n", e.At.Local().Format(time.DateTime), e.Link, e.From, e.To, e.Reason)
+	}
+	return sb.String()
 }
 
 func formatLinks(links []api.Link) string {

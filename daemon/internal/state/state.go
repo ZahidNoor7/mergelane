@@ -1,5 +1,6 @@
 // Package state holds where the daemon keeps its files. The control socket lives in DefaultDir;
-// per-link speed caps persist in limits.json (see limits.go).
+// per-link speed caps persist in limits.json (see limits.go), and the auto-resume setting with the
+// facts a restart needs in prefs.json (see prefs.go).
 package state
 
 import (

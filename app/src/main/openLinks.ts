@@ -5,7 +5,7 @@ import { app, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { BrowserContext, PendingLink } from '../shared/types'
 
-// Links the OS hands Plexo (a magnet link clicked in a browser, a .torrent or .nzb opened from the
+// Links the OS hands Mergelane (a magnet link clicked in a browser, a .torrent or .nzb opened from the
 // file manager) or the browser extension does. They're never started on their own: the user still sees
 // what the link is and presses Start.
 

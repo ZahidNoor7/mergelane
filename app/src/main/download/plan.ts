@@ -17,12 +17,13 @@ export const DEFAULT_MAX_BLOCK_BYTES = 8 * MIB
  * megabyte the round trips cost more than splitting the file saves. */
 export const MIN_BLOCK_BYTES = MIB
 
-/** Streams each network starts with, as download managers do (IDM, XDM: 8). From there it
+/** Streams each network starts with, as other segmented download managers do (8). From there it
  * doubles once they are all receiving (see concurrency.ts). */
 export const START_STREAMS_PER_NETWORK = 8
 
-/** The most streams a network can grow to (IDM's limit). Enough for a far server, where TCP holds
- * each connection to a megabyte or so a second; a server that wants fewer says so by refusing. */
+/** The most streams a network can grow to (a common download-manager limit). Enough for a far
+ * server, where TCP holds each connection to a megabyte or so a second; a server that wants fewer
+ * says so by refusing. */
 export const MAX_STREAMS_PER_NETWORK = 32
 
 /** Blocks planned per stream a network could grow to. Streams pull blocks as they free up, so a

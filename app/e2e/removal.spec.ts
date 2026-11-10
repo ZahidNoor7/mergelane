@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, symlink, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { BLOCK, expect, test, treeSha, type PlexoApp } from './fixtures'
+import { BLOCK, expect, test, treeSha, type MergelaneApp } from './fixtures'
 import { seededBytes } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 /** Hold the actual history save, rather than relying on a quick click landing in its window. */
-async function holdHistoryWrite(plexo: PlexoApp): Promise<void> {
-  await plexo.evaluateMain(() => {
+async function holdHistoryWrite(mergelane: MergelaneApp): Promise<void> {
+  await mergelane.evaluateMain(() => {
     const fs = process.getBuiltinModule('node:fs/promises')
     const { basename } = process.getBuiltinModule('node:path')
     const original = fs.rename
@@ -30,24 +30,24 @@ async function holdHistoryWrite(plexo: PlexoApp): Promise<void> {
   }, null)
 }
 
-async function releaseHistoryWrite(plexo: PlexoApp): Promise<void> {
-  await plexo.evaluateMain(() => {
+async function releaseHistoryWrite(mergelane: MergelaneApp): Promise<void> {
+  await mergelane.evaluateMain(() => {
     const globals = globalThis as Record<string, unknown>
     if (typeof globals.__releaseHistory === 'function') globals.__releaseHistory()
   }, null)
 }
 
-async function waitForHistoryWrite(plexo: PlexoApp): Promise<void> {
+async function waitForHistoryWrite(mergelane: MergelaneApp): Promise<void> {
   await expect
     .poll(() =>
-      plexo.evaluateMain(() => (globalThis as Record<string, unknown>).__historyHeld, null)
+      mergelane.evaluateMain(() => (globalThis as Record<string, unknown>).__historyHeld, null)
     )
     .toBe(true)
 }
 
-async function stubTrash(plexo: PlexoApp, destination: string): Promise<void> {
+async function stubTrash(mergelane: MergelaneApp, destination: string): Promise<void> {
   await mkdir(destination)
-  await plexo.evaluateMain(({ shell }, dest) => {
+  await mergelane.evaluateMain(({ shell }, dest) => {
     shell.trashItem = async (path: string): Promise<void> => {
       const { rename } = process.getBuiltinModule('node:fs/promises')
       const { basename, join } = process.getBuiltinModule('node:path')
@@ -59,47 +59,47 @@ async function stubTrash(plexo: PlexoApp, destination: string): Promise<void> {
 test.describe('removal during completion @smoke', () => {
   for (const action of ['remove', 'clear', 'trash'] as const) {
     test(`${action} waits for the pending history save and stays removed after restart`, async ({
-      plexo,
+      mergelane,
       serve,
       dirs
     }) => {
       const trash = join(dirs.dest, 'test-trash')
-      if (action === 'trash') await stubTrash(plexo, trash)
-      await holdHistoryWrite(plexo)
+      if (action === 'trash') await stubTrash(mergelane, trash)
+      await holdHistoryWrite(mergelane)
       try {
         const origin = await serve({ size: BLOCK })
-        const id = await plexo.start(origin.url(), origin.sha256)
-        await waitForHistoryWrite(plexo)
-        const completed = (await plexo.api.listDownloads()).find(
+        const id = await mergelane.start(origin.url(), origin.sha256)
+        await waitForHistoryWrite(mergelane)
+        const completed = (await mergelane.api.listDownloads()).find(
           (entry) => entry.state.id === id
         )!.state
         expect(completed.status).toBe('completed')
 
         const removing =
           action === 'clear'
-            ? plexo.api.clearHistory()
-            : plexo.api.removeDownload(id, { trashFile: action === 'trash' })
+            ? mergelane.api.clearHistory()
+            : mergelane.api.removeDownload(id, { trashFile: action === 'trash' })
         // Sent after removal on the same renderer IPC connection: removal has reached main.
-        await plexo.api.listDownloads()
-        await releaseHistoryWrite(plexo)
+        await mergelane.api.listDownloads()
+        await releaseHistoryWrite(mergelane)
         await removing
 
-        expect((await plexo.api.listHistory()).find((entry) => entry.id === id)).toBeUndefined()
+        expect((await mergelane.api.listHistory()).find((entry) => entry.id === id)).toBeUndefined()
         expect(
-          (await plexo.api.listDownloads()).find((entry) => entry.state.id === id)
+          (await mergelane.api.listDownloads()).find((entry) => entry.state.id === id)
         ).toBeUndefined()
         expect(existsSync(completed.destinationPath)).toBe(action !== 'trash')
         if (action === 'trash') expect(existsSync(join(trash, completed.fileName))).toBe(true)
-        await plexo.relaunch()
-        expect(await plexo.all()).toEqual([])
+        await mergelane.relaunch()
+        expect(await mergelane.all()).toEqual([])
       } finally {
-        if (plexo.alive) await releaseHistoryWrite(plexo).catch(() => {})
+        if (mergelane.alive) await releaseHistoryWrite(mergelane).catch(() => {})
       }
     })
   }
 
   test('trashing a just-finished torrent waits for its owned-file history record', async ({
-    plexo,
+    mergelane,
     dirs
   }) => {
     const swarm = await new Swarm().start()
@@ -110,20 +110,20 @@ test.describe('removal during completion @smoke', () => {
       ]
       const torrent = await swarm.seed(files, { folder: 'Finished', pieceLength: 16 * 1024 })
       const trash = join(dirs.dest, 'test-trash')
-      await stubTrash(plexo, trash)
-      await holdHistoryWrite(plexo)
-      const id = await plexo.start(
+      await stubTrash(mergelane, trash)
+      await holdHistoryWrite(mergelane)
+      const id = await mergelane.start(
         await torrentFileOnDisk(torrent),
         treeSha(files.map((data) => ({ path: (data as { name?: string }).name!, data })))
       )
-      await waitForHistoryWrite(plexo)
-      const completed = (await plexo.api.listDownloads()).find(
+      await waitForHistoryWrite(mergelane)
+      const completed = (await mergelane.api.listDownloads()).find(
         (entry) => entry.state.id === id
       )!.state
       await writeFile(join(completed.destinationPath, 'personal.txt'), 'keep me')
-      const removing = plexo.api.removeDownload(id, { trashFile: true })
-      await plexo.api.listDownloads()
-      await releaseHistoryWrite(plexo)
+      const removing = mergelane.api.removeDownload(id, { trashFile: true })
+      await mergelane.api.listDownloads()
+      await releaseHistoryWrite(mergelane)
       await removing
 
       expect(await readFile(join(completed.destinationPath, 'personal.txt'), 'utf8')).toBe(
@@ -133,16 +133,16 @@ test.describe('removal during completion @smoke', () => {
         expect(existsSync(join(completed.destinationPath, name))).toBe(false)
         expect(existsSync(join(trash, name))).toBe(true)
       }
-      expect(await plexo.all()).toEqual([])
+      expect(await mergelane.all()).toEqual([])
     } finally {
-      if (plexo.alive) await releaseHistoryWrite(plexo).catch(() => {})
+      if (mergelane.alive) await releaseHistoryWrite(mergelane).catch(() => {})
       await swarm.stop()
     }
   })
 })
 
 test('failed torrent cancellation stays visible across restart and can be retried @smoke', async ({
-  plexo,
+  mergelane,
   dirs
 }) => {
   const swarm = await new Swarm().start()
@@ -156,25 +156,25 @@ test('failed torrent cancellation stays visible across restart and can be retrie
       pieceLength: 16 * 1024,
       uploadLimit: 64 * 1024
     })
-    const id = await plexo.start(
+    const id = await mergelane.start(
       await torrentFileOnDisk(torrent),
       treeSha(files.map((data) => ({ path: (data as { name?: string }).name!, data })))
     )
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForTorrentStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForTorrentStatus('paused')
     await writeFile(join(paused.destinationPath, 'personal.txt'), 'keep me')
     const original = paused.destinationPath + '.original'
     await rename(paused.destinationPath, original)
     await symlink(original, paused.destinationPath, 'junction')
 
-    await expect(plexo.api.removeDownload(id)).rejects.toThrow(/folder is now a link/)
-    const failed = await plexo.waitForTorrentStatus('error')
+    await expect(mergelane.api.removeDownload(id)).rejects.toThrow(/folder is now a link/)
+    const failed = await mergelane.waitForTorrentStatus('error')
     expect(failed.error).toMatch(/folder is now a link/)
     expect(failed.resumable).toBe(false)
-    const row = plexo.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
+    const row = mergelane.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
     await expect(row).toBeVisible()
     expect(
-      plexo.sessions
+      mergelane.sessions
         .flat()
         .filter((state) => state.id === id)
         .some((state) => state.status === 'cancelled')
@@ -182,15 +182,15 @@ test('failed torrent cancellation stays visible across restart and can be retrie
     const manifest = join(dirs.userData, 'downloads', id, 'manifest.json')
     expect(JSON.parse(await readFile(manifest, 'utf8')).state.status).toBe('error')
 
-    await plexo.relaunch()
+    await mergelane.relaunch()
     await expect(
-      plexo.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
+      mergelane.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
     ).toBeVisible()
-    expect((await plexo.waitForTorrentStatus('error')).error).toMatch(/folder is now a link/)
+    expect((await mergelane.waitForTorrentStatus('error')).error).toMatch(/folder is now a link/)
     await unlink(paused.destinationPath)
     await rename(original, paused.destinationPath)
-    await plexo.api.removeDownload(id)
-    expect(await plexo.all()).toEqual([])
+    await mergelane.api.removeDownload(id)
+    expect(await mergelane.all()).toEqual([])
     expect(existsSync(manifest)).toBe(false)
     expect(await readFile(join(paused.destinationPath, 'personal.txt'), 'utf8')).toBe('keep me')
     for (const name of ['a.bin', 'b.bin'])
@@ -201,17 +201,17 @@ test('failed torrent cancellation stays visible across restart and can be retrie
 })
 
 test('cleanup failure keeps an active HTTP download visible and blocks resume during cancellation @smoke', async ({
-  plexo,
+  mergelane,
   serve,
   dirs
 }) => {
   const origin = await serve({ size: 24 * BLOCK })
   const reached = origin.hold(7 * BLOCK)
-  const id = await plexo.start(origin.url(), origin.sha256)
+  const id = await mergelane.start(origin.url(), origin.sha256)
   await reached
-  const state = (await plexo.currentHttp())!
-  const staging = `${state.destinationPath}.plexo`
-  await plexo.evaluateMain((_electron, path) => {
+  const state = (await mergelane.currentHttp())!
+  const staging = `${state.destinationPath}.mergelane`
+  await mergelane.evaluateMain((_electron, path) => {
     const fs = process.getBuiltinModule('node:fs/promises')
     const original = fs.rm
     const globals = globalThis as Record<string, unknown>
@@ -235,36 +235,36 @@ test('cleanup failure keeps an active HTTP download visible and blocks resume du
     }
   }, staging)
   try {
-    const removing = plexo.api.removeDownload(id).then(
+    const removing = mergelane.api.removeDownload(id).then(
       () => null,
       (error: Error) => error.message
     )
     await expect
       .poll(() =>
-        plexo.evaluateMain(() => (globalThis as Record<string, unknown>).__discardHeld, null)
+        mergelane.evaluateMain(() => (globalThis as Record<string, unknown>).__discardHeld, null)
       )
       .toBe(true)
-    const alsoRemoving = plexo.api.removeDownload(id).then(
+    const alsoRemoving = mergelane.api.removeDownload(id).then(
       () => null,
       (error: Error) => error.message
     )
-    await plexo.api.resumeDownload(id)
+    await mergelane.api.resumeDownload(id)
     expect(
-      (await plexo.api.listDownloads()).find((entry) => entry.state.id === id)?.state.status
+      (await mergelane.api.listDownloads()).find((entry) => entry.state.id === id)?.state.status
     ).toBe('paused')
     await expect(
-      plexo.page.getByRole('button', { name: `Open ${state.fileName}`, exact: true })
+      mergelane.page.getByRole('button', { name: `Open ${state.fileName}`, exact: true })
     ).toBeVisible()
-    await plexo.evaluateMain(() => {
+    await mergelane.evaluateMain(() => {
       ;((globalThis as Record<string, unknown>).__releaseDiscard as () => void)()
     }, null)
     expect(await removing).toMatch(/Permission denied/)
     expect(await alsoRemoving).toMatch(/Permission denied/)
-    const failed = await plexo.waitForHttpStatus('error')
+    const failed = await mergelane.waitForHttpStatus('error')
     expect(failed.resumable).toBe(false)
     expect(existsSync(staging)).toBe(true)
     expect(
-      plexo.sessions
+      mergelane.sessions
         .flat()
         .filter((entry) => entry.id === id)
         .some((entry) => entry.status === 'cancelled')
@@ -273,12 +273,12 @@ test('cleanup failure keeps an active HTTP download visible and blocks resume du
       JSON.parse(await readFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'utf8'))
         .state.status
     ).toBe('error')
-    await plexo.api.removeDownload(id)
+    await mergelane.api.removeDownload(id)
     expect(existsSync(staging)).toBe(false)
-    expect(await plexo.all()).toEqual([])
+    expect(await mergelane.all()).toEqual([])
   } finally {
-    if (plexo.alive)
-      await plexo
+    if (mergelane.alive)
+      await mergelane
         .evaluateMain(() => {
           ;((globalThis as Record<string, unknown>).__releaseDiscard as () => void)()
         }, null)

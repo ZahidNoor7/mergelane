@@ -103,13 +103,13 @@ interface AppStore {
 }
 
 // Settings saved by the main process, read once before the first paint (see InitialState).
-const initial = window.plexo.initialState
+const initial = window.mergelane.initialState
 
 /** Every setting changes optimistically: the store is updated first so the UI feels instant,
  * then this saves it. The store stays the source of truth either way — a failed save just means
  * the change isn't remembered next launch. */
 function persist(patch: AppSettings): void {
-  window.plexo.updateSettings(patch).catch(() => {})
+  window.mergelane.updateSettings(patch).catch(() => {})
 }
 
 /** Links let go here: a listing main sent before it heard so would bring them back. */
@@ -153,7 +153,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (get().interfacesStatus !== 'ready') set({ interfacesStatus: 'loading' })
     set({ interfacesError: null })
     try {
-      get().receiveInterfaces(await window.plexo.listInterfaces())
+      get().receiveInterfaces(await window.mergelane.listInterfaces())
     } catch (error) {
       set({
         interfacesStatus: 'error',
@@ -216,7 +216,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   receiveLinks: async () => {
     // main lists every link still waiting, so a window that was closed or reloaded gets them back.
-    const pending = await window.plexo.pendingLinks().catch(() => [])
+    const pending = await window.mergelane.pendingLinks().catch(() => [])
     const known = new Set(get().links.map((link) => link.id))
     const arrived = pending.filter((link) => !known.has(link.id) && !letGo.has(link.id))
     if (arrived.length === 0) return
@@ -244,7 +244,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (!links.some((link) => link.id === id)) return
     letGo.add(id)
     // Started, main has already forgotten its sign-in.
-    if (!started) void window.plexo.dismissLink(id).catch(() => {})
+    if (!started) void window.mergelane.dismissLink(id).catch(() => {})
     set({
       links: links.filter((link) => link.id !== id),
       ...(shownId === id && { shownId: null })

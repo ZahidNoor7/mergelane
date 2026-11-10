@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NzbDownloadState, UsenetServerInput } from '../src/shared/types'
 import type { Locator } from '@playwright/test'
-import { expect, expectNzb, LAN_ADDRESS, test, type PlexoApp } from './fixtures'
+import { expect, expectNzb, LAN_ADDRESS, test, type MergelaneApp } from './fixtures'
 import { NewsServer, type NewsServerOptions } from './newsServer'
 import { seededBytes } from './origin'
 
@@ -24,7 +24,7 @@ const RELEASE = [
 let servers: NewsServer[] = []
 let folder: string
 test.beforeEach(async () => {
-  folder = await mkdtemp(join(tmpdir(), 'plexo-nzb-'))
+  folder = await mkdtemp(join(tmpdir(), 'mergelane-nzb-'))
 })
 test.afterEach(async () => {
   await Promise.all(servers.map((server) => server.stop()))
@@ -46,11 +46,11 @@ async function nzbOnDisk(server: NewsServer, name = 'Test.Release.nzb'): Promise
 }
 
 async function useServer(
-  plexo: PlexoApp,
+  mergelane: MergelaneApp,
   server: NewsServer,
   settings: Partial<UsenetServerInput> = {}
 ): Promise<void> {
-  await plexo.api.saveUsenetServer({
+  await mergelane.api.saveUsenetServer({
     host: '127.0.0.1',
     port: server.port,
     tls: false,
@@ -62,12 +62,12 @@ async function useServer(
 }
 
 test.describe('NZB downloads', () => {
-  test('an NZB’s files, decoded byte for byte into their folder @smoke', async ({ plexo }) => {
+  test('an NZB’s files, decoded byte for byte into their folder @smoke', async ({ mergelane }) => {
     const server = await newsServer()
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
 
-    const id = await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    const id = await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     expect(done.id).toBe(id)
     expect(done.fileName).toBe('Test.Release')
     expect(done.server).toBe('127.0.0.1')
@@ -83,10 +83,10 @@ test.describe('NZB downloads', () => {
   })
 
   test('an indexer’s NZB link is downloaded and named from its headers @smoke', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer()
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
     const indexer: Server = createServer((_request, response) => {
       response.writeHead(200, {
         'Content-Type': 'application/x-nzb',
@@ -98,12 +98,12 @@ test.describe('NZB downloads', () => {
     try {
       const { port } = indexer.address() as AddressInfo
       const link = `http://127.0.0.1:${port}/api?t=get&id=1&apikey=secret`
-      const probe = await plexo.api.probeUrl(link)
+      const probe = await mergelane.api.probeUrl(link)
       expect(probe.kind).toBe('nzb')
       expect(probe.suggestedFileName).toBe('Indexer.Release')
 
-      await plexo.start(link, server.expectedSha())
-      const done = await plexo.waitForNzbStatus('completed', 30_000)
+      await mergelane.start(link, server.expectedSha())
+      const done = await mergelane.waitForNzbStatus('completed', 30_000)
       expect(done.fileName).toBe('Indexer.Release')
     } finally {
       indexer.close()
@@ -111,10 +111,10 @@ test.describe('NZB downloads', () => {
   })
 
   test('an indexer’s answer in plain XML: an NZB is taken, its error is shown', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer()
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
     const indexer: Server = createServer((request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' })
       response.end(
@@ -127,9 +127,9 @@ test.describe('NZB downloads', () => {
     try {
       const { port } = indexer.address() as AddressInfo
       await expect(
-        plexo.api.probeUrl(`http://127.0.0.1:${port}/api?t=get&id=limit&apikey=secret`)
+        mergelane.api.probeUrl(`http://127.0.0.1:${port}/api?t=get&id=limit&apikey=secret`)
       ).rejects.toThrow(/The indexer refused this link: Request limit reached \(error 500\)/)
-      const probe = await plexo.api.probeUrl(
+      const probe = await mergelane.api.probeUrl(
         `http://127.0.0.1:${port}/api?t=get&id=1&apikey=secret`
       )
       expect(probe.kind).toBe('nzb')
@@ -138,14 +138,14 @@ test.describe('NZB downloads', () => {
     }
   })
 
-  test('articles the server doesn’t have are left as gaps, and counted', async ({ plexo }) => {
+  test('articles the server doesn’t have are left as gaps, and counted', async ({ mergelane }) => {
     const server = await newsServer({
       missing: (article) => article.file === 0 && (article.number === 3 || article.number === 7)
     })
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     expect(done.nzbFiles[0].missing).toBe(2)
     expect(done.missingBytes).toBeGreaterThan(0)
     expect(done.blocks.filter((block) => block.status === 'missing')).toHaveLength(2)
@@ -155,19 +155,19 @@ test.describe('NZB downloads', () => {
   })
 
   test('a server with none of the articles fails the download, leaving nothing', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer({ missing: () => true })
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const failed = await plexo.waitForNzbStatus('error', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const failed = await mergelane.waitForNzbStatus('error', 30_000)
     expect(failed.error).toMatch(/none of this NZB’s articles/)
     expect(failed.resumable).toBe(false)
   })
 
   test('a damaged article is fetched again; one damaged every time counts as missing', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer({
       fault: (article, request) =>
@@ -177,12 +177,12 @@ test.describe('NZB downloads', () => {
             ? 'corrupt'
             : 'ok'
     })
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
 
     // The article damaged every time is a gap in its file.
     const expected = server.expectedSha((article) => article.file === 0 && article.number === 5)
-    await plexo.start(await nzbOnDisk(server), expected)
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), expected)
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     expect(done.nzbFiles[1].missing).toBe(0)
     expect(done.nzbFiles[0].missing).toBe(1)
     const fetches = (file: number, number: number): number =>
@@ -194,24 +194,24 @@ test.describe('NZB downloads', () => {
     expect(fetches(0, 5)).toBe(2)
   })
 
-  test('connections dropped or stalled mid-article are opened again', async ({ plexo }) => {
+  test('connections dropped or stalled mid-article are opened again', async ({ mergelane }) => {
     const server = await newsServer({
       fault: (article, request) =>
         request > 1 ? 'ok' : article.number === 2 ? 'cut' : article.number === 4 ? 'stall' : 'ok'
     })
-    await useServer(plexo, server)
+    await useServer(mergelane, server)
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     expect(done.missingBytes).toBe(0)
     expect(done.networks[0].retries).toBeGreaterThan(0)
   })
 
-  test('signs in, and says so when the password is wrong', async ({ plexo }) => {
+  test('signs in, and says so when the password is wrong', async ({ mergelane }) => {
     const server = await newsServer({ username: 'reader', password: 'right' })
-    await useServer(plexo, server, { username: 'reader', password: 'wrong' })
+    await useServer(mergelane, server, { username: 'reader', password: 'wrong' })
     await expect(
-      plexo.api.testUsenetServer({
+      mergelane.api.testUsenetServer({
         host: '127.0.0.1',
         port: server.port,
         tls: false,
@@ -220,29 +220,29 @@ test.describe('NZB downloads', () => {
       })
     ).rejects.toThrow(/username or password/)
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const failed = await plexo.waitForNzbStatus('error', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const failed = await mergelane.waitForNzbStatus('error', 30_000)
     expect(failed.error).toMatch(/username or password/)
     expect(failed.resumable).toBe(true)
 
     // Fixed in the settings, the same download resumes and finishes.
-    await useServer(plexo, server, { username: 'reader', password: 'right' })
-    await plexo.api.resumeDownload(failed.id)
-    await plexo.waitForNzbStatus('completed', 30_000)
+    await useServer(mergelane, server, { username: 'reader', password: 'right' })
+    await mergelane.api.resumeDownload(failed.id)
+    await mergelane.waitForNzbStatus('completed', 30_000)
   })
 
   test('a wrong password is put right from the failed download, then it starts again', async ({
-    plexo,
+    mergelane,
     dirs
   }) => {
     const server = await newsServer({ username: 'reader', password: 'right' })
-    await useServer(plexo, server, { username: 'reader', password: 'wrong' })
+    await useServer(mergelane, server, { username: 'reader', password: 'wrong' })
     const nzb = await nzbOnDisk(server)
-    await plexo.start(nzb, server.expectedSha())
-    const failed = await plexo.waitForNzbStatus('error', 30_000)
-    plexo.tracked.delete(failed.id)
+    await mergelane.start(nzb, server.expectedSha())
+    const failed = await mergelane.waitForNzbStatus('error', 30_000)
+    mergelane.tracked.delete(failed.id)
 
-    const { page } = plexo
+    const { page } = mergelane
     await page.getByText('Test.Release', { exact: true }).first().click()
     await page.getByRole('button', { name: /^Usenet server 127\.0\.0\.1/ }).click()
     const dialog = page.getByRole('dialog', { name: 'Usenet server' })
@@ -255,7 +255,7 @@ test.describe('NZB downloads', () => {
     await page.getByRole('button', { name: 'Download again' }).click()
     await expect(page.getByRole('textbox', { name: 'Link' })).toHaveValue(nzb)
     // Saved where the test looks, as the folder picker would choose it.
-    await plexo.evaluateMain(({ dialog }, dest) => {
+    await mergelane.evaluateMain(({ dialog }, dest) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dest] })) as never
     }, dirs.dest)
     await page
@@ -264,24 +264,24 @@ test.describe('NZB downloads', () => {
       .getByRole('button', { name: 'Change' })
       .click()
     // The failed one is gone by now: the new one is what the folder gains.
-    await plexo.expectNextDownload(server.expectedSha())
+    await mergelane.expectNextDownload(server.expectedSha())
     await expect(page.getByText('127.0.0.1', { exact: false }).first()).toBeVisible()
     await page.getByRole('button', { name: 'Download', exact: true }).click()
-    await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.waitForNzbStatus('completed', 30_000)
   })
 
   test('a server that turns every connection away is unreachable, not a strike', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer()
     const { port } = server
     await server.stop()
     servers = []
-    await useServer(plexo, server, { port })
+    await useServer(mergelane, server, { port })
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
     // Shown as it is for an HTTP server out of reach: one connection keeps trying, backing off.
-    await plexo.waitUntil(
+    await mergelane.waitUntil(
       (state) =>
         state.kind === 'nzb' &&
         state.networks.find((network) => network.id === 'a')?.status === 'unreachable',
@@ -289,53 +289,53 @@ test.describe('NZB downloads', () => {
     )
   })
 
-  test('never more connections than the account allows', async ({ plexo }) => {
+  test('never more connections than the account allows', async ({ mergelane }) => {
     const server = await newsServer({ maxConnections: 2, delayMs: 5 })
     // Set to more than the account has: the server turns the rest away.
-    await useServer(plexo, server, { connections: 6 })
+    await useServer(mergelane, server, { connections: 6 })
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     expect(server.refused).toBeGreaterThan(0)
     expect(done.missingBytes).toBe(0)
   })
 
-  test('without a news server set up, it says so before starting', async ({ plexo }) => {
+  test('without a news server set up, it says so before starting', async ({ mergelane }) => {
     const server = await newsServer()
-    const probe = await plexo.api.probeUrl(await nzbOnDisk(server))
+    const probe = await mergelane.api.probeUrl(await nzbOnDisk(server))
     expect(probe.kind).toBe('nzb')
-    expect(await plexo.api.usenetServer()).toBeNull()
-    await expect(plexo.start(await nzbOnDisk(server), server.expectedSha())).rejects.toThrow(
+    expect(await mergelane.api.usenetServer()).toBeNull()
+    await expect(mergelane.start(await nzbOnDisk(server), server.expectedSha())).rejects.toThrow(
       /Set up a news server/
     )
   })
 
   test('pause, quit, relaunch and resume: articles already in aren’t fetched again', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer({ delayMs: 40 })
-    await useServer(plexo, server, { connections: 2 })
+    await useServer(mergelane, server, { connections: 2 })
 
-    const id = await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    await plexo.waitUntil((state) => state.kind === 'nzb' && countDone(state) >= 4)
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForNzbStatus('paused')
+    const id = await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    await mergelane.waitUntil((state) => state.kind === 'nzb' && countDone(state) >= 4)
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForNzbStatus('paused')
     const doneBefore = paused.blocks.filter((block) => block.status === 'completed').length
 
-    await plexo.relaunch()
+    await mergelane.relaunch()
     // No keychain on a test runner: an account without a password is what survives a relaunch.
-    expect((await plexo.api.usenetServer())?.host).toBe('127.0.0.1')
+    expect((await mergelane.api.usenetServer())?.host).toBe('127.0.0.1')
     const servedBefore = server.served.length
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForNzbStatus('completed', 30_000)
     expect(server.served.length - servedBefore).toBeLessThanOrEqual(
       server.articleCount - doneBefore + 2
     )
   })
 
-  test('goes through the proxy set on the network', async ({ plexo }) => {
+  test('goes through the proxy set on the network', async ({ mergelane }) => {
     const server = await newsServer()
-    await useServer(plexo, server, { connections: 2 })
+    await useServer(mergelane, server, { connections: 2 })
     // SOCKS5 without auth, IPv4 targets only: greeting, then CONNECT.
     const targets: string[] = []
     const proxy = createTcpServer((client) => {
@@ -358,13 +358,13 @@ test.describe('NZB downloads', () => {
     await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve))
     try {
       const port = (proxy.address() as AddressInfo).port
-      await plexo.api.updateSettings({
+      await mergelane.api.updateSettings({
         networkPreferences: {
           a: { proxy: { enabled: true, type: 'socks5', host: '127.0.0.1', port } }
         }
       })
-      await plexo.start(await nzbOnDisk(server), server.expectedSha())
-      await plexo.waitForNzbStatus('completed', 30_000)
+      await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+      await mergelane.waitForNzbStatus('completed', 30_000)
       expect(targets.length).toBeGreaterThan(0)
       expect(new Set(targets)).toEqual(new Set([`127.0.0.1:${server.port}`]))
     } finally {
@@ -372,13 +372,13 @@ test.describe('NZB downloads', () => {
     }
   })
 
-  test('shares the connections across both networks', async ({ plexo }) => {
+  test('shares the connections across both networks', async ({ mergelane }) => {
     test.skip(!LAN_ADDRESS, 'needs a second local address')
     const server = await newsServer({ delayMs: 5 })
-    await useServer(plexo, server, { connections: 4 })
+    await useServer(mergelane, server, { connections: 4 })
 
-    await plexo.start(await nzbOnDisk(server), server.expectedSha(), { networks: ['a', 'b'] })
-    const done = await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha(), { networks: ['a', 'b'] })
+    const done = await mergelane.waitForNzbStatus('completed', 30_000)
     const from = new Set(server.served.map((article) => article.from))
     expect(from).toEqual(new Set(['127.0.0.1', LAN_ADDRESS]))
     for (const network of done.networks.filter((network) => network.enabled)) {
@@ -388,10 +388,10 @@ test.describe('NZB downloads', () => {
 })
 
 /** Speed & data limits, on its Usenet page. */
-async function openUsenetPage(plexo: PlexoApp): Promise<Locator> {
-  await plexo.page.getByRole('button', { name: /^\d+ networks?/ }).click()
-  await plexo.page.getByRole('button', { name: 'Speed & data limits', exact: true }).click()
-  const dialog = plexo.page.getByRole('dialog', { name: 'Speed & data limits' })
+async function openUsenetPage(mergelane: MergelaneApp): Promise<Locator> {
+  await mergelane.page.getByRole('button', { name: /^\d+ networks?/ }).click()
+  await mergelane.page.getByRole('button', { name: 'Speed & data limits', exact: true }).click()
+  const dialog = mergelane.page.getByRole('dialog', { name: 'Speed & data limits' })
   await dialog.getByRole('button', { name: /^Usenet/ }).click()
   return dialog
 }
@@ -412,10 +412,10 @@ async function indexerFor(server: NewsServer): Promise<{ link: string; close: ()
 
 test.describe('Usenet settings', () => {
   test('the switch in Speed & data limits is saved with the server and kept on restart', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer()
-    const file = join(plexo.dirs.userData, 'usenet-server.json')
+    const file = join(mergelane.dirs.userData, 'usenet-server.json')
     // Saved before there was a switch: on. Its password sealed by a keychain this session can't
     // open (another login's, say), so it reads as none.
     const password = Buffer.from('sealed elsewhere').toString('base64')
@@ -423,62 +423,64 @@ test.describe('Usenet settings', () => {
       file,
       JSON.stringify({ host: '127.0.0.1', port: server.port, tls: false, connections: 3, password })
     )
-    await plexo.relaunch()
-    expect((await plexo.api.usenetServer())?.enabled).toBe(true)
+    await mergelane.relaunch()
+    expect((await mergelane.api.usenetServer())?.enabled).toBe(true)
 
-    let dialog = await openUsenetPage(plexo)
+    let dialog = await openUsenetPage(mergelane)
     await expect(dialog.getByText(`127.0.0.1:${server.port}`)).toBeVisible()
     await dialog.getByRole('switch', { name: 'Usenet downloads' }).click()
     // Nothing changes until Save.
-    expect((await plexo.api.usenetServer())?.enabled).toBe(true)
+    expect((await mergelane.api.usenetServer())?.enabled).toBe(true)
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(dialog).toBeHidden()
-    expect(await plexo.api.usenetServer()).toMatchObject({ enabled: false, connections: 3 })
+    expect(await mergelane.api.usenetServer()).toMatchObject({ enabled: false, connections: 3 })
     // Kept for a session that can unseal it.
     expect(JSON.parse(await readFile(file, 'utf-8')).password).toBe(password)
 
-    await plexo.relaunch()
-    expect((await plexo.api.usenetServer())?.enabled).toBe(false)
-    dialog = await openUsenetPage(plexo)
+    await mergelane.relaunch()
+    expect((await mergelane.api.usenetServer())?.enabled).toBe(false)
+    dialog = await openUsenetPage(mergelane)
     await expect(dialog.getByRole('switch', { name: 'Usenet downloads' })).not.toBeChecked()
     // Saving the server from its own form leaves the switch as it is.
     await dialog.getByRole('button', { name: 'Change server' }).click()
-    const form = plexo.page.getByRole('dialog', { name: 'Usenet server' })
+    const form = mergelane.page.getByRole('dialog', { name: 'Usenet server' })
     await form.getByLabel('Connections').fill('5')
     await form.getByRole('button', { name: 'Save' }).click()
     await expect(form).toBeHidden()
-    expect(await plexo.api.usenetServer()).toMatchObject({ enabled: false, connections: 5 })
+    expect(await mergelane.api.usenetServer()).toMatchObject({ enabled: false, connections: 5 })
     // Its password field left blank, which can't show a password this session can't unseal.
     expect(JSON.parse(await readFile(file, 'utf-8')).password).toBe(password)
   })
 
   test('off, an NZB is no Usenet download, and a running one stops connecting and waits', async ({
-    plexo
+    mergelane
   }) => {
     const server = await newsServer({ delayMs: 40 })
-    await useServer(plexo, server, { connections: 2 })
+    await useServer(mergelane, server, { connections: 2 })
     const nzb = await nzbOnDisk(server)
-    const id = await plexo.start(nzb, server.expectedSha())
-    await plexo.waitUntil((state) => state.kind === 'nzb' && countDone(state) >= 2)
+    const id = await mergelane.start(nzb, server.expectedSha())
+    await mergelane.waitUntil((state) => state.kind === 'nzb' && countDone(state) >= 2)
 
-    await useServer(plexo, server, { connections: 2, enabled: false })
+    await useServer(mergelane, server, { connections: 2, enabled: false })
     await expect
-      .poll(async () => (await plexo.byId(id))?.status, { timeout: 10_000 })
+      .poll(async () => (await mergelane.byId(id))?.status, { timeout: 10_000 })
       .toBe('queued')
     await new Promise((resolve) => setTimeout(resolve, 200))
     const served = server.served.length
     // Paused and resumed while off, it fails before it connects.
-    await plexo.api.pauseDownload(id)
-    await plexo.api.resumeDownload(id)
-    await expect.poll(async () => (await plexo.byId(id))?.status, { timeout: 10_000 }).toBe('error')
-    expect((await plexo.byId(id))?.error).toMatch(/Usenet downloads are off/)
+    await mergelane.api.pauseDownload(id)
+    await mergelane.api.resumeDownload(id)
+    await expect
+      .poll(async () => (await mergelane.byId(id))?.status, { timeout: 10_000 })
+      .toBe('error')
+    expect((await mergelane.byId(id))?.error).toMatch(/Usenet downloads are off/)
     expect(server.served.length).toBe(served)
 
     // An NZB file can't be downloaded; one by link is a plain file, for another newsreader.
-    await expect(plexo.api.probeUrl(nzb)).rejects.toThrow(/Usenet downloads are off/)
+    await expect(mergelane.api.probeUrl(nzb)).rejects.toThrow(/Usenet downloads are off/)
     const indexer = await indexerFor(server)
     try {
-      const probe = await plexo.api.probeUrl(indexer.link)
+      const probe = await mergelane.api.probeUrl(indexer.link)
       expect(probe.kind).toBe('http')
       expect(probe.suggestedFileName).toBe('Indexer.Release.nzb')
     } finally {
@@ -486,58 +488,58 @@ test.describe('Usenet settings', () => {
     }
 
     // Back on, the download picks up where it stopped.
-    await useServer(plexo, server, { connections: 2, enabled: true })
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForNzbStatus('completed', 30_000)
+    await useServer(mergelane, server, { connections: 2, enabled: true })
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForNzbStatus('completed', 30_000)
   })
 
   test('off, running and queued NZBs wait rather than fail, and start once it’s back on', async ({
-    plexo
+    mergelane
   }) => {
-    await plexo.api.updateSettings({ downloadsAtOnce: 1 })
+    await mergelane.api.updateSettings({ downloadsAtOnce: 1 })
     const server = await newsServer({ delayMs: 40 })
-    await useServer(plexo, server, { connections: 2 })
-    const running = await plexo.start(
+    await useServer(mergelane, server, { connections: 2 })
+    const running = await mergelane.start(
       await nzbOnDisk(server, 'First.Release.nzb'),
       server.expectedSha()
     )
-    await plexo.waitUntil((state) => state.id === running && countDone(expectNzb(state)) >= 2)
-    const queued = await plexo.start(
+    await mergelane.waitUntil((state) => state.id === running && countDone(expectNzb(state)) >= 2)
+    const queued = await mergelane.start(
       await nzbOnDisk(server, 'Second.Release.nzb'),
       server.expectedSha()
     )
-    expect((await plexo.byId(queued))?.status).toBe('queued')
+    expect((await mergelane.byId(queued))?.status).toBe('queued')
 
-    await useServer(plexo, server, { connections: 2, enabled: false })
+    await useServer(mergelane, server, { connections: 2, enabled: false })
     // The running one goes back in the queue, which makes room (see pause): the queued one still
     // waits.
     await expect
-      .poll(async () => (await plexo.byId(running))?.status, { timeout: 10_000 })
+      .poll(async () => (await mergelane.byId(running))?.status, { timeout: 10_000 })
       .toBe('queued')
     await new Promise((resolve) => setTimeout(resolve, 200))
-    const waiting = expectNzb((await plexo.byId(queued))!)
+    const waiting = expectNzb((await mergelane.byId(queued))!)
     expect(waiting.status).toBe('queued')
     expect(countDone(waiting)).toBe(0)
     expect(waiting.streams).toHaveLength(0)
-    expect((await plexo.byId(running))?.status).toBe('queued')
+    expect((await mergelane.byId(running))?.status).toBe('queued')
 
     // Back on, both start without being asked.
-    await useServer(plexo, server, { connections: 2, enabled: true })
+    await useServer(mergelane, server, { connections: 2, enabled: true })
     for (const id of [running, queued]) {
       await expect
-        .poll(async () => (await plexo.byId(id))?.status, { timeout: 30_000 })
+        .poll(async () => (await mergelane.byId(id))?.status, { timeout: 30_000 })
         .toBe('completed')
     }
   })
 
-  test('the news server is set up from Speed & data limits', async ({ plexo }) => {
+  test('the news server is set up from Speed & data limits', async ({ mergelane }) => {
     const server = await newsServer()
-    const dialog = await openUsenetPage(plexo)
+    const dialog = await openUsenetPage(mergelane)
     await expect(dialog.getByText('No news server set up')).toBeVisible()
     await expect(dialog.getByRole('switch', { name: 'Usenet downloads' })).toBeDisabled()
     await dialog.getByRole('button', { name: 'Set up server' }).click()
 
-    const form = plexo.page.getByRole('dialog', { name: 'Usenet server' })
+    const form = mergelane.page.getByRole('dialog', { name: 'Usenet server' })
     await form.getByLabel('Server').fill('127.0.0.1')
     await form.getByRole('switch').click()
     await form.getByLabel('Port').fill(String(server.port))
@@ -549,15 +551,15 @@ test.describe('Usenet settings', () => {
     await expect(dialog.getByRole('switch', { name: 'Usenet downloads' })).toBeChecked()
     // Saved already: the server's own Save is what counts, not Cancel here.
     await dialog.getByRole('button', { name: 'Cancel' }).click()
-    expect(await plexo.api.usenetServer()).toMatchObject({
+    expect(await mergelane.api.usenetServer()).toMatchObject({
       enabled: true,
       host: '127.0.0.1',
       port: server.port,
       tls: false,
       connections: 2
     })
-    await plexo.start(await nzbOnDisk(server), server.expectedSha())
-    await plexo.waitForNzbStatus('completed', 30_000)
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    await mergelane.waitForNzbStatus('completed', 30_000)
   })
 })
 

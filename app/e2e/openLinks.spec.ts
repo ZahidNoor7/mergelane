@@ -1,11 +1,11 @@
 import type { Locator } from '@playwright/test'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { electronArgs, expect, PROJECT_ROOT, test, type PlexoApp } from './fixtures'
+import { electronArgs, expect, PROJECT_ROOT, test, type MergelaneApp } from './fixtures'
 import { seededBytes } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
-// Links the OS hands Plexo — a magnet link clicked in a browser, a .torrent opened from the file
+// Links the OS hands Mergelane — a magnet link clicked in a browser, a .torrent opened from the file
 // manager — open New download with it filled in, for the user to look at and start; nothing starts
 // on its own.
 
@@ -21,26 +21,35 @@ async function aTorrentFile(): Promise<string> {
   }
 }
 
-const linkField = (plexo: PlexoApp): Locator => plexo.page.getByRole('textbox', { name: 'Link' })
+const linkField = (mergelane: MergelaneApp): Locator =>
+  mergelane.page.getByRole('textbox', { name: 'Link' })
 
 test.describe('links handed over by the OS', () => {
-  test('a .torrent on the command line (Windows, Linux) fills in the link', async ({ plexo }) => {
+  test('a .torrent on the command line (Windows, Linux) fills in the link', async ({
+    mergelane
+  }) => {
     const path = await aTorrentFile()
-    await plexo.quit()
-    await plexo.launch({}, [path])
+    await mergelane.quit()
+    await mergelane.launch({}, [path])
 
-    await expect(linkField(plexo)).toHaveValue(path)
-    await expect(plexo.page.getByRole('group', { name: 'Files' })).toBeVisible({ timeout: 15_000 })
+    await expect(linkField(mergelane)).toHaveValue(path)
+    await expect(mergelane.page.getByRole('group', { name: 'Files' })).toBeVisible({
+      timeout: 15_000
+    })
     // Shown, not started.
-    expect(await plexo.current()).toBeNull()
+    expect(await mergelane.current()).toBeNull()
   })
 
   test('a second launch hands its magnet link to the first window, and exits', async ({
-    plexo
+    mergelane
   }) => {
     const electronBinary = createRequire(__filename)('electron') as string
     const second = spawn(electronBinary, electronArgs(PROJECT_ROOT, [MAGNET]), {
-      env: { ...process.env, PLEXO_USER_DATA: plexo.dirs.userData, PLEXO_E2E_HIDE_WINDOW: '1' },
+      env: {
+        ...process.env,
+        MERGELANE_USER_DATA: mergelane.dirs.userData,
+        MERGELANE_E2E_HIDE_WINDOW: '1'
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     })
     const output: string[] = []
@@ -57,14 +66,14 @@ test.describe('links handed over by the OS', () => {
     } finally {
       if (second.exitCode === null && second.signalCode === null) second.kill('SIGKILL')
     }
-    await expect(linkField(plexo)).toHaveValue(MAGNET)
+    await expect(linkField(mergelane)).toHaveValue(MAGNET)
   })
 
   test('macOS’s open-url and open-file fill in the link; anything else is ignored', async ({
-    plexo
+    mergelane
   }) => {
     const emit = (event: 'open-url' | 'open-file', link: string): Promise<unknown> =>
-      plexo.evaluateMain(
+      mergelane.evaluateMain(
         ({ app }, [name, value]) => app.emit(name, { preventDefault: () => undefined }, value),
         [event, link] as const
       )
@@ -72,13 +81,13 @@ test.describe('links handed over by the OS', () => {
     await emit('open-url', 'https://example.com/not-a-torrent')
     await emit('open-file', '/no/such/file.torrent')
     // Neither is taken: New download doesn't open for them.
-    await expect(linkField(plexo)).toBeHidden()
+    await expect(linkField(mergelane)).toBeHidden()
 
     await emit('open-url', MAGNET)
-    await expect(linkField(plexo)).toHaveValue(MAGNET)
+    await expect(linkField(mergelane)).toHaveValue(MAGNET)
 
     const path = await aTorrentFile()
     await emit('open-file', path)
-    await expect(linkField(plexo)).toHaveValue(path)
+    await expect(linkField(mergelane)).toHaveValue(path)
   })
 })

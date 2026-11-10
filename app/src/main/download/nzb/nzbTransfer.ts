@@ -25,9 +25,9 @@ import type { NzbSegment } from './nzbFile'
 import { USENET_OFF, type UsenetServerConfig } from './usenetServer'
 import { decodeYenc, YencError } from './yenc'
 
-// Set PLEXO_DEBUG=1 to log every article's outcome.
-const debug: (...args: unknown[]) => void = process.env['PLEXO_DEBUG']
-  ? (...args) => console.debug('[plexo nzb]', ...args)
+// Set MERGELANE_DEBUG=1 to log every article's outcome.
+const debug: (...args: unknown[]) => void = process.env['MERGELANE_DEBUG']
+  ? (...args) => console.debug('[mergelane nzb]', ...args)
   : () => {}
 
 const RETRY_BASE_DELAY_MS = testKnobs.retryBaseDelayMs
@@ -85,7 +85,7 @@ interface Connection {
  *
  * An article counts once it is decoded, checked (CRC-32) and written. One the server doesn't have,
  * or keeps sending damaged, is marked missing and the download carries on: a par2 repair
- * restores it, which Plexo leaves to the user's tools.
+ * restores it, which Mergelane leaves to the user's tools.
  */
 export class NzbTransfer implements Transfer {
   private connections = new Map<number, Connection>()
@@ -117,7 +117,7 @@ export class NzbTransfer implements Transfer {
         (server) => {
           if (this.runtime.stop.signal.aborted) return
           if (!server) {
-            this.host.failDownload('Set up a news server in Plexo to download from Usenet.')
+            this.host.failDownload('Set up a news server in Mergelane to download from Usenet.')
             return
           }
           if (!server.enabled) {

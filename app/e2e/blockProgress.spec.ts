@@ -79,7 +79,7 @@ test.describe('block progress', () => {
 test.describe('destination-side staging file', () => {
   let dir: string
   test.beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plexo-staging-'))
+    dir = await mkdtemp(join(tmpdir(), 'mergelane-staging-'))
   })
   test.afterEach(async () => {
     await rm(dir, { recursive: true, force: true })
@@ -88,13 +88,13 @@ test.describe('destination-side staging file', () => {
   const bytes = (from: number, to: number): Buffer =>
     Buffer.from(Array.from({ length: to - from }, (_, i) => (from + i) % 251))
 
-  test('only the .plexo file is visible until completion, and it reserves the name', async () => {
+  test('only the .mergelane file is visible until completion, and it reserves the name', async () => {
     const first = await reserveDestinationPath(dir, 'result.bin')
     const second = await reserveDestinationPath(dir, 'result.bin')
     expect(first).toBe(join(dir, 'result.bin'))
     expect(second).toBe(join(dir, 'result (1).bin'))
-    expect(await readFile(`${first}.plexo`)).toHaveLength(0)
-    expect(await readFile(`${second}.plexo`)).toHaveLength(0)
+    expect(await readFile(`${first}.mergelane`)).toHaveLength(0)
+    expect(await readFile(`${second}.mergelane`)).toHaveLength(0)
     await expect(readFile(first)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(readFile(second)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -106,7 +106,7 @@ test.describe('destination-side staging file', () => {
     ]) {
       const first = await reserveDestinationPath(dir, name)
       const second = await reserveDestinationPath(dir, name)
-      expect(Buffer.byteLength(`${basename(first)}.plexo`)).toBeLessThanOrEqual(255)
+      expect(Buffer.byteLength(`${basename(first)}.mergelane`)).toBeLessThanOrEqual(255)
       expect(basename(second)).toBe(`${basename(first)} (1)`)
       expect(name.startsWith(basename(first))).toBe(true)
     }
@@ -117,7 +117,7 @@ test.describe('destination-side staging file', () => {
 
   test('out-of-order ranges and a racing hedge produce one exact file', async () => {
     const destination = join(dir, 'result.bin')
-    const file = new DownloadFile(`${destination}.plexo`)
+    const file = new DownloadFile(`${destination}.mergelane`)
     await writeFile(file.path, '')
     const write = (position: number, data: Buffer): Promise<void> =>
       new Promise((resolve, reject) => {
@@ -138,7 +138,7 @@ test.describe('destination-side staging file', () => {
 
   test('publishing does not replace a final file created during the download', async () => {
     const destination = join(dir, 'result.bin')
-    const file = new DownloadFile(`${destination}.plexo`)
+    const file = new DownloadFile(`${destination}.mergelane`)
     await writeFile(file.path, bytes(0, LENGTH))
     await writeFile(destination, 'someone else owns this name')
 

@@ -11,23 +11,23 @@ import { seededBytes } from './origin'
 const SIZE = 32 * BLOCK
 
 test.describe('restart @smoke', () => {
-  test('normal quit mid-download → relaunch paused → resume', async ({ plexo, serve }) => {
+  test('normal quit mid-download → relaunch paused → resume', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(10 * BLOCK + 500)
-    const id = await plexo.start(origin.url(), origin.sha256, { connections: 2 })
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
     await reached
 
-    await plexo.quit()
+    await mergelane.quit()
     origin.release()
-    await plexo.launch()
+    await mergelane.launch()
 
-    const restored = await plexo.currentHttp()
+    const restored = await mergelane.currentHttp()
     expect(restored?.id).toBe(id)
     expect(restored?.status).toBe('paused')
     expect(restored?.bytesDownloaded).toBeGreaterThan(0)
 
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 })
 
@@ -35,66 +35,70 @@ test.describe('crash (SIGKILL) and recover @smoke', () => {
   // Offsets chosen to leave different part-file and manifest states behind: so early no progress
   // has been saved yet, and mid-block. Chaos covers the moments in between.
   for (const offset of [100, 3 * BLOCK + 777]) {
-    test(`killed with a response held at byte ${offset}`, async ({ plexo, serve }) => {
+    test(`killed with a response held at byte ${offset}`, async ({ mergelane, serve }) => {
       const origin = await serve({ size: SIZE, seed: offset })
       const reached = origin.hold(offset)
-      const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+      const id = await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
       await reached
       // Give progress events and the throttled manifest save a chance to (partly) happen.
-      await plexo.waitUntil((state) => state.bytesDownloaded > 0)
+      await mergelane.waitUntil((state) => state.bytesDownloaded > 0)
 
-      await plexo.kill()
+      await mergelane.kill()
       origin.release()
-      await plexo.launch()
+      await mergelane.launch()
 
-      const restored = await plexo.currentHttp()
+      const restored = await mergelane.currentHttp()
       expect(restored?.id).toBe(id)
       expect(restored?.status).toBe('paused')
 
-      await plexo.api.resumeDownload(id)
-      await plexo.waitForHttpStatus('completed')
+      await mergelane.api.resumeDownload(id)
+      await mergelane.waitForHttpStatus('completed')
     })
   }
 })
 
 test.describe('persisted state on disk @smoke', () => {
   async function pausedDownload(
-    plexo: import('./fixtures').PlexoApp,
+    mergelane: import('./fixtures').MergelaneApp,
     serve: (o: { size: number; seed?: number }) => Promise<import('./origin').Origin>,
     seed = 1
   ): Promise<{ id: string; origin: import('./origin').Origin }> {
     const origin = await serve({ size: SIZE, seed })
     const reached = origin.hold(8 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    await plexo.api.pauseDownload(id)
-    await plexo.waitForHttpStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused')
     origin.release()
     return { id, origin }
   }
 
-  test('a corrupt manifest does not stop the app from starting', async ({ plexo, serve, dirs }) => {
-    const { id } = await pausedDownload(plexo, serve)
-    await plexo.quit()
+  test('a corrupt manifest does not stop the app from starting', async ({
+    mergelane,
+    serve,
+    dirs
+  }) => {
+    const { id } = await pausedDownload(mergelane, serve)
+    await mergelane.quit()
     await writeFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'not json {')
-    await plexo.launch()
-    expect(await plexo.currentHttp()).toBeNull()
+    await mergelane.launch()
+    expect(await mergelane.currentHttp()).toBeNull()
     // Nothing can bring it back: its folder is cleared rather than kept forever.
     await expect.poll(() => existsSync(join(dirs.userData, 'downloads', id))).toBe(false)
 
     // And a new download still works.
     const origin = await serve({ size: 4 * BLOCK, seed: 99 })
-    await plexo.start(origin.url(), origin.sha256)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256)
+    await mergelane.waitForHttpStatus('completed')
   })
 
   test('two saved downloads of one partial file: only the newest is restored', async ({
-    plexo,
+    mergelane,
     serve,
     dirs
   }) => {
-    const { id } = await pausedDownload(plexo, serve)
-    await plexo.quit()
+    const { id } = await pausedDownload(mergelane, serve)
+    await mergelane.quit()
 
     // Clone the saved download under another id, dated an hour earlier.
     const root = join(dirs.userData, 'downloads')
@@ -106,35 +110,35 @@ test.describe('persisted state on disk @smoke', () => {
     manifest.state.startedAt -= 3_600_000
     await writeFile(manifestPath, JSON.stringify(manifest))
 
-    await plexo.launch()
-    expect((await plexo.currentHttp())?.id).toBe(id)
+    await mergelane.launch()
+    expect((await mergelane.currentHttp())?.id).toBe(id)
     await expect.poll(() => existsSync(join(root, olderId))).toBe(false)
 
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 
   test('staging file deleted while the app was closed → reports lost progress', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
-    await pausedDownload(plexo, serve)
-    const partial = `${(await plexo.currentHttp())!.destinationPath}.plexo`
-    await plexo.quit()
+    await pausedDownload(mergelane, serve)
+    const partial = `${(await mergelane.currentHttp())!.destinationPath}.mergelane`
+    await mergelane.quit()
     await rm(partial)
-    await plexo.launch()
-    expect((await plexo.currentHttp())?.status).toBe('error')
-    expect((await plexo.currentHttp())?.error).toMatch(/partial download file is missing/)
+    await mergelane.launch()
+    expect((await mergelane.currentHttp())?.status).toBe('error')
+    expect((await mergelane.currentHttp())?.error).toMatch(/partial download file is missing/)
   })
 
   test('downloads an older version saved are cleared, partial data and all', async ({
-    plexo,
+    mergelane,
     serve,
     dirs
   }) => {
     // A paused download of this version's, which the clearing must leave alone.
-    const { id } = await pausedDownload(plexo, serve)
-    await plexo.quit()
+    const { id } = await pausedDownload(mergelane, serve)
+    await mergelane.quit()
     const root = join(dirs.userData, 'downloads')
     const manifest = (folder: string, content: object): Promise<void> =>
       mkdir(join(root, folder), { recursive: true }).then(() =>
@@ -155,7 +159,7 @@ test.describe('persisted state on disk @smoke', () => {
 
     // A layout this version doesn't read, with its staging file beside the destination.
     const laterId = '00000000-0000-4000-8000-000000000005'
-    const staging = join(dirs.dest, 'other.iso.plexo')
+    const staging = join(dirs.dest, 'other.iso.mergelane')
     await manifest(laterId, {
       version: 5,
       partialPath: staging,
@@ -163,7 +167,7 @@ test.describe('persisted state on disk @smoke', () => {
     })
     await writeFile(staging, seededBytes(1000, 6))
 
-    // An old manifest naming a file that holds something: never Plexo's to delete.
+    // An old manifest naming a file that holds something: never Mergelane's to delete.
     const realId = '00000000-0000-4000-8000-000000000003'
     const realFile = join(dirs.dest, 'mine.txt')
     await manifest(realId, {
@@ -172,8 +176,8 @@ test.describe('persisted state on disk @smoke', () => {
     })
     await writeFile(realFile, 'keep me')
 
-    await plexo.launch()
-    expect((await plexo.currentHttp())?.id).toBe(id)
+    await mergelane.launch()
+    expect((await mergelane.currentHttp())?.id).toBe(id)
     for (const gone of [join(root, oldId), placeholder, join(root, laterId), staging]) {
       await expect.poll(() => existsSync(gone), { message: `${gone} cleared` }).toBe(false)
     }
@@ -182,25 +186,25 @@ test.describe('persisted state on disk @smoke', () => {
     // Ours, not the download's: out of the way of the end-of-test check for stray files.
     await rm(realFile)
 
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 
   test('a staging file cut short while the app was closed is fetched again', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     // What a power cut can do: the manifest says a block is done, but its data never all
     // reached the disk.
-    const { id } = await pausedDownload(plexo, serve)
-    const state = (await plexo.currentHttp())!
+    const { id } = await pausedDownload(mergelane, serve)
+    const state = (await mergelane.currentHttp())!
     const done = state.blocks!.find((block) => block.status === 'completed')!
-    await plexo.quit()
-    const staging = `${state.destinationPath}.plexo`
+    await mergelane.quit()
+    const staging = `${state.destinationPath}.mergelane`
     await truncate(staging, done.rangeStart + 1000)
 
-    await plexo.launch()
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.launch()
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 })

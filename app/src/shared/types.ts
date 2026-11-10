@@ -229,13 +229,13 @@ export interface TelegramCredentials {
 }
 
 /** Where Telegram sign-in stands, as the login dialog shows it. Credentials are the user's own
- * api_id/api_hash from my.telegram.org — unless the release build bundles Plexo's own
+ * api_id/api_hash from my.telegram.org — unless the release build bundles Mergelane's own
  * (`bundled`), in which case the api form becomes an advanced fallback. The api_hash itself
  * never crosses to the window: it's the bundled secret in release builds, and the user's own
  * is a stored secret either way. */
 export interface TelegramAuthState {
   signedIn: boolean
-  /** The release build ships Plexo's own credentials: sign in with a phone (or the QR) alone. */
+  /** The release build ships Mergelane's own credentials: sign in with a phone (or the QR) alone. */
   bundled?: boolean
   /** The stored api registration is the user's own (not the bundled pair) — its api_hash field
    * can stay empty and the stored keys keep winning. */
@@ -501,7 +501,7 @@ export interface NetworkPreference {
   off?: boolean
   /** Bytes a second all downloads together may take over it. */
   speedLimit?: number
-  /** Bytes Plexo may receive in the chosen calendar period. */
+  /** Bytes Mergelane may receive in the chosen calendar period. */
   dataLimit?: number
   /** Defaults to month for existing settings. Weeks start Monday in local time. */
   dataLimitPeriod?: DataLimitPeriod
@@ -670,7 +670,7 @@ export interface UsenetServer {
   connections: number
   /** A password is set. */
   hasPassword: boolean
-  /** Its password is kept only until Plexo quits: this computer offers no keychain to seal it
+  /** Its password is kept only until Mergelane quits: this computer offers no keychain to seal it
    * with (see main/download/nzb/usenetServer.ts). */
   passwordInMemory?: boolean
 }

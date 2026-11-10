@@ -56,7 +56,7 @@ export function UsenetServerButton({ host }: { host: string }): React.JSX.Elemen
         size="xs"
         aria-label={`Usenet server ${host}: change settings`}
         onClick={() => {
-          void window.plexo
+          void window.mergelane
             .usenetServer()
             .then(setServer)
             .catch(() => setServer(null))
@@ -113,7 +113,7 @@ function UsenetServerForm({
     setBusy('test')
     setResult(null)
     try {
-      await window.plexo.testUsenetServer(input())
+      await window.mergelane.testUsenetServer(input())
       setResult({ ok: true, text: 'Connected and signed in.' })
     } catch (error) {
       setResult({ ok: false, text: describeError(error) })
@@ -126,7 +126,7 @@ function UsenetServerForm({
     setBusy('save')
     setResult(null)
     try {
-      onSaved(await window.plexo.saveUsenetServer(input()))
+      onSaved(await window.mergelane.saveUsenetServer(input()))
     } catch (error) {
       setResult({ ok: false, text: describeError(error) })
       setBusy(null)
@@ -231,8 +231,8 @@ function UsenetServerForm({
         </div>
         {server?.passwordInMemory && (
           <p className={hintClass}>
-            This computer has no keychain Plexo can use, so your password is kept only until Plexo
-            quits.
+            This computer has no keychain Mergelane can use, so your password is kept only until
+            Mergelane quits.
           </p>
         )}
       </div>

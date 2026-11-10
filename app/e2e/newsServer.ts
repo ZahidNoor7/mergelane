@@ -116,7 +116,7 @@ function post(files: NewsFile[], articleBytes: number): Article[] {
         Buffer.from(`${trailer}\r\n`)
       ])
       articles.push({
-        messageId: `part${part}of${total}.${index}.${file.name.replace(/[^\w.-]/g, '_')}@plexo.test`,
+        messageId: `part${part}of${total}.${index}.${file.name.replace(/[^\w.-]/g, '_')}@mergelane.test`,
         file: index,
         number: part,
         begin,
@@ -187,7 +187,7 @@ export class NewsServer {
             `      <segment bytes="${article.body.length}" number="${article.number}">${escapeXml(article.messageId)}</segment>`
         )
         .join('\n')
-      return `  <file poster="plexo@test" date="1700000000" subject="${escapeXml(`[${index + 1}/${this.options.files.length}] - "${file.name}" yEnc (1/${articles.length})`)}">
+      return `  <file poster="mergelane@test" date="1700000000" subject="${escapeXml(`[${index + 1}/${this.options.files.length}] - "${file.name}" yEnc (1/${articles.length})`)}">
     <groups><group>alt.binaries.test</group></groups>
     <segments>
 ${segments}
@@ -241,7 +241,7 @@ ${files.join('\n')}
     let signedIn = this.options.username === undefined
     let user = ''
     let buffered = ''
-    socket.write('200 Plexo test news server ready\r\n')
+    socket.write('200 Mergelane test news server ready\r\n')
     socket.on('data', (chunk) => {
       buffered += chunk.toString('latin1')
       let end: number

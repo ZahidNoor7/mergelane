@@ -6,5 +6,10 @@
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
+    <!-- Ad-hoc signatures carry no Team ID, so with the hardened runtime on, library validation would
+         refuse to load native modules such as koffi. electron-builder documents that ad-hoc signing
+         needs library validation disabled. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
   </dict>
 </plist>

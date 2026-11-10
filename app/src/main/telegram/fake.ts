@@ -13,7 +13,7 @@ import { TelegramFileError } from '../download/telegramTransfer'
 import type { TelegramServiceApi } from './service'
 
 /**
- * The Telegram service's double for end-to-end tests (PLEXO_E2E_TELEGRAM_FAKE=1): signs in
+ * The Telegram service's double for end-to-end tests (MERGELANE_E2E_TELEGRAM_FAKE=1): signs in
  * instantly, lists a page of Saved Messages media that isn't really there, and serves its
  * bytes the way a DC would — including the faults the real one inflicts (FLOOD_WAITs, stale
  * file references, per-region caps on the request size, a photo whose size only the download

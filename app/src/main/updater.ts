@@ -12,8 +12,11 @@ import type { UpdateState } from '../shared/types'
 import { saveSettings } from './settings'
 
 const CHECK_EVERY_MS = 4 * 60 * 60_000
+/** Off until updates are checked through the GitHub Releases API and installed by the user: an
+ * ad-hoc-signed build can't install updates itself (docs/DECISIONS.md ADR-0010). */
+export const UPDATES_ENABLED = false
 /** Where an update the app couldn't install itself is downloaded from instead. */
-const DOWNLOAD_PAGE = 'https://getplexo.app/'
+const DOWNLOAD_PAGE = 'https://github.com/ZahidNoor7/mergelane'
 
 let state: UpdateState = { status: 'idle', autoUpdate: true }
 let getWindow: () => BrowserWindow | null = () => null
@@ -58,7 +61,7 @@ function setAutoUpdate(on: boolean): void {
   autoUpdater.autoDownload = on
   set({ autoUpdate: on })
   saveSettings({ autoUpdate: on }).catch((error) =>
-    console.error('[plexo] failed to save the automatic updates setting', error)
+    console.error('[mergelane] failed to save the automatic updates setting', error)
   )
   if (on && state.status === 'available') download()
 }
@@ -66,6 +69,7 @@ function setAutoUpdate(on: boolean): void {
 /** The same items in the macOS app menu and in the menu the status bar's update button opens —
  * Windows and Linux windows show no menu bar, so that button is their only way to these. */
 function menuItems(): MenuItemConstructorOptions[] {
+  if (!UPDATES_ENABLED) return []
   const { status, version } = state
   const items: MenuItemConstructorOptions[] = []
   if (status === 'ready') {
@@ -77,10 +81,10 @@ function menuItems(): MenuItemConstructorOptions[] {
   } else if (status === 'downloading') {
     items.push({ label: `Downloading ${version}…`, enabled: false })
   } else if (status === 'available') {
-    items.push({ label: `Download Plexo ${version}`, click: download })
+    items.push({ label: `Download Mergelane ${version}`, click: download })
   } else if (status === 'error') {
     items.push({
-      label: `Get Plexo ${version} from the Website…`,
+      label: `Get Mergelane ${version} from the Website…`,
       click: () => void shell.openExternal(DOWNLOAD_PAGE)
     })
   }
@@ -105,6 +109,10 @@ export function showUpdateMenu(): void {
   if (window) Menu.buildFromTemplate(menuItems()).popup({ window })
 }
 
+function withSeparator(items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
+  return items.length ? [...items, { type: 'separator' }] : []
+}
+
 /** Electron's default macOS menu, with the update items under the app's name. */
 function setAppMenu(): void {
   if (process.platform !== 'darwin') return
@@ -115,8 +123,7 @@ function setAppMenu(): void {
         submenu: [
           { role: 'about' },
           { type: 'separator' },
-          ...menuItems(),
-          { type: 'separator' },
+          ...withSeparator(menuItems()),
           { role: 'services' },
           { type: 'separator' },
           { role: 'hide' },
@@ -145,11 +152,13 @@ export function startUpdater(window: () => BrowserWindow | null, autoUpdate: boo
   // never reach it. Off, every build follows Latest, whatever its version. A release marked
   // pre-release on GitHub is never Latest, so it reaches nobody.
   autoUpdater.allowPrerelease = false
+  setAppMenu()
+  if (!UPDATES_ENABLED) return
 
   autoUpdater.on('checking-for-update', () => set({ status: 'checking' }))
   autoUpdater.on('update-not-available', () => {
     set({ status: 'idle', version: undefined })
-    answer('You’re up to date', `Plexo ${app.getVersion()} is the newest version.`)
+    answer('You’re up to date', `Mergelane ${app.getVersion()} is the newest version.`)
   })
   autoUpdater.on('update-available', ({ version }) => {
     asked = false
@@ -161,14 +170,13 @@ export function startUpdater(window: () => BrowserWindow | null, autoUpdate: boo
   })
   autoUpdater.on('update-downloaded', ({ version }) => set({ status: 'ready', version }))
   autoUpdater.on('error', (error) => {
-    console.error('[plexo] update failed', error)
+    console.error('[mergelane] update failed', error)
     // Before an update is found (offline, GitHub down) there's nothing to show. After, the
     // website still has it — the way an unsigned Mac build, which can't install it, gets it.
     set({ status: state.version ? 'error' : 'idle' })
     answer('Couldn’t check for updates', 'Check your connection and try again.')
   })
 
-  setAppMenu()
   check()
   setInterval(check, CHECK_EVERY_MS)
 }

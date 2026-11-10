@@ -264,7 +264,7 @@ async function connectHttpTunnel(
     const credentials = Buffer.from(`${proxy.username}:${proxy.password ?? ''}`).toString('base64')
     connectRequest += `Proxy-Authorization: Basic ${credentials}\r\n`
   }
-  connectRequest += `User-Agent: Plexo/1.0\r\nProxy-Connection: Keep-Alive\r\n\r\n`
+  connectRequest += `User-Agent: Mergelane/1.0\r\nProxy-Connection: Keep-Alive\r\n\r\n`
 
   proxySocket.write(connectRequest)
 

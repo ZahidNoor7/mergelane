@@ -15,37 +15,37 @@ test.describe('pause and resume @smoke', () => {
     ['exactly on a block boundary', 8 * BLOCK]
   ]
   for (const [label, offset] of points) {
-    test(`pause ${label}, then resume`, async ({ plexo, serve }) => {
+    test(`pause ${label}, then resume`, async ({ mergelane, serve }) => {
       const origin = await serve({ size: SIZE })
       const reached = origin.hold(offset)
-      const id = await plexo.start(origin.url(), origin.sha256, { connections: 2 })
+      const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
       await reached
 
-      await plexo.api.pauseDownload(id)
-      const paused = await plexo.waitForHttpStatus('paused')
+      await mergelane.api.pauseDownload(id)
+      const paused = await mergelane.waitForHttpStatus('paused')
       expect(paused.speedBytesPerSec).toBe(0)
       origin.release()
 
-      await plexo.api.resumeDownload(id)
-      await plexo.waitForHttpStatus('completed')
+      await mergelane.api.resumeDownload(id)
+      await mergelane.waitForHttpStatus('completed')
     })
   }
 
-  test('rapid pause/resume, 20 times', async ({ plexo, serve }) => {
+  test('rapid pause/resume, 20 times', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(6 * BLOCK + 10)
-    const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
     await reached
     for (let i = 0; i < 20; i++) {
-      await plexo.api.pauseDownload(id)
-      await plexo.api.resumeDownload(id)
+      await mergelane.api.pauseDownload(id)
+      await mergelane.api.resumeDownload(id)
     }
     origin.release()
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.waitForHttpStatus('completed')
   })
 
   test('resuming while a paused stream is still winding down waits for it, not runs beside it', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: SIZE, bytesPerSecond: 256 * 1024 })
@@ -71,48 +71,48 @@ test.describe('pause and resume @smoke', () => {
       return 'stallHeaders'
     })
 
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await expect.poll(() => stalled, { message: 'the sample request hung' }).toBe(true)
-    const pausing = plexo.api.pauseDownload(id)
-    await plexo.waitForHttpStatus('paused')
-    await plexo.api.resumeDownload(id)
+    const pausing = mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused')
+    await mergelane.api.resumeDownload(id)
     await pausing
     // Two runs side by side would each try to finish the download, and the one left behind would
     // call it failed.
-    await plexo.waitForHttpStatus('completed', 30_000)
+    await mergelane.waitForHttpStatus('completed', 30_000)
   })
 })
 
 test.describe('pause during a retry backoff', () => {
-  test.use({ appEnv: { PLEXO_E2E_RETRY_BASE_MS: '5000' } })
+  test.use({ appEnv: { MERGELANE_E2E_RETRY_BASE_MS: '5000' } })
 
-  test('pausing does not wait out the backoff @smoke', async ({ plexo, serve }) => {
+  test('pausing does not wait out the backoff @smoke', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE })
     let failing = true
     origin.setRule(({ range }) =>
       failing && range && range.start === 4 * BLOCK ? { status: 500 } : 'ok'
     )
-    const id = await plexo.start(origin.url(), origin.sha256, { connections: 2 })
-    await plexo.waitUntil(
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
+    await mergelane.waitUntil(
       (state) =>
         state.kind === 'http' && state.streams.some((stream) => stream.status === 'retrying')
     )
 
     const before = Date.now()
-    await plexo.api.pauseDownload(id)
-    await plexo.waitForHttpStatus('paused', 2000)
+    await mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused', 2000)
     expect(Date.now() - before).toBeLessThan(2000)
 
     failing = false
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 })
 
 test.describe('resume safety checks @smoke', () => {
   /** Starts a download, pauses it partway, and lets `change` alter the server while paused. */
   async function pauseThenChange(
-    plexo: import('./fixtures').PlexoApp,
+    mergelane: import('./fixtures').MergelaneApp,
     origin: import('./origin').Origin,
     change: () => void
   ): Promise<{
@@ -121,36 +121,36 @@ test.describe('resume safety checks @smoke', () => {
     paused: import('../src/shared/types').HttpDownloadState
   }> {
     const reached = origin.hold(5 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForHttpStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForHttpStatus('paused')
     change()
     origin.release()
     const resumedAt = origin.log.length
-    await plexo.api.resumeDownload(id)
+    await mergelane.api.resumeDownload(id)
     return { id, resumedAt, paused }
   }
 
   test('a new version published while paused (new ETag) → error, nothing kept', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: SIZE })
-    await pauseThenChange(plexo, origin, () => origin.setContent(seededBytes(SIZE, 9), '"v2"'))
-    const state = await plexo.waitForHttpStatus('error')
+    await pauseThenChange(mergelane, origin, () => origin.setContent(seededBytes(SIZE, 9), '"v2"'))
+    const state = await mergelane.waitForHttpStatus('error')
     expect(state.error).toMatch(/changed/)
   })
 
   test('same bytes under a new ETag while paused (server migrated) → resumes, progress kept', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: SIZE })
-    const { resumedAt, paused } = await pauseThenChange(plexo, origin, () =>
+    const { resumedAt, paused } = await pauseThenChange(mergelane, origin, () =>
       origin.setContent(origin.content, '"migrated"')
     )
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.waitForHttpStatus('completed')
 
     // Kept, not restarted: after resuming, no block that was already complete was fetched again
     // — only the small samples that confirmed the bytes match.
@@ -166,68 +166,68 @@ test.describe('resume safety checks @smoke', () => {
     )
   })
 
-  test('no validators at all → resumes', async ({ plexo, serve }) => {
+  test('no validators at all → resumes', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE, etag: null, lastModified: null })
     const reached = origin.hold(5 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    await plexo.api.pauseDownload(id)
-    await plexo.waitForHttpStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused')
     origin.release()
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
   })
 
-  test('resume against a server without range support', async ({ plexo, serve }) => {
+  test('resume against a server without range support', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE, ranges: false })
     const reached = origin.hold(5 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    await plexo.api.pauseDownload(id)
-    await plexo.waitForHttpStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused')
     origin.release()
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed', 10_000)
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed', 10_000)
   })
 })
 
 test.describe('cancel and remove @smoke', () => {
-  test('cancel while paused', async ({ plexo, serve }) => {
+  test('cancel while paused', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(7 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForHttpStatus('paused')
-    const staging = `${paused.destinationPath}.plexo`
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForHttpStatus('paused')
+    const staging = `${paused.destinationPath}.mergelane`
     expect(existsSync(staging), 'pausing keeps the staging file').toBe(true)
     origin.release()
-    await plexo.api.cancelDownload(id)
-    await plexo.waitForHttpStatus('cancelled')
+    await mergelane.api.cancelDownload(id)
+    await mergelane.waitForHttpStatus('cancelled')
     await expect.poll(() => existsSync(staging), { message: 'cancelling removes it' }).toBe(false)
   })
 
-  test('remove after completion keeps the file', async ({ plexo, serve, dirs }) => {
+  test('remove after completion keeps the file', async ({ mergelane, serve, dirs }) => {
     const origin = await serve({ size: SIZE })
-    const id = await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
-    await plexo.api.removeDownload(id)
+    const id = await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
+    await mergelane.api.removeDownload(id)
 
-    expect(await plexo.currentHttp()).toBeNull()
+    expect(await mergelane.currentHttp()).toBeNull()
     expect(sha256(await readFile(state.destinationPath))).toBe(origin.sha256)
     await expect.poll(() => existsSync(join(dirs.userData, 'downloads', id))).toBe(false)
   })
 
-  test('remove while downloading deletes everything', async ({ plexo, serve, dirs }) => {
+  test('remove while downloading deletes everything', async ({ mergelane, serve, dirs }) => {
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(7 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await reached
-    const { destinationPath } = (await plexo.currentHttp())!
-    await plexo.api.removeDownload(id)
+    const { destinationPath } = (await mergelane.currentHttp())!
+    await mergelane.api.removeDownload(id)
     origin.release()
 
-    expect(await plexo.currentHttp()).toBeNull()
+    expect(await mergelane.currentHttp()).toBeNull()
     await expect.poll(() => existsSync(destinationPath)).toBe(false)
     await expect.poll(() => existsSync(join(dirs.userData, 'downloads', id))).toBe(false)
   })
@@ -235,7 +235,7 @@ test.describe('cancel and remove @smoke', () => {
 
 test.describe('window close with active downloads @smoke', () => {
   test('closing the window keeps active downloads running and suspends cleanly on quit', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     test.skip(
@@ -245,29 +245,29 @@ test.describe('window close with active downloads @smoke', () => {
 
     const origin = await serve({ size: SIZE, bytesPerSecond: 256 * 1024 })
     const reached = origin.hold(6 * BLOCK)
-    await plexo.start(origin.url(), origin.sha256, { connections: 2 })
+    await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
     await reached
 
-    const windowState = await plexo.evaluateMain(({ BrowserWindow }) => {
+    const windowState = await mergelane.evaluateMain(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0]
       win.close()
       return { isDestroyed: win.isDestroyed() }
     }, null)
 
     expect(windowState.isDestroyed, 'window is not destroyed').toBe(false)
-    expect(plexo.alive, 'app is still alive').toBe(true)
+    expect(mergelane.alive, 'app is still alive').toBe(true)
 
     const nextReached = origin.hold(10 * BLOCK)
     await nextReached
 
-    const windowCount = await plexo.evaluateMain(
+    const windowCount = await mergelane.evaluateMain(
       ({ BrowserWindow }) => BrowserWindow.getAllWindows().length,
       null
     )
     expect(windowCount, 'window remains open in background').toBe(1)
 
-    await plexo.relaunch()
-    const current = await plexo.currentHttp()
+    await mergelane.relaunch()
+    const current = await mergelane.currentHttp()
     expect(current?.status).toBe('paused')
     origin.release()
   })

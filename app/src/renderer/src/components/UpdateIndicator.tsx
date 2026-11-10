@@ -9,15 +9,15 @@ function describe({ status, version, percent, autoUpdate }: UpdateState): string
     case 'checking':
       return 'Checking for updates…'
     case 'available':
-      return `Plexo ${version} is available`
+      return `Mergelane ${version} is available`
     case 'downloading':
-      return `Downloading Plexo ${version}… ${percent}%`
+      return `Downloading Mergelane ${version}… ${percent}%`
     case 'ready':
-      return `Plexo ${version} is ready — restart to update`
+      return `Mergelane ${version} is ready — restart to update`
     case 'error':
-      return `Couldn’t install Plexo ${version}`
+      return `Couldn’t install Mergelane ${version}`
     default:
-      return autoUpdate ? 'Plexo updates automatically' : 'Automatic updates are off'
+      return autoUpdate ? 'Mergelane updates automatically' : 'Automatic updates are off'
   }
 }
 
@@ -27,8 +27,8 @@ export function UpdateIndicator(): React.JSX.Element {
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', autoUpdate: true })
 
   useEffect(() => {
-    const stop = window.plexo.onUpdateState(setUpdate)
-    window.plexo.updateState().then(setUpdate, () => {})
+    const stop = window.mergelane.onUpdateState(setUpdate)
+    window.mergelane.updateState().then(setUpdate, () => {})
     return stop
   }, [])
 
@@ -52,7 +52,7 @@ export function UpdateIndicator(): React.JSX.Element {
           <button
             type="button"
             aria-label={label}
-            onClick={() => void window.plexo.showUpdateMenu()}
+            onClick={() => void window.mergelane.showUpdateMenu()}
             className={cn(
               'flex h-[26px] min-w-[26px] shrink-0 cursor-default items-center justify-center gap-1.5 rounded-[6px] border-[0.5px] border-border bg-secondary px-[5px] [-webkit-app-region:no-drag]',
               status === 'available' || status === 'ready'

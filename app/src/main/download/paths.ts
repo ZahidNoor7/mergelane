@@ -89,7 +89,7 @@ async function claimName(
 }
 
 /**
- * Claims a download by exclusively creating <final name>.plexo. The final name
+ * Claims a download by exclusively creating <final name>.mergelane. The final name
  * itself does not appear until the file is complete. An existing partial file
  * also claims its corresponding final name, including after a restart.
  */
@@ -97,15 +97,15 @@ export async function reserveDestinationPath(directory: string, fileName: string
   return claimName(
     directory,
     fileName,
-    { suffix: '.plexo', extension: true },
+    { suffix: '.mergelane', extension: true },
     async (candidate) => {
-      const handle = await open(`${candidate}.plexo`, 'wx+')
+      const handle = await open(`${candidate}.mergelane`, 'wx+')
       await handle.close()
       if (!(await pathExists(candidate))) {
-        await markSparse(`${candidate}.plexo`)
+        await markSparse(`${candidate}.mergelane`)
         return true
       }
-      await rm(`${candidate}.plexo`)
+      await rm(`${candidate}.mergelane`)
       return false
     }
   )

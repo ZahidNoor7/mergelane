@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-/** Telegram, as Plexo reaches it: the user's own session, and only Saved Messages — the "me"
+/** Telegram, as Mergelane reaches it: the user's own session, and only Saved Messages — the "me"
  * peer every request here is hard-pinned to. Signed in, it lists the media there; a pick of it
  * starts downloads the manager runs like any other. */
 
@@ -46,10 +46,10 @@ function TelegramPanel({ onDone }: { onDone: () => void }): React.JSX.Element {
 
   useEffect(() => {
     let stale = false
-    void window.plexo.telegramState().then((state) => {
+    void window.mergelane.telegramState().then((state) => {
       if (!stale) setAuth(state)
     })
-    const unsubscribe = window.plexo.onTelegramAuth((state) => setAuth(state))
+    const unsubscribe = window.mergelane.onTelegramAuth((state) => setAuth(state))
     return () => {
       stale = true
       unsubscribe()
@@ -75,8 +75,8 @@ function TelegramPanel({ onDone }: { onDone: () => void }): React.JSX.Element {
           </div>
         </div>
         <p className="mt-1.5 text-[12px] leading-[1.5] text-[var(--text-secondary)]">
-          Plexo is an unofficial Telegram client: signing in grants it full access to your account,
-          though it reads nothing but Saved Messages.
+          Mergelane is an unofficial Telegram client: signing in grants it full access to your
+          account, though it reads nothing but Saved Messages.
         </p>
       </div>
       {auth === null ? (
@@ -102,7 +102,7 @@ function SignOut(): React.JSX.Element {
       disabled={busy}
       onClick={() => {
         setBusy(true)
-        void window.plexo.telegramLogout().catch(() => setBusy(false))
+        void window.mergelane.telegramLogout().catch(() => setBusy(false))
       }}
     >
       Sign out
@@ -114,7 +114,7 @@ const fieldLabelClass = 'w-24 shrink-0 text-[12.5px] text-[var(--text-secondary)
 const errorClass = 'text-[12px] leading-[1.4] text-[var(--color-danger)]'
 
 /** The sign-in steps, driven by what main reports: a QR to scan (default, when credentials to
- * power one exist — Plexo's own in a bundled release, else the user's from an earlier
+ * power one exist — Mergelane's own in a bundled release, else the user's from an earlier
  * sign-in), then the code or the two-step-verification password if those flows are used. */
 function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element {
   const canQr = auth.bundled === true || auth.hasOwnKeys === true
@@ -125,7 +125,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  // Bundled builds lead with Plexo's own credentials; the user's own api keys are one toggle
+  // Bundled builds lead with Mergelane's own credentials; the user's own api keys are one toggle
   // away — the api_hash never comes prefilled (main never sends it), and stored own keys keep
   // winning while the fields stay empty (see main's startLogin).
   const [showApi, setShowApi] = useState(auth.bundled !== true)
@@ -137,7 +137,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
 
   const startQr = useCallback((): void => {
     // Failures arrive as state pushes from main; the dialog just shows them.
-    void window.plexo.telegramStartQrLogin().catch(() => {})
+    void window.mergelane.telegramStartQrLogin().catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -150,7 +150,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
         className="flex flex-col gap-3 px-5 py-4"
         onSubmit={(event) => {
           event.preventDefault()
-          run(() => window.plexo.telegramSubmitPassword(password))
+          run(() => window.mergelane.telegramSubmitPassword(password))
         }}
       >
         <p className="text-[12.5px] leading-[1.5]">
@@ -186,7 +186,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
         className="flex flex-col gap-3 px-5 py-4"
         onSubmit={(event) => {
           event.preventDefault()
-          run(() => window.plexo.telegramSubmitCode(code))
+          run(() => window.mergelane.telegramSubmitCode(code))
         }}
       >
         <p className="text-[12.5px] leading-[1.5]">
@@ -267,7 +267,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
       onSubmit={(event) => {
         event.preventDefault()
         run(() =>
-          window.plexo.telegramStartLogin({
+          window.mergelane.telegramStartLogin({
             apiId: Number(apiId),
             apiHash,
             phone
@@ -277,7 +277,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
     >
       {needsApiFields ? (
         <p className="text-[12.5px] leading-[1.5]">
-          Plexo needs an <span className="font-medium">api_id</span> and{' '}
+          Mergelane needs an <span className="font-medium">api_id</span> and{' '}
           <span className="font-medium">api_hash</span> of your own: create an app at
           my.telegram.org → API development tools, and enter them here with your phone number.
         </p>
@@ -333,7 +333,7 @@ function TelegramLogin({ auth }: { auth: TelegramAuthState }): React.JSX.Element
           size="xs"
           onClick={() => setShowApi((shown) => !shown)}
         >
-          {showApi ? 'Use Plexo’s api keys instead' : 'Use your own api keys (advanced)'}
+          {showApi ? 'Use Mergelane’s api keys instead' : 'Use your own api keys (advanced)'}
         </Button>
       )}
       {auth.error && (
@@ -396,7 +396,7 @@ function SavedMessagesBrowser({ onDone }: { onDone: () => void }): React.JSX.Ele
     setLoading(true)
     setError(null)
     try {
-      const page = await window.plexo.telegramListMedia(olderThan)
+      const page = await window.mergelane.telegramListMedia(olderThan)
       setItems((previous) => (olderThan === undefined ? page.items : [...previous, ...page.items]))
       setNextOffsetId(page.nextOffsetId)
       setExhausted(page.exhausted)
@@ -415,7 +415,7 @@ function SavedMessagesBrowser({ onDone }: { onDone: () => void }): React.JSX.Ele
   }, [loadPage, interfaces.length, loadInterfaces])
 
   const chooseDestination = async (): Promise<void> => {
-    const dir = await window.plexo.chooseDestinationFolder(destinationDir).catch(() => null)
+    const dir = await window.mergelane.chooseDestinationFolder(destinationDir).catch(() => null)
     if (dir) setDestinationDir(dir)
   }
 
@@ -425,7 +425,7 @@ function SavedMessagesBrowser({ onDone }: { onDone: () => void }): React.JSX.Ele
     const interfaceIds = interfaces.map((iface) => iface.id)
     const picks = items.filter((item) => selected.has(item.messageId))
     for (const item of picks) {
-      window.plexo
+      window.mergelane
         .startDownload({
           kind: 'telegram',
           messageId: item.messageId,

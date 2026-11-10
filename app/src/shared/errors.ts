@@ -19,7 +19,7 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /EACCES|EPERM/,
     message:
-      'Plexo doesn’t have permission to access this file or folder. Check its permissions or choose another folder.'
+      'Mergelane doesn’t have permission to access this file or folder. Check its permissions or choose another folder.'
   },
   {
     pattern: /ENOENT/,
@@ -28,12 +28,12 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /EROFS/, message: 'This drive is read-only. Choose another download folder.' },
   {
     pattern: /EIO/,
-    message: 'Plexo couldn’t read or write the download. Check the drive and try again.'
+    message: 'Mergelane couldn’t read or write the download. Check the drive and try again.'
   },
   {
     pattern:
       /Invalid torrent metadata|Invalid torrent|Invalid info hash|Invalid infoHash|Invalid magnet/i,
-    message: 'Plexo couldn’t read this torrent. Try another magnet link or .torrent file.'
+    message: 'Mergelane couldn’t read this torrent. Try another magnet link or .torrent file.'
   },
   {
     pattern: LINK_REFUSED,
@@ -41,12 +41,12 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   },
   {
     pattern: /Download is incomplete/,
-    message: 'Plexo couldn’t download every part of the file. Try downloading again.'
+    message: 'Mergelane couldn’t download every part of the file. Try downloading again.'
   },
   {
     pattern: /Download file size does not match/,
     message:
-      'The downloaded file has an unexpected size. Plexo couldn’t save the completed file. Try downloading again.'
+      'The downloaded file has an unexpected size. Mergelane couldn’t save the completed file. Try downloading again.'
   },
   {
     pattern: /Proxy authentication required|HTTP 407/i,
@@ -70,7 +70,7 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   },
   {
     pattern: /ENOTFOUND|EAI_AGAIN/,
-    message: 'Plexo couldn’t find the server. Check the link and your connection.'
+    message: 'Mergelane couldn’t find the server. Check the link and your connection.'
   },
   {
     pattern: /ECONNREFUSED/,

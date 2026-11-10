@@ -1,5 +1,5 @@
 import { api } from './api'
-import { plexoPort, reach } from './plexo'
+import { mergelanePort, reach } from './mergelane'
 import { loadSettings, saveSettings, siteOf } from './settings'
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
@@ -38,12 +38,12 @@ async function renderConnection(): Promise<void> {
   element('dot').className = `dot ${reached === 'ok' ? 'ok' : reached === 'update' ? 'warn' : ''}`
   element('connection').textContent =
     reached === 'ok'
-      ? 'Connected to Plexo'
+      ? 'Connected to Mergelane'
       : reached === 'update'
-        ? 'Update Plexo to use this extension'
-        : 'Plexo isn’t open'
-  element('open-plexo').hidden = reached !== 'closed'
-  const port = plexoPort()
+        ? 'Update Mergelane to use this extension'
+        : 'Mergelane isn’t open'
+  element('open-mergelane').hidden = reached !== 'closed'
+  const port = mergelanePort()
   element('port').textContent = port === null ? '' : `127.0.0.1:${port}`
 }
 
@@ -70,8 +70,10 @@ element<HTMLFormElement>('add-site').addEventListener('submit', async (event) =>
   input.value = ''
 })
 
-element('open-plexo').addEventListener('click', () => {
-  void api.runtime.sendMessage({ wakePlexo: true }).then(() => setTimeout(renderConnection, 4000))
+element('open-mergelane').addEventListener('click', () => {
+  void api.runtime
+    .sendMessage({ wakeMergelane: true })
+    .then(() => setTimeout(renderConnection, 4000))
 })
 
 element('version').textContent = `Extension ${api.runtime.getManifest().version}`

@@ -38,15 +38,15 @@ const LIST_PAGE = 50
  * login — the shape of a fast download in Telegram's own desktop client. */
 const FILE_SENDER_POOL = 8
 
-/** Plexo's own api credentials, replaced into release builds at build time (see
+/** Mergelane's own api credentials, replaced into release builds at build time (see
  * electron.vite.config.ts). When present, signing in needs only a phone or the QR — the api
  * form becomes an advanced fallback. */
 const BUNDLED_CREDENTIALS: { apiId: number; apiHash: string } | undefined =
-  typeof __PLEXO_TG_API_ID__ === 'number' &&
-  __PLEXO_TG_API_ID__ > 0 &&
-  typeof __PLEXO_TG_API_HASH__ === 'string' &&
-  __PLEXO_TG_API_HASH__ !== ''
-    ? { apiId: __PLEXO_TG_API_ID__, apiHash: __PLEXO_TG_API_HASH__ }
+  typeof __MERGELANE_TG_API_ID__ === 'number' &&
+  __MERGELANE_TG_API_ID__ > 0 &&
+  typeof __MERGELANE_TG_API_HASH__ === 'string' &&
+  __MERGELANE_TG_API_HASH__ !== ''
+    ? { apiId: __MERGELANE_TG_API_ID__, apiHash: __MERGELANE_TG_API_HASH__ }
     : undefined
 
 interface StoredAuth {
@@ -385,7 +385,7 @@ export class TelegramService implements TelegramServiceApi {
     return client
   }
 
-  /** Connects and sends the login code. A release build has Plexo's own credentials bundled,
+  /** Connects and sends the login code. A release build has Mergelane's own credentials bundled,
    * so only the phone is asked for; otherwise the user's api_id/api_hash come in too. Stops
    * any QR sign-in that was waiting. */
   async startLogin(input: TelegramCredentials): Promise<void> {
@@ -435,7 +435,7 @@ export class TelegramService implements TelegramServiceApi {
   }
 
   /** Starts a QR sign-in: the dialog is fed fresh login tokens (rendered as a QR that Telegram
-   * rotates) until the user scans one from Settings → Devices. Needs credentials — Plexo's
+   * rotates) until the user scans one from Settings → Devices. Needs credentials — Mergelane's
    * own when bundled, else the user's from an earlier sign-in. A two-step-verification
    * account moves the dialog on to its password step after the scan. */
   async startQrLogin(): Promise<void> {
@@ -825,7 +825,7 @@ export class TelegramService implements TelegramServiceApi {
         if (result instanceof Api.upload.FileCdnRedirect) {
           throw new TelegramFileError(
             'other',
-            'Telegram served this file from a CDN, which Plexo can’t fetch.'
+            'Telegram served this file from a CDN, which Mergelane can’t fetch.'
           )
         }
         return result.bytes
@@ -983,7 +983,7 @@ export class TelegramService implements TelegramServiceApi {
                 apiId: identity?.apiId ?? this.credentials!.apiId,
                 deviceModel: identity?.deviceModel ?? 'Desktop',
                 systemVersion: identity?.systemVersion ?? 'unknown',
-                appVersion: identity?.appVersion ?? 'Plexo',
+                appVersion: identity?.appVersion ?? 'Mergelane',
                 systemLangCode: identity?.systemLangCode ?? 'en',
                 langPack: identity?.langPack ?? '',
                 langCode: identity?.langCode ?? 'en',

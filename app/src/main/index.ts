@@ -12,7 +12,7 @@ import {
 import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
-import { keepsRunningForBrowser, startBridge } from './browserBridge'
+import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import { startUpdater } from './updater'
@@ -22,12 +22,12 @@ import type { DownloadManager } from './download/downloadManager'
 // In dev mode the app runs as the raw `electron` binary, which otherwise shows "Electron" in
 // the Dock tooltip/menu bar — must be set before the app is ready. Packaged builds already get
 // this from electron-builder's productName, but setting it here keeps dev and packaged in sync.
-app.setName('Plexo')
+app.setName('Mergelane')
 
 // Each e2e test runs against its own throwaway userData folder (downloads, manifests, settings).
 if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
 
-// One Plexo at a time (per userData folder, so parallel e2e runs each have their own): a second
+// One Mergelane at a time (per userData folder, so parallel e2e runs each have their own): a second
 // launch — a magnet link clicked, a .torrent opened — hands its link to the first and exits.
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -41,15 +41,15 @@ let hasShownTrayNotification = false
 function ensureTray(): Tray {
   if (tray && !tray.isDestroyed()) return tray
   tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
-  tray.setToolTip('Plexo')
+  tray.setToolTip('Mergelane')
   tray.on('click', () => bringForward(ensureWindow()))
   tray.on('double-click', () => bringForward(ensureWindow()))
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Plexo', click: () => bringForward(ensureWindow()) },
+      { label: 'Open Mergelane', click: () => bringForward(ensureWindow()) },
       { type: 'separator' },
       {
-        label: 'Quit Plexo',
+        label: 'Quit Mergelane',
         click: () => {
           isQuitting = true
           app.quit()
@@ -74,7 +74,7 @@ function offer(candidate: string): void {
   offerLink({ url: link }, app.isReady() ? ensureWindow() : null)
 }
 
-// A plexo:// link from the browser extension arrives here too, with no link in it.
+// A mergelane:// link from the browser extension arrives here too, with no link in it.
 app.on('second-instance', (_event, argv) => {
   const link = linkFromArgs(argv)
   if (link) return offer(link)
@@ -113,7 +113,7 @@ function createWindow(): void {
     minHeight: 620,
     show: false,
     autoHideMenuBar: true,
-    title: 'Plexo',
+    title: 'Mergelane',
     // Matches the renderer's dark-mode background so a live window resize
     // (which briefly exposes the raw window background) doesn't flash white.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
@@ -135,6 +135,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     if (!testKnobs.hideWindow) mainWindow?.show()
+    markAppReady()
   })
 
   mainWindow.on('session-end', () => {
@@ -158,8 +159,8 @@ function createWindow(): void {
         hasShownTrayNotification = true
         if (!testKnobs.userDataDir && Notification.isSupported()) {
           new Notification({
-            title: 'Plexo is still downloading',
-            body: 'Downloads will continue in the background. Open Plexo again, or use its tray icon, to quit.'
+            title: 'Mergelane is still downloading',
+            body: 'Downloads will continue in the background. Open Mergelane again, or use its tray icon, to quit.'
           }).show()
         }
       }
@@ -203,16 +204,17 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.plexo.app')
+  electronApp.setAppUserModelId('io.github.zahidnoor7.mergelane')
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
   await migrateLegacyNetworkPreferences().catch((error) =>
-    console.error('[plexo] failed to migrate network-preferences.json', error)
+    console.error('[mergelane] failed to migrate network-preferences.json', error)
   )
 
-  // The macOS About window (Plexo › About Plexo); its copyright comes from electron-builder.yml.
+  // The macOS About window (Mergelane › About Mergelane); its copyright comes from electron-builder.yml.
   app.setAboutPanelOptions({
-    credits: 'Developed by Anmol Kapil.\nmacOS code signing provided by Dhananjay Bhosale.'
+    credits:
+      'Based on Plexo by Anmol Kapil and Net Merge by Rohit Mahto (both MIT). See THIRD-PARTY-NOTICES.md.'
   })
 
   // Applied before the window is created so the initial background/icon already match —
@@ -227,10 +229,10 @@ app.whenReady().then(async () => {
   void startBridge({
     manager: downloadManager,
     offer: (link) => offerLink(link, ensureWindow())
-  }).catch((error) => console.error('[plexo] browser bridge failed to start', error))
-  // Unlike magnet:, plexo:// is Plexo's own, so registering it takes nothing from another app. A
+  }).catch((error) => console.error('[mergelane] browser bridge failed to start', error))
+  // Unlike magnet:, mergelane:// is Mergelane's own, so registering it takes nothing from another app. A
   // development build has no fixed path to register.
-  if (app.isPackaged) app.setAsDefaultProtocolClient('plexo')
+  if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
     mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')

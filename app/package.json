@@ -1,10 +1,10 @@
 {
-  "name": "plexo",
-  "version": "1.0.0-rc.15",
-  "description": "Speed up downloads by combining multiple network connections in parallel",
+  "name": "mergelane",
+  "version": "0.1.0",
+  "description": "Download manager for macOS that combines every internet connection the Mac has",
   "main": "./out/main/index.js",
-  "author": "Anmol Kapil",
-  "homepage": "https://github.com/anmolkapil/plexo",
+  "author": "Mergelane contributors",
+  "homepage": "https://github.com/ZahidNoor7/mergelane",
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -21,9 +21,7 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "patch-package && install-electron && electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux",
     "build:extension": "node extension/build.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke"

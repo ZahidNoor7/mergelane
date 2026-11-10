@@ -18,7 +18,7 @@ function serverPath(): string {
   return join(app.getPath('userData'), 'usenet-server.json')
 }
 
-/** The password, when this computer has no keychain to seal it with: kept until Plexo quits. */
+/** The password, when this computer has no keychain to seal it with: kept until Mergelane quits. */
 let inMemory: string | undefined
 
 /** As for the browser's cookies (see sealBrowser in downloadManager.ts): never written in the

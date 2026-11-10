@@ -18,7 +18,7 @@ import { useFormatSpeed } from '../hooks/useFormatSpeed'
 const sectionHeaderClass =
   'font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
 
-/** What's left to do with an NZB download, which Plexo leaves to the user's tools: a repair
+/** What's left to do with an NZB download, which Mergelane leaves to the user's tools: a repair
  * where articles were missing, unpacking where it's an archive. Null when it's ready as it is. */
 function usenetNote(files: NzbFileState[]): { warning: boolean; text: string } | null {
   const missing = files.reduce((sum, file) => sum + file.missing, 0)

@@ -8,7 +8,7 @@ import type { Torrent } from 'webtorrent'
 import { expect, test } from './fixtures'
 import { seededBytes } from './origin'
 
-// Getting a torrent in: every way in gives the same answer, and a torrent Plexo can't save
+// Getting a torrent in: every way in gives the same answer, and a torrent Mergelane can't save
 // safely is refused before anything is written. Peers come from the link itself (x.pe), so no
 // tracker or DHT is involved.
 
@@ -54,13 +54,13 @@ test.afterEach(async () => {
 })
 
 test.describe('getting a torrent in', () => {
-  test('a link to a .torrent', async ({ plexo }) => {
+  test('a link to a .torrent', async ({ mergelane }) => {
     const { client, torrent } = await seed([named(seededBytes(300_000, 1), 'movie.mkv')])
     clients.push(client)
     const { url, server } = await serveTorrent(torrent.torrentFile)
     servers.push(server)
 
-    const probe = await plexo.api.probeUrl(url)
+    const probe = await mergelane.api.probeUrl(url)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.torrent.infoHash).toBe(torrent.infoHash)
@@ -69,16 +69,16 @@ test.describe('getting a torrent in', () => {
     expect(probe.torrent.files).toEqual([{ path: 'movie.mkv', length: 300_000 }])
   })
 
-  test('a .torrent file on this computer, with a folder of files', async ({ plexo }) => {
+  test('a .torrent file on this computer, with a folder of files', async ({ mergelane }) => {
     const { client, torrent } = await seed(
       [named(seededBytes(1000, 2), 'a.bin'), named(seededBytes(2000, 3), 'b.bin')],
       'Album'
     )
     clients.push(client)
-    const path = join(await mkdtemp(join(tmpdir(), 'plexo-torrent-')), 'album.torrent')
+    const path = join(await mkdtemp(join(tmpdir(), 'mergelane-torrent-')), 'album.torrent')
     await writeFile(path, torrent.torrentFile)
 
-    const probe = await plexo.api.probeUrl(path)
+    const probe = await mergelane.api.probeUrl(path)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.suggestedFileName).toBe('Album')
@@ -89,12 +89,12 @@ test.describe('getting a torrent in', () => {
     ])
   })
 
-  test('a magnet link, its details fetched from a peer', async ({ plexo }) => {
+  test('a magnet link, its details fetched from a peer', async ({ mergelane }) => {
     const { client, torrent } = await seed([named(seededBytes(500_000, 4), 'show.mp4')])
     clients.push(client)
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
-    const probe = await plexo.api.probeUrl(magnet)
+    const probe = await mergelane.api.probeUrl(magnet)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.torrent.infoHash).toBe(torrent.infoHash)
@@ -102,7 +102,7 @@ test.describe('getting a torrent in', () => {
     expect(probe.totalBytes).toBe(500_000)
   })
 
-  test('two files that would be saved as one are refused', async ({ plexo }) => {
+  test('two files that would be saved as one are refused', async ({ mergelane }) => {
     const { client, torrent } = await seed(
       [named(seededBytes(10, 5), 'Read.txt'), named(seededBytes(10, 6), 'read.txt')],
       'Docs'
@@ -111,10 +111,10 @@ test.describe('getting a torrent in', () => {
     const { url, server } = await serveTorrent(torrent.torrentFile)
     servers.push(server)
 
-    await expect(plexo.api.probeUrl(url)).rejects.toThrow(/saved as the same file/)
+    await expect(mergelane.api.probeUrl(url)).rejects.toThrow(/saved as the same file/)
   })
 
-  test('a v2-only torrent is refused', async ({ plexo }) => {
+  test('a v2-only torrent is refused', async ({ mergelane }) => {
     // BEP 52: a file tree and per-file piece roots, but none of the v1 piece hashes.
     const v2Only = (await loadBencode()).encode({
       info: {
@@ -127,11 +127,11 @@ test.describe('getting a torrent in', () => {
     const { url, server } = await serveTorrent(v2Only)
     servers.push(server)
 
-    await expect(plexo.api.probeUrl(url)).rejects.toThrow(/BitTorrent v2 only/)
+    await expect(mergelane.api.probeUrl(url)).rejects.toThrow(/BitTorrent v2 only/)
   })
 
   test('a magnet link with only an xs= source, its details fetched over HTTP', async ({
-    plexo
+    mergelane
   }) => {
     const { client, torrent } = await seed([named(seededBytes(200_000, 7), 'notes.pdf')])
     // Only the .torrent is served; the seeding client takes no part.
@@ -140,17 +140,17 @@ test.describe('getting a torrent in', () => {
     servers.push(server)
     const magnet = `magnet:?xt=urn:btih:${torrent.infoHash}&xs=${encodeURIComponent(url)}`
 
-    const probe = await plexo.api.probeUrl(magnet)
+    const probe = await mergelane.api.probeUrl(magnet)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.suggestedFileName).toBe('notes.pdf')
   })
 
   test.describe('with nobody to ask', () => {
-    test('a magnet link with no trackers and no DHT gives up at once', async ({ plexo }) => {
+    test('a magnet link with no trackers and no DHT gives up at once', async ({ mergelane }) => {
       const magnet = `magnet:?xt=urn:btih:${'ab'.repeat(20)}&dn=nothing`
       const started = Date.now()
-      await expect(plexo.api.probeUrl(magnet)).rejects.toThrow(/Couldn’t find anyone sharing/)
+      await expect(mergelane.api.probeUrl(magnet)).rejects.toThrow(/Couldn’t find anyone sharing/)
       // Well inside the 3-minute wait for peers: there was nothing to wait for.
       expect(Date.now() - started).toBeLessThan(10_000)
     })
@@ -161,20 +161,20 @@ test.describe('getting a torrent in', () => {
     // behind a VPN or firewall that drops BitTorrent's UDP.
     test.use({
       appEnv: {
-        PLEXO_E2E_DHT: '1',
-        PLEXO_E2E_DHT_BOOTSTRAP: '127.0.0.1:9',
-        PLEXO_E2E_MAGNET_GRACE_MS: '3000'
+        MERGELANE_E2E_DHT: '1',
+        MERGELANE_E2E_DHT_BOOTSTRAP: '127.0.0.1:9',
+        MERGELANE_E2E_MAGNET_GRACE_MS: '3000'
       }
     })
 
     test('a magnet link says no peers are found yet, then gives up after a short wait', async ({
-      plexo
+      mergelane
     }) => {
-      const link = await plexo.newDownload()
+      const link = await mergelane.newDownload()
       await link.fill(`magnet:?xt=urn:btih:${'cd'.repeat(20)}&dn=nothing`)
-      await expect(plexo.page.getByText('No peers found yet, still looking…')).toBeVisible()
+      await expect(mergelane.page.getByText('No peers found yet, still looking…')).toBeVisible()
       const noPeersYetAt = Date.now()
-      await expect(plexo.page.getByText(/Couldn’t find anyone sharing/)).toBeVisible({
+      await expect(mergelane.page.getByText(/Couldn’t find anyone sharing/)).toBeVisible({
         timeout: 20_000
       })
       // It kept looking for the whole window, not one moment longer than it needed.
@@ -182,7 +182,7 @@ test.describe('getting a torrent in', () => {
     })
   })
 
-  test('a second search finds a peer the first one missed', async ({ plexo }) => {
+  test('a second search finds a peer the first one missed', async ({ mergelane }) => {
     // The DHT's only node. It knows of no peer until the test announces the seeder to it, after
     // the first search came back empty.
     const { default: DHT } = (await import('bittorrent-dht' as string)) as {
@@ -198,19 +198,19 @@ test.describe('getting a torrent in', () => {
     await new Promise<void>((resolve) => node.listen(0, '127.0.0.1', resolve))
     const bootstrap = `127.0.0.1:${node.address().port}`
     try {
-      await plexo.relaunch({
-        PLEXO_E2E_DHT: '1',
-        PLEXO_E2E_DHT_BOOTSTRAP: bootstrap,
-        PLEXO_E2E_MAGNET_GRACE_MS: '15000'
+      await mergelane.relaunch({
+        MERGELANE_E2E_DHT: '1',
+        MERGELANE_E2E_DHT_BOOTSTRAP: bootstrap,
+        MERGELANE_E2E_MAGNET_GRACE_MS: '15000'
       })
-      // Off the DHT, with no tracker: it never learns of Plexo, so it can't connect to it. Plexo
+      // Off the DHT, with no tracker: it never learns of Mergelane, so it can't connect to it. Mergelane
       // can only find it by asking the DHT node again.
       const { client: seeder, torrent } = await seed([named(seededBytes(300_000, 8), 'late.mkv')])
       clients.push(seeder)
 
-      const link = await plexo.newDownload()
+      const link = await mergelane.newDownload()
       await link.fill(`magnet:?xt=urn:btih:${torrent.infoHash}&dn=late`)
-      await expect(plexo.page.getByText('No peers found yet, still looking…')).toBeVisible()
+      await expect(mergelane.page.getByText('No peers found yet, still looking…')).toBeVisible()
 
       await new Promise<void>((resolve, reject) =>
         node.announce(torrent.infoHash, seeder.address().port, (error) =>
@@ -219,24 +219,24 @@ test.describe('getting a torrent in', () => {
       )
 
       // Its details arrived: the name, and the file list.
-      await expect(plexo.page.getByText('late.mkv').first()).toBeVisible({ timeout: 20_000 })
-      await expect(plexo.page.getByText('No peers found yet, still looking…')).toBeHidden()
+      await expect(mergelane.page.getByText('late.mkv').first()).toBeVisible({ timeout: 20_000 })
+      await expect(mergelane.page.getByText('No peers found yet, still looking…')).toBeHidden()
     } finally {
       await new Promise<void>((resolve) => node.destroy(() => resolve()))
     }
   })
 
   test.describe('with a peer that never answers', () => {
-    test.use({ appEnv: { PLEXO_E2E_MAGNET_MS: '1500' } })
+    test.use({ appEnv: { MERGELANE_E2E_MAGNET_MS: '1500' } })
 
-    test('a magnet link still waits for its peers, then gives up', async ({ plexo }) => {
+    test('a magnet link still waits for its peers, then gives up', async ({ mergelane }) => {
       // Accepts the connection and says nothing, so no metadata ever comes.
       const silent = createNetServer(() => {})
       await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve))
       try {
         const port = (silent.address() as AddressInfo).port
         const magnet = `magnet:?xt=urn:btih:${'ef'.repeat(20)}&dn=quiet&x.pe=127.0.0.1:${port}`
-        await expect(plexo.api.probeUrl(magnet)).rejects.toThrow(
+        await expect(mergelane.api.probeUrl(magnet)).rejects.toThrow(
           /No peers responded to this magnet link/
         )
       } finally {

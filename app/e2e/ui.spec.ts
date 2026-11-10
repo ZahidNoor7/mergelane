@@ -13,10 +13,10 @@ const SIZE = 24 * BLOCK
 
 /** The destination picker and "Reveal in Finder" go through native OS UI — replace both. */
 async function stubNativeUi(
-  plexo: import('./fixtures').PlexoApp,
+  mergelane: import('./fixtures').MergelaneApp,
   destination: string
 ): Promise<void> {
-  await plexo.evaluateMain(({ dialog, shell }, dest) => {
+  await mergelane.evaluateMain(({ dialog, shell }, dest) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dest] })) as never
     const revealed: string[] = []
     ;(globalThis as Record<string, unknown>).__revealed = revealed
@@ -25,31 +25,31 @@ async function stubNativeUi(
 }
 
 test('Show in Finder on a download in progress shows its staging file', async ({
-  plexo,
+  mergelane,
   serve,
   dirs
 }) => {
   const origin = await serve({ size: SIZE })
-  await stubNativeUi(plexo, dirs.dest)
+  await stubNativeUi(mergelane, dirs.dest)
   const reached = origin.hold(6 * BLOCK)
-  const id = await plexo.start(origin.url(), origin.sha256)
+  const id = await mergelane.start(origin.url(), origin.sha256)
   await reached
-  const { destinationPath } = (await plexo.api.listDownloads()).find(
+  const { destinationPath } = (await mergelane.api.listDownloads()).find(
     (entry) => entry.state.id === id
   )!.state
-  // The final file isn't there yet: what's on disk is `<name>.plexo`.
-  expect(await plexo.api.revealDownload(id)).toBe(true)
+  // The final file isn't there yet: what's on disk is `<name>.mergelane`.
+  expect(await mergelane.api.revealDownload(id)).toBe(true)
   expect(
-    await plexo.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
-  ).toEqual([`${destinationPath}.plexo`])
+    await mergelane.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
+  ).toEqual([`${destinationPath}.mergelane`])
   origin.release()
 })
 
 test.describe('a torrent through the UI', () => {
   // This journey inspects a peer row, not network reassignment. Keep one network stable;
   // routing across networks and globally unique peer IDs are checked by torrent specs/invariants.
-  test.use({ appEnv: { PLEXO_E2E_INTERFACES: interfacesEnv({ a: NETWORKS.a }) } })
-  test('choose its files, watch its peers, finish', async ({ plexo, dirs }) => {
+  test.use({ appEnv: { MERGELANE_E2E_INTERFACES: interfacesEnv({ a: NETWORKS.a }) } })
+  test('choose its files, watch its peers, finish', async ({ mergelane, dirs }) => {
     const swarm = await new Swarm().start()
     try {
       const files = ['a.bin', 'b.bin', 'c.bin'].map((name, index) =>
@@ -59,14 +59,14 @@ test.describe('a torrent through the UI', () => {
       const options = { folder: 'Trio', pieceLength: 64 * 1024, uploadLimit: 200 * 1024 }
       await swarm.seed(files, options)
       const torrent = await swarm.seed(files, options)
-      await stubNativeUi(plexo, dirs.dest)
-      const page = plexo.page
+      await stubNativeUi(mergelane, dirs.dest)
+      const page = mergelane.page
 
-      const link = await plexo.newDownload()
+      const link = await mergelane.newDownload()
       await page.getByRole('button', { name: 'Change' }).click()
       await link.fill(await torrentFileOnDisk(torrent))
       await page.getByRole('checkbox', { name: /b\.bin/ }).click()
-      await plexo.expectNextDownload(
+      await mergelane.expectNextDownload(
         treeSha(
           [files[0], files[2]].map((data) => ({ path: (data as { name?: string }).name!, data }))
         )
@@ -135,10 +135,10 @@ test.describe('a torrent through the UI', () => {
 
 test.describe('UI journeys @smoke', () => {
   test('minimum window keeps download controls and a network row in view', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
-    const minimum = await plexo.evaluateMain(({ BrowserWindow }) => {
+    const minimum = await mergelane.evaluateMain(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0]
       const [width, height] = window.getMinimumSize()
       window.setSize(width, height)
@@ -148,9 +148,9 @@ test.describe('UI journeys @smoke', () => {
     expect(minimum.size).toEqual(minimum.minimum)
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(0)
-    await plexo.start(origin.url(), origin.sha256)
+    await mergelane.start(origin.url(), origin.sha256)
     await reached
-    const page = plexo.page
+    const page = mergelane.page
     await page.getByRole('button', { name: 'Open test.bin', exact: true }).click()
     // An empty bar is still a progress indicator: its track and accessible value must exist
     // before the server sends the first byte.
@@ -177,22 +177,22 @@ test.describe('UI journeys @smoke', () => {
     })
     origin.release()
     await page.getByRole('button', { name: 'Resume', exact: true }).click()
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.waitForHttpStatus('completed')
     await expect(page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeInViewport({
       ratio: 1
     })
   })
 
   test('paste a link, start, pause, resume, finish, reveal the file', async ({
-    plexo,
+    mergelane,
     serve,
     dirs
   }) => {
     const origin = await serve({ size: SIZE })
-    await stubNativeUi(plexo, dirs.dest)
-    const page = plexo.page
+    await stubNativeUi(mergelane, dirs.dest)
+    const page = mergelane.page
 
-    const link = await plexo.newDownload()
+    const link = await mergelane.newDownload()
     await page.getByRole('button', { name: 'Change' }).click()
     await link.fill(origin.url())
     const start = page.getByRole('button', { name: 'Download' })
@@ -200,11 +200,11 @@ test.describe('UI journeys @smoke', () => {
     await page.getByRole('group', { name: 'Streams' }).getByRole('button', { name: '8' }).click()
 
     const reached = origin.hold(6 * BLOCK)
-    await plexo.expectNextDownload(origin.sha256)
+    await mergelane.expectNextDownload(origin.sha256)
     await start.click()
     await reached
     // The streams picked in the dialog reach the download.
-    const { id } = (await plexo.current())!
+    const { id } = (await mergelane.current())!
     const manifestPath = join(dirs.userData, 'downloads', id, 'manifest.json')
     await expect
       .poll(async () => JSON.parse(await readFile(manifestPath, 'utf-8')).requestPayload)
@@ -224,23 +224,23 @@ test.describe('UI journeys @smoke', () => {
     await expect(page.getByText('Streams', { exact: true })).toBeVisible()
     await expect(page.getByText(/^written in \d+ chunks/)).toBeVisible()
     await reveal.click()
-    const { destinationPath } = (await plexo.current())!
+    const { destinationPath } = (await mergelane.current())!
     await expect
       .poll(() =>
-        plexo.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
+        mergelane.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
       )
       .toEqual([destinationPath])
   })
 
   test('delete through the confirmation dialog, then download it again', async ({
-    plexo,
+    mergelane,
     serve,
     dirs
   }) => {
     const origin = await serve({ size: SIZE })
-    await stubNativeUi(plexo, dirs.dest)
-    const page = plexo.page
-    let link = await plexo.newDownload()
+    await stubNativeUi(mergelane, dirs.dest)
+    const page = mergelane.page
+    let link = await mergelane.newDownload()
     await page.getByRole('button', { name: 'Change' }).click()
     await link.fill(origin.url())
 
@@ -253,49 +253,51 @@ test.describe('UI journeys @smoke', () => {
     // Gone, with what it had downloaded.
     await expect(page.getByText('No downloads yet')).toBeVisible()
 
-    link = await plexo.newDownload()
+    link = await mergelane.newDownload()
     await link.fill(origin.url())
-    await plexo.expectNextDownload(origin.sha256)
+    await mergelane.expectNextDownload(origin.sha256)
     await page.getByRole('button', { name: 'Download' }).click({ timeout: 5000 })
-    await plexo.waitForStatus('completed')
+    await mergelane.waitForStatus('completed')
   })
 
   test('a link the server rejects shows the error and keeps Download disabled', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: SIZE })
     origin.setRule(() => ({ status: 404 }))
-    const page = plexo.page
-    await (await plexo.newDownload()).fill(origin.url())
+    const page = mergelane.page
+    await (await mergelane.newDownload()).fill(origin.url())
     await expect(page.getByText(/couldn’t be found/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
   })
 
-  test('New download dialog shows free space on destination folder', async ({ plexo }) => {
-    await plexo.newDownload()
-    const dialog = plexo.page.getByRole('dialog', { name: 'New download' })
+  test('New download dialog shows free space on destination folder', async ({ mergelane }) => {
+    await mergelane.newDownload()
+    const dialog = mergelane.page.getByRole('dialog', { name: 'New download' })
     await expect(dialog.getByText(/\(\d+(\.\d+)?\s*(B|KB|MB|GB|TB)\s*free\)/)).toBeVisible()
   })
 
-  test('a completed download is shown again after a restart', async ({ plexo, serve }) => {
+  test('a completed download is shown again after a restart', async ({ mergelane, serve }) => {
     const origin = await serve({ size: SIZE })
-    await plexo.start(origin.url(), origin.sha256)
-    const { fileName } = await plexo.waitForStatus('completed')
-    await plexo.relaunch()
+    await mergelane.start(origin.url(), origin.sha256)
+    const { fileName } = await mergelane.waitForStatus('completed')
+    await mergelane.relaunch()
     // Listed under Finished; opened, it shows as it did when it finished.
-    await plexo.page.getByRole('button', { name: `Open ${fileName}` }).click()
-    await expect(plexo.page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeVisible()
+    await mergelane.page.getByRole('button', { name: `Open ${fileName}` }).click()
+    await expect(
+      mergelane.page.getByRole('button', { name: /Show in (Finder|folder)/ })
+    ).toBeVisible()
   })
 })
 
 // What a user sets is still set after they reload or restart — checked only through what they see.
 test.describe('settings @smoke', () => {
   test('every choice survives a reload and a restart, even made right before', async ({
-    plexo,
+    mergelane,
     dirs
   }) => {
-    const page = (): Page => plexo.page
+    const page = (): Page => mergelane.page
     const themeToggle = page().getByRole('button', { name: /^Switch to (dark|light) theme$/ })
     // After switching, the toggle offers to switch back.
     const labelAfterSwitch = (await themeToggle.getAttribute('aria-label'))!.includes('dark')
@@ -303,8 +305,8 @@ test.describe('settings @smoke', () => {
       : 'Switch to dark theme'
     await themeToggle.click()
 
-    await stubNativeUi(plexo, dirs.dest)
-    await plexo.newDownload()
+    await stubNativeUi(mergelane, dirs.dest)
+    await mergelane.newDownload()
     await page().getByRole('button', { name: 'Change' }).click()
     const destinationRow = (): Locator => page().getByText('Save to', { exact: true }).locator('..')
     const destination = async (): Promise<string> =>
@@ -329,7 +331,7 @@ test.describe('settings @smoke', () => {
 
     const expectAllKept = async (): Promise<void> => {
       await expect(page().getByRole('button', { name: labelAfterSwitch })).toBeVisible()
-      await plexo.newDownload()
+      await mergelane.newDownload()
       await expect.poll(destination).toBe(chosenDestination)
       // Presentation may abbreviate home; persistence must retain the usable absolute path.
       const saved = JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
@@ -349,44 +351,47 @@ test.describe('settings @smoke', () => {
     // No waiting for saves: a user doesn't either.
     await page().reload()
     await expectAllKept()
-    await plexo.relaunch()
+    await mergelane.relaunch()
     await expectAllKept()
   })
 
   test('a broken settings file falls back to what a fresh install shows', async ({
-    plexo,
+    mergelane,
     dirs
   }) => {
     const settingsPath = join(dirs.userData, 'app-settings.json')
     // New download's "Save to" row, as the user sees it — compared whole, so no platform's idea
     // of the default folder is baked into the test.
     const choices = async (): Promise<string> => {
-      await plexo.newDownload()
-      const row = await plexo.page.getByText('Save to', { exact: true }).locator('..').innerText()
-      await plexo.page.keyboard.press('Escape')
+      await mergelane.newDownload()
+      const row = await mergelane.page
+        .getByText('Save to', { exact: true })
+        .locator('..')
+        .innerText()
+      await mergelane.page.keyboard.press('Escape')
       // Free space shows up when it's ready; only the folder is compared.
       return row.replace(/\s*\([^)]*free\)/, '')
     }
     const fresh = await choices()
 
-    await plexo.quit()
+    await mergelane.quit()
     await writeFile(settingsPath, '{"destinationDir": "/')
-    await plexo.launch()
+    await mergelane.launch()
     expect(await choices()).toEqual(fresh)
 
-    await plexo.quit()
+    await mergelane.quit()
     await writeFile(settingsPath, JSON.stringify({ destinationDir: join(dirs.dest, 'unplugged') }))
-    await plexo.launch()
+    await mergelane.launch()
     expect(await choices()).toEqual(fresh)
   })
 })
 
 test.describe('no networks', () => {
-  test.use({ appEnv: { PLEXO_E2E_INTERFACES: '' } })
+  test.use({ appEnv: { MERGELANE_E2E_INTERFACES: '' } })
 
-  test('New download says why it has no network to offer @smoke', async ({ plexo }) => {
-    await plexo.newDownload()
-    const dialog = plexo.page.getByRole('dialog', { name: 'New download' })
+  test('New download says why it has no network to offer @smoke', async ({ mergelane }) => {
+    await mergelane.newDownload()
+    const dialog = mergelane.page.getByRole('dialog', { name: 'New download' })
     await expect(
       dialog.getByText(
         'No networks connected. Join a Wi-Fi network, plug in Ethernet, or connect your phone using USB tethering.'
@@ -396,18 +401,18 @@ test.describe('no networks', () => {
     await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeDisabled()
   })
 
-  test('a network appearing makes the list ready for downloads @smoke', async ({ plexo }) => {
-    await expect(plexo.page.getByText('No networks connected')).toBeVisible()
+  test('a network appearing makes the list ready for downloads @smoke', async ({ mergelane }) => {
+    await expect(mergelane.page.getByText('No networks connected')).toBeVisible()
     // A manual scan is safe while the list stays empty. Once an interface appears, the
     // background monitor can remove this button before Playwright finishes clicking it.
-    await plexo.page.getByRole('button', { name: 'Scan again' }).click()
-    await expect(plexo.page.getByText('No networks connected')).toBeVisible()
-    await plexo.evaluateMain(
+    await mergelane.page.getByRole('button', { name: 'Scan again' }).click()
+    await expect(mergelane.page.getByText('No networks connected')).toBeVisible()
+    await mergelane.evaluateMain(
       (_electron, value) => {
-        process.env['PLEXO_E2E_INTERFACES'] = value
+        process.env['MERGELANE_E2E_INTERFACES'] = value
       },
       interfacesEnv({ a: NETWORKS['a'] })
     )
-    await expect(plexo.page.getByText('No downloads yet')).toBeVisible()
+    await expect(mergelane.page.getByText('No downloads yet')).toBeVisible()
   })
 })

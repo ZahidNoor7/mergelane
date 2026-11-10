@@ -79,7 +79,7 @@ export function CombineDiagram({
               opacity={opacity}
               style={
                 flowing
-                  ? { animation: `plexo-dash ${1.1 + index * 0.2}s linear infinite` }
+                  ? { animation: `mergelane-dash ${1.1 + index * 0.2}s linear infinite` }
                   : undefined
               }
             />

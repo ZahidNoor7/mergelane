@@ -7,6 +7,7 @@ import {
   BRIDGE_PORTS,
   type BridgeAddRequest,
   type BridgeHandoff,
+  type BridgeHealth,
   type BridgePing
 } from '../shared/browserBridge'
 import type { BrowserContext, ProbeResult } from '../shared/types'
@@ -35,8 +36,14 @@ let host: BridgeHost | null = null
 let listeningOn: number | null = null
 const handoffs = new Map<string, Offer>()
 let extensionUsed = false
+let appReady = false
 
-/** Once an extension has connected, closing the window keeps Plexo in the tray, where the
+/** The main window is ready to show; GET /health reports it from now on. */
+export function markAppReady(): void {
+  appReady = true
+}
+
+/** Once an extension has connected, closing the window keeps Mergelane in the tray, where the
  * browser can still reach it. */
 export function keepsRunningForBrowser(): boolean {
   return listeningOn !== null && extensionUsed
@@ -58,7 +65,7 @@ export async function startBridge(bridgeHost: BridgeHost): Promise<void> {
       return
     }
   }
-  console.error(`[plexo] browser bridge: ports ${BRIDGE_PORTS.join(', ')} are all taken`)
+  console.error(`[mergelane] browser bridge: ports ${BRIDGE_PORTS.join(', ')} are all taken`)
 }
 
 function end(res: ServerResponse, code: number, headers: Record<string, string> = {}): void {
@@ -102,10 +109,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, port: number): 
   if (req.method === 'POST' && !/^application\/json\b/i.test(req.headers['content-type'] ?? '')) {
     return end(res, 415, cors)
   }
+  if (req.method === 'GET' && path === '/health') {
+    return json(res, 200, cors, {
+      app: 'mergelane',
+      version: app.getVersion(),
+      ready: appReady
+    } satisfies BridgeHealth)
+  }
   if (req.method === 'GET' && path === '/ping') {
     noteExtension()
     return json(res, 200, cors, {
-      app: 'plexo',
+      app: 'mergelane',
       version: app.getVersion(),
       api: BRIDGE_API
     } satisfies BridgePing)

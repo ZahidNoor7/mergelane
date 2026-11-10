@@ -6,8 +6,8 @@ import { STRIPPED_FROM_NAMES } from '../torrent/paths'
 /** An NZB is a list of message IDs; a few MB for even a large release. A file or link much
  * larger than this isn't one. */
 const MAX_NZB_FILE_BYTES = 64 * 1024 * 1024
-const TOO_LARGE = 'Plexo supports NZB files up to 64 MB.'
-const NOT_NZB = 'This isn’t an NZB file Plexo can read'
+const TOO_LARGE = 'Mergelane supports NZB files up to 64 MB.'
+const NOT_NZB = 'This isn’t an NZB file Mergelane can read'
 const MAX_NAME_BYTES = 255
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i
 
@@ -84,7 +84,7 @@ export function nameFromSubject(subject: string): string {
 }
 
 /**
- * A name that can be saved as is, inside the download's folder, on any of the systems Plexo runs
+ * A name that can be saved as is, inside the download's folder, on any of the systems Mergelane runs
  * on: nothing that names another folder, no character Windows refuses, no name it reserves, and
  * no longer than a file system allows (the extension kept).
  */

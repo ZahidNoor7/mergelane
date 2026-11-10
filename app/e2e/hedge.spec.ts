@@ -9,7 +9,7 @@ const BLOCKS = 12
 const SLOW = 3 // the block whose first request crawls
 
 test.describe('racing a slow block', () => {
-  test.use({ appEnv: { PLEXO_E2E_HEDGE_MS: '400' } })
+  test.use({ appEnv: { MERGELANE_E2E_HEDGE_MS: '400' } })
 
   const inSlowBlock = (range: OriginRequest['range']): boolean =>
     !!range && range.start >= SLOW * BLOCK && range.start < (SLOW + 1) * BLOCK
@@ -23,7 +23,7 @@ test.describe('racing a slow block', () => {
     }
 
   test('a block crawling at 2 KB/s is finished by a hedge that picks up where it had got to', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: BLOCKS * BLOCK })
@@ -35,8 +35,8 @@ test.describe('racing a slow block', () => {
     )
 
     const started = Date.now()
-    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-    await plexo.waitForHttpStatus('completed', 10_000)
+    await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+    await mergelane.waitForHttpStatus('completed', 10_000)
     expect(Date.now() - started).toBeLessThan(10_000)
 
     const requests = origin.chunkRequests().filter((r) => inSlowBlock(r.range))
@@ -48,15 +48,15 @@ test.describe('racing a slow block', () => {
     ).toBe(true)
   })
 
-  test('the slow holder can win, and then the hedge is dropped', async ({ plexo, serve }) => {
+  test('the slow holder can win, and then the hedge is dropped', async ({ mergelane, serve }) => {
     const origin = await serve({ size: BLOCKS * BLOCK })
     // The holder is slowish (about 1.6 s for the block); the hedge is slower still.
     origin.setRule(
       answerRequestsInSlowBlock((n) => (n === 0 ? { crawl: 40_000 } : { crawl: 3000 }))()
     )
 
-    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-    await plexo.waitForHttpStatus('completed', 10_000)
+    await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+    await mergelane.waitForHttpStatus('completed', 10_000)
 
     const requests = origin.chunkRequests().filter((r) => inSlowBlock(r.range))
     expect(requests.length).toBeGreaterThanOrEqual(2)
@@ -65,7 +65,7 @@ test.describe('racing a slow block', () => {
   })
 
   test('paused while racing, then resumed: no half-hedge is left behind', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: BLOCKS * BLOCK })
@@ -75,7 +75,7 @@ test.describe('racing a slow block', () => {
       )()
     )
 
-    const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
     await expect
       .poll(() => origin.chunkRequests().filter((r) => inSlowBlock(r.range)).length, {
         message: 'the hedge started',
@@ -83,16 +83,16 @@ test.describe('racing a slow block', () => {
       })
       .toBeGreaterThanOrEqual(2)
 
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForHttpStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForHttpStatus('paused')
     expect(paused.streams.some((chunk) => chunk.hedge)).toBe(false)
 
-    await plexo.api.resumeDownload(id)
-    await plexo.waitForHttpStatus('completed', 15_000)
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed', 15_000)
   })
 
   test('a second network rescues a block the first is crawling through, and is credited for it', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     test.skip(!LAN_ADDRESS, 'needs a LAN address to act as the second network')
@@ -105,8 +105,8 @@ test.describe('racing a slow block', () => {
       return { crawl: 2000 }
     })
 
-    await plexo.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 1 })
-    const state = await plexo.waitForHttpStatus('completed', 10_000)
+    await mergelane.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 1 })
+    const state = await mergelane.waitForHttpStatus('completed', 10_000)
 
     const shared = (state.blocks ?? []).filter(
       (block) => (block.bytesByInterface['a'] ?? 0) > 0 && (block.bytesByInterface['b'] ?? 0) > 0
@@ -126,7 +126,7 @@ test.describe('splitting a block at the end', () => {
   // whichever stream frees first, about 8 s in, and alone would take 8 s more.
   const SIZE = 5 * MIB
   const LAST = 4 * MIB
-  test.use({ appEnv: { PLEXO_E2E_BLOCK_BYTES: String(MIB), PLEXO_E2E_SILENT_MS: '1000' } })
+  test.use({ appEnv: { MERGELANE_E2E_BLOCK_BYTES: String(MIB), MERGELANE_E2E_SILENT_MS: '1000' } })
 
   const lastBlock = (origin: Origin): LoggedRequest[] =>
     origin.chunkRequests().filter((r) => r.range && r.range.start >= LAST)
@@ -137,12 +137,12 @@ test.describe('splitting a block at the end', () => {
     requests.reduce((sum, r) => sum + r.bytesSent, 0)
 
   test('the free streams share the last block, and nothing is fetched twice', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
-    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-    await plexo.waitForHttpStatus('completed', 30_000)
+    await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+    await mergelane.waitForHttpStatus('completed', 30_000)
     const done = Date.now()
 
     expect(splits(origin).length, 'a request began partway into the last block').toBeGreaterThan(0)
@@ -158,7 +158,7 @@ test.describe('splitting a block at the end', () => {
 
   for (const fault of ['drop', 'stall'] as const) {
     test(`a split whose connection ${fault === 'drop' ? 'drops' : 'goes silent'} partway: the rest of its part is fetched from where it stopped, and the file is exact`, async ({
-      plexo,
+      mergelane,
       serve
     }) => {
       const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
@@ -168,8 +168,8 @@ test.describe('splitting a block at the end', () => {
         first = range
         return fault === 'drop' ? { cutAfter: 64 * 1024 } : 'stallBody'
       })
-      await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-      await plexo.waitForHttpStatus('completed', 30_000)
+      await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+      await mergelane.waitForHttpStatus('completed', 30_000)
 
       const resumedAt = first!.start + (fault === 'drop' ? 64 * 1024 : 0)
       expect(
@@ -181,11 +181,11 @@ test.describe('splitting a block at the end', () => {
 
   for (const stop of ['pause', 'kill'] as const) {
     test(`${stop === 'pause' ? 'paused' : 'killed'} while split, then resumed: what the split fetched ahead is fetched again, and the file is exact`, async ({
-      plexo,
+      mergelane,
       serve
     }) => {
       const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
-      const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+      const id = await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
       await expect
         .poll(() => splits(origin).length, { message: 'a split started', timeout: 20_000 })
         .toBeGreaterThan(0)
@@ -193,21 +193,21 @@ test.describe('splitting a block at the end', () => {
       await new Promise((resolve) => setTimeout(resolve, 800))
 
       if (stop === 'pause') {
-        await plexo.api.pauseDownload(id)
-        const paused = await plexo.waitForHttpStatus('paused')
+        await mergelane.api.pauseDownload(id)
+        const paused = await mergelane.waitForHttpStatus('paused')
         expect(paused.streams.some((chunk) => chunk.hedge || chunk.split)).toBe(false)
         // Only what joins the block's first byte counts: a split's part ahead of it doesn't.
         const last = paused.blocks!.at(-1)!
         expect(last.status).not.toBe('completed')
         expect(last.bytesDownloaded).toBeLessThan(splits(origin)[0].range!.start - LAST)
       } else {
-        await plexo.kill()
-        await plexo.launch()
-        expect((await plexo.currentHttp())?.status).toBe('paused')
+        await mergelane.kill()
+        await mergelane.launch()
+        expect((await mergelane.currentHttp())?.status).toBe('paused')
       }
 
-      await plexo.api.resumeDownload(id)
-      await plexo.waitForHttpStatus('completed', 30_000)
+      await mergelane.api.resumeDownload(id)
+      await mergelane.waitForHttpStatus('completed', 30_000)
     })
   }
 })

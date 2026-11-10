@@ -1,4 +1,4 @@
-// webtorrent and parse-torrent ship no types. These cover only what Plexo (and its e2e tests) use.
+// webtorrent and parse-torrent ship no types. These cover only what Mergelane (and its e2e tests) use.
 
 declare module 'webtorrent' {
   import type { EventEmitter } from 'node:events'
@@ -16,7 +16,7 @@ declare module 'webtorrent' {
     maxConns?: number
     /** Bytes per second this client uploads at most. */
     uploadLimit?: number
-    /** Added by Plexo's patch (patches/webtorrent+3.0.21.patch): opens every outgoing TCP peer
+    /** Added by Mergelane's patch (patches/webtorrent+3.0.21.patch): opens every outgoing TCP peer
      * connection. `key` is the peer's key in the swarm: its address, or a twin's own key. */
     connect?: (options: { host: string; port: number; key: string }) => Socket
   }
@@ -75,7 +75,7 @@ declare module 'webtorrent' {
     bitfield: { get(index: number): boolean }
     destroy(options?: { destroyStore?: boolean }, callback?: (error?: Error) => void): void
     addPeer(address: string): boolean
-    /** Added by Plexo's patch: dials `address` again under `key`, shaking hands as `peerId` (hex),
+    /** Added by Mergelane's patch: dials `address` again under `key`, shaking hands as `peerId` (hex),
      * so one peer can be reached over more than one network. Null if `key` is already there. */
     addTwinPeer(address: string, key: string, peerId: string): object | null
   }

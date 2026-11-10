@@ -45,8 +45,8 @@ export function DownloadActionsProvider({
           const results = await Promise.allSettled(
             targets.map((item) =>
               id === 'pause'
-                ? window.plexo.pauseDownload(item.id)
-                : window.plexo.resumeDownload(item.id)
+                ? window.mergelane.pauseDownload(item.id)
+                : window.mergelane.resumeDownload(item.id)
             )
           )
           const failed = results.find((result) => result.status === 'rejected')
@@ -63,7 +63,7 @@ export function DownloadActionsProvider({
           // Only once it's really gone, so the new one can't collide with what's left of it.
           const [item] = targets
           try {
-            await window.plexo.removeDownload(item.id)
+            await window.mergelane.removeDownload(item.id)
           } catch (cause) {
             return fail(cause)
           }
@@ -78,8 +78,8 @@ export function DownloadActionsProvider({
             const [item] = targets
             const found =
               id === 'open'
-                ? await window.plexo.openDownload(item.id)
-                : await window.plexo.revealDownload(item.id)
+                ? await window.mergelane.openDownload(item.id)
+                : await window.mergelane.revealDownload(item.id)
             return found || fail('That file is no longer where it was saved.')
           } catch (cause) {
             return fail(cause)
@@ -121,11 +121,11 @@ export function DownloadActionsProvider({
       const gone = new Set<string>()
       let firstFailure: unknown
       if (clearAll) {
-        await window.plexo.clearHistory()
+        await window.mergelane.clearHistory()
       } else {
         for (const item of items) {
           try {
-            await window.plexo.removeDownload(item.id, { trashFile: mode === 'trash' })
+            await window.mergelane.removeDownload(item.id, { trashFile: mode === 'trash' })
             useAppStore.getState().forgetDownload(item.id)
             gone.add(item.id)
           } catch (cause) {

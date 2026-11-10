@@ -144,12 +144,12 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   useEffect(() => {
     if (isPaused) {
       const label = isQueued ? 'Queued' : 'Paused'
-      document.title = knownSize ? `Plexo — ${label} (${percent}%)` : `Plexo — ${label}`
+      document.title = knownSize ? `Mergelane — ${label} (${percent}%)` : `Mergelane — ${label}`
     } else {
-      document.title = knownSize ? `Plexo — ${percent}%` : 'Plexo — downloading'
+      document.title = knownSize ? `Mergelane — ${percent}%` : 'Mergelane — downloading'
     }
     return () => {
-      document.title = 'Plexo'
+      document.title = 'Mergelane'
     }
   }, [percent, knownSize, isPaused, isQueued])
 
@@ -556,7 +556,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 blocks={download.kind === 'torrent' ? undefined : download.blocks}
                 usenet={download.kind === 'nzb'}
                 onSwitch={(enabled) =>
-                  void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
+                  void window.mergelane.setDownloadNetwork(download.id, row.id, enabled)
                 }
               />
             ))}

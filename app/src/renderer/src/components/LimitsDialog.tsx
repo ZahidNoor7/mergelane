@@ -366,7 +366,7 @@ function NetworkPage({
     setError(null)
     try {
       if (reset === 'usage') {
-        await window.plexo.resetNetworkUsage(id)
+        await window.mergelane.resetNetworkUsage(id)
         onUsageReset()
       } else change({ speedLimit: undefined, dataLimit: undefined })
       setReset(null)
@@ -387,7 +387,7 @@ function NetworkPage({
       <div className="flex flex-col gap-1 pb-3">
         <h3 className="font-sans text-[18px] leading-none font-semibold">{name}</h3>
         <div className="font-mono text-[12px] text-muted-foreground">
-          {formatBytes(used)} used by Plexo {dataUsageLabel(period)}
+          {formatBytes(used)} used by Mergelane {dataUsageLabel(period)}
         </div>
       </div>
 
@@ -727,7 +727,7 @@ function LimitsEditor({
   const [usenetEnabled, setUsenetEnabled] = useState<boolean | undefined>(undefined)
   const shownUsenetEnabled = usenetEnabled ?? usenet?.enabled ?? true
   useEffect(() => {
-    void window.plexo
+    void window.mergelane
       .usenetServer()
       .then(setUsenet)
       .catch(() => setUsenet(null))
@@ -755,12 +755,12 @@ function LimitsEditor({
       }
     }
     try {
-      await window.plexo.updateSettings(patch)
+      await window.mergelane.updateSettings(patch)
       useAppStore.setState(patch)
       // Last, as switching off stops running NZBs: not done when the rest failed to save.
       if (usenet && usenetEnabled !== undefined && usenetEnabled !== usenet.enabled) {
         // The server as it is, every field kept. No password given: the saved one stays.
-        setUsenet(await window.plexo.saveUsenetServer({ ...usenet, enabled: usenetEnabled }))
+        setUsenet(await window.mergelane.saveUsenetServer({ ...usenet, enabled: usenetEnabled }))
       }
       onClose()
     } catch (cause) {

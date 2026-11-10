@@ -4,41 +4,46 @@ import { BLOCK, expect, LAN_ADDRESS, test } from './fixtures'
 // fixtures.ts: completed ⇒ the file's SHA-256 matches the source, nothing stray left behind.
 
 test.describe('happy paths @smoke', () => {
-  test('IPv6-only origin downloads through an IPv6 interface', async ({ plexo, serve }) => {
+  test('IPv6-only origin downloads through an IPv6 interface', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 4 * BLOCK, host: '::1' })
-    await plexo.relaunch({ PLEXO_E2E_INTERFACES: 'a=::1' })
-    await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.relaunch({ MERGELANE_E2E_INTERFACES: 'a=::1' })
+    await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.networks.every((network) => network.retries === 0)).toBe(true)
     expect(origin.chunkRequests().every((request) => request.from === '::1')).toBe(true)
   })
 
   test('IPv6 origin reports an incompatible IPv4-only selection immediately', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: BLOCK, host: '::1' })
-    await expect(plexo.start(origin.url(), origin.sha256)).rejects.toThrow(/No selected network/)
-    expect(await plexo.currentHttp()).toBeNull()
+    await expect(mergelane.start(origin.url(), origin.sha256)).rejects.toThrow(
+      /No selected network/
+    )
+    expect(await mergelane.currentHttp()).toBeNull()
   })
 
   for (const [label, size] of [
     ['1 byte', 1],
     ['37.5 blocks', Math.floor(BLOCK * 37.5)]
   ] as const) {
-    test(`ranged download: ${label}`, async ({ plexo, serve }) => {
+    test(`ranged download: ${label}`, async ({ mergelane, serve }) => {
       const origin = await serve({ size })
-      await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-      const state = await plexo.waitForHttpStatus('completed')
+      await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+      const state = await mergelane.waitForHttpStatus('completed')
       expect(state.bytesDownloaded).toBe(size)
       expect(state.totalBlocks).toBe(Math.ceil(size / BLOCK))
     })
   }
 
-  test('each stream keeps its connection from one block to the next', async ({ plexo, serve }) => {
+  test('each stream keeps its connection from one block to the next', async ({
+    mergelane,
+    serve
+  }) => {
     const origin = await serve({ size: 20 * BLOCK + 123 })
-    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256, { connections: 4 })
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.streams).toHaveLength(4)
     const requests = origin.chunkRequests()
     expect(new Set(requests.map((request) => request.connection)).size).toBe(4)
@@ -46,13 +51,13 @@ test.describe('happy paths @smoke', () => {
   })
 
   test('two networks share the work, and attribution matches what the server saw', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     test.skip(!LAN_ADDRESS, 'needs a LAN address to act as the second network')
     const origin = await serve({ size: 40 * BLOCK })
-    await plexo.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 2 })
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 2 })
+    const state = await mergelane.waitForHttpStatus('completed')
 
     const served = { a: 0, b: 0 }
     for (const entry of origin.chunkRequests()) {
@@ -68,11 +73,14 @@ test.describe('happy paths @smoke', () => {
     expect(attributed).toEqual(served)
   })
 
-  test('after the first, updates carry only the blocks that changed', async ({ plexo, serve }) => {
+  test('after the first, updates carry only the blocks that changed', async ({
+    mergelane,
+    serve
+  }) => {
     const origin = await serve({ size: 64 * BLOCK, bytesPerSecond: 500_000 })
-    const id = await plexo.start(origin.url(), origin.sha256)
-    await plexo.waitForHttpStatus('completed')
-    const sent = plexo.updates
+    const id = await mergelane.start(origin.url(), origin.sha256)
+    await mergelane.waitForHttpStatus('completed')
+    const sent = mergelane.updates
       .at(-1)!
       .filter((update) => update.state.id === id && 'blocks' in update)
       .filter(
@@ -84,88 +92,88 @@ test.describe('happy paths @smoke', () => {
     expect(Math.max(...sent.slice(1).map((update) => update.blocks.length))).toBeLessThan(16)
   })
 
-  test('server without range support: one stream, whole file', async ({ plexo, serve }) => {
+  test('server without range support: one stream, whole file', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 10 * BLOCK, ranges: false })
-    await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.streams).toHaveLength(1)
   })
 
   test('server that refuses range requests with 403: one stream, whole file', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: 10 * BLOCK })
     origin.setRule(({ range }) => (range ? { status: 403 } : 'ok'))
-    const probe = await plexo.api.probeUrl(origin.url())
+    const probe = await mergelane.api.probeUrl(origin.url())
     expect(probe).toMatchObject({ kind: 'http', supportsRanges: false, totalBytes: 10 * BLOCK })
-    await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.streams).toHaveLength(1)
     // After the probe's ranged GET, nothing else asks for a range the server would refuse.
     expect(origin.chunkRequests().filter((request) => request.range !== null)).toEqual([])
   })
 
   test('server that ignores the end of a range: one stream, whole file', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: 10 * BLOCK })
     origin.setRule(({ range }) => (range ? 'wholeRange' : 'ok'))
-    const probe = await plexo.api.probeUrl(origin.url())
+    const probe = await mergelane.api.probeUrl(origin.url())
     expect(probe).toMatchObject({
       kind: 'http',
       supportsRanges: false,
       totalBytes: 10 * BLOCK
     })
-    await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.streams).toHaveLength(1)
     // The transfer asks for the whole file, not a range the server would overrun.
     expect(origin.chunkRequests().filter((request) => request.range !== null)).toEqual([])
   })
 
   test('server that names the file end but sends only the range: streams still split', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: 10 * BLOCK })
     // Cloudflare-fronted hosts: Content-Range ends at the file, Content-Length is the range.
     origin.setRule(({ range }) => (range ? 'rangeToEof' : 'ok'))
-    const probe = await plexo.api.probeUrl(origin.url())
+    const probe = await mergelane.api.probeUrl(origin.url())
     expect(probe).toMatchObject({
       kind: 'http',
       supportsRanges: true,
       totalBytes: 10 * BLOCK
     })
-    await plexo.start(origin.url(), origin.sha256, { connections: 2 })
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
+    await mergelane.waitForHttpStatus('completed')
     expect(
       origin.chunkRequests().filter((request) => request.range !== null).length
     ).toBeGreaterThan(0)
   })
 
   test('a link that answers 403 with or without a range is still an error', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: 3 * BLOCK })
     origin.setRule(() => ({ status: 403 }))
-    await expect(plexo.api.probeUrl(origin.url())).rejects.toThrow(/status 403/)
+    await expect(mergelane.api.probeUrl(origin.url())).rejects.toThrow(/status 403/)
   })
 
-  test('unknown size (no Content-Length)', async ({ plexo, serve }) => {
+  test('unknown size (no Content-Length)', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 10 * BLOCK, ranges: false, contentLength: false })
-    await plexo.start(origin.url(), origin.sha256)
-    const state = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url(), origin.sha256)
+    const state = await mergelane.waitForHttpStatus('completed')
     expect(state.totalBytes).toBe(0)
   })
 
-  test('redirect during probe and on chunk requests', async ({ plexo, serve }) => {
+  test('redirect during probe and on chunk requests', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 12 * BLOCK })
     origin.setRule(({ path }) => (path === '/start' ? { redirect: '/files/test.bin' } : 'ok'))
-    await plexo.start(origin.url('/start'), origin.sha256)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.start(origin.url('/start'), origin.sha256)
+    await mergelane.waitForHttpStatus('completed')
 
     // The chunk requests follow redirects too (a signed CDN URL rotating mid-download).
     const next = await serve({ size: 12 * BLOCK, seed: 7 })
@@ -176,8 +184,8 @@ test.describe('happy paths @smoke', () => {
       }
       return 'ok'
     })
-    await plexo.start(next.url(), next.sha256)
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.start(next.url(), next.sha256)
+    await mergelane.waitForHttpStatus('completed')
     expect(redirected).toBeGreaterThan(0)
   })
 })
@@ -234,26 +242,26 @@ test.describe('file names @smoke', () => {
     ]
   ]
   for (const [label, disposition, expected] of cases) {
-    test(label, async ({ plexo, serve, dirs }) => {
+    test(label, async ({ mergelane, serve, dirs }) => {
       const origin = await serve({ size: 3 * BLOCK, contentDisposition: disposition })
-      await plexo.start(origin.url(), origin.sha256)
-      const state = await plexo.waitForHttpStatus('completed')
+      await mergelane.start(origin.url(), origin.sha256)
+      const state = await mergelane.waitForHttpStatus('completed')
       expect(state.fileName).toMatch(expected)
       expect(state.destinationPath.startsWith(dirs.dest)).toBe(true)
     })
   }
 
   test('the same name twice gets "(1)" and leaves the first file alone', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const first = await serve({ size: 3 * BLOCK, seed: 1 })
-    await plexo.start(first.url(), first.sha256)
-    const one = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(first.url(), first.sha256)
+    const one = await mergelane.waitForHttpStatus('completed')
 
     const second = await serve({ size: 5 * BLOCK, seed: 2 })
-    await plexo.start(second.url(), second.sha256)
-    const two = await plexo.waitForHttpStatus('completed')
+    await mergelane.start(second.url(), second.sha256)
+    const two = await mergelane.waitForHttpStatus('completed')
 
     expect(one.fileName).toBe('test.bin')
     expect(two.fileName).toBe('test (1).bin')
@@ -264,72 +272,74 @@ test.describe('file names @smoke', () => {
 })
 
 test.describe('edge cases', () => {
-  test('a 0-byte file @smoke', async ({ plexo, serve }) => {
+  test('a 0-byte file @smoke', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 0 })
-    await plexo.start(origin.url(), origin.sha256)
-    await plexo.waitForHttpStatus('completed', 5000)
+    await mergelane.start(origin.url(), origin.sha256)
+    await mergelane.waitForHttpStatus('completed', 5000)
   })
 
   test('a server that never answers the link check → an error, not endless "Checking…" @smoke', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: BLOCK })
     origin.setRule(() => 'stallHeaders')
     const started = Date.now()
-    await expect(plexo.api.probeUrl(origin.url())).rejects.toThrow(/did not respond/)
+    await expect(mergelane.api.probeUrl(origin.url())).rejects.toThrow(/did not respond/)
     expect(Date.now() - started).toBeLessThan(10_000)
   })
 
   test('a link that expired mid-download carries on from a fresh one, not one to another file', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origin = await serve({ size: 16 * BLOCK, seed: 7 })
     const held = origin.hold(4 * BLOCK)
-    const id = await plexo.start(origin.url(), origin.sha256)
+    const id = await mergelane.start(origin.url(), origin.sha256)
     await held
     origin.setRule(() => ({ status: 403 }))
     origin.release()
-    const failed = await plexo.waitUntil((state) => state.status === 'error', 30_000)
+    const failed = await mergelane.waitUntil((state) => state.status === 'error', 30_000)
     expect(failed.error).toMatch(/status 403/)
     const kept = failed.bytesDownloaded
     expect(kept).toBeGreaterThan(0)
 
     const other = await serve({ size: 8 * BLOCK, seed: 8 })
-    await expect(plexo.api.relinkDownload(id, other.url())).rejects.toThrow(/different file/)
+    await expect(mergelane.api.relinkDownload(id, other.url())).rejects.toThrow(/different file/)
     // Same size and the same ETag (every test origin's "v1"), other bytes: labels alone would let
     // it through and mix two files.
     const lookalike = await serve({ size: 16 * BLOCK, seed: 9 })
-    await expect(plexo.api.relinkDownload(id, lookalike.url())).rejects.toThrow(/different file/)
+    await expect(mergelane.api.relinkDownload(id, lookalike.url())).rejects.toThrow(
+      /different file/
+    )
 
     const fresh = await serve({ size: 16 * BLOCK, seed: 7 })
-    await plexo.api.relinkDownload(id, fresh.url())
-    await plexo.waitForHttpStatus('completed')
+    await mergelane.api.relinkDownload(id, fresh.url())
+    await mergelane.waitForHttpStatus('completed')
     // Only what was missing came from the fresh link.
     const fetched = fresh.chunkRequests().reduce((sum, entry) => sum + entry.bytesSent, 0)
     expect(fetched).toBeLessThanOrEqual(16 * BLOCK - kept + 4 * BLOCK)
   })
 
   test('past two at once, downloads wait in the queue and start as room frees @smoke', async ({
-    plexo,
+    mergelane,
     serve
   }) => {
     const origins = await Promise.all([1, 2, 3].map((seed) => serve({ size: 4 * BLOCK, seed })))
     const held = origins.map((origin) => origin.hold(BLOCK))
     const ids: string[] = []
-    for (const origin of origins) ids.push(await plexo.start(origin.url(), origin.sha256))
+    for (const origin of origins) ids.push(await mergelane.start(origin.url(), origin.sha256))
     await Promise.all(held.slice(0, 2))
     const status = async (index: number): Promise<string | undefined> =>
-      (await plexo.byId(ids[index]))?.status
+      (await mergelane.byId(ids[index]))?.status
     expect(await status(2)).toBe('queued')
 
     // A pause makes room: the queued one starts.
-    await plexo.api.pauseDownload(ids[0])
+    await mergelane.api.pauseDownload(ids[0])
     await held[2]
     expect(await status(2)).toBe('downloading')
     // Resumed while two run, it waits, first in line, for the next to finish.
-    await plexo.api.resumeDownload(ids[0])
+    await mergelane.api.resumeDownload(ids[0])
     await expect.poll(() => status(0)).toBe('queued')
     origins[1].release()
     await expect.poll(() => status(1)).toBe('completed')

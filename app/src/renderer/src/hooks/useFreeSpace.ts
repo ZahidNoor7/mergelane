@@ -21,7 +21,7 @@ export function useFreeSpace(dir: string | null | undefined): number | null {
 
     let disposed = false
     const check = (): void => {
-      void window.plexo
+      void window.mergelane
         .freeSpace(dir)
         .then((bytes) => {
           if (!disposed) setFree(bytes)

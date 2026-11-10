@@ -372,8 +372,8 @@ function isCurrentManifest(value: unknown, id: string): value is PersistedDownlo
 
 /**
  * Where a saved download that can't be restored kept its partial data beside its destination:
- * only what is unmistakably Plexo's, so that a damaged manifest can never point it at a real file.
- * - A `<name>.plexo` staging file, or a torrent's `<name>.plexo/` staging folder.
+ * only what is unmistakably Mergelane's, so that a damaged manifest can never point it at a real file.
+ * - A `<name>.mergelane` staging file, or a torrent's `<name>.mergelane/` staging folder.
  * - rc.1–rc.9 (manifest version 2) claimed the final name itself as an empty file, until the
  *   download's parts were joined into it: taken while it is still empty and the download
  *   unfinished, never once it holds anything.
@@ -387,8 +387,8 @@ async function partialLeftovers(persisted: unknown): Promise<string[]> {
   const leftovers: string[] = []
   const partial = manifest?.partialPath
   if (typeof partial === 'string' && isAbsolute(partial)) {
-    if (partial.endsWith('.plexo')) leftovers.push(partial)
-    else if (dirname(partial).endsWith('.plexo')) leftovers.push(dirname(partial))
+    if (partial.endsWith('.mergelane')) leftovers.push(partial)
+    else if (dirname(partial).endsWith('.mergelane')) leftovers.push(dirname(partial))
   }
   const placeholder = manifest?.state?.destinationPath
   if (
@@ -551,7 +551,7 @@ export class DownloadManager {
     this.scheduleTimer = setTimeout(
       () => {
         void this.refreshSchedule()
-          .catch((error) => console.error('[plexo] schedule', error))
+          .catch((error) => console.error('[mergelane] schedule', error))
           .finally(() => this.armScheduleTimer())
       },
       boundary ? Math.max(1, Math.min(1000, boundary - now)) : 1000
@@ -1118,7 +1118,7 @@ export class DownloadManager {
   /**
    * Clears a saved download that can't be restored, rather than keep it forever: its folder here
    * (manifest, a saved .torrent, an old version's parts/ folder), and its partial data beside the
-   * destination when that is unmistakably Plexo's (see partialLeftovers).
+   * destination when that is unmistakably Mergelane's (see partialLeftovers).
    */
   private async discardUnrestorable(id: string, persisted: unknown): Promise<void> {
     for (const path of await partialLeftovers(persisted)) {
@@ -1248,7 +1248,7 @@ export class DownloadManager {
       runtime = this.newTelegramRuntime(
         state,
         requestPayload,
-        new DownloadFile(`${destinationPath}.plexo`),
+        new DownloadFile(`${destinationPath}.mergelane`),
         blocks
       )
     } else if (requestPayload.kind === 'nzb') {
@@ -1301,7 +1301,7 @@ export class DownloadManager {
       runtime = this.newHttpRuntime(
         state,
         requestPayload,
-        new DownloadFile(`${destinationPath}.plexo`),
+        new DownloadFile(`${destinationPath}.mergelane`),
         blocks
       )
     }
@@ -1510,7 +1510,7 @@ export class DownloadManager {
       throw new Error('That link is to a different file: its bytes don’t match what’s downloaded.')
     }
     if (verdict === 'unknown') {
-      throw new Error('Plexo couldn’t check that link against what’s downloaded. Try again.')
+      throw new Error('Mergelane couldn’t check that link against what’s downloaded. Try again.')
     }
     if (!replaceable()) throw new Error('The download changed while its new link was checked.')
     runtime.requestPayload.url = probe.finalUrl
@@ -1765,7 +1765,7 @@ export class DownloadManager {
     for (const runtime of this.runtimes.values()) {
       if (runtime.kind !== 'nzb') continue
       void this.pause(runtime.state.id, true).catch((error) =>
-        console.error('[plexo] Usenet switched off', error)
+        console.error('[mergelane] Usenet switched off', error)
       )
     }
   }
@@ -1775,7 +1775,7 @@ export class DownloadManager {
    * crawling connection) spans the sleep. All of it starts over. */
   systemResumed(): void {
     void this.refreshSchedule().catch((error) =>
-      console.error('[plexo] schedule after wake', error)
+      console.error('[mergelane] schedule after wake', error)
     )
     const now = Date.now()
     for (const runtime of this.runtimes.values()) {
@@ -2042,7 +2042,7 @@ export class DownloadManager {
     this.historyChanged()
   }
 
-  /** Shows a download's file in its folder (while it's downloading, its `.plexo` staging file):
+  /** Shows a download's file in its folder (while it's downloading, its `.mergelane` staging file):
    * by the download's own path, never one the window
    * names, and only once it's checked to be there — the window's view of that can be old (the
    * file moved or deleted since). When it isn't, the window is told to look again, and the
@@ -2051,7 +2051,7 @@ export class DownloadManager {
     const runtime = this.runtimes.get(id)
     const download = runtime?.state ?? (await findInHistory(id))
     // Until it's published, what's on disk is its staging file (an HTTP download's
-    // `<name>.plexo`), not the path it will end up at.
+    // `<name>.mergelane`), not the path it will end up at.
     const unfinished = runtime && runtime.state.status !== 'completed'
     for (const path of [unfinished ? runtime.file.path : undefined, download?.destinationPath]) {
       if (path && (await pathExists(path).catch(() => false))) {
@@ -2332,7 +2332,7 @@ export class DownloadManager {
     if (state.status !== 'downloading' || runtime.stop.signal.aborted) return
     if (!this.scheduleAllowsDownloads()) {
       void this.pause(state.id, true).catch((error) =>
-        console.error('[plexo] schedule cutoff', error)
+        console.error('[mergelane] schedule cutoff', error)
       )
       return
     }

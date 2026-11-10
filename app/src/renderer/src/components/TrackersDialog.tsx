@@ -13,7 +13,7 @@ import {
 } from './ui/dialog'
 import { Textarea } from './ui/textarea'
 
-const SHORTCUT = window.plexo.platform === 'darwin' ? 'Cmd+Enter' : 'Ctrl+Enter'
+const SHORTCUT = window.mergelane.platform === 'darwin' ? 'Cmd+Enter' : 'Ctrl+Enter'
 
 /**
  * Manages trackers for an active or paused torrent download.
@@ -48,7 +48,7 @@ export function TrackersDialog({
     if (!downloadId) return
 
     let active = true
-    window.plexo
+    window.mergelane
       .torrentTrackers(downloadId)
       .then((result) => {
         if (active) setData(result)
@@ -79,7 +79,7 @@ export function TrackersDialog({
     setError(null)
     setWarning(null)
     try {
-      const updated = await window.plexo.addTorrentTrackers(download.id, valid)
+      const updated = await window.mergelane.addTorrentTrackers(download.id, valid)
       setData(updated)
       setInput('')
       if (invalidCount > 0) {

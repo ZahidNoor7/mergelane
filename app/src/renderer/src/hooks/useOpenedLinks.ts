@@ -2,19 +2,19 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { acceptedLink } from '../utils/format'
 
-/** Opens New download with links handed to Plexo, for the user to look at and start. */
+/** Opens New download with links handed to Mergelane, for the user to look at and start. */
 export function useOpenedLinks(): void {
   const receiveLinks = useAppStore((store) => store.receiveLinks)
 
   useEffect(() => {
-    const unsubscribe = window.plexo.onLinkReceived(() => void receiveLinks())
+    const unsubscribe = window.mergelane.onLinkReceived(() => void receiveLinks())
     // Some may have arrived before the window was listening.
     void receiveLinks()
     return unsubscribe
   }, [receiveLinks])
 }
 
-const isMac = window.plexo.platform === 'darwin'
+const isMac = window.mergelane.platform === 'darwin'
 
 /** The ways into New download from anywhere in the window, as download managers have them:
  * pasting a link (outside a text field), ⌘N / Ctrl+N, and dropping a link, a .torrent or an
@@ -46,7 +46,7 @@ export function useNewDownloadShortcuts(): void {
       const file = event.dataTransfer?.files[0]
       const link = file
         ? /\.(torrent|nzb)$/i.test(file.name)
-          ? window.plexo.pathForFile(file)
+          ? window.mergelane.pathForFile(file)
           : null
         : acceptedLink(event.dataTransfer?.getData('text') ?? '')
       if (link) openNewDownload(link)

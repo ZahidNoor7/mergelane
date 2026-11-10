@@ -66,7 +66,7 @@ function NetworkListNotice({
   return (
     <span className="flex flex-wrap items-center gap-2 text-[12.5px] leading-snug text-[var(--text-secondary)]">
       {status === 'error'
-        ? `Plexo couldn’t list this computer’s networks.${detail ? ` ${detail}` : ''}`
+        ? `Mergelane couldn’t list this computer’s networks.${detail ? ` ${detail}` : ''}`
         : 'No networks connected. Join a Wi-Fi network, plug in Ethernet, or connect your phone using USB tethering.'}
       <Button type="button" variant="secondary" size="xs" onClick={onScan}>
         Scan again
@@ -152,7 +152,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   // managers have long assumed. Anything else on the clipboard is left alone.
   useEffect(() => {
     if (useAppStore.getState().draftUrl) return
-    void window.plexo
+    void window.mergelane
       .readClipboardText()
       .then((text) => {
         const link = acceptedLink(text)
@@ -188,7 +188,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     // answer is no longer wanted then.
     let stale = false
     setProbe({ status: 'probing' })
-    const stopListening = window.plexo.onMagnetCheckStatus((status) => {
+    const stopListening = window.mergelane.onMagnetCheckStatus((status) => {
       if (stale || status.link !== trimmed) return
       setProbe((now) =>
         now.status === 'probing' ? { status: 'probing', noPeersYet: status.noPeersYet } : now
@@ -196,7 +196,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     })
     const timer = setTimeout(async () => {
       try {
-        const result = await window.plexo.probeUrl(trimmed)
+        const result = await window.mergelane.probeUrl(trimmed)
         if (stale) return
         setProbe({ status: 'ready', result })
       } catch (error) {
@@ -220,7 +220,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const wantsServer = nzb !== null && server === undefined
   useEffect(() => {
     if (!wantsServer) return
-    void window.plexo
+    void window.mergelane
       .usenetServer()
       .then(setServer)
       .catch(() => setServer(null))
@@ -316,13 +316,13 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   }
 
   const handleBrowse = async (): Promise<void> => {
-    const chosen = await window.plexo.chooseDestinationFolder(destinationDir)
+    const chosen = await window.mergelane.chooseDestinationFolder(destinationDir)
     if (chosen) setDestinationDir(chosen)
   }
 
   // A .torrent or .nzb file goes in the link field as its path; the probe reads it from there.
   const handleOpenFile = async (): Promise<void> => {
-    const path = await window.plexo.chooseDownloadFile()
+    const path = await window.mergelane.chooseDownloadFile()
     if (path) setUrl(path)
   }
 
@@ -333,7 +333,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     setStarting(true)
     setStartError(null)
     try {
-      await window.plexo.resumeFromLink(link.id, resumes.id)
+      await window.mergelane.resumeFromLink(link.id, resumes.id)
       useAppStore.setState({ view: { name: 'download', id: resumes.id } })
       finishLink(link.id, true)
     } catch (error) {
@@ -360,7 +360,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         etag: probe.result.etag,
         lastModified: probe.result.lastModified
       }
-      const id = await window.plexo.startDownload(
+      const id = await window.mergelane.startDownload(
         probe.result.kind === 'torrent'
           ? {
               ...common,

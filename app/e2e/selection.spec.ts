@@ -17,9 +17,12 @@ async function chooseMore(page: Page, name: string | RegExp): Promise<void> {
   await page.getByRole('menuitem', { name }).click()
 }
 
-async function stubTrash(plexo: import('./fixtures').PlexoApp, destination: string): Promise<void> {
+async function stubTrash(
+  mergelane: import('./fixtures').MergelaneApp,
+  destination: string
+): Promise<void> {
   await mkdir(destination)
-  await plexo.evaluateMain(({ shell }, dest) => {
+  await mergelane.evaluateMain(({ shell }, dest) => {
     shell.trashItem = async (path: string): Promise<void> => {
       const { rename } = process.getBuiltinModule('node:fs/promises')
       const { basename, join } = process.getBuiltinModule('node:path')
@@ -29,28 +32,28 @@ async function stubTrash(plexo: import('./fixtures').PlexoApp, destination: stri
 }
 
 test('mixed selection applies actions only to eligible downloads and keeps finished files', async ({
-  plexo,
+  mergelane,
   serve
 }) => {
   const complete = await serve({ size: BLOCK })
-  await plexo.start(complete.url(), complete.sha256, { fileName: 'finished.bin' })
-  const finished = await plexo.waitForStatus('completed')
+  await mergelane.start(complete.url(), complete.sha256, { fileName: 'finished.bin' })
+  const finished = await mergelane.waitForStatus('completed')
   const failed = await serve({ size: 16 * BLOCK })
   const held = failed.hold(4 * BLOCK)
-  await plexo.start(failed.url(), failed.sha256, { fileName: 'expired.bin' })
+  await mergelane.start(failed.url(), failed.sha256, { fileName: 'expired.bin' })
   await held
   failed.setRule(() => ({ status: 403 }))
   failed.release()
-  await plexo.waitForStatus('error')
+  await mergelane.waitForStatus('error')
   const paused = await serve({ size: 16 * BLOCK })
   const pausedHeld = paused.hold(4 * BLOCK)
-  const pausedId = await plexo.start(paused.url(), paused.sha256, { fileName: 'paused.bin' })
+  const pausedId = await mergelane.start(paused.url(), paused.sha256, { fileName: 'paused.bin' })
   await pausedHeld
-  await plexo.api.pauseDownload(pausedId)
+  await mergelane.api.pauseDownload(pausedId)
   paused.release()
-  await plexo.waitForStatus('paused')
+  await mergelane.waitForStatus('paused')
 
-  const page = plexo.page
+  const page = mergelane.page
   const beforeSelection = await page
     .getByRole('button', { name: 'Open paused.bin', exact: true })
     .boundingBox()
@@ -108,38 +111,38 @@ test('mixed selection applies actions only to eligible downloads and keeps finis
 })
 
 test('missing finished files can leave the list but are excluded from file removal', async ({
-  plexo,
+  mergelane,
   serve
 }) => {
   const origin = await serve({ size: BLOCK })
-  await plexo.start(origin.url(), origin.sha256)
-  const complete = await plexo.waitForStatus('completed')
+  await mergelane.start(origin.url(), origin.sha256)
+  const complete = await mergelane.waitForStatus('completed')
   // Rename instead of delete so automatic fixture integrity checks can still inspect the bytes.
   const { rename } = await import('node:fs/promises')
   await rename(complete.destinationPath, `${complete.destinationPath}.moved`)
-  await plexo.page.reload()
-  await plexo.page
+  await mergelane.page.reload()
+  await mergelane.page
     .getByRole('checkbox', { name: `Select ${complete.fileName}`, exact: true })
     .check()
-  await expect(plexo.page.getByRole('button', { name: /^Move/ })).toHaveCount(0)
-  await plexo.page.getByRole('button', { name: 'Remove from list (1)', exact: true }).click()
-  await plexo.page
+  await expect(mergelane.page.getByRole('button', { name: /^Move/ })).toHaveCount(0)
+  await mergelane.page.getByRole('button', { name: 'Remove from list (1)', exact: true }).click()
+  await mergelane.page
     .getByRole('alertdialog')
     .getByRole('button', { name: 'Remove', exact: true })
     .click()
-  await expect(plexo.page.getByText('No downloads yet', { exact: true })).toBeVisible()
+  await expect(mergelane.page.getByText('No downloads yet', { exact: true })).toBeVisible()
   await rename(`${complete.destinationPath}.moved`, complete.destinationPath)
 })
 
 test('showing a file that has moved says so in a dialog, not on the page', async ({
-  plexo,
+  mergelane,
   serve
 }) => {
   const origin = await serve({ size: BLOCK })
-  await plexo.start(origin.url(), origin.sha256)
-  const complete = await plexo.waitForStatus('completed')
+  await mergelane.start(origin.url(), origin.sha256)
+  const complete = await mergelane.waitForStatus('completed')
   const { rename } = await import('node:fs/promises')
-  const page = plexo.page
+  const page = mergelane.page
   // The window lists history again just after a download finishes and whenever it's focused,
   // checking each file. Move the file only once that listing is in (there are finished ones to
   // clear) and the menu is open, so neither can see it gone first.
@@ -166,14 +169,14 @@ test('showing a file that has moved says so in a dialog, not on the page', async
 })
 
 test('trashing finished torrent files preserves unrelated files in the torrent folder', async ({
-  plexo,
+  mergelane,
   dirs
 }) => {
   const swarm = await new Swarm().start()
   try {
     const files = [named(seededBytes(BLOCK, 81), 'a.bin'), named(seededBytes(BLOCK, 82), 'b.bin')]
     const torrent = await swarm.seed(files, { folder: 'Owned', pieceLength: 16 * 1024 })
-    await plexo.start(
+    await mergelane.start(
       await torrentFileOnDisk(torrent),
       treeSha(
         files.map((data) => ({
@@ -182,20 +185,20 @@ test('trashing finished torrent files preserves unrelated files in the torrent f
         }))
       )
     )
-    const completed = await plexo.waitForTorrentStatus('completed')
+    const completed = await mergelane.waitForTorrentStatus('completed')
     await writeFile(join(completed.destinationPath, 'personal.txt'), 'keep me')
     const trash = join(dirs.dest, 'test-trash')
-    await stubTrash(plexo, trash)
-    await plexo.page
+    await stubTrash(mergelane, trash)
+    await mergelane.page
       .getByRole('checkbox', { name: `Select ${completed.fileName}`, exact: true })
       .check()
     const trashName = process.platform === 'win32' ? 'Recycle Bin' : 'Trash'
-    await chooseMore(plexo.page, `Move file to ${trashName}`)
-    await plexo.page
+    await chooseMore(mergelane.page, `Move file to ${trashName}`)
+    await mergelane.page
       .getByRole('alertdialog')
       .getByRole('button', { name: 'Delete file', exact: true })
       .click()
-    await expect(plexo.page.getByText('No downloads yet', { exact: true })).toBeVisible()
+    await expect(mergelane.page.getByText('No downloads yet', { exact: true })).toBeVisible()
     expect(await readFile(join(completed.destinationPath, 'personal.txt'), 'utf8')).toBe('keep me')
     for (const file of files)
       expect(existsSync(join(trash, basename((file as { name?: string }).name!)))).toBe(true)
@@ -205,7 +208,7 @@ test('trashing finished torrent files preserves unrelated files in the torrent f
 })
 
 test('cancelling an unfinished torrent preserves unrelated files in its folder', async ({
-  plexo
+  mergelane
 }) => {
   const swarm = await new Swarm().start()
   try {
@@ -218,7 +221,7 @@ test('cancelling an unfinished torrent preserves unrelated files in its folder',
       pieceLength: 16 * 1024,
       uploadLimit: 64 * 1024
     })
-    const id = await plexo.start(
+    const id = await mergelane.start(
       await torrentFileOnDisk(torrent),
       treeSha(
         files.map((data) => ({
@@ -227,10 +230,10 @@ test('cancelling an unfinished torrent preserves unrelated files in its folder',
         }))
       )
     )
-    await plexo.api.pauseDownload(id)
-    const paused = await plexo.waitForTorrentStatus('paused')
+    await mergelane.api.pauseDownload(id)
+    const paused = await mergelane.waitForTorrentStatus('paused')
     await writeFile(join(paused.destinationPath, 'personal.txt'), 'keep me')
-    await plexo.api.removeDownload(id)
+    await mergelane.api.removeDownload(id)
     expect(await readFile(join(paused.destinationPath, 'personal.txt'), 'utf8')).toBe('keep me')
     expect(existsSync(join(paused.destinationPath, 'a.bin'))).toBe(false)
     expect(existsSync(join(paused.destinationPath, 'b.bin'))).toBe(false)
@@ -240,21 +243,21 @@ test('cancelling an unfinished torrent preserves unrelated files in its folder',
 })
 
 test('a removal that fails for one download still removes the rest, and asks again about only that one', async ({
-  plexo,
+  mergelane,
   serve,
   dirs
 }) => {
   const first = await serve({ size: BLOCK })
-  await plexo.start(first.url(), first.sha256, { fileName: 'goes.bin' })
-  await plexo.waitForStatus('completed')
+  await mergelane.start(first.url(), first.sha256, { fileName: 'goes.bin' })
+  await mergelane.waitForStatus('completed')
   const second = await serve({ size: BLOCK })
-  await plexo.start(second.url(), second.sha256, { fileName: 'stays.bin' })
+  await mergelane.start(second.url(), second.sha256, { fileName: 'stays.bin' })
   await expect
-    .poll(async () => (await plexo.all()).filter((d) => d.status === 'completed').length)
+    .poll(async () => (await mergelane.all()).filter((d) => d.status === 'completed').length)
     .toBe(2)
   const trashed = join(dirname(dirs.dest), 'test-trash')
   await mkdir(trashed)
-  await plexo.evaluateMain(({ shell }, dest) => {
+  await mergelane.evaluateMain(({ shell }, dest) => {
     shell.trashItem = async (path: string): Promise<void> => {
       const { rename } = process.getBuiltinModule('node:fs/promises')
       const { basename, join } = process.getBuiltinModule('node:path')
@@ -263,7 +266,7 @@ test('a removal that fails for one download still removes the rest, and asks aga
     }
   }, trashed)
 
-  const page = plexo.page
+  const page = mergelane.page
   await page.getByRole('checkbox', { name: 'Select goes.bin', exact: true }).check()
   await page.getByRole('checkbox', { name: 'Select stays.bin', exact: true }).check()
   await page.getByRole('button', { name: /^Move to (Trash|Recycle Bin) \(2\)$/ }).click()
@@ -277,18 +280,18 @@ test('a removal that fails for one download still removes the rest, and asks aga
 })
 
 test('search and filter interaction with selection: no crash on empty query filter, Cmd+A selects matching only, Esc clears selection', async ({
-  plexo,
+  mergelane,
   serve
 }) => {
   const first = await serve({ size: BLOCK })
-  await plexo.start(first.url(), first.sha256, { fileName: 'alpha-doc.bin' })
-  await plexo.waitForStatus('completed')
+  await mergelane.start(first.url(), first.sha256, { fileName: 'alpha-doc.bin' })
+  await mergelane.waitForStatus('completed')
 
   const second = await serve({ size: BLOCK })
-  await plexo.start(second.url(), second.sha256, { fileName: 'beta-video.bin' })
-  await plexo.waitForStatus('completed')
+  await mergelane.start(second.url(), second.sha256, { fileName: 'beta-video.bin' })
+  await mergelane.waitForStatus('completed')
 
-  const page = plexo.page
+  const page = mergelane.page
   const search = page.getByRole('textbox', { name: 'Search downloads' })
 
   // 1. Pick a status filter ('Finished') and type a query matching nothing ('zzz').
@@ -325,33 +328,35 @@ test('search and filter interaction with selection: no crash on empty query filt
 })
 
 test('search box maintains minimum usable width at 720px minimum window width with active download', async ({
-  plexo,
+  mergelane,
   serve
 }) => {
   // Set window to minimum 720px width
-  await plexo.evaluateMain(({ BrowserWindow }) => {
+  await mergelane.evaluateMain(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
     window.setSize(720, 620)
   }, null)
   // The default schedule allows 0:00–7:00, so set the clock inside it: otherwise the download
   // waits for the schedule and never starts.
-  await plexo.evaluateMain(() => {
+  await mergelane.evaluateMain(() => {
     const insideSchedule = new Date(2000, 0, 1, 3).getTime()
     Date.now = () => insideSchedule
   }, null)
-  await plexo.api.updateSettings({
+  await mergelane.api.updateSettings({
     downloadSchedule: { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true }
   })
   // The window reads the schedule when it loads, so reload it to show the schedule button.
-  await plexo.page.reload()
-  await expect(plexo.page.getByRole('button', { name: 'Download schedule enabled' })).toBeVisible()
+  await mergelane.page.reload()
+  await expect(
+    mergelane.page.getByRole('button', { name: 'Download schedule enabled' })
+  ).toBeVisible()
 
   const origin = await serve({ size: 24 * BLOCK })
   const reached = origin.hold(6 * BLOCK)
-  await plexo.start(origin.url(), origin.sha256, { fileName: 'active-download.bin' })
+  await mergelane.start(origin.url(), origin.sha256, { fileName: 'active-download.bin' })
   await reached
 
-  const page = plexo.page
+  const page = mergelane.page
   const searchInput = page.getByRole('textbox', { name: 'Search downloads' })
   await expect(searchInput).toBeVisible()
 

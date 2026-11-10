@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   ERROR_CODES,
   isErrorResponse,
+  isEventsResult,
   isRequest,
   isResponse,
   isResultOf,
@@ -12,7 +13,18 @@ import {
 } from '../../shared/daemon-api'
 import { callDaemon, DaemonError } from '../src/main/daemon/client'
 import { appleScriptString, installCommand, shellWord } from '../src/main/daemon/installCommand'
-import { startFakeDaemon } from './fakeDaemon'
+import {
+  afterInstall,
+  mergeIsOn,
+  outagesFrom,
+  readSnapshot,
+  switchAutoResume,
+  switchMerge,
+  versionMismatch,
+  type SnapshotContext
+} from '../src/main/daemon/snapshot'
+import type { SystemMergeLinkEvent } from '../src/shared/types'
+import { startFakeDaemon, type FakeDaemon } from './fakeDaemon'
 
 // The app's side of the daemon contract (CLAUDE.md: shared/daemon-api.ts, tested from both
 // sides). The Go side round-trips the same fixtures in daemon/internal/api.
@@ -125,6 +137,321 @@ test.describe('daemon client @smoke', () => {
     } finally {
       await fake.close()
     }
+  })
+
+  test('turns auto-resume on and off, and reads the link-change log', async () => {
+    const fake = await startFakeDaemon()
+    fake.events = [
+      { at: '2026-11-10T09:00:00Z', link: 'en5', from: 'up', to: 'down', reason: 'probe-failed' }
+    ]
+    try {
+      const opts = { socketPath: fake.path }
+      expect((await callDaemon('status', undefined, opts)).autoResume).toBe(false)
+      expect((await callDaemon('setAutoResume', { enabled: true }, opts)).autoResume).toBe(true)
+      expect(fake.autoResume).toBe(true)
+      expect((await callDaemon('setAutoResume', { enabled: false }, opts)).autoResume).toBe(false)
+      const events = await callDaemon('events', undefined, opts)
+      expect(isEventsResult(events)).toBe(true)
+      expect(events.events).toEqual(fake.events)
+      expect(fake.requests[1]).toEqual({ method: 'setAutoResume', params: { enabled: true } })
+      // The fake is as strict as the daemon about the one param.
+      const bad = await callDaemon('setAutoResume', { enabled: 'yes' } as never, opts).catch(
+        (e) => e
+      )
+      expect(bad.code).toBe('BAD_REQUEST')
+      expect(fake.autoResume).toBe(false)
+    } finally {
+      await fake.close()
+    }
+  })
+
+  test('a helper that speaks another protocol is UNSUPPORTED_VERSION', async () => {
+    const fake = await startFakeDaemon()
+    try {
+      const opts = { socketPath: fake.path }
+      fake.protocol = 2
+      const envelope = await callDaemon('status', undefined, opts).catch((e) => e)
+      expect(envelope).toBeInstanceOf(DaemonError)
+      expect(envelope.code).toBe('UNSUPPORTED_VERSION')
+      expect(envelope.message).toMatch(/protocol version 2; this app speaks 1/)
+
+      // A v1 envelope around a status that says another protocol is the same mismatch.
+      fake.protocol = undefined
+      fake.rawReply =
+        '{"v":1,"id":"","ok":true,"result":{"state":"off","version":"9","protocol":3}}'
+      const status = await callDaemon('status', undefined, opts).catch((e) => e)
+      expect(status.code).toBe('UNSUPPORTED_VERSION')
+      expect(status.message).toMatch(/protocol version 3/)
+    } finally {
+      await fake.close()
+    }
+  })
+})
+
+/** A fake daemon and the context the snapshot reads it with: the app at version 'fake', the same
+ * as the fake helper's, with the version check on as in a packaged app. */
+async function withFake(
+  run: (fake: FakeDaemon, context: SnapshotContext) => Promise<void>
+): Promise<void> {
+  const fake = await startFakeDaemon()
+  try {
+    await run(fake, {
+      socketPath: fake.path,
+      installed: true,
+      appVersion: 'fake',
+      compareVersions: true
+    })
+  } finally {
+    await fake.close()
+  }
+}
+
+const at = (minutes: number): string => new Date(Date.UTC(2026, 10, 10, 9, minutes)).toISOString()
+
+test.describe('system merge snapshot @smoke', () => {
+  test('reads state, traffic, auto-resume and outages from a current helper', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      fake.autoResume = true
+      fake.events = [
+        { at: at(1), link: 'en5', from: 'up', to: 'down', reason: 'probe-failed' },
+        { at: at(2), link: 'en5', from: 'down', to: 'up', reason: 'probe-ok' }
+      ]
+      const snapshot = await readSnapshot(context)
+      expect(snapshot).toMatchObject({
+        installed: true,
+        reachable: true,
+        state: 'on',
+        appVersion: 'fake',
+        helperVersion: 'fake',
+        helperOutdated: false,
+        autoResume: true,
+        events: fake.events,
+        outages: [{ link: 'en5', kind: 'down', at: at(1), backAt: at(2), reason: 'probe-failed' }]
+      })
+      expect(snapshot.error).toBeUndefined()
+      expect(snapshot.links).toEqual([
+        { name: 'feth10', state: 'up', rxBps: 2_500_000, txBps: 100_000, activeFlows: 3 },
+        { name: 'feth20', state: 'down', rxBps: 0, txBps: 0, activeFlows: 0 }
+      ])
+      expect((await readSnapshot(context, 'Earlier failure.')).error).toBe('Earlier failure.')
+    })
+  })
+
+  test('a helper with another version is out of date, with both versions', async () => {
+    await withFake(async (fake, context) => {
+      fake.version = '0.0.9'
+      expect(await readSnapshot({ ...context, appVersion: '0.1.0' })).toMatchObject({
+        reachable: true,
+        helperOutdated: true,
+        helperVersion: '0.0.9',
+        appVersion: '0.1.0'
+      })
+      // A development build compares nothing.
+      const dev = await readSnapshot({ ...context, appVersion: '0.1.0', compareVersions: false })
+      expect(dev.helperOutdated).toBe(false)
+    })
+  })
+
+  test('a helper from before M2.4 is out of date and has no auto-resume', async () => {
+    await withFake(async (fake, context) => {
+      fake.legacy = true
+      const snapshot = await readSnapshot({ ...context, compareVersions: false })
+      expect(snapshot).toMatchObject({ reachable: true, helperOutdated: true, events: [] })
+      expect(snapshot).not.toHaveProperty('autoResume')
+
+      // Only the event log missing is enough.
+      fake.legacy = false
+      fake.unknownMethods = ['events']
+      expect((await readSnapshot(context)).helperOutdated).toBe(true)
+    })
+  })
+
+  test('a failing event log leaves the history empty, not the snapshot', async () => {
+    await withFake(async (fake, context) => {
+      fake.events = [{ at: at(1), link: 'en5', from: 'up', to: 'down', reason: 'probe-failed' }]
+      fake.refuse = { events: { code: 'INTERNAL', message: 'log unavailable' } }
+      const snapshot = await readSnapshot(context)
+      expect(snapshot).toMatchObject({
+        reachable: true,
+        helperOutdated: false,
+        events: [],
+        outages: []
+      })
+    })
+  })
+
+  test('a helper in another protocol is out of date and unreachable, without an error', async () => {
+    await withFake(async (fake, context) => {
+      fake.protocol = 2
+      const snapshot = await readSnapshot(context)
+      expect(snapshot).toMatchObject({
+        reachable: false,
+        state: 'off',
+        helperOutdated: true,
+        links: [],
+        events: [],
+        outages: []
+      })
+      expect(snapshot.error).toBeUndefined()
+
+      // A status this app can't read is the same, and says what went wrong.
+      fake.protocol = undefined
+      fake.rawReply = '{"v":1,"id":"","ok":true,"result":{"state":"sideways"}}'
+      const malformed = await readSnapshot(context)
+      expect(malformed.helperOutdated).toBe(true)
+      expect(malformed.error).toMatch(/malformed/)
+    })
+  })
+
+  test('a missing helper is unreachable, not out of date; an error only once installed', async () => {
+    const missing = {
+      socketPath: '/tmp/mlfd-none',
+      installed: false,
+      appVersion: '0.1.0',
+      compareVersions: true
+    }
+    // Not installed: the install prompt says it all, so no error.
+    const notInstalled = await readSnapshot(missing)
+    expect(notInstalled).toMatchObject({
+      installed: false,
+      reachable: false,
+      helperOutdated: false
+    })
+    expect(notInstalled.error).toBeUndefined()
+    // Installed but not answering is a problem worth an alert.
+    expect((await readSnapshot({ ...missing, installed: true })).error).toMatch(/isn't running/)
+    // A request that failed is always shown.
+    expect((await readSnapshot(missing, 'Installation was canceled.')).error).toBe(
+      'Installation was canceled.'
+    )
+  })
+
+  test('switches merging on and off, and shows a refusal in the daemon’s words', async () => {
+    await withFake(async (fake, context) => {
+      expect((await switchMerge(context, true)).state).toBe('on')
+      expect((await switchMerge(context, false)).state).toBe('off')
+      fake.refuseEnable = { code: 'VPN_ACTIVE', message: 'Another VPN (utun4) is on.' }
+      const refused = await switchMerge(context, true)
+      expect(refused).toMatchObject({ state: 'off', error: 'Another VPN (utun4) is on.' })
+    })
+  })
+
+  test('switches auto-resume, and reports a helper without it as out of date', async () => {
+    await withFake(async (fake, context) => {
+      expect((await switchAutoResume(context, true)).autoResume).toBe(true)
+      expect(fake.autoResume).toBe(true)
+      expect((await switchAutoResume(context, false)).autoResume).toBe(false)
+
+      // Anything but a boolean is refused before it's sent.
+      const sent = fake.requests.length
+      const notBoolean = await switchAutoResume(context, 'yes' as unknown as boolean)
+      expect(notBoolean.error).toBe('That setting needs on or off.')
+      expect(fake.requests.slice(sent).some((r) => r.method === 'setAutoResume')).toBe(false)
+
+      fake.refuse = { setAutoResume: { code: 'NOT_ROOT', message: 'The helper is not root.' } }
+      expect((await switchAutoResume(context, true)).error).toBe('The helper is not root.')
+
+      // Its status still claims the setting, but the method is missing: believe the method.
+      fake.refuse = undefined
+      fake.unknownMethods = ['setAutoResume']
+      const old = await switchAutoResume(context, true)
+      expect(old).toMatchObject({ reachable: true, helperOutdated: true })
+      expect(old).not.toHaveProperty('autoResume')
+      expect(old.error).toMatch(/Update it first/)
+      expect(fake.autoResume).toBe(false)
+    })
+  })
+
+  test('after an update, merging that was on comes back on once the new helper answers', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      expect(await mergeIsOn(context)).toBe(true)
+      // The update stops the old helper cleanly: the new one starts off and doesn't auto-resume.
+      fake.state = 'off'
+      expect(await mergeIsOn(context)).toBe(false)
+      const resumed = await afterInstall(context, true, { everyMs: 50 })
+      expect(resumed).toMatchObject({ reachable: true, state: 'on' })
+      expect(resumed.error).toBeUndefined()
+      expect(fake.requests.filter((r) => r.method === 'enable')).toHaveLength(1)
+
+      // Already on (or off before the update): nothing to turn on.
+      await afterInstall(context, true, { everyMs: 50 })
+      fake.state = 'off'
+      expect((await afterInstall(context, false, { everyMs: 50 })).state).toBe('off')
+      expect(fake.requests.filter((r) => r.method === 'enable')).toHaveLength(1)
+
+      // A refusal says why it stayed off.
+      fake.refuseEnable = { code: 'VPN_ACTIVE', message: 'Another VPN (utun4) is on.' }
+      const refused = await afterInstall(context, true, { everyMs: 50 })
+      expect(refused.state).toBe('off')
+      expect(refused.error).toBe(
+        "The helper is updated, but system merge didn't turn back on: Another VPN (utun4) is on."
+      )
+    })
+  })
+
+  test('after an update, it waits for the new helper, but not forever', async () => {
+    await withFake(async (fake, context) => {
+      // Still starting: connections are accepted but not answered for a moment.
+      fake.silent = true
+      setTimeout(() => (fake.silent = false), 300)
+      const resumed = await afterInstall(context, true, { everyMs: 50 })
+      expect(resumed.state).toBe('on')
+    })
+    expect(
+      await mergeIsOn({
+        socketPath: '/tmp/mlfd-none',
+        installed: true,
+        appVersion: '0.1.0',
+        compareVersions: false
+      })
+    ).toBe(false)
+    const never = await afterInstall(
+      {
+        socketPath: '/tmp/mlfd-none',
+        installed: true,
+        appVersion: '0.1.0',
+        compareVersions: false
+      },
+      true,
+      { waitMs: 200, everyMs: 50 }
+    )
+    expect(never).toMatchObject({ reachable: false, state: 'off' })
+    expect(never.error).toMatch(/isn't running/)
+  })
+
+  test('outages pair each drop with its recovery, per link', () => {
+    const events: SystemMergeLinkEvent[] = [
+      // Out of order on purpose: the log is sorted by time first.
+      { at: at(9), link: 'en5', from: 'gone', to: 'up', reason: 'returned' },
+      { at: at(1), link: 'en0', from: 'unknown', to: 'up', reason: 'probe-ok' },
+      { at: at(2), link: 'en5', from: 'up', to: 'down', reason: 'probe-failed' },
+      { at: at(3), link: 'en0', from: 'up', to: 'gone', reason: 'lost' },
+      { at: at(4), link: 'en5', from: 'down', to: 'gone', reason: 'lost' },
+      { at: at(5), link: 'en0', from: 'gone', to: 'unknown', reason: 'returned' },
+      { at: at(6), link: 'en0', from: 'unknown', to: 'up', reason: 'probe-ok' },
+      { at: at(7), link: 'en7', from: 'up', to: 'down', reason: 'probe-failed' }
+    ]
+    expect(outagesFrom(events)).toEqual([
+      { link: 'en5', kind: 'gone', at: at(2), backAt: at(9), reason: 'probe-failed' },
+      { link: 'en0', kind: 'gone', at: at(3), backAt: at(6), reason: 'lost' },
+      { link: 'en7', kind: 'down', at: at(7), reason: 'probe-failed' }
+    ])
+    expect(outagesFrom([])).toEqual([])
+    // A link that comes up after a probe, with no drop before it, is not an outage.
+    expect(
+      outagesFrom([{ at: at(1), link: 'en0', from: 'unknown', to: 'up', reason: 'probe-ok' }])
+    ).toEqual([])
+  })
+
+  test('version check skips development builds on either side', () => {
+    const context = { installed: true, appVersion: '0.2.0', compareVersions: true }
+    expect(versionMismatch(context, '0.1.0')).toBe(true)
+    expect(versionMismatch(context, '0.2.0')).toBe(false)
+    expect(versionMismatch(context, 'dev')).toBe(false)
+    expect(versionMismatch({ ...context, appVersion: 'dev' }, '0.1.0')).toBe(false)
+    expect(versionMismatch({ ...context, compareVersions: false }, '0.1.0')).toBe(false)
   })
 })
 

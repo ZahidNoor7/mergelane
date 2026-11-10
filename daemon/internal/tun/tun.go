@@ -159,6 +159,16 @@ const udpSessionTimeout = 30 * time.Second
 
 func New(b *engine.Balancer) *Tun { return &Tun{B: b, MTU: DefaultMTU} }
 
+// Name is the adapter's name (e.g. "utun4") once it exists, "" before.
+func (t *Tun) Name() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.dev == nil {
+		return ""
+	}
+	return t.dev.Name()
+}
+
 func (t *Tun) IsOn() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()

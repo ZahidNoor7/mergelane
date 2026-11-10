@@ -1,21 +1,15 @@
+// Package state holds where the daemon keeps its files. The control socket lives in DefaultDir;
+// per-link speed caps persist in limits.json (see limits.go).
 package state
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
-
-	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
 )
 
-// The elevated process can't be signalled from a normal shell, so control goes through files in
-// a per-user directory: status.json (written once a second while on) and marker files
-// ("on", "off", "quit") that the running instance consumes.
-
-// macStateDir is where the daemon keeps its status and control socket. It is under /var/run because
-// the daemon runs as root but is driven by a normal user, so the directory has to be root-owned.
+// macStateDir holds the control socket. It is under /var/run because the daemon runs as root but
+// is driven by a normal user, so the directory has to be root-owned. macOS empties it at boot.
 const macStateDir = "/var/run/mergelane"
 
 // macLimitsDir is where the caps live on macOS: /var/run is emptied at boot, and a metered-tether
@@ -23,18 +17,9 @@ const macStateDir = "/var/run/mergelane"
 // usual place for a setting that has to stay.
 const macLimitsDir = "/Library/Application Support/Mergelane/daemon"
 
-type Status struct {
-	PID     int
-	Mode    string
-	V6      string
-	Since   time.Time
-	Updated time.Time
-	NICs    []engine.SlotStats
-}
-
+// DefaultDir is the daemon's state directory: a fixed root-owned path on macOS, so root never
+// follows a symlink planted in a user-owned directory.
 func DefaultDir() string {
-	// The macOS tray runs as root but is commanded by the user, so its state can't live in a
-	// user-owned directory (root would follow a planted symlink): a fixed root-owned path.
 	if runtime.GOOS == "darwin" {
 		return macStateDir
 	}
@@ -45,48 +30,11 @@ func DefaultDir() string {
 	return filepath.Join(base, "mergelane")
 }
 
-// Prepare creates the state dir, with markers going in a sticky world-writable ctl/ inside it, so
-// a normal user can drop one without being able to touch anything else there.
+// Prepare creates the state directory, readable by everyone (the socket inside checks each
+// caller's uid itself).
 func Prepare(dir string) error {
-	ctl := filepath.Join(dir, "ctl")
-	if err := os.MkdirAll(ctl, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return os.Chmod(ctl, os.ModeSticky|0o777)
+	return os.Chmod(dir, 0o755)
 }
-
-func Write(dir string, st Status) {
-	b, err := json.Marshal(st)
-	if err != nil {
-		return
-	}
-	tmp := filepath.Join(dir, "status.json.tmp")
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		os.Rename(tmp, filepath.Join(dir, "status.json"))
-	}
-}
-
-func Clear(dir string) { os.Remove(filepath.Join(dir, "status.json")) }
-
-// Read returns the status only if it is fresh, i.e. a live process is writing it.
-func Read(dir string) (*Status, bool) {
-	b, err := os.ReadFile(filepath.Join(dir, "status.json"))
-	if err != nil {
-		return nil, false
-	}
-	var st Status
-	if json.Unmarshal(b, &st) != nil || time.Since(st.Updated) > 3*time.Second {
-		return nil, false
-	}
-	return &st, true
-}
-
-func SendMarker(dir, name string) error {
-	if err := os.MkdirAll(filepath.Join(dir, "ctl"), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, "ctl", name), nil, 0o666)
-}
-
-// TakeMarker consumes a marker, reporting whether it was there.
-func TakeMarker(dir, name string) bool { return os.Remove(filepath.Join(dir, "ctl", name)) == nil }

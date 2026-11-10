@@ -55,6 +55,21 @@ Last updated: 2026-11-10
     the toolchain (ADR-0014).
   - Publishing the extension needs a Chrome Web Store developer account, which has a one-time fee: owner decision.
 
+**M2.2 video: in progress** (branch `m2.2-media`).
+- **Done:**
+  - YouTube options review (`docs/YOUTUBE-REVIEW.md`), waiting for the owner's choice;
+  - HLS module: 56 tests, 98–100% coverage;
+  - DASH module: 49 tests, 100% coverage;
+  - yt-dlp and FFmpeg fetch with pinned checksums (ADR-0022, `docs/MEDIA-TOOLS.md`): 29 tests, 98.6% coverage.
+- **In progress:**
+  - FFmpeg muxing;
+  - the daemon's `run` made testable (M2.0);
+  - then HLS and DASH wired into downloads and the UI.
+- **Owner questions:**
+  - which YouTube approach (it also decides whether to ship Deno);
+  - whether the FFmpeg build source is acceptable;
+  - whether to attach GPL sources to releases.
+
 **Owner choices for Phase 2:**
 - CI stays paused (ADR-0020).
 - YouTube: review first, no YouTube code until the owner picks an approach.

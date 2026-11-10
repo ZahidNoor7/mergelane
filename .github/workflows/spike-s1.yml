@@ -1,0 +1,62 @@
+# Throwaway feasibility spike (docs/PHASE-1.md §5, S1). Never merged into main.
+name: spike-s1
+
+on:
+  push:
+    branches: [spike/s1-ci-feasibility]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  feasibility:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: spike/s1/fakevpn/go.mod
+          cache: false
+
+      - name: Runner facts
+        run: |
+          sw_vers; uname -m; sysctl -n hw.ncpu hw.memsize
+          ifconfig -l
+          netstat -rn -f inet | head -20
+          sudo pfctl -s info | head -5
+          sudo pfctl -s Anchors
+          spctl --status || true
+          id
+
+      - name: Install spike deps
+        working-directory: spike/s1
+        run: npm ci
+
+      - name: T1-T4 fake links (pf rdr + reply-to)
+        continue-on-error: true
+        run: bash spike/s1/run-links.sh replyto
+
+      - name: T1-T4 fake links (pf rdr, replies over lo0)
+        continue-on-error: true
+        run: bash spike/s1/run-links.sh asym
+
+      - name: T5 fake VPN and kill -9
+        continue-on-error: true
+        run: bash spike/s1/vpn.sh
+
+      - name: T6 Gatekeeper with a quarantined ad-hoc app
+        continue-on-error: true
+        run: bash spike/s1/gatekeeper.sh
+
+      - name: T7 LaunchDaemon KeepAlive after kill -9
+        continue-on-error: true
+        run: sudo bash spike/s1/launchd.sh
+
+      - name: Teardown
+        if: always()
+        run: sudo bash spike/s1/link-down.sh

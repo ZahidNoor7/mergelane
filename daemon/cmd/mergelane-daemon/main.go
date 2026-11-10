@@ -8,17 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ZahidNoor7/mergelane/daemon/internal/api"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/control"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/launchd"
-	"github.com/ZahidNoor7/mergelane/daemon/internal/logx"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/platform"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/rib"
@@ -80,8 +77,9 @@ func dispatch(cmd string, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func requireRoot(what string) error {
-	if !platform.IsAdmin() {
+// requireRoot fails unless isRoot (platform.IsAdmin) says this process runs as root.
+func requireRoot(what string, isRoot func() bool) error {
+	if !isRoot() {
 		return fmt.Errorf("%s must run as root", what)
 	}
 	return nil
@@ -213,122 +211,8 @@ func authorizer(allowed int) func(uint32) bool {
 	return func(uid uint32) bool { return uid == 0 || (allowed > 0 && uid == uint32(allowed)) }
 }
 
-func cmdRun(args []string) error {
-	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	var c engineFlags
-	c.register(fs)
-	allowedUID := fs.Int("allowed-uid", 0, "the user allowed to drive the daemon besides root")
-	socketPath := fs.String("socket", api.SocketPath, "control socket path")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if err := requireRoot("run"); err != nil {
-		return err
-	}
-	if c.mtu < 1280 || c.mtu > 65535 {
-		return fmt.Errorf("-mtu must be between 1280 and 65535, got %d", c.mtu)
-	}
-	if !platform.SingleInstance() {
-		return fmt.Errorf("mergelane-daemon is already running")
-	}
-	if c.logFile != "" {
-		f, err := os.OpenFile(c.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			return err
-		}
-		logx.SetOutput(f)
-		platform.RedirectStd(f)
-	}
-	if c.pprof != "" {
-		if err := startPprof(c.pprof); err != nil {
-			return err
-		}
-	}
-	if err := state.Prepare(c.stateDir); err != nil {
-		return err
-	}
-	engine.SetProbeTargets(engine.Fam4, splitList(c.probes))
-
-	// Start clean, and say so if the last run didn't get to (ADR-0007).
-	startReason := ""
-	if countLeftovers(rib.Read) > 0 {
-		startReason = control.ReasonCrash
-		logx.Printf("previous run left routes behind; cleaning up\n")
-	}
-	tun.CleanupStale()
-
-	found, _, err := c.discover()
-	if err != nil {
-		return err
-	}
-	sched := engine.NewScheduler(found)
-	sched.SetAuto(c.auto && len(c.weights) == 0)
-	if limits, err := state.LoadLimits(c.stateDir); err == nil {
-		sched.SetLimits(limits)
-	} else {
-		logx.Printf("warning: %v (ignored)\n", err)
-	}
-	bal := engine.NewBalancer(sched)
-	v6, ok := engine.ParseV6Mode(c.ipv6)
-	if !ok {
-		return fmt.Errorf(`-ipv6 must be auto, on or off, got %q`, c.ipv6)
-	}
-	bal.SetV6Mode(v6)
-	t := tun.New(bal)
-	t.MTU = c.mtu
-	// Create the utun now, so turning merging on and off only touches routes (upstream: tray.go).
-	if err := t.Warm(); err != nil {
-		return err
-	}
-	defer t.Close()
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	go sched.RunProbes(ctx.Done())
-	go func() {
-		rescan := time.NewTicker(c.rescan)
-		tick := time.NewTicker(time.Second)
-		defer rescan.Stop()
-		defer tick.Stop()
-		last := time.Now()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-rescan.C:
-				if ns, _, err := c.discover(); err == nil {
-					sched.Update(ns)
-				}
-			case now := <-tick.C:
-				sched.Tick(now.Sub(last))
-				last = now
-			}
-		}
-	}()
-
-	ctl := control.New(control.Config{
-		Version:     version,
-		Tunnel:      t,
-		Engine:      sched,
-		Guard:       guardMessages(vpnguard.ReadRoutes, vpnguard.ReadNCConnected),
-		SaveLimits:  func(m map[string]float64) error { return state.SaveLimits(c.stateDir, m) },
-		StartReason: startReason,
-	})
-	go ctl.Watch(ctx, time.Second)
-	srv, err := api.Listen(*socketPath, 0o666, authorizer(*allowedUID), ctl)
-	if err != nil {
-		return err
-	}
-	logx.Printf("mergelane-daemon %s listening on %s (merging off)\n", version, srv.Path())
-	<-ctx.Done()
-	ctl.Shutdown()
-	srv.Close()
-	logx.Printf("mergelane-daemon stopped\n")
-	return nil
-}
-
 func cmdCleanup(out io.Writer) error {
-	if err := requireRoot("cleanup"); err != nil {
+	if err := requireRoot("cleanup", platform.IsAdmin); err != nil {
 		return err
 	}
 	tun.CleanupStale()

@@ -124,7 +124,8 @@ Last updated: 2026-11-11
 - CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11).
 - YouTube: option A with hard limits (ADR-0026); Deno shipped.
 - FFmpeg: our own LGPL build (ADR-0028); sources attached to every release (ADR-0027).
-- Probes and the quarantine test accepted (ADR-0008, ADR-0013); Telegram to be removed (ADR-0012).
+- Probes and the quarantine test accepted (ADR-0008, ADR-0013); Telegram removed (ADR-0012, branch
+  `m2.6-remove-telegram`: 3,570 lines and four packages gone; smoke 428 passed, 1 skipped).
 - Chrome Web Store: later, once Phase 2's installer works.
 - Keep the `m1.4-pinning` branch.
 

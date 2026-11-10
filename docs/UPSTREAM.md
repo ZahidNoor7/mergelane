@@ -70,3 +70,4 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
 | 2026-11-10 | Plexo | — → `2e44a2f` | `ac203ef` | Verbatim import into `app/` (branch `m1.2-app`). |
 | 2026-11-10 | Net Merge | — → `2b333a3` | `e3a8aa4` | Verbatim import into `daemon/` (branch `m1.3-daemon`). |
 | 2026-11-10 | Awesome Downloader | — (logic only) at `d99dbe0` | M2.2 (branch `m2.2-media`) | HLS logic from `core/hls.mjs` rewritten in TypeScript as `app/src/main/media/hls/` (no code copied verbatim); each file credits it. |
+| 2026-11-10 | Awesome Downloader | — (logic only) at `d99dbe0` | M2.2 (branch `m2.2-media`) | FFmpeg muxing idea from `core/mux.mjs` rewritten as `app/src/main/media/mux/`; files credit it. |

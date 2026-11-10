@@ -62,9 +62,10 @@ Last updated: 2026-11-10
   - DASH module: 49 tests, 100% coverage;
   - yt-dlp and FFmpeg fetch with pinned checksums (ADR-0022, `docs/MEDIA-TOOLS.md`): 29 tests, 98.6% coverage.
 - **In progress:**
-  - FFmpeg muxing;
-  - the daemon's `run` made testable (M2.0);
-  - then HLS and DASH wired into downloads and the UI.
+  - HLS and DASH wired into downloads and the UI.
+- **Also done:**
+  - FFmpeg muxing: 35 tests, 100% line coverage;
+  - the daemon's `run` made testable (M2.0): 92.5% coverage.
 - **Owner questions:**
   - which YouTube approach (it also decides whether to ship Deno);
   - whether the FFmpeg build source is acceptable;
@@ -101,9 +102,8 @@ CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
   Phase 2 questions.
 - When CI is back on: prove criteria 1, 2 and the app part of 6 with
   `gh workflow run ci.yml --ref m1.4-system-merge`.
-- **Daemon `run` coverage:** unit tests cover all of `cmd/mergelane-daemon` except `run`. The root acceptance
-  run measured 38.7% of that package (only clean exits write counters). Raising it means splitting `run`'s
-  wiring from its privileged steps.
+- **Daemon `run` coverage:** done in Phase 2, M2.0. `run` was split into testable parts; package coverage went
+  from 63.6% to 92.5%, and `run` itself is at 100%.
 
 ### Blockers and open questions
 

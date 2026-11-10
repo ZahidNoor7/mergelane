@@ -1,0 +1,213 @@
+import { BLOCK, expect, LAN_ADDRESS, test } from './fixtures'
+import type { Fault, LoggedRequest, Origin, OriginRequest } from './origin'
+
+// L. Racing a slow block. Near the end of a download, a free stream fetches the rest of a block
+// whose holder is too slow, and whichever finishes first wins. Every test here also gets the
+// automatic checks: the finished file matches the source byte for byte, and nothing is left on disk.
+
+const BLOCKS = 12
+const SLOW = 3 // the block whose first request crawls
+
+test.describe('racing a slow block', () => {
+  test.use({ appEnv: { PLEXO_E2E_HEDGE_MS: '400' } })
+
+  const inSlowBlock = (range: OriginRequest['range']): boolean =>
+    !!range && range.start >= SLOW * BLOCK && range.start < (SLOW + 1) * BLOCK
+
+  /** The origin's answer to the n-th request that lands in the slow block. */
+  const answerRequestsInSlowBlock =
+    (byOrder: (n: number, request: OriginRequest) => Fault) =>
+    (): ((request: OriginRequest) => Fault | undefined) => {
+      let seen = 0
+      return (request) => (inSlowBlock(request.range) ? byOrder(seen++, request) : undefined)
+    }
+
+  test('a block crawling at 2 KB/s is finished by a hedge that picks up where it had got to', async ({
+    plexo,
+    serve
+  }) => {
+    const origin = await serve({ size: BLOCKS * BLOCK })
+    // 64 KB at 2 KB/s would take half a minute. The hedge is quick but not instant, so the slow
+    // holder keeps writing over the range the hedge is writing too: the same bytes, so the file
+    // still comes out exact.
+    origin.setRule(
+      answerRequestsInSlowBlock((n) => (n === 0 ? { crawl: 2000 } : { crawl: 100_000 }))()
+    )
+
+    const started = Date.now()
+    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    await plexo.waitForHttpStatus('completed', 10_000)
+    expect(Date.now() - started).toBeLessThan(10_000)
+
+    const requests = origin.chunkRequests().filter((r) => inSlowBlock(r.range))
+    // Twice: a third would mean the hedge's bytes didn't join the block's and it was fetched again.
+    expect(requests, 'the slow block was requested by its holder and by one hedge').toHaveLength(2)
+    expect(
+      requests.some((r) => r.range!.start > SLOW * BLOCK),
+      'the hedge began partway into the block, after what the slow one had already got'
+    ).toBe(true)
+  })
+
+  test('the slow holder can win, and then the hedge is dropped', async ({ plexo, serve }) => {
+    const origin = await serve({ size: BLOCKS * BLOCK })
+    // The holder is slowish (about 1.6 s for the block); the hedge is slower still.
+    origin.setRule(
+      answerRequestsInSlowBlock((n) => (n === 0 ? { crawl: 40_000 } : { crawl: 3000 }))()
+    )
+
+    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    await plexo.waitForHttpStatus('completed', 10_000)
+
+    const requests = origin.chunkRequests().filter((r) => inSlowBlock(r.range))
+    expect(requests.length).toBeGreaterThanOrEqual(2)
+    const hedge = requests[requests.length - 1]
+    expect(hedge.bytesSent, 'the losing hedge was cut off').toBeLessThan(BLOCK)
+  })
+
+  test('paused while racing, then resumed: no half-hedge is left behind', async ({
+    plexo,
+    serve
+  }) => {
+    const origin = await serve({ size: BLOCKS * BLOCK })
+    origin.setRule(
+      answerRequestsInSlowBlock((n) =>
+        n === 0 ? { crawl: 2000 } : n === 1 ? { crawl: 2000 } : 'ok'
+      )()
+    )
+
+    const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    await expect
+      .poll(() => origin.chunkRequests().filter((r) => inSlowBlock(r.range)).length, {
+        message: 'the hedge started',
+        timeout: 8000
+      })
+      .toBeGreaterThanOrEqual(2)
+
+    await plexo.api.pauseDownload(id)
+    const paused = await plexo.waitForHttpStatus('paused')
+    expect(paused.streams.some((chunk) => chunk.hedge)).toBe(false)
+
+    await plexo.api.resumeDownload(id)
+    await plexo.waitForHttpStatus('completed', 15_000)
+  })
+
+  test('a second network rescues a block the first is crawling through, and is credited for it', async ({
+    plexo,
+    serve
+  }) => {
+    test.skip(!LAN_ADDRESS, 'needs a LAN address to act as the second network')
+    const origin = await serve({ size: BLOCKS * BLOCK })
+    let crawled = false
+    // The first network's first request past the opening blocks is the one that crawls.
+    origin.setRule(({ from, range }) => {
+      if (crawled || from !== '127.0.0.1' || !range || range.start < 2 * BLOCK) return undefined
+      crawled = true
+      return { crawl: 2000 }
+    })
+
+    await plexo.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 1 })
+    const state = await plexo.waitForHttpStatus('completed', 10_000)
+
+    const shared = (state.blocks ?? []).filter(
+      (block) => (block.bytesByInterface['a'] ?? 0) > 0 && (block.bytesByInterface['b'] ?? 0) > 0
+    )
+    expect(shared.length, 'one block was split between the networks').toBeGreaterThanOrEqual(1)
+  })
+})
+
+// M. Splitting a block at the end. Once no block is waiting, a free stream takes the back half of
+// what a block's holder has left, and the holder stops where it begins: each byte is fetched
+// once. What matters most is a server that caps each connection, where racing the holder would
+// only fetch the same bytes as slowly.
+test.describe('splitting a block at the end', () => {
+  const MIB = 1024 * 1024
+  const RATE = 128 * 1024
+  // Five 1 MiB blocks, four streams, every response at 128 KB/s: the fifth block goes to
+  // whichever stream frees first, about 8 s in, and alone would take 8 s more.
+  const SIZE = 5 * MIB
+  const LAST = 4 * MIB
+  test.use({ appEnv: { PLEXO_E2E_BLOCK_BYTES: String(MIB), PLEXO_E2E_SILENT_MS: '1000' } })
+
+  const lastBlock = (origin: Origin): LoggedRequest[] =>
+    origin.chunkRequests().filter((r) => r.range && r.range.start >= LAST)
+  /** Requests that began partway into the last block: splits. */
+  const splits = (origin: Origin): LoggedRequest[] =>
+    lastBlock(origin).filter((r) => r.range!.start > LAST)
+  const sent = (requests: LoggedRequest[]): number =>
+    requests.reduce((sum, r) => sum + r.bytesSent, 0)
+
+  test('the free streams share the last block, and nothing is fetched twice', async ({
+    plexo,
+    serve
+  }) => {
+    const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
+    await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+    await plexo.waitForHttpStatus('completed', 30_000)
+    const done = Date.now()
+
+    expect(splits(origin).length, 'a request began partway into the last block').toBeGreaterThan(0)
+    // Measured from when the last block was first asked for, so a slow start doesn't count.
+    expect(done - lastBlock(origin)[0].at, 'well under the 8 s one connection takes').toBeLessThan(
+      0.8 * (MIB / RATE) * 1000
+    )
+    // A holder cut short leaves a little of its response unread, and nothing more.
+    expect(sent(origin.chunkRequests()), 'bytes served beyond the file').toBeLessThan(
+      SIZE + 256 * 1024
+    )
+  })
+
+  for (const fault of ['drop', 'stall'] as const) {
+    test(`a split whose connection ${fault === 'drop' ? 'drops' : 'goes silent'} partway: the rest of its part is fetched from where it stopped, and the file is exact`, async ({
+      plexo,
+      serve
+    }) => {
+      const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
+      let first: OriginRequest['range'] = null
+      origin.setRule(({ range }) => {
+        if (first || !range || range.start <= LAST) return undefined
+        first = range
+        return fault === 'drop' ? { cutAfter: 64 * 1024 } : 'stallBody'
+      })
+      await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+      await plexo.waitForHttpStatus('completed', 30_000)
+
+      const resumedAt = first!.start + (fault === 'drop' ? 64 * 1024 : 0)
+      expect(
+        splits(origin).filter((r) => r.range!.start === resumedAt).length,
+        'what was left of the split was asked for from where it stopped'
+      ).toBeGreaterThanOrEqual(fault === 'drop' ? 1 : 2)
+    })
+  }
+
+  for (const stop of ['pause', 'kill'] as const) {
+    test(`${stop === 'pause' ? 'paused' : 'killed'} while split, then resumed: what the split fetched ahead is fetched again, and the file is exact`, async ({
+      plexo,
+      serve
+    }) => {
+      const origin = await serve({ size: SIZE, bytesPerSecond: RATE })
+      const id = await plexo.start(origin.url(), origin.sha256, { connections: 4 })
+      await expect
+        .poll(() => splits(origin).length, { message: 'a split started', timeout: 20_000 })
+        .toBeGreaterThan(0)
+      // Let it write some of its part.
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      if (stop === 'pause') {
+        await plexo.api.pauseDownload(id)
+        const paused = await plexo.waitForHttpStatus('paused')
+        expect(paused.streams.some((chunk) => chunk.hedge || chunk.split)).toBe(false)
+        // Only what joins the block's first byte counts: a split's part ahead of it doesn't.
+        const last = paused.blocks!.at(-1)!
+        expect(last.status).not.toBe('completed')
+        expect(last.bytesDownloaded).toBeLessThan(splits(origin)[0].range!.start - LAST)
+      } else {
+        await plexo.kill()
+        await plexo.launch()
+        expect((await plexo.currentHttp())?.status).toBe('paused')
+      }
+
+      await plexo.api.resumeDownload(id)
+      await plexo.waitForHttpStatus('completed', 30_000)
+    })
+  }
+})

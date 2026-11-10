@@ -80,7 +80,7 @@ until the owner overrides it.
 
 ## ADR-0008: Faster link health checks
 
-- Status: Proposed (2026-11-10). Implemented in M1.3 (`daemon/internal/engine/probe.go`).
+- Status: Accepted by the owner (2026-11-11). Implemented in M1.3 (`daemon/internal/engine/probe.go`).
 - Context: Upstream marks a silent link down after about 19 s. Phase 1 requires that new flows avoid a dead link
   within 5 s.
 - Decision:
@@ -95,7 +95,8 @@ until the owner overrides it.
 - Consequences:
   - About one TCP handshake per link every 2 s.
   - A single lost probe briefly demotes a link for new flows only; existing flows are unaffected.
-- Owner question open: whether to probe only the gateway instead (PHASE-1 §4 Q3).
+- Owner answer (2026-11-11, PHASE-1 §4 Q3): keep probing public targets. A gateway-only probe would miss "Wi-Fi up,
+  internet down".
 
 ## ADR-0009: Keep Plexo's HTTP browser bridge in Phase 1
 
@@ -124,7 +125,8 @@ until the owner overrides it.
 
 ## ADR-0012: Telegram source kept, unchanged, for now
 
-- Status: Proposed (2026-11-10, revised the same day). Owner question open (PHASE-1 §4 Q4).
+- Status: Superseded (2026-11-11). The owner chose to remove the Telegram source (PHASE-1 §4 Q4). The removal
+  follows the YouTube work, so the two changes don't clash.
 - Context:
   - Plexo's Telegram source needs a Telegram account plus API credentials. Plexo injects its own at build
     time; Mergelane has none, so users must enter their own.
@@ -136,7 +138,7 @@ until the owner overrides it.
 
 ## ADR-0013: Packaging test launches after the documented quarantine removal
 
-- Status: Proposed (2026-11-10). Owner question open (PHASE-1 §4 Q2). Confirmed by spike S1.
+- Status: Accepted by the owner (2026-11-11, PHASE-1 §4 Q2). Confirmed by spike S1.
 - Decision: The packaging test proves that:
   - the signature verifies;
   - Gatekeeper's verdict on the quarantined app is "not notarised", not "damaged";
@@ -254,7 +256,7 @@ until the owner overrides it.
 
 ## ADR-0020: CI paused, runs by hand only
 
-- Status: Owner (2026-11-10)
+- Status: Owner (2026-11-10). Reconfirmed 2026-11-11: CI stays paused, and no manual runs either for now.
 - Decision: At the owner's request, `.github/workflows/ci.yml` runs only on `workflow_dispatch`. Pushes and pull
   requests trigger nothing until the owner asks to resume (the original triggers are noted in the file).
 - Consequences:
@@ -284,7 +286,8 @@ until the owner overrides it.
 
 ## ADR-0022: Where yt-dlp and FFmpeg come from
 
-- Status: Proposed (2026-11-10). Owner questions open (see `docs/MEDIA-TOOLS.md`).
+- Status: yt-dlp part accepted by the owner (2026-11-11). The FFmpeg part is superseded by ADR-0028: we build our
+  own.
 - Decision:
   - yt-dlp: the official `yt-dlp_macos` release (universal, includes arm64), pinned to the hash in the release's
     `SHA2-256SUMS`.
@@ -301,7 +304,7 @@ until the owner overrides it.
 
 ## ADR-0023: The extension offers streams the page already loads (option D); YouTube pending
 
-- Status: Proposed (2026-11-10). YouTube approach still open (`docs/YOUTUBE-REVIEW.md`).
+- Status: Proposed (2026-11-10). The YouTube approach is now decided by ADR-0026.
 - Decision:
   - The extension observes the HLS and DASH manifests a tab loads (headers only) and lists them in its popup.
   - The user hands one to Mergelane, which treats it like any other link. There is no site-specific logic.
@@ -359,3 +362,117 @@ until the owner overrides it.
   - The history is lost when the daemon restarts.
   - How the macOS kernel treats these routes on real interfaces (down and up, a network change, a tether with
     a new index) could not be checked against an official source. It must be confirmed on the hardware runner.
+
+## ADR-0026: YouTube through yt-dlp only, with hard limits (option A)
+
+- Status: Accepted by the owner (2026-11-11). Review: `docs/YOUTUBE-REVIEW.md`. Implementation: M2.2 YouTube.
+- Context: every way of downloading from YouTube is outside YouTube's Terms of Service; the review compared six
+  options. CLAUDE.md forbids DRM circumvention and sign-in-only media.
+- Decision:
+  - YouTube links are resolved by the bundled yt-dlp only (option A). Other sites keep option D: the extension
+    offers the HLS and DASH streams a page loads (ADR-0023).
+  - No cookies, and no PO tokens, captured or generated. Option B (cookies) is not offered; options C (our own
+    googlevideo/SABR client) and F (token replay) are ruled out.
+  - Every format marked DRM or "maybe" DRM is dropped.
+  - Only links the user pasted or opened. No crawling of playlists or channels.
+  - yt-dlp needs a JavaScript runtime for YouTube; Deno ships as a third pinned program (ADR-0029). The app itself
+    can't act as Node (ADR-0016).
+  - The limits are written into CLAUDE.md.
+- Consequences:
+  - Some videos will fail: anything that needs a sign-in, a token or DRM. The app says so in plain words.
+  - YouTube changes often; the pinned yt-dlp must be updated when it breaks (about monthly upstream).
+  - Before the public 1.0 release, get a lawyer's view (the review notes a German ruling).
+
+## ADR-0027: Every release attaches the source of the programs it bundles
+
+- Status: Accepted by the owner (2026-11-11).
+- Context: GPL version 3 (yt-dlp's macOS program) and LGPL version 2.1 (our FFmpeg, ADR-0028) require us to make
+  the Corresponding Source available. Pointing at someone else's server is allowed, but we stay responsible if it
+  disappears (`docs/MEDIA-TOOLS.md`).
+- Decision: the release workflow attaches, to every GitHub release:
+  - FFmpeg's source release tarball, exactly the one the build verified, plus our build script (in the tagged
+    repository);
+  - yt-dlp's source tarball for the bundled version, pinned by its published SHA-256.
+  - Deno is MIT: its licence text ships in the app, and no source is attached.
+- Consequences: each release carries about 20 MB of source archives. GitHub Releases is free for public repositories.
+
+## ADR-0028: Mergelane builds its own minimal FFmpeg (supersedes ADR-0022's FFmpeg part)
+
+- Status: Accepted by the owner (2026-11-11).
+- Context:
+  - ADR-0022 picked Martin Riedl's static GPL build. Its build script downloads x264 from the `master` branch on
+    every build and doesn't record the commit (`script/build-x264.sh`, checked 2026-11-11), so we can't attach the
+    exact source of the program we would ship (ADR-0027).
+  - Mergelane only joins and rewraps media with stream copy (`app/src/main/media/mux`), so it needs no encoders.
+- Decision:
+  - `scripts/media-tools/build-ffmpeg.sh` builds FFmpeg from FFmpeg's official source release at build time:
+    - the tarball is pinned by SHA-256, and FFmpeg's GPG signature was checked when it was pinned (key
+      `FCF986EA15E6E293A5644F10B4322F04D67658D8`, as published on ffmpeg.org);
+    - `--disable-everything`, then only what stream copy needs:
+      - demuxers mov, mpegts, matroska, aac, mp3, ac3 and eac3, and muxers mp4 and matroska;
+      - parsers, a few decoders that read stream parameters, the needed bitstream filters, and the file protocol;
+    - no network, no devices and no outside libraries beyond macOS's zlib and system frameworks;
+    - not `--enable-gpl` or `--enable-version3`, so the program is **LGPL version 2.1 or later**. The script
+      refuses a build that reports anything else.
+  - The tests make their sample media with a full FFmpeg (Homebrew's, test-only, never shipped) and join it with
+    ours.
+- Evidence (2026-11-11, FFmpeg 9.0.2, this Mac):
+  - the build takes about 35 s and gives a 4.1 MB program (the static build was 66 MB);
+  - it links only macOS's own libraries;
+  - it joined all 52 of our video and audio combinations, identical to Homebrew's full FFmpeg 8.1.2:
+    - H.264, HEVC, VP9 and AV1 video, each with AAC (MP4 and ADTS), Opus, MP3, AC-3 and E-AC-3 audio, into both MP4
+      and MKV;
+    - MPEG-TS with H.264 or HEVC, rewrapped into both.
+- Consequences:
+  - The exact Corresponding Source is one tarball plus one script.
+  - Each app build compiles FFmpeg. The result is cached in `app/resources/bin`.
+  - Anything beyond stream copy, such as re-encoding, would need this build to grow.
+
+## ADR-0029: Deno ships as a third pinned program
+
+- Status: Accepted by the owner as part of option A (2026-11-11). Implemented in M2.2 YouTube.
+- Decision:
+  - Deno 2.9.8 (`deno-aarch64-apple-darwin.zip`) is fetched by `fetch.mjs`, with both of the publisher's SHA-256s
+    pinned (zip and program). It ships as `Contents/Resources/deno` with its MIT licence, and `package-test.sh` checks
+    that it runs JavaScript after the hardened-runtime re-sign.
+  - Only yt-dlp runs it, through `--no-js-runtimes --js-runtimes deno:<path>`, with `DENO_DIR` in a private folder
+    deleted after each run and `DENO_NO_UPDATE_CHECK=1`.
+  - yt-dlp's built-in, hash-checked challenge scripts (`yt-dlp-ejs`) are used. `--no-remote-components` is always
+    passed, so no unpinned code is fetched at run time.
+- Consequences:
+  - About 81 MB more in the app. No source to attach, since Deno is MIT (ADR-0027).
+  - **Open:** the notices of the third-party code built into Deno (V8, TypeScript, Rust crates) are not collected
+    yet. Needed before the first public release.
+
+## ADR-0030: How YouTube downloads run on several networks (implements ADR-0026)
+
+- Status: Accepted (2026-11-11). Implemented in M2.2 YouTube (`app/src/main/media/youtube`).
+- Context: YouTube's media addresses carry the asking IP address as a signed parameter (`ip` is in `sparams`), so
+  an address fetched over one network is meant for that network only.
+- Decision:
+  - Each network asks yt-dlp for its own addresses, through a loopback CONNECT proxy:
+    - the proxy's connections are pinned to that network with `IP_BOUND_IF`;
+    - it listens on 127.0.0.1 only, only for one yt-dlp run, and only for random credentials.
+  - Each network then downloads with its own addresses, in byte ranges of at most 10 MiB (yt-dlp's chunk size).
+  - Addresses are never saved, only the watch page and the format IDs. A network asks again on every run, a minute
+    before its addresses expire, and after an HTTP 403. After two refusals in a row it sits out.
+  - A network whose request fails sits out; if every network fails, the download fails in plain words.
+- Consequences:
+  - Each download costs one yt-dlp run per network, plus one for the New download dialog. That is more requests to
+    YouTube, so bot checks or rate limits may come sooner than for a single-network downloader.
+  - That two real networks with different public IPs each get working addresses must still be confirmed on real
+    hardware.
+
+## ADR-0031: Ship yt-dlp's unpacked macOS build (updates ADR-0022's yt-dlp part)
+
+- Status: Accepted (2026-11-11).
+- Context: the single-file `yt-dlp_macos` unpacks its Python runtime on every start. On the owner's Mac that took
+  about 24 s per run. YouTube downloads run yt-dlp at least twice (ADR-0030).
+- Decision: ship the official `yt-dlp_macos.zip` from the same release instead, a folder with the program and its
+  `_internal` files, pinned by its SHA-256 in the release's `SHA2-256SUMS`. It starts in about 0.25 s after the
+  first run.
+- Consequences:
+  - The fetch script installs a folder rather than one file.
+  - Packaging re-signs every Mach-O file inside it.
+  - The licence analysis is unchanged: the program as a whole is GPL-3.0-or-later, and its source is the same
+    `yt-dlp.tar.gz`.

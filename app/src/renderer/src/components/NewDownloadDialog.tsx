@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Film,
   Folder,
   FolderOpen,
@@ -19,6 +20,7 @@ import {
   X
 } from 'lucide-react'
 import { fileTypeOf } from '@shared/downloadFilters'
+import { nextStartAt, startAtAction, startAtScheduleNote } from '@shared/startAt'
 import { FILE_TYPE_ICON } from './fileTypeIcons'
 import { NetworkTile } from './NetworkTile'
 import { useEffect, useRef, useState } from 'react'
@@ -58,6 +60,16 @@ const PROBE_DEBOUNCE_MS = 600
 type StreamsChoice = 'auto' | number
 /** Streams per network the user can pick instead of Auto. */
 const STREAMS_CHOICES: StreamsChoice[] = ['auto', 4, 8, 16, 32]
+
+/** The design's "When" (ADR-0044): now, added to the queue to wait for a turn, or at a time. */
+type WhenChoice = 'now' | 'queue' | 'later'
+const WHEN_CHOICES: { value: WhenChoice; label: string }[] = [
+  { value: 'now', label: 'Now' },
+  { value: 'queue', label: 'Add to queue' },
+  { value: 'later', label: 'At a time' }
+]
+/** The time "At a time" offers first, as the design does: overnight, when the line is quiet. */
+const DEFAULT_START_TIME = '01:00'
 
 // The design's field rows: a label column beside the field once the sheet is wide enough.
 const ROW = 'grid gap-x-4 gap-y-2 @min-[512px]:grid-cols-[6.5rem_minmax(0,1fr)]'
@@ -162,6 +174,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   // The news server, for an NZB: undefined until it has been asked for, null when there's none.
   const [server, setServer] = useState<UsenetServer | null | undefined>(undefined)
   const [serverOpen, setServerOpen] = useState(false)
+  // For this download only: the next one starts Now again.
+  const [when, setWhen] = useState<WhenChoice>('now')
+  const [startTime, setStartTime] = useState(DEFAULT_START_TIME)
+  // The next time the clock reads the time picked: today, or tomorrow once it has passed.
+  const startAt = when === 'later' ? nextStartAt(startTime) : null
   const freeSpace = useFreeSpace(destinationDir)
 
   // Opened with nothing in it: a link on the clipboard is most likely what it's for, as download
@@ -292,6 +309,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
   const canStart =
     probe.status === 'ready' &&
+    (when !== 'later' || startAt !== null) &&
     (!torrent || chosenFiles.length > 0) &&
     (!nzb || !!server) &&
     selectedInterfaceIds.length > 0 &&
@@ -302,11 +320,15 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     ? 'Starting'
     : probe.status === 'probing'
       ? 'Checking'
-      : scheduledWait
-        ? 'Add to scheduled queue'
-        : full
-          ? 'Add to queue'
-          : 'Download'
+      : startAt !== null
+        ? startAtAction(startAt)
+        : scheduledWait
+          ? 'Add to scheduled queue'
+          : full || when === 'queue'
+            ? 'Add to queue'
+            : 'Download'
+  // What the schedule does to the time picked: it wins, so the download waits for its hours.
+  const startAtNote = startAt !== null ? startAtScheduleNote(schedule, startAt) : null
 
   // Two networks on one subnet: the OS sends both down one route, so there's nothing to combine.
   let subnetConflict: { subnet: string; names: string[] } | null = null
@@ -376,6 +398,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     // Captured now: links can arrive and change what's shown while this starts.
     const linkId = shownLink?.id
     const form = useAppStore.getState().formKey
+    // Worked out again now: the time picked may have come round while the sheet was open.
+    const startsAt = when === 'later' ? nextStartAt(startTime) : null
     setStarting(true)
     setStartError(null)
     try {
@@ -387,7 +411,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         supportsRanges: multiChunkAllowed,
         interfaceIds: selectedInterfaceIds,
         etag: probe.result.etag,
-        lastModified: probe.result.lastModified
+        lastModified: probe.result.lastModified,
+        ...(when === 'queue' && { when: { kind: 'queue' as const } }),
+        ...(startsAt !== null && { when: { kind: 'at' as const, at: startsAt } })
       }
       const id = await window.mergelane.startDownload(
         probe.result.kind === 'torrent'
@@ -426,7 +452,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       // Started: the link is spent, so the next download starts from an empty one. Its own
       // screen opens, unless it was only added to the queue.
       useAppStore.setState({ startedUrl: url.trim() })
-      if (!full && !scheduledWait) useAppStore.getState().openDownload(id)
+      if (!full && !scheduledWait && when === 'now') useAppStore.getState().openDownload(id)
       if (linkId) {
         finishLink(linkId, true)
       } else if (useAppStore.getState().formKey === form) {
@@ -931,6 +957,48 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         )}
 
         <div className={ROW}>
+          <span className={FIELD_LABEL} id="new-download-when">
+            When
+          </span>
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ToggleGroup
+                value={[when]}
+                onValueChange={(values) => {
+                  if (values.length > 0) setWhen(values[0] as WhenChoice)
+                }}
+                aria-labelledby="new-download-when"
+              >
+                {WHEN_CHOICES.map((choice) => (
+                  <ToggleGroupItem key={choice.value} value={choice.value}>
+                    {choice.value === 'later' && <Clock data-icon="inline-start" aria-hidden />}
+                    {choice.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {when === 'later' && (
+                <label className="flex h-8 items-center gap-2 rounded-full bg-[var(--input-bg)] px-3 text-[13px] shadow-[inset_0_0_0_1px_var(--control)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+                  <span className="sr-only">Start time</span>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(event) => setStartTime(event.target.value || DEFAULT_START_TIME)}
+                    className="figures bg-transparent text-[14px] text-foreground outline-none"
+                  />
+                </label>
+              )}
+            </div>
+            {when === 'queue' && (
+              <p className="text-[12px] leading-snug text-ink-3">
+                It waits for a turn: it starts when a running download finishes, or when you start
+                it.
+              </p>
+            )}
+            {startAtNote && <Note tone="warning">{startAtNote}</Note>}
+          </div>
+        </div>
+
+        <div className={ROW}>
           <span className={FIELD_LABEL}>Save to</span>
           <div className="flex min-w-0 flex-col gap-1.5">
             <div className="flex min-w-0 items-center gap-2">
@@ -980,6 +1048,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           Cancel
         </Button>
         <Button type="submit" disabled={!canStart}>
+          {startAt !== null && !starting && probe.status !== 'probing' && (
+            <Clock data-icon="inline-start" aria-hidden />
+          )}
           {startLabel}
         </Button>
       </div>

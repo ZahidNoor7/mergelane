@@ -6,6 +6,7 @@ import { linkExpired } from './format'
  * they can't disagree about what is offered, when, or in what order. How an action is named,
  * drawn and confirmed is in components/downloadActionMeta.ts and DownloadActionsProvider.tsx. */
 export type ActionId =
+  | 'start'
   | 'pause'
   | 'resume'
   | 'retry'
@@ -48,7 +49,14 @@ export function failureAction(download: DownloadState): FailureAction {
   return download.resumable !== false && download.bytesDownloaded > 0 ? 'retry' : 'again'
 }
 
+/** Added to the queue or for later (ADR-0044): waiting for a turn or a time, not for room. */
+export const isPlanned = (item: DownloadItem): item is DownloadState =>
+  !isFinished(item) &&
+  item.status === 'queued' &&
+  (item.held === true || item.startAt !== undefined)
+
 const appliesTo: Record<ActionId, (item: DownloadItem) => boolean> = {
+  start: isPlanned,
   pause: (item) => !isFinished(item) && (item.status === 'downloading' || item.status === 'queued'),
   resume: (item) => !isFinished(item) && item.status === 'paused',
   retry: (item) => isFailed(item) && failureAction(item) === 'retry',
@@ -69,7 +77,7 @@ const SINGLE_ONLY: ReadonlySet<ActionId> = new Set(['fix', 'again', 'open', 'rev
 /** The order they're shown in, in groups: what to do with it, its link, getting rid of it.
  * Menus put a separator between groups. */
 export const ACTION_GROUPS: readonly (readonly ActionId[])[] = [
-  ['pause', 'resume', 'retry', 'fix', 'again', 'open', 'reveal', 'trackers'],
+  ['start', 'pause', 'resume', 'retry', 'fix', 'again', 'open', 'reveal', 'trackers'],
   ['copy'],
   ['cancel', 'remove', 'trash']
 ]
@@ -98,6 +106,7 @@ export function availableActions(items: DownloadItem[]): AvailableAction[][] {
  * That gives each state two sensible buttons: Pause and Cancel; Resume and Cancel; Retry and
  * Remove; Open and Show in Finder; and for several finished, Remove and Move to Trash. */
 export const TOOLBAR_PRIORITY: readonly ActionId[] = [
+  'start',
   'pause',
   'resume',
   'retry',
@@ -134,7 +143,14 @@ export function splitToolbar(groups: AvailableAction[][]): {
 }
 
 /** The single button a row shows when idle: the next step for that download, if it has one. */
-export const ROW_ACTIONS: readonly ActionId[] = ['pause', 'resume', 'retry', 'fix', 'again']
+export const ROW_ACTIONS: readonly ActionId[] = [
+  'start',
+  'pause',
+  'resume',
+  'retry',
+  'fix',
+  'again'
+]
 
 export function rowAction(item: DownloadItem): ActionId | null {
   return ROW_ACTIONS.find((id) => appliesTo[id](item)) ?? null

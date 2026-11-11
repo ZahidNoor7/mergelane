@@ -38,6 +38,7 @@ export function DownloadActionsProvider({
         return false
       }
       switch (id) {
+        case 'start':
         case 'pause':
         case 'resume':
         case 'retry': {

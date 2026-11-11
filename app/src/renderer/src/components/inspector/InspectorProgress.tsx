@@ -1,4 +1,5 @@
 import type { DownloadState } from '@shared/types'
+import { describeStartAt, HELD_NOTE, missedStartNote } from '@shared/startAt'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
@@ -141,9 +142,11 @@ export function InspectorProgress({ download }: { download: DownloadState }): Re
   const statusWord = running
     ? 'Speed'
     : isQueued
-      ? scheduleWindow.allowed
-        ? 'Waiting for a turn'
-        : 'Waiting for the schedule'
+      ? download.startAt !== undefined
+        ? describeStartAt(download.startAt, now)
+        : scheduleWindow.allowed
+          ? 'Waiting for a turn'
+          : 'Waiting for the schedule'
       : 'Paused'
   const third = isTorrent
     ? { label: 'Peers', value: String(download.peers.length) }
@@ -160,6 +163,12 @@ export function InspectorProgress({ download }: { download: DownloadState }): Re
           {scheduleMessage}
         </p>
       )}
+      {/* Added to the queue, or started late (ADR-0044): when its turn comes, or why it's late. */}
+      {(isQueued && download.held) || download.missedStartAt !== undefined ? (
+        <p className="rounded-[12px] bg-sunken px-3 py-2.5 text-[12.5px] leading-snug text-ink-2">
+          {isQueued && download.held ? HELD_NOTE : missedStartNote(download.missedStartAt!, now)}
+        </p>
+      ) : null}
 
       <Confluence
         compact

@@ -39,6 +39,15 @@ interface ActionMeta {
 }
 
 export const ACTION_META: Record<ActionId, ActionMeta> = {
+  // For a download added to the queue or for later (ADR-0044): it goes next.
+  start: {
+    label: 'Start now',
+    many: (n) => `Start ${n} downloads now`,
+    toolbar: 'Start now',
+    working: 'Starting',
+    failure: 'Couldn’t start',
+    icon: Play
+  },
   pause: {
     label: 'Pause',
     many: (n) => `Pause ${n} downloads`,

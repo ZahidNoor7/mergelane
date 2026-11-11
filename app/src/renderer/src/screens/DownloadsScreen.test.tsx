@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ActionsContext, StateContext } from '../components/downloadActionsContext'
 import { TooltipProvider } from '../components/ui/tooltip'
+import { describeStartAt } from '@shared/startAt'
 import { useAppStore } from '../store/useAppStore'
 import { DownloadsScreen } from './DownloadsScreen'
 
@@ -288,6 +289,28 @@ describe('DownloadsScreen, the list', () => {
     expect(useAppStore.getState()).toMatchObject({ selectedId: 'film', detailOpen: true })
     await user().click(screen.getByRole('button', { name: 'Pause Holiday film.mkv' }))
     expect(perform).toHaveBeenCalledWith('pause', [running])
+  })
+
+  it('a download added to the queue or for later waits, and starts on its row’s button', async () => {
+    const at = new Date(2026, 10, 11, 23, 30).getTime()
+    const timed = download('timed', { status: 'queued', queuedAt: 3, startAt: at })
+    const held = download('held', { status: 'queued', queuedAt: 4, held: true })
+    const late = download('late', {
+      status: 'downloading',
+      missedStartAt: NOW - 3_600_000,
+      timeLeftSeconds: 60,
+      networks: [network('en0')]
+    })
+    show([timed, held, late])
+    const meta = (name: string): string =>
+      screen.getByRole('button', { name }).closest('li')!.querySelector('p')!.textContent!
+    expect(meta('timed.zip')).toBe(`${describeStartAt(at, NOW)}4.0 MB of 10.0 MB`)
+    expect(meta('held.zip')).toBe('Waiting for a turn4.0 MB of 10.0 MB')
+    expect(meta('late.zip')).toBe('40%4.0 MB of 10.0 MB1m 0s leftStarted late')
+    await user().click(screen.getByRole('button', { name: 'Start now timed.zip' }))
+    expect(perform).toHaveBeenCalledWith('start', [timed])
+    await user().click(screen.getByRole('button', { name: 'Start now held.zip' }))
+    expect(perform).toHaveBeenCalledWith('start', [held])
   })
 
   it('a waiting download outside the schedule says when it starts', () => {

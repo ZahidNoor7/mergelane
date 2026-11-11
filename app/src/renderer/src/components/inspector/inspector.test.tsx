@@ -7,6 +7,7 @@ import type {
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describeStartAt, HELD_NOTE, missedStartNote } from '@shared/startAt'
 import { DownloadsPlace } from '../../screens/DownloadsPlace'
 import { useAppStore } from '../../store/useAppStore'
 import { ActionsContext, StateContext } from '../downloadActionsContext'
@@ -448,6 +449,33 @@ describe('Inspector, running', () => {
     expect(
       screen.getByRole('progressbar', { name: 'x.zip progress' }).getAttribute('aria-valuetext')
     ).toBe('4.0 MB received')
+  })
+})
+
+describe('Inspector, planned starts (ADR-0044)', () => {
+  it('one added for later says when it starts, and starts now from its header', async () => {
+    const at = new Date(2026, 10, 12, 1).getTime()
+    const timed = download({ status: 'queued', startAt: at, networks: [network('en0')] })
+    show(<Inspector download={timed} />)
+    expect(screen.getByText(describeStartAt(at, NOW))).toBeTruthy()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Start now' }))
+    expect(perform).toHaveBeenCalledWith('start', [timed])
+  })
+
+  it('one added to the queue says when its turn comes', () => {
+    show(
+      <Inspector
+        download={download({ status: 'queued', held: true, networks: [network('en0')] })}
+      />
+    )
+    expect(screen.getByText(HELD_NOTE)).toBeTruthy()
+    expect(screen.getByText('Waiting for a turn')).toBeTruthy()
+  })
+
+  it('one that started late says why', () => {
+    const missed = NOW - 2 * 3_600_000
+    show(<Inspector download={download({ missedStartAt: missed, networks: [network('en0')] })} />)
+    expect(screen.getByText(missedStartNote(missed, NOW))).toBeTruthy()
   })
 })
 

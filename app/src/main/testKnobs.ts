@@ -18,6 +18,10 @@ export const testKnobs = {
   telegramFake: env['MERGELANE_E2E_TELEGRAM_FAKE'] === '1',
   /** Milliseconds the fake source's every chunk takes — a pause window for tests. */
   telegramDelayMs: positiveNumber('MERGELANE_E2E_TELEGRAM_DELAY_MS', 0),
+  /** A fake mergelane-daemon's socket, instead of the real one (e2e/systemMerge.spec.ts). */
+  daemonSocket: env['MERGELANE_E2E_DAEMON_SOCKET'],
+  /** Whether the helper counts as installed: '1' or '0'; unset checks /Library. */
+  daemonInstalled: env['MERGELANE_E2E_DAEMON_INSTALLED'],
   /** Keeps the window off-screen so a test run doesn't pop windows up over the desktop. */
   hideWindow: env['MERGELANE_E2E_HIDE_WINDOW'] === '1',
   blockBytes: positiveNumber('MERGELANE_E2E_BLOCK_BYTES', 8 * 1024 * 1024),

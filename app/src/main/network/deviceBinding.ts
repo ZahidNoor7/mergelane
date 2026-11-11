@@ -2,36 +2,91 @@ import { connect, Socket, type SocketConstructorOpts } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import type { NetworkRoute } from './routes'
 
-// Linux picks a socket's outgoing interface from the routing table alone: binding to an
-// interface's IP (Node's `localAddress`) still sends the packets out the default route, where the
-// network that doesn't own that IP drops them. SO_BINDTODEVICE pins the socket to the interface
-// itself. Node has no setsockopt, so the socket is made through libc and handed to Node as an fd.
-// Unprivileged since Linux 5.7. macOS and Windows already route by source address.
+// Each download stream must leave through the network it belongs to. Binding a socket to an
+// interface's IP (Node's `localAddress`) is not enough on macOS once Mergelane's system-wide merge
+// is on: its utun's 0/1 and 128/1 routes would capture the connection and the daemon would
+// rebalance it. So the socket is pinned to the interface itself before it connects, with
+// setsockopt IP_BOUND_IF / IPV6_BOUND_IF and the interface index. Node has no setsockopt, so the
+// socket is made through libc (koffi) and handed to Node as an fd, as upstream Plexo did on Linux
+// with SO_BINDTODEVICE (that Linux path is gone: Mergelane is macOS only).
 
-const AF_INET = 2
-const AF_INET6 = 10
-const SOCK_STREAM = 1
-const SOCK_CLOEXEC = 0o2000000
-const SOL_SOCKET = 1
-const SO_BINDTODEVICE = 25
+interface Constants {
+  AF_INET: number
+  AF_INET6: number
+  SOCK_STREAM: number
+  /** OR'd into the socket type where the platform has it; macOS has none and uses fcntl. */
+  SOCK_CLOEXEC: number
+}
+
+// macOS SDK headers: sys/socket.h, netinet/in.h, netinet6/in6.h, sys/fcntl.h.
+const DARWIN = {
+  AF_INET: 2,
+  AF_INET6: 30,
+  SOCK_STREAM: 1,
+  SOCK_CLOEXEC: 0,
+  IPPROTO_IP: 0,
+  IPPROTO_IPV6: 41,
+  IP_BOUND_IF: 25,
+  IPV6_BOUND_IF: 125,
+  F_SETFD: 2,
+  FD_CLOEXEC: 1
+} as const
 
 interface Libc {
+  constants: Constants
   socket: (domain: number, type: number, protocol: number) => number
-  setsockopt: (fd: number, level: number, name: number, value: string, length: number) => number
+  /** Pins fd to the interface; 0 on success, -1 with errno set on failure. */
+  bind: (fd: number, device: string, family: 4 | 6) => number
+  /** Marks fd close-on-exec, since macOS's socket() can't; 0 on success. */
+  cloexec: (fd: number) => number
   close: (fd: number) => number
   errno: () => number
+  /** The interface index fd is pinned to, or 0 (used by tests). */
+  boundIndex: (fd: number, family: 4 | 6) => number
 }
 
 /** Set once the support check below passes; until then everything falls back to localAddress. */
 let libc: Libc | null = null
 let support: Promise<boolean> | null = null
 
+async function loadLibc(): Promise<Libc> {
+  const { default: koffi } = await import('koffi')
+  const lib = koffi.load('/usr/lib/libSystem.B.dylib')
+  const setsockopt = lib.func('int setsockopt(int, int, int, const void *, uint32_t)')
+  const getsockopt = lib.func('int getsockopt(int, int, int, _Out_ void *, _Inout_ uint32_t *)')
+  const ifNameToIndex = lib.func('uint32_t if_nametoindex(const char *)')
+  const fcntl = lib.func('int fcntl(int, int, ...)')
+  const level = (family: 4 | 6): [number, number] =>
+    family === 6
+      ? [DARWIN.IPPROTO_IPV6, DARWIN.IPV6_BOUND_IF]
+      : [DARWIN.IPPROTO_IP, DARWIN.IP_BOUND_IF]
+  return {
+    constants: DARWIN,
+    socket: lib.func('int socket(int, int, int)'),
+    bind: (fd, device, family) => {
+      const index = ifNameToIndex(device) as number
+      if (!index) return -1
+      const value = Buffer.alloc(4)
+      value.writeUInt32LE(index)
+      return setsockopt(fd, ...level(family), value, 4) as number
+    },
+    cloexec: (fd) => fcntl(fd, DARWIN.F_SETFD, 'int', DARWIN.FD_CLOEXEC) as number,
+    close: lib.func('int close(int)'),
+    errno: () => koffi.errno(),
+    boundIndex: (fd, family) => {
+      const out = Buffer.alloc(4)
+      const length = [4]
+      if (getsockopt(fd, ...level(family), out, length) !== 0) return 0
+      return out.readUInt32LE()
+    }
+  }
+}
+
 function openOnDevice(lib: Libc, device: string, family: 4 | 6): number {
+  const { AF_INET, AF_INET6, SOCK_STREAM, SOCK_CLOEXEC } = lib.constants
   const fd = lib.socket(family === 6 ? AF_INET6 : AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)
   if (fd < 0) throw new Error(`socket() failed (errno ${lib.errno()})`)
-  if (
-    lib.setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, device, Buffer.byteLength(device) + 1) !== 0
-  ) {
+  if (lib.cloexec(fd) !== 0 || lib.bind(fd, device, family) !== 0) {
     const errno = lib.errno()
     lib.close(fd)
     throw new Error(`Couldn't bind a socket to ${device} (errno ${errno})`)
@@ -39,21 +94,13 @@ function openOnDevice(lib: Libc, device: string, family: 4 | 6): number {
   return fd
 }
 
-/** Whether each network can carry its own connections. Always true off Linux. */
+/** Whether each network can carry its own connections. */
 export function deviceBindingSupported(): Promise<boolean> {
   support ??= (async () => {
-    if (process.platform !== 'linux') return true
     try {
-      const { default: koffi } = await import('koffi')
-      const lib = koffi.load('libc.so.6')
-      const candidate: Libc = {
-        socket: lib.func('int socket(int, int, int)'),
-        setsockopt: lib.func('int setsockopt(int, int, int, const char *, uint32_t)'),
-        close: lib.func('int close(int)'),
-        errno: () => koffi.errno()
-      }
-      // Loopback always exists, so this only fails when the kernel refuses (EPERM before 5.7).
-      candidate.close(openOnDevice(candidate, 'lo', 4))
+      const candidate = await loadLibc()
+      // Loopback always exists, so this only fails when the system refuses.
+      candidate.close(openOnDevice(candidate, 'lo0', 4))
       libc = candidate
       return true
     } catch (error) {
@@ -62,6 +109,27 @@ export function deviceBindingSupported(): Promise<boolean> {
     }
   })()
   return support
+}
+
+/** For tests: opens a socket pinned to `device` and reports the interface index the system says it
+ * is pinned to (macOS), then closes it. Throws when the socket can't be pinned. */
+export async function pinnedIndexForTest(device: string, family: 4 | 6): Promise<number> {
+  if (!(await deviceBindingSupported()) || !libc) throw new Error('binding unsupported')
+  const fd = openOnDevice(libc, device, family)
+  try {
+    return libc.boundIndex(fd, family)
+  } finally {
+    libc.close(fd)
+  }
+}
+
+/** For tests: a socket pinned to `device`, not yet connected. */
+export async function pinnedSocketForTest(device: string, family: 4 | 6): Promise<Socket> {
+  if (!(await deviceBindingSupported()) || !libc) throw new Error('binding unsupported')
+  return new Socket({
+    fd: openOnDevice(libc, device, family),
+    manualStart: true
+  } as SocketConstructorOpts)
 }
 
 /** A TCP connection through the already chosen device, to a numeric remote address. */

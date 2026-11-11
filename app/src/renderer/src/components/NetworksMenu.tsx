@@ -6,6 +6,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useFormatSpeed, useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { formatDataUsage } from '../utils/format'
 import { NetworkEditPopover } from './NetworkEditPopover'
+import { SystemMergeSection } from './SystemMergeSection'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Button } from './ui/button'
 import { TruncatedText } from './TruncatedText'
@@ -179,6 +180,7 @@ export function NetworksMenu({
         >
           Speed &amp; data limits
         </button>
+        <SystemMergeSection open={open} />
       </PopoverContent>
     </Popover>
   )

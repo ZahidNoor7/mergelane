@@ -217,6 +217,40 @@ until the owner overrides it.
   must read the routing table and cannot rely on `scutil` alone. The runner also has `utun0`–`utun3` without
   routes, so a `utun` with no default, `0/1` or `128/1` route must not count as a VPN.
 
+## ADR-0018: What the VPN guard counts as a conflict, and how our routes are told apart
+
+- Status: Proposed (2026-11-10). Implemented in M1.3 (`daemon/internal/vpnguard`, `routemark`, `rib`).
+- What counts as a conflict:
+  - An *unscoped* default, `0/1`, `128/1`, `::/1` or `8000::/1` route on a `utun`, `ipsec`, `ppp`, `tun` or `tap`
+    interface that is not the daemon's own.
+  - A `scutil --nc list` service that is Connected, Connecting or Disconnecting.
+- What does not:
+  - Scoped defaults on `utun`. macOS keeps `fe80` scoped defaults on several utuns with no VPN at all (seen on
+    the owner's Mac and the runner), and scoped routes capture no traffic.
+  - A split VPN that installs only a scoped default is therefore not detected by routes, only by `scutil`
+    when it is a Network Extension VPN.
+- Route marks:
+  - `RTF_PROTO2` is also `RTF_ANNOUNCE`, which XNU uses for published proxy-ARP/NDP entries.
+  - So "ours" means the flag plus the shape of a route we add: a /0 or /1, not a host or link-layer entry.
+- Off:
+  - XNU's `RTM_DELETE` matches by destination and mask only.
+  - So `Off` deletes only the capture routes the routing table shows on our own utun. Otherwise it could delete
+    another VPN's `0/1`.
+  - Proven in CI: criterion 5's "VPN appears while merging is on" case keeps the VPN's routes.
+- x/net v0.56.0 reads `rtm_use` as the error field on darwin. `rib.Read` ignores it, with a regression test.
+
+## ADR-0019: The bundled helper runs only after the app is approved
+
+- Status: Proposed (2026-11-10)
+- Context: On macOS 27.0.1, running `Contents/Resources/mergelane-daemon` from an app bundle that still carries
+  the quarantine flag is killed (exit 137) and shows the "Not Opened" dialog.
+- Decision:
+  - The app offers the one-time install only from the running app, which the user has already approved with
+    Open Anyway (the README's install step). The installer copies the helper to
+    `/Library/PrivilegedHelperTools`.
+  - `package-test.sh` checks the helper after the approval step.
+- Consequences: The admin-prompt install is still to be confirmed on real hardware (Phase 3 hardware runner).
+
 ## ADR-0020: CI paused, runs by hand only
 
 - Status: Owner (2026-11-10)

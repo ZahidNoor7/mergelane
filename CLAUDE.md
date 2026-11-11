@@ -117,7 +117,7 @@ Test layers:
 | Phase | Goal | Exit criteria |
 |---|---|---|
 | 1. PoC | Prove the risky parts | See `docs/PHASE-1.md` |
-| 2. MVP | One installable app: downloads, torrents, Chrome capture, YouTube, system merge on/off, failover, dashboard | DMG installs and works on a clean Mac; full CI suite green |
+| 2. MVP | One installable app: downloads, torrents, Chrome capture, YouTube, system merge on/off, failover, dashboard | DMG installs and works on a clean Mac; full CI suite green. Proposed plan: `docs/PHASE-2.md` |
 | 3. Everyday | Safari extension, clipboard monitor, link priorities and cost rules, sticky-per-site routing option, diagnostics bundle, auto-update via GitHub Releases | Hardware suite green on the owner's Mac |
 | 4. Production | Security hardening (IPC fuzzing, threat model), performance targets, accessibility, docs, stable 1.0 | Release checklist complete |
 | Later | Developer ID signing and notarization, `SMAppService`, Homebrew cask, per-app routing via Network Extension, App Store edition | Needs an Apple Developer account |

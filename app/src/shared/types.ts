@@ -509,6 +509,30 @@ export interface NetworkPreference {
 
 export type NetworkPreferences = Record<string, NetworkPreference>
 
+/** One link as system-wide merging sees it (from mergelane-daemon). Rates are bytes per second of
+ * traffic the daemon merged, not everything on the link. */
+export interface SystemMergeLink {
+  name: string
+  state: 'up' | 'unknown' | 'down'
+  rxBps: number
+  txBps: number
+  activeFlows: number
+}
+
+/** System-wide merging, as the app shows it (see main/daemon/daemon.ts). */
+export interface SystemMergeSnapshot {
+  /** The helper is installed in /Library (done once, with an administrator password). */
+  installed: boolean
+  /** The helper answered just now. */
+  reachable: boolean
+  state: 'off' | 'on' | 'starting' | 'stopping'
+  /** Why merging is off when nobody asked for that, e.g. another VPN is on. */
+  reason?: string
+  /** The last request that failed, in words for the user. */
+  error?: string
+  links: SystemMergeLink[]
+}
+
 /** Where the app's own update is (see main/updater.ts). `version` is the update's, once one is
  * found; `percent` only means something while downloading. */
 export interface UpdateState {

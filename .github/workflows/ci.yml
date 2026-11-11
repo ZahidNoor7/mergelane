@@ -90,6 +90,15 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - name: Build the helper that ships inside the app
+        working-directory: daemon
+        run: |
+          version=$(node -p "require('../app/package.json').version")
+          go build -trimpath -ldflags "-X main.version=$version" -o bin/mergelane-daemon ./cmd/mergelane-daemon
       - name: Build the arm64 DMG (ad-hoc signed)
         # electron-builder skips signing on pull requests unless told otherwise. Ad-hoc signing uses
         # no secrets, so forcing it is safe on any pull request, including forks.
@@ -181,3 +190,32 @@ jobs:
           sudo /tmp/mergelane-acceptance-bin/mergelane-daemon uninstall || true
           sudo /tmp/mergelane-acceptance-bin/mergelane-daemon cleanup || true
           sudo bash scripts/netsim/netsim.sh down
+
+  # Phase 1 acceptance criteria 2 and 6 (app part): the app's downloads over simulated links.
+  app-acceptance:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    needs: [netsim]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - name: App downloads on a 20 and a 50 Mbit/s link
+        run: >-
+          bash scripts/netsim/with-netsim.sh "1:20:10:0 2:50:10:0" --
+          bash -c 'cd app && npx playwright test --grep @netsim --reporter=list'
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-netsim
+          path: app/playwright-report
+          retention-days: 14
+      - name: Clean up after a failure
+        if: always()
+        run: sudo bash scripts/netsim/netsim.sh down

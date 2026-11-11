@@ -6,6 +6,7 @@ import type {
   PendingLink,
   ProbeResult,
   StartDownloadRequest,
+  SystemMergeSnapshot,
   TelegramAuthState,
   TelegramCredentials,
   TelegramMediaPage,
@@ -47,6 +48,10 @@ export interface IpcContract {
   clearHistory: { args: []; result: void }
   /** Bytes each network has received in its selected calendar period, by id (see NetworkPreference.dataLimit). */
   networkUsage: { args: []; result: Record<string, number> }
+  /** System-wide merging through mergelane-daemon (main/daemon/daemon.ts). */
+  systemMerge: { args: []; result: SystemMergeSnapshot }
+  setSystemMerge: { args: [on: boolean]; result: SystemMergeSnapshot }
+  installSystemMerge: { args: []; result: SystemMergeSnapshot }
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }

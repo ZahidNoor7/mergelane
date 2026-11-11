@@ -32,6 +32,7 @@ import {
 } from '../download/nzb/usenetServer'
 import { onMagnetCheckStatus } from '../download/torrent/metadata'
 import { testKnobs } from '../testKnobs'
+import { installSystemMerge, setSystemMerge, systemMergeSnapshot } from '../daemon/daemon'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { pendingLink, pendingLinks, releaseLink } from '../openLinks'
 import { NetworkMonitor } from '../network/interfaces'
@@ -247,6 +248,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('clearHistory', async () => manager.clearHistory())
 
   handle('networkUsage', async () => manager.limits.usedByPeriod())
+  handle('systemMerge', async () => systemMergeSnapshot())
+  handle('setSystemMerge', async (_event, on) => setSystemMerge(on))
+  handle('installSystemMerge', async () => installSystemMerge())
   handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))
 
   handle('freeSpace', async (_event, dir) => freeSpace(dir))

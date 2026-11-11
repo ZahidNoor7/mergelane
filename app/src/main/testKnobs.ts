@@ -24,8 +24,10 @@ export const testKnobs = {
   daemonSocket: env['MERGELANE_E2E_DAEMON_SOCKET'],
   /** The helper's log a diagnostics bundle reads, instead of /Library/Logs/Mergelane/daemon.log. */
   helperLog: env['MERGELANE_E2E_HELPER_LOG'],
-  /** Whether the helper counts as installed: '1' or '0'; unset checks /Library. */
-  daemonInstalled: env['MERGELANE_E2E_DAEMON_INSTALLED'],
+  /** How a test run's administrator password prompt is answered, instead of showing it: the
+   * osascript command is recorded (testRecord 'adminCommands') and never run. 'allow', 'cancel' or
+   * 'fail:<reason>' (main/daemon/removal.ts simulatedAdminPrompt). Unset: the real prompt. */
+  adminPrompt: env['MERGELANE_E2E_ADMIN_PROMPT'],
   /** The app version to compare with the helper's, so a development build (whose helper says
    * 'dev') can test the out-of-date banner (daemon.ts). Unset: no comparison. */
   appVersion: env['MERGELANE_E2E_APP_VERSION'],
@@ -83,6 +85,14 @@ export function testRecord(kind: string, value: unknown, replace = false): void 
   >
   if (replace) store[kind] = value
   else ((store[kind] ??= []) as unknown[]).push(value)
+}
+
+/** `MERGELANE_E2E_DAEMON_INSTALLED`: whether the helper counts as installed, '1' or '0'; unset
+ * (and in a packaged build) /Library is checked. Read on every call rather than once, so a test can
+ * have the helper disappear after "Remove helper" by rewriting process.env in the main process. */
+export function testDaemonInstalled(): string | undefined {
+  if (app.isPackaged) return undefined
+  return process.env['MERGELANE_E2E_DAEMON_INSTALLED']
 }
 
 /** `MERGELANE_E2E_STREAMS=2` fixes how many streams each network runs and turns the automatic

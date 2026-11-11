@@ -11,6 +11,7 @@ import type {
   PendingLink,
   ProbeResult,
   StartDownloadRequest,
+  SystemMergeRemoval,
   SystemMergeSnapshot,
   TorrentFileEntry,
   TorrentTrackersResult,
@@ -55,6 +56,8 @@ export interface IpcContract {
   setSystemMerge: { args: [on: boolean]; result: SystemMergeSnapshot }
   /** Installs the bundled helper, or updates an older one (an administrator password prompt). */
   installSystemMerge: { args: []; result: SystemMergeSnapshot }
+  /** Turns system merge off, then removes the helper (one administrator password prompt). */
+  removeSystemMerge: { args: []; result: SystemMergeRemoval }
   /** Whether merging turns itself back on after the helper restarts. */
   setSystemMergeAutoResume: { args: [enabled: boolean]; result: SystemMergeSnapshot }
   resetNetworkUsage: { args: [id: string]; result: void }

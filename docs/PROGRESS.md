@@ -567,6 +567,28 @@ Last updated: 2026-11-11
     check. The launchd-run copy that `install` starts still writes none (launchd starts it, and it is killed with
     `kill -9`).
 
+- **Remove helper** (branch `remove-helper`, ADR-0046; resolves the Phase 2 follow-up "no Remove helper button").
+  - **UI:** Networks › Other apps › System merge ends with "Remove helper…" while the helper is installed, and a
+    confirmation that says merging turns off, the Mac asks for the password, and downloads keep working. The
+    result (removed, password prompt canceled, or failed with the reason) stays in the section.
+  - **Main:** `main/daemon/removal.ts` turns merging off first (`disable`), then runs the bundled helper's
+    `uninstall` through `osascript -e 'do shell script "…" with administrator privileges'` (one prompt). A
+    dismissed prompt turns merging back on if it was on. No daemon (Go) change: `uninstall` already boots the
+    LaunchDaemon out, cleans up routes and deletes both files.
+  - **Test seam:** `MERGELANE_E2E_ADMIN_PROMPT=allow|cancel|fail:<reason>` records the osascript argv and runs
+    nothing (ignored by packaged builds). `MERGELANE_E2E_DAEMON_INSTALLED` is now read live.
+  - **Tests:**
+    - Vitest: `SystemMergeSection.test.tsx` (17), with `SystemMergeSection.tsx` and `useSystemMerge.ts` added to
+      `COVERED` at 100% of lines. Full run (with `main` merged): 358 passed.
+    - `e2e/daemonApi.spec.ts` (7 new, Node side): the uninstall command's exact text and quoting (decoded back by
+      AppleScript and split by /bin/sh, nothing run), osascript failure parsing, and the removal order against
+      the fake daemon (off before the prompt; back on after a cancel; failure; a stuck or silent helper).
+    - `e2e/systemMerge.spec.ts` (5 new, @smoke): the exact recorded argv, merge off first, Install offered after;
+      Cancel in the dialog; a dismissed prompt; a failure with its reason; a development build without the seam;
+      no Remove button without the helper. With `daemonApi`: 42 passed. `dashboard` and `diagnostics`: 10 passed.
+  - **Not checked:** the real password prompt, bootout and file removal. They need a manual check on the owner's
+    Mac with a packaged build; no test ran them.
+
 ### Phase 2 (started 2026-11-10, owner-approved)
 
 **M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.
@@ -698,7 +720,8 @@ Last updated: 2026-11-11
 - **Follow-ups:**
   - `extensionMedia.spec.ts`'s "Send this video to Mergelane" failed once in a full `local.sh` run: the app's link field
     lost its last character. Explained later: test windows took the Mac's focus (see "The two flaky Link-field tests").
-  - The app has no "Remove helper" button: Phase 3 candidate.
+  - ~~The app has no "Remove helper" button: Phase 3 candidate.~~ Resolved: Remove helper (ADR-0046, branch
+    `remove-helper`).
   - `scripts/acceptance/daemon.sh` sets `GOCOVERDIR` only for `run`, so `install`/`uninstall` show 0% coverage.
     *Fixed in branch `test-cleanup`* (every daemon run now writes coverage); unproven until CI or `local-root.sh` runs it.
 

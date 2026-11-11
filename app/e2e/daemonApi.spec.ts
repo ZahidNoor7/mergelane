@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -12,7 +13,13 @@ import {
   type Method
 } from '../../shared/daemon-api'
 import { callDaemon, DaemonError } from '../src/main/daemon/client'
-import { appleScriptString, installCommand, shellWord } from '../src/main/daemon/installCommand'
+import {
+  appleScriptString,
+  installCommand,
+  shellWord,
+  uninstallCommand
+} from '../src/main/daemon/installCommand'
+import { adminFailure, removeHelper, simulatedAdminPrompt } from '../src/main/daemon/removal'
 import {
   afterInstall,
   mergeIsOn,
@@ -463,5 +470,177 @@ test.describe('helper install command @smoke', () => {
     )
     expect(shellWord("a'b")).toBe(`'a'\\''b'`)
     expect(appleScriptString('a"b\\c')).toBe('"a\\"b\\\\c"')
+  })
+})
+
+// "Remove helper" (ADR-0046). Nothing here asks for a password or touches /Library: the prompt is
+// a stand-in that records the script, and the daemon is the fake.
+const TRICKY = `/Applications/My "Apps"/Merge'lane.app/Contents/Resources/mergelane-daemon`
+
+test.describe('helper removal @smoke', () => {
+  test('the uninstall command is the bundled binary’s uninstall, quoted for the shell and for AppleScript', () => {
+    expect(uninstallCommand(TRICKY)).toBe(
+      "do shell script \"'/Applications/My \\\"Apps\\\"/Merge'\\\\''lane.app/Contents/Resources/mergelane-daemon' uninstall\" with administrator privileges"
+    )
+    expect(
+      uninstallCommand('/Applications/Mergelane.app/Contents/Resources/mergelane-daemon')
+    ).toBe(
+      `do shell script "'/Applications/Mergelane.app/Contents/Resources/mergelane-daemon' uninstall" with administrator privileges`
+    )
+  })
+
+  test('AppleScript and /bin/sh read the command back as exactly two words', () => {
+    const shell = `${shellWord(TRICKY)} uninstall`
+    // AppleScript decodes its string literal back to the shell line (a plain `return`: no
+    // privileges, nothing run)…
+    const decoded = execFileSync(
+      '/usr/bin/osascript',
+      ['-e', `return ${appleScriptString(shell)}`],
+      {
+        encoding: 'utf8'
+      }
+    ).replace(/\n$/, '')
+    expect(decoded).toBe(shell)
+    // …and the shell splits that line into the binary's path and `uninstall` (printed, not run).
+    const words = execFileSync('/bin/sh', ['-c', `printf '%s\\n' ${decoded}`], { encoding: 'utf8' })
+    expect(words.split('\n').slice(0, -1)).toEqual([TRICKY, 'uninstall'])
+  })
+
+  test('reads osascript’s failures: a dismissed prompt, a reason, or nothing', async () => {
+    const cancel = await simulatedAdminPrompt('cancel').catch((caught: unknown) => caught)
+    expect(adminFailure(cancel)).toEqual({ canceled: true, reason: 'User canceled.' })
+    const failed = await simulatedAdminPrompt('fail:error: launchd: launchctl bootout: busy').catch(
+      (caught: unknown) => caught
+    )
+    expect(adminFailure(failed)).toEqual({
+      canceled: false,
+      reason: 'error: launchd: launchctl bootout: busy'
+    })
+    await expect(simulatedAdminPrompt('allow')).resolves.toBeUndefined()
+    const bare = await simulatedAdminPrompt('fail:').catch((caught: unknown) => caught)
+    expect(adminFailure(bare).reason).toBe('failed')
+    // Without stderr, the error's own message; without either, a fallback.
+    expect(adminFailure(new Error('spawn osascript ENOENT'))).toEqual({
+      canceled: false,
+      reason: 'spawn osascript ENOENT'
+    })
+    expect(adminFailure(Object.assign(new Error('x'), { stderr: '  ' })).reason).toBe('x')
+    expect(adminFailure('').reason).toBe('osascript failed without saying why.')
+    expect(adminFailure(null).canceled).toBe(false)
+    // A multi-line reason becomes one line.
+    expect(adminFailure({ stderr: '1:2: execution error: a\nb (1)' }).reason).toBe('a b')
+  })
+
+  test('turns merging off before the prompt, then reads the helper again', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      const scripts: string[] = []
+      let stateAtPrompt = ''
+      let installed = true
+      const removal = await removeHelper(
+        () => ({ ...context, installed }),
+        TRICKY,
+        async (script) => {
+          scripts.push(script)
+          stateAtPrompt = fake.state
+          installed = false
+        }
+      )
+      expect(scripts).toEqual([uninstallCommand(TRICKY)])
+      expect(stateAtPrompt).toBe('off')
+      expect(fake.requests.map((r) => r.method)).toContain('disable')
+      expect(removal.outcome).toBe('removed')
+      expect(removal.message).toBe('Helper removed. Install it again to use system merge.')
+      expect(removal.snapshot.installed).toBe(false)
+    })
+  })
+
+  test('a dismissed prompt removes nothing and turns merging back on', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      const removal = await removeHelper(
+        () => context,
+        TRICKY,
+        () => simulatedAdminPrompt('cancel')
+      )
+      expect(removal.outcome).toBe('canceled')
+      expect(removal.message).toBe('Removal canceled. The helper is still installed.')
+      expect(
+        fake.requests.map((r) => r.method).filter((m) => m === 'disable' || m === 'enable')
+      ).toEqual(['disable', 'enable'])
+      expect(removal.snapshot.state).toBe('on')
+
+      // Turning it back on can be refused; that is said too.
+      fake.refuseEnable = { code: 'VPN_ACTIVE', message: 'Another VPN (utun4) is on.' }
+      const refused = await removeHelper(
+        () => context,
+        TRICKY,
+        () => simulatedAdminPrompt('cancel')
+      )
+      expect(refused.message).toBe(
+        'Removal canceled. The helper is still installed. System merge stayed off: Another VPN (utun4) is on.'
+      )
+      expect(refused.snapshot.state).toBe('off')
+
+      // Merging that was off stays off.
+      fake.refuseEnable = undefined
+      const sent = fake.requests.length
+      await removeHelper(
+        () => context,
+        TRICKY,
+        () => simulatedAdminPrompt('cancel')
+      )
+      expect(fake.requests.slice(sent).some((r) => r.method === 'enable')).toBe(false)
+    })
+  })
+
+  test('a failed removal says why, and leaves merging off', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      const removal = await removeHelper(
+        () => context,
+        TRICKY,
+        () => simulatedAdminPrompt('fail:error: must run as root')
+      )
+      expect(removal).toMatchObject({
+        outcome: 'failed',
+        message: "Couldn't remove the helper: error: must run as root"
+      })
+      expect(fake.state).toBe('off')
+      expect(fake.requests.some((r) => r.method === 'enable')).toBe(false)
+    })
+  })
+
+  test('a helper that won’t turn off, or doesn’t answer, is removed anyway', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      fake.refuse = { disable: { code: 'INTERNAL', message: 'stuck' } }
+      const scripts: string[] = []
+      const stuck = await removeHelper(
+        () => context,
+        TRICKY,
+        async (script) => {
+          scripts.push(script)
+        }
+      )
+      expect(stuck.outcome).toBe('removed')
+      expect(scripts).toHaveLength(1)
+    })
+    const gone = {
+      socketPath: '/tmp/mlfd-none',
+      installed: true,
+      appVersion: 'x',
+      compareVersions: false
+    }
+    const scripts: string[] = []
+    const removal = await removeHelper(
+      () => gone,
+      TRICKY,
+      async (script) => {
+        scripts.push(script)
+      }
+    )
+    expect(removal.outcome).toBe('removed')
+    expect(scripts).toEqual([uninstallCommand(TRICKY)])
   })
 })

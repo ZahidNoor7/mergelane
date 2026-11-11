@@ -106,7 +106,10 @@ export const COVERED = [
   'src/renderer/src/hooks/useNetworks.ts',
   // M3.9: New download's When (ADR-0044).
   'src/shared/startAt.ts',
-  'src/renderer/src/utils/downloadActions.ts'
+  'src/renderer/src/utils/downloadActions.ts',
+  // ADR-0046: Remove helper, in the System merge section.
+  'src/renderer/src/components/SystemMergeSection.tsx',
+  'src/renderer/src/hooks/useSystemMerge.ts'
 ]
 
 export default defineConfig({

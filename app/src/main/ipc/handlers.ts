@@ -33,6 +33,7 @@ import {
 import { onMagnetCheckStatus } from '../download/torrent/metadata'
 import {
   installSystemMerge,
+  removeSystemMerge,
   setSystemMerge,
   setSystemMergeAutoResume,
   systemMergeSnapshot
@@ -304,6 +305,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('systemMerge', async () => systemMergeSnapshot())
   handle('setSystemMerge', async (_event, on) => setSystemMerge(on))
   handle('installSystemMerge', async () => installSystemMerge())
+  handle('removeSystemMerge', async () => removeSystemMerge())
   // `enabled` is checked with the daemon API's own guard (snapshot.ts) before it's sent.
   handle('setSystemMergeAutoResume', async (_event, enabled) => setSystemMergeAutoResume(enabled))
   handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))

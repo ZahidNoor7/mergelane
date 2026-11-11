@@ -13,7 +13,7 @@ import { named, Swarm } from './torrentSwarm'
 
 const KB = 1024
 
-test.describe('speed and data limits', () => {
+test.describe('speed and data limits @smoke', () => {
   test('a total speed limit holds a download to it', async ({ mergelane, serve }) => {
     const origin = await serve({ size: 16 * BLOCK })
     await mergelane.api.updateSettings({ speedLimit: 256 * KB })
@@ -196,7 +196,7 @@ test.describe('speed and data limits', () => {
 // go over a and uploads over b, so b carries nothing but uploads (and a few protocol messages it
 // receives, far under the limit): what takes it to its limit is uploads alone. Then it stops: its
 // peers are dropped, and nothing more goes out over it.
-test.describe('data limits and uploads', () => {
+test.describe('data limits and uploads @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the second network')
 
   test('a network’s data limit is reached by uploads alone, and then it stops uploading', async ({
@@ -260,7 +260,7 @@ test.describe('data limits and uploads', () => {
   })
 })
 
-test('usage survives period switches and restart, and expired calendar periods reset', async ({
+test('usage survives period switches and restart, and expired calendar periods reset @smoke', async ({
   mergelane,
   dirs
 }) => {
@@ -316,7 +316,10 @@ test('usage survives period switches and restart, and expired calendar periods r
   }
 })
 
-test('existing monthly usage remains available after migration', async ({ mergelane, dirs }) => {
+test('existing monthly usage remains available after migration @smoke', async ({
+  mergelane,
+  dirs
+}) => {
   await mergelane.quit()
   await writeFile(
     join(dirs.userData, 'network-usage.json'),
@@ -333,7 +336,7 @@ test('existing monthly usage remains available after migration', async ({ mergel
   expect((await mergelane.api.networkUsage()).a).toBe(12345)
 })
 
-test('calendar periods use local midnight, Monday weeks, and correct year boundaries', () => {
+test('calendar periods use local midnight, Monday weeks, and correct year boundaries @smoke', () => {
   const sunday = new Date(2026, 9, 4, 23, 59, 59, 999).getTime()
   const monday = new Date(2026, 9, 5).getTime()
   expect(dataPeriodKey('week', sunday)).toBe('2026-09-28')
@@ -348,7 +351,7 @@ test('calendar periods use local midnight, Monday weeks, and correct year bounda
 })
 
 for (const period of ['day', 'week', 'month'] as const) {
-  test(`resetting ${period} usage preserves other periods and networks and survives restart`, async ({
+  test(`resetting ${period} usage preserves other periods and networks and survives restart @smoke`, async ({
     mergelane,
     serve
   }) => {

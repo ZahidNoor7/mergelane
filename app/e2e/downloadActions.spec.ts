@@ -37,7 +37,7 @@ function finished(patch: Partial<FinishedDownload> = {}): DownloadItem {
 const ids = (items: DownloadItem[]): ActionId[] =>
   availableActions(items).flatMap((group) => group.map((action) => action.id))
 
-test.describe('what each state offers', () => {
+test.describe('what each state offers @smoke', () => {
   test('downloading and queued', () => {
     for (const status of ['downloading', 'queued'] as const)
       expect(ids([download({ status })])).toEqual(['pause', 'reveal', 'copy', 'cancel'])
@@ -107,7 +107,7 @@ test.describe('what each state offers', () => {
   })
 })
 
-test.describe('several selected', () => {
+test.describe('several selected @smoke', () => {
   test('an action acts on just the ones it is valid for', () => {
     const items = [
       download({ id: 'a', status: 'downloading' }),
@@ -145,7 +145,7 @@ test.describe('several selected', () => {
   })
 })
 
-test.describe('the places that show them agree', () => {
+test.describe('the places that show them agree @smoke', () => {
   test('a row button, a screen header and the menu start from the same list', () => {
     const states = [
       download({ status: 'downloading' }),
@@ -181,7 +181,7 @@ test.describe('the places that show them agree', () => {
   })
 })
 
-test.describe('the selection toolbar', () => {
+test.describe('the selection toolbar @smoke', () => {
   const shown = (items: DownloadItem[]): { buttons: ActionId[]; more: ActionId[] } => {
     const { buttons, more } = splitToolbar(availableActions(items))
     return { buttons: buttons.map((a) => a.id), more: more.flat().map((a) => a.id) }

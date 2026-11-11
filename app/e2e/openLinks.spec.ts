@@ -35,7 +35,7 @@ async function aTorrentFile(): Promise<string> {
 const linkField = (mergelane: MergelaneApp): Locator =>
   mergelane.page.getByRole('textbox', { name: 'Link' })
 
-test.describe('links handed over by the OS', () => {
+test.describe('links handed over by the OS @smoke', () => {
   test('a .torrent on the command line (Windows, Linux) fills in the link', async ({
     mergelane
   }) => {

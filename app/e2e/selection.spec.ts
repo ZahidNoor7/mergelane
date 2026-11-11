@@ -31,7 +31,7 @@ async function stubTrash(
   }, destination)
 }
 
-test('mixed selection applies actions only to eligible downloads and keeps finished files', async ({
+test('mixed selection applies actions only to eligible downloads and keeps finished files @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -110,7 +110,7 @@ test('mixed selection applies actions only to eligible downloads and keeps finis
   expect(existsSync(finished.destinationPath)).toBe(true)
 })
 
-test('missing finished files can leave the list but are excluded from file removal', async ({
+test('missing finished files can leave the list but are excluded from file removal @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -134,7 +134,7 @@ test('missing finished files can leave the list but are excluded from file remov
   await rename(`${complete.destinationPath}.moved`, complete.destinationPath)
 })
 
-test('showing a file that has moved says so in a dialog, not on the page', async ({
+test('showing a file that has moved says so in a dialog, not on the page @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -168,7 +168,7 @@ test('showing a file that has moved says so in a dialog, not on the page', async
   }
 })
 
-test('trashing finished torrent files preserves unrelated files in the torrent folder', async ({
+test('trashing finished torrent files preserves unrelated files in the torrent folder @smoke', async ({
   mergelane,
   dirs
 }) => {
@@ -207,7 +207,7 @@ test('trashing finished torrent files preserves unrelated files in the torrent f
   }
 })
 
-test('cancelling an unfinished torrent preserves unrelated files in its folder', async ({
+test('cancelling an unfinished torrent preserves unrelated files in its folder @smoke', async ({
   mergelane
 }) => {
   const swarm = await new Swarm().start()
@@ -242,7 +242,7 @@ test('cancelling an unfinished torrent preserves unrelated files in its folder',
   }
 })
 
-test('a removal that fails for one download still removes the rest, and asks again about only that one', async ({
+test('a removal that fails for one download still removes the rest, and asks again about only that one @smoke', async ({
   mergelane,
   serve,
   dirs
@@ -279,7 +279,7 @@ test('a removal that fails for one download still removes the rest, and asks aga
   expect(existsSync(join(trashed, 'goes.bin'))).toBe(true)
 })
 
-test('search and filter interaction with selection: no crash on empty query filter, Cmd+A selects matching only, Esc clears selection', async ({
+test('search and filter interaction with selection: no crash on empty query filter, Cmd+A selects matching only, Esc clears selection @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -329,7 +329,7 @@ test('search and filter interaction with selection: no crash on empty query filt
   await expect(search).toBeFocused()
 })
 
-test('search box maintains minimum usable width at 720px minimum window width with active download', async ({
+test('search box maintains minimum usable width at 720px minimum window width with active download @smoke', async ({
   mergelane,
   serve
 }) => {

@@ -49,7 +49,7 @@ const update = (seq: number, blocks: HttpBlockState[], id = 'd1'): HttpDownloadU
 const full = (seq: number, id = 'd1'): HttpDownloadUpdate =>
   update(seq, [block(0), block(1), block(2), block(3)], id)
 
-test.describe('download updates', () => {
+test.describe('download updates @smoke', () => {
   test('changed blocks land on the ones already there', () => {
     const start = applyDownloadUpdate(null, full(1))
     const next = applyDownloadUpdate(start, update(2, [block(1, 50)]))!

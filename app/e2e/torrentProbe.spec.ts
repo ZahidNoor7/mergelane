@@ -69,7 +69,7 @@ async function serveTorrent(body: Uint8Array): Promise<{ url: string; server: Se
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/file.torrent`, server }
 }
 
-test.describe('getting a torrent in', () => {
+test.describe('getting a torrent in @smoke', () => {
   test('a link to a .torrent', async ({ mergelane }) => {
     const { client, torrent } = await seed([named(seededBytes(300_000, 1), 'movie.mkv')])
     clients.push(client)

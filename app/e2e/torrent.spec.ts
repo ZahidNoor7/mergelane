@@ -19,7 +19,7 @@ test.afterEach(async () => {
   await swarm.stop()
 })
 
-test.describe('torrent downloads', () => {
+test.describe('torrent downloads @smoke', () => {
   test('a single-file torrent', async ({ mergelane }) => {
     const data = seededBytes(2 * MB, 11)
     const torrent = await swarm.seed([named(data, 'movie.mkv')], { pieceLength: PIECE })
@@ -74,7 +74,7 @@ test.describe('torrent downloads', () => {
   })
 })
 
-test.describe('choosing files', () => {
+test.describe('choosing files @smoke', () => {
   /** Files of sizes that don't line up with pieces, so pieces straddle chosen and skipped ones. */
   function album(size: number, seed: number): Buffer[] {
     return ['a.bin', 'b.bin', 'c.bin', 'd.bin'].map((name, index) =>
@@ -163,7 +163,7 @@ test.describe('choosing files', () => {
   })
 })
 
-test.describe('torrents over two networks', () => {
+test.describe('torrents over two networks @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for a second network')
 
   /** Three seeders of `data`, at `uploadLimit` each. */
@@ -235,7 +235,7 @@ test.describe('torrents over two networks', () => {
   })
 })
 
-test.describe('uploading', () => {
+test.describe('uploading @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the network')
   // A USB-tethered network, the one kind once left out: every network uploads, whatever its kind.
   test.use({ appEnv: { MERGELANE_E2E_INTERFACES: `b=${LAN_ADDRESS}==usb` } })
@@ -272,7 +272,7 @@ test.describe('uploading', () => {
 
 // Networks › Uploads use (M3.5b, docs/DECISIONS.md ADR-0041), over test networks a (loopback) and
 // b (this Mac's LAN address).
-test.describe('routing uploads', () => {
+test.describe('routing uploads @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the second network')
 
   /**
@@ -361,7 +361,7 @@ test.describe('routing uploads', () => {
   })
 })
 
-test.describe('managing trackers', () => {
+test.describe('managing trackers @smoke', () => {
   test('a torrent with an unreachable tracker finds the seeder after addTorrentTrackers', async ({
     mergelane
   }) => {

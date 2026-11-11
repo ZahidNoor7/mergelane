@@ -68,7 +68,7 @@ async function turnOn(mergelane: MergelaneApp): Promise<void> {
 const offer = (mergelane: MergelaneApp): Locator =>
   mergelane.page.getByRole('region', { name: 'Copied link' })
 
-test.describe('Offer links I copy', () => {
+test.describe('Offer links I copy @smoke', () => {
   test('off, as it starts, the clipboard isn’t read when the user switches to Mergelane', async ({
     mergelane
   }) => {

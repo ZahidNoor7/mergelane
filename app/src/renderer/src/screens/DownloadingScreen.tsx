@@ -6,6 +6,7 @@ import { ColorBadge } from '../components/ColorBadge'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
+import { BigStat, Dot, InlineStat } from '../components/HeroStats'
 import { NetworkRow } from '../components/NetworkRow'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
@@ -39,57 +40,6 @@ import {
   wantedBytes
 } from '../utils/format'
 import { useFormatSpeed, useFormatSpeedLimit } from '../hooks/useFormatSpeed'
-
-/** Inline "·" separator between adjacent stats. `shrink` pins it at its natural width inside a
- * flex row that might otherwise squeeze it (footer rows), matching each call site's prior style. */
-function Dot(): React.JSX.Element {
-  return <span className="opacity-35">·</span>
-}
-
-function InlineStat({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <span>
-      {label} <span className="font-semibold text-foreground">{value}</span>
-    </span>
-  )
-}
-
-/** The hero band's headline figure: a tracked-out label over one big tabular number and its unit. */
-function BigStat({
-  label,
-  value,
-  unit,
-  valueClass,
-  note
-}: {
-  label: string
-  value: string | number
-  unit?: string
-  valueClass: string
-  /** Beside the label, e.g. a warning about what holds the value down. */
-  note?: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <>
-      <div className="flex items-center gap-1.5 font-mono text-[10px] leading-none font-medium tracking-[0.2em] text-muted-foreground">
-        {label}
-        {note}
-      </div>
-      <div className="flex items-baseline gap-[7px]">
-        <div
-          className={`font-mono text-[38px] leading-[0.88] font-semibold tracking-[-0.03em] tabular-nums ${valueClass}`}
-        >
-          {value}
-        </div>
-        {unit && (
-          <div className="font-mono text-[12px] leading-none font-medium text-muted-foreground">
-            {unit}
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
 
 /** What the download is waiting on, when no network is carrying it. */
 function waitingFor(download: DownloadState): string | null {

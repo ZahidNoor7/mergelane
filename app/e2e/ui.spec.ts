@@ -80,7 +80,8 @@ test.describe('a torrent through the UI', () => {
       await peers.click()
       // Numbered by connection, so whichever peers are connected now.
       const peerRow = page
-        .getByRole('row')
+        .getByRole('list', { name: /peers$/ })
+        .getByRole('listitem')
         .filter({ hasText: /Peer #\d+/ })
         .first()
       await expect(peerRow).toBeVisible()
@@ -92,7 +93,6 @@ test.describe('a torrent through the UI', () => {
       // Read out in words, not only shown as an arrow; upload only once something was sent.
       await expect(peerRow).toContainText('Receiving at')
       await expect(peerRow).not.toContainText('Sending at')
-      await expect(peerRow.getByRole('cell')).toHaveCount(6)
       // What it runs. A peer has no progress of its own: a dash, not a bar.
       await expect(peerRow).toContainText('WebTorrent')
       await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
@@ -102,15 +102,10 @@ test.describe('a torrent through the UI', () => {
       )
       expect(numbers.length).toBeGreaterThan(0)
       expect(new Set(numbers).size).toBe(numbers.length)
-      const networks = page.getByRole('table', { name: 'Networks' })
-      await expect(networks.getByRole('columnheader', { name: 'Verified' })).toHaveCount(0)
-      await expect(
-        networks.getByRole('columnheader', { name: 'Progress', exact: true })
-      ).toBeVisible()
-      await expect(networks.getByRole('progressbar').first()).toBeVisible()
-      await expect(
-        page.getByRole('progressbar', { name: 'Download progress', exact: true })
-      ).toHaveCount(0)
+      const networks = page.getByRole('list', { name: 'Networks', exact: true })
+      // The download's progress, split by network, and no network table's columns.
+      await expect(page.getByRole('progressbar', { name: 'Trio progress' })).toBeVisible()
+      await expect(page.getByRole('columnheader')).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces of about /)).toBeVisible()
       // Each network's upload, even before anything is sent; nothing at the top. A peer that has
@@ -124,9 +119,8 @@ test.describe('a torrent through the UI', () => {
       await expect(page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeVisible({
         timeout: 60_000
       })
-      await expect(page.getByText(/^2 of 3 files · /)).toBeVisible()
       await expect(page.getByText('Peers', { exact: true })).toBeVisible()
-      await expect(page.getByText(/^written in \d+ pieces · uploaded /)).toBeVisible()
+      await expect(page.getByText(/^2 of 3 files, written in \d+ pieces, uploaded /)).toBeVisible()
     } finally {
       await swarm.stop()
     }
@@ -154,18 +148,19 @@ test.describe('UI journeys @smoke', () => {
     await page.getByRole('button', { name: 'test.bin', exact: true }).click()
     // An empty bar is still a progress indicator: its track and accessible value must exist
     // before the server sends the first byte.
-    const progress = page.getByRole('table', { name: 'Networks' }).getByRole('progressbar').first()
+    const progress = page.getByRole('progressbar', { name: 'test.bin progress' })
     await expect(progress).toHaveAttribute('aria-valuenow', '0')
     await expect(progress).toBeVisible()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeInViewport({
       ratio: 1
     })
-    await expect(page.getByRole('columnheader', { name: 'Network', exact: true })).toBeInViewport({
-      ratio: 1
-    })
-    await expect(
-      page.getByRole('table', { name: 'Networks' }).getByRole('checkbox').first()
-    ).toBeInViewport({ ratio: 1 })
+    // The details scroll: the networks are below, each switch reachable without scrolling sideways.
+    const networkSwitch = page
+      .getByRole('list', { name: 'Networks', exact: true })
+      .getByRole('checkbox')
+      .first()
+    await networkSwitch.scrollIntoViewIfNeeded()
+    await expect(networkSwitch).toBeInViewport({ ratio: 1 })
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
@@ -209,15 +204,15 @@ test.describe('UI journeys @smoke', () => {
     await expect
       .poll(async () => JSON.parse(await readFile(manifestPath, 'utf-8')).requestPayload)
       .toMatchObject({ streamsPerNetwork: 8 })
-    // Started: its own screen opens.
-    await page.getByRole('button', { name: 'Pause' }).click()
-    await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Progress', exact: true })).toBeVisible()
+    // Started: its details open.
+    await page.getByRole('button', { name: 'Pause', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Networks', exact: true })).toBeVisible()
     // An HTTP download's connections are streams, and its blocks chunks.
     await expect(page.getByRole('button', { name: /^\d+ streams?/ }).first()).toBeVisible()
     await expect(page.getByText(/^\d+ chunks of about /)).toBeVisible()
     origin.release()
-    await page.getByRole('button', { name: 'Resume' }).click()
+    await page.getByRole('button', { name: 'Resume', exact: true }).click()
 
     const reveal = page.getByRole('button', { name: /Show in (Finder|folder)/ })
     await expect(reveal).toBeVisible()

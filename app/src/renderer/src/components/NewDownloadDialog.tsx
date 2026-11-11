@@ -353,7 +353,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     setStartError(null)
     try {
       await window.mergelane.resumeFromLink(link.id, resumes.id)
-      useAppStore.setState({ view: { name: 'download', id: resumes.id } })
+      useAppStore.getState().openDownload(resumes.id)
       finishLink(link.id, true)
     } catch (error) {
       setStartError(describeError(error))
@@ -415,10 +415,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       }
       // Started: the link is spent, so the next download starts from an empty one. Its own
       // screen opens, unless it was only added to the queue.
-      useAppStore.setState({
-        startedUrl: url.trim(),
-        ...(full || scheduledWait ? {} : { view: { name: 'download', id } as const })
-      })
+      useAppStore.setState({ startedUrl: url.trim() })
+      if (!full && !scheduledWait) useAppStore.getState().openDownload(id)
       if (linkId) {
         finishLink(linkId, true)
       } else if (useAppStore.getState().formKey === form) {

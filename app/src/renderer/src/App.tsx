@@ -1,4 +1,3 @@
-import type { DownloadState, FinishedDownload } from '@shared/types'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
@@ -8,51 +7,15 @@ import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useElementWidth } from './hooks/useElementWidth'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
-import { CompleteScreen } from './screens/CompleteScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
-import { DownloadingScreen } from './screens/DownloadingScreen'
-import { DownloadsScreen } from './screens/DownloadsScreen'
-import { ErrorScreen } from './screens/ErrorScreen'
+import { DownloadsPlace } from './screens/DownloadsPlace'
 import { useAppStore } from './store/useAppStore'
 
-function assertNever(status: never): never {
-  throw new Error(`Unhandled download status: ${String(status)}`)
-}
-
-/** One screen per download.status — a switch with an assertNever default so a new
- * DownloadStatus value is a compile error here instead of silently falling into whichever branch
- * happened to be last. */
-function renderDownload(download: DownloadState | FinishedDownload): React.JSX.Element {
-  if ('unitsWritten' in download) return <CompleteScreen download={download} />
-  switch (download.status) {
-    case 'queued':
-    case 'downloading':
-    case 'paused':
-      return <DownloadingScreen download={download} />
-    case 'completed':
-      return <CompleteScreen download={download} />
-    case 'error':
-    case 'cancelled':
-      return <ErrorScreen download={download} />
-    default:
-      return assertNever(download.status)
-  }
-}
-
-/** The download shown, the dashboard, or the list. Only this re-renders on a progress update —
- * App, the title bar, the status bar and the dialogs around it don't. */
+/** The place the window shows: the downloads (with a download's details) or the dashboard. Only
+ * this re-renders on a progress update; App, the frame and the dialogs around it don't. */
 function CurrentScreen(): React.JSX.Element {
-  const dashboard = useAppStore((store) => store.view.name === 'dashboard')
-  // Just the one shown: an update to any other download leaves this selector's result alone.
-  const shown = useAppStore((store) => {
-    const { view } = store
-    if (view.name !== 'download') return null
-    // A download that's gone (removed, deleted) leaves the list showing.
-    return store.downloads[view.id] ?? store.history.find((entry) => entry.id === view.id) ?? null
-  })
-  const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
-  if (dashboard) return <DashboardScreen />
-  return shown && !cancelled ? renderDownload(shown) : <DownloadsScreen />
+  const dashboard = useAppStore((store) => store.screen === 'dashboard')
+  return dashboard ? <DashboardScreen /> : <DownloadsPlace />
 }
 
 function App(): React.JSX.Element {

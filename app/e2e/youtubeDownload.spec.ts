@@ -155,7 +155,8 @@ test.describe('YouTube downloads @smoke', () => {
     // name.
     server.delayMs = 150
     await page.getByRole('button', { name: 'Download' }).click()
-    await expect(page.getByText('YouTube', { exact: true })).toBeVisible()
+    // In its row, and in its details beside the list in a wide window.
+    await expect(page.getByText('YouTube', { exact: true }).first()).toBeVisible()
 
     const done = expectStream(await mergelane.waitForStatus('completed'))
     expect(done.protocol).toBe('youtube')

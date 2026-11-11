@@ -293,7 +293,7 @@ describe('DownloadsScreen, the list', () => {
   it('opens a download, and does a row’s next step', async () => {
     show(ALL)
     await user().click(screen.getByRole('button', { name: 'Holiday film.mkv' }))
-    expect(useAppStore.getState().view).toEqual({ name: 'download', id: 'film' })
+    expect(useAppStore.getState()).toMatchObject({ selectedId: 'film', detailOpen: true })
     await user().click(screen.getByRole('button', { name: 'Pause Holiday film.mkv' }))
     expect(perform).toHaveBeenCalledWith('pause', [running])
   })

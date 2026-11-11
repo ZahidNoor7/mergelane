@@ -14,7 +14,6 @@ import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { MoreActionsMenu } from '../components/MoreActionsMenu'
 import { networkStatusText } from '../components/networkStatus'
-import { NetworksMenu } from '../components/NetworksMenu'
 import { ScheduleIndicator } from '../components/ScheduleIndicator'
 import { SpeedText } from '../components/SpeedText'
 import { SplitBar } from '../components/SplitBar'
@@ -48,8 +47,8 @@ import {
 // Confluence of every network; the status tabs and the filters; then the downloads in groups.
 //
 // Kept from before, restyled (the owner's answer to PHASE-3.md's first question): the selection
-// with its toolbar and keys, the right-click menu, each row's next step, the schedule button and the
-// networks menu (which move to Settings and the Networks screen in M3.1 pull requests 5e and 5d).
+// with its toolbar and keys, the right-click menu, each row's next step, and the schedule button (which
+// moves to Settings in M3.1 pull request 5e). The networks menu became the Networks place (5d).
 
 type Item = DownloadState | FinishedDownload
 
@@ -293,13 +292,6 @@ export function DownloadsScreen({
               )}
             </label>
             <ScheduleIndicator onClick={openSchedule} />
-            <NetworksMenu
-              onOpenLimits={(page) => {
-                setShowSchedule(false)
-                setLimitsPage(page)
-                setLimitsOpen(true)
-              }}
-            />
             <Button type="button" onClick={() => openNewDownload()}>
               <Plus data-icon="inline-start" />
               New download

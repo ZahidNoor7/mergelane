@@ -22,7 +22,7 @@ async function openSection(
     MERGELANE_E2E_DAEMON_INSTALLED: '1',
     ...env
   })
-  await mergelane.page.getByRole('button', { name: /^\d+ networks?$|^No network$/ }).click()
+  await mergelane.place('Networks')
   return mergelane.page.getByRole('region', { name: 'System merge' })
 }
 
@@ -38,7 +38,7 @@ test.describe('System merge @smoke', () => {
       MERGELANE_E2E_DAEMON_INSTALLED: '1'
     })
     const page = mergelane.page
-    await page.getByRole('button', { name: /^\d+ networks?$|^No network$/ }).click()
+    await mergelane.place('Networks')
     const section = page.getByRole('region', { name: 'System merge' })
     const toggle = section.getByRole('switch', { name: 'System merge' })
     await expect(toggle).not.toBeChecked()
@@ -70,7 +70,7 @@ test.describe('System merge @smoke', () => {
       MERGELANE_E2E_DAEMON_INSTALLED: '1'
     })
     const page = mergelane.page
-    await page.getByRole('button', { name: /^\d+ networks?$|^No network$/ }).click()
+    await mergelane.place('Networks')
     const section = page.getByRole('region', { name: 'System merge' })
     await section.getByRole('switch', { name: 'System merge' }).click()
     await expect(section.getByRole('alert')).toHaveText(/Another VPN \(utun4\)/)
@@ -83,7 +83,7 @@ test.describe('System merge @smoke', () => {
       MERGELANE_E2E_DAEMON_INSTALLED: '0'
     })
     const page = mergelane.page
-    await page.getByRole('button', { name: /^\d+ networks?$|^No network$/ }).click()
+    await mergelane.place('Networks')
     const section = page.getByRole('region', { name: 'System merge' })
     await expect(section.getByText('Needs a one-time install of a small helper.')).toBeVisible()
     // Not installed is a normal state, not an error.

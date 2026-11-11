@@ -9,13 +9,21 @@ import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
+import { NetworksScreen } from './screens/NetworksScreen'
 import { useAppStore } from './store/useAppStore'
 
-/** The place the window shows: the downloads (with a download's details) or the dashboard. Only
+/** The place the window shows: the downloads (with a download's details), the dashboard or the
+ * networks. Only
  * this re-renders on a progress update; App, the frame and the dialogs around it don't. */
 function CurrentScreen(): React.JSX.Element {
-  const dashboard = useAppStore((store) => store.screen === 'dashboard')
-  return dashboard ? <DashboardScreen /> : <DownloadsPlace />
+  const screen = useAppStore((store) => store.screen)
+  return screen === 'dashboard' ? (
+    <DashboardScreen />
+  ) : screen === 'networks' ? (
+    <NetworksScreen />
+  ) : (
+    <DownloadsPlace />
+  )
 }
 
 function App(): React.JSX.Element {

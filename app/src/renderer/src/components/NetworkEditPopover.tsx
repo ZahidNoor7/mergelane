@@ -49,7 +49,8 @@ export function NetworkEditPopover({
   const visual = useNetworkVisuals()(interfaceId, interfaceKind, osName)
 
   const [draftName, setDraftName] = useState('')
-  const [draftColorId, setDraftColorId] = useState<NetworkColorId>(visual.colorId)
+  // 'theme': no colour of its own, so it takes the theme's colour for its kind of network.
+  const [draftColorId, setDraftColorId] = useState<NetworkColorId | 'theme'>('theme')
 
   // Proxy draft state
   const [proxyEnabled, setProxyEnabled] = useState(false)
@@ -62,8 +63,8 @@ export function NetworkEditPopover({
   function save(): void {
     const trimmed = draftName.trim().slice(0, MAX_NETWORK_NAME_LENGTH)
     const customName = trimmed && trimmed !== osName ? trimmed : undefined
-    // Re-picking the color it already had keeps it automatic instead of pinning it.
-    const colorId = draftColorId === visual.colorId ? preference?.colorId : draftColorId
+    // A colour picked overrides the theme's, in every theme; Theme colour gives it back.
+    const colorId = draftColorId === 'theme' ? undefined : draftColorId
 
     const hostTrimmed = proxyHost.trim()
     const parsedPort = parseInt(proxyPort.trim(), 10)
@@ -100,7 +101,7 @@ export function NetworkEditPopover({
       onOpenChange={(next, details) => {
         if (next) {
           setDraftName(visual.name)
-          setDraftColorId(visual.colorId)
+          setDraftColorId((preference?.colorId as NetworkColorId | undefined) ?? 'theme')
           const p = preference?.proxy
           setProxyEnabled(Boolean(p?.enabled))
           setProxyType(p?.type ?? 'http')
@@ -163,7 +164,15 @@ export function NetworkEditPopover({
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <span className={fieldLabelClass}>Color</span>
+          <span className={fieldLabelClass}>Colour</span>
+          <button
+            type="button"
+            aria-pressed={draftColorId === 'theme'}
+            onClick={() => setDraftColorId('theme')}
+            className="self-start rounded-full px-2.5 py-1 text-[12px] font-[580] text-ink-2 shadow-[inset_0_0_0_1px_var(--border)] hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-selected aria-pressed:text-foreground aria-pressed:shadow-[inset_0_0_0_1px_var(--color-accent)]"
+          >
+            Theme colour
+          </button>
           <div className="flex items-center justify-between px-1 py-1">
             {NETWORK_COLOR_SWATCHES.map((swatch) => {
               const isSelected = draftColorId === swatch.id

@@ -122,7 +122,7 @@ test('the cutoff stops torrent peers and uploads; reopening finishes the same fi
 })
 
 async function openSchedule(mergelane: MergelaneApp): Promise<void> {
-  await mergelane.page.getByRole('button', { name: /^\d+ networks?/ }).click()
+  await mergelane.place('Networks')
   await mergelane.page.getByRole('button', { name: 'Speed & data limits', exact: true }).click()
   await mergelane.page.getByRole('region', { name: 'Download schedule' }).scrollIntoViewIfNeeded()
 }

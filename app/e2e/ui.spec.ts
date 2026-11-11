@@ -309,12 +309,8 @@ test.describe('settings @smoke', () => {
     const chosenDestination = await destination()
     await page().keyboard.press('Escape')
     // A function: the window, and so the page, is a new one after a relaunch.
-    const networksMenu = (): Locator =>
-      page()
-        .getByRole('button', { name: /network/ })
-        .first()
-        .first()
-    await networksMenu().click()
+    const networksMenu = (): Promise<void> => mergelane.place('Networks')
+    await networksMenu()
     await page()
       .getByRole('button', { name: /^Edit / })
       .first()
@@ -332,9 +328,13 @@ test.describe('settings @smoke', () => {
       const saved = JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
       expect(saved.destinationDir).toBe(dirs.dest)
       await page().keyboard.press('Escape')
-      await networksMenu().click()
-      // In the menu, not the sidebar, which lists the networks too.
-      await expect(page().getByRole('dialog').getByText('Office fibre')).toBeVisible()
+      await networksMenu()
+      // On the Networks screen, not the sidebar, which lists the networks too.
+      await expect(
+        page()
+          .getByRole('list', { name: 'Networks', exact: true })
+          .getByText('Office fibre', { exact: true })
+      ).toBeVisible()
       await page().getByRole('button', { name: 'Edit Office fibre' }).click()
       await expect(page().getByRole('button', { name: 'Violet' })).toHaveAttribute(
         'aria-pressed',

@@ -298,13 +298,24 @@ export class MergelaneApp {
 
   nextDownload: Tracked | null = null
 
-  /** Opens New download as its button does, and gives its link field. */
+  /** Opens New download as its button does, and gives its link field. The button is on the
+   * Downloads place, so it goes there first from another. */
   async newDownload(): Promise<Locator> {
     const link = this.page.getByRole('textbox', { name: 'Link' })
     if (!(await link.isVisible())) {
-      await this.page.getByRole('button', { name: 'New download' }).first().click()
+      const button = this.page.getByRole('button', { name: 'New download' }).first()
+      if (!(await button.isVisible())) await this.place('Downloads')
+      await button.click()
     }
     return link
+  }
+
+  /** Goes to one of the window's places by the sidebar (or the compact bar). */
+  async place(name: 'Downloads' | 'Dashboard' | 'Networks'): Promise<void> {
+    await this.page
+      .getByRole('navigation', { name: 'Mergelane' })
+      .getByRole('button', { name: new RegExp(`^${name}`) })
+      .click()
   }
 
   /** Every download, running or finished, oldest first. A finished one comes from history, so it

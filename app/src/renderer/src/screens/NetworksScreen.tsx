@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from 'react'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkEditPopover } from '../components/NetworkEditPopover'
 import { NetworkTile } from '../components/NetworkTile'
+import { RoutingPanel } from '../components/RoutingPanel'
 import { Sparkline } from '../components/Sparkline'
 import { SpeedText } from '../components/SpeedText'
 import { SystemMergeSection } from '../components/SystemMergeSection'
@@ -28,8 +29,8 @@ import { formatDataUsage } from '../utils/format'
 // toolbar's networks menu. Speed and data limits are edited in their dialog, opened from here,
 // until the Settings screen (M3.1 pull request 5e) takes its general page.
 //
-// Not built: the design's "Which network carries what" (routing downloads and uploads to one
-// network). Mergelane has no such routing; it would be new engine work.
+// "Which network carries what" (RoutingPanel, ADR-0040) routes downloads; the design's uploads row
+// comes with M3.5b.
 
 /** What kind of connection a network is, said plainly (the owner's answer 3 in PHASE-3.md: the
  * connection type only, never the Wi-Fi network's name). */
@@ -98,6 +99,8 @@ export function NetworksScreen(): React.JSX.Element {
               ))}
             </ul>
           )}
+
+          <RoutingPanel networks={summaries} />
 
           <section
             aria-labelledby="networks-merge"

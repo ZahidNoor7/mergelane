@@ -19,6 +19,9 @@ All notable changes to Mergelane are recorded here. The format follows
   the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
   new version over the old one. Turn on "Download updates in the background" to have it download by itself;
   installing always waits for you.
+- Networks › Which network carries what: send every download over one network (Ethernet, say), the running ones
+  included, or over all of them as before. Choose whether the other networks stand in when the chosen one drops,
+  or downloads wait for it.
 - Settings › Browser extensions shows when each browser's extension last reached Mergelane and its version, and
   says when to restart a browser to use a newer one. "What the extension does" sets the rules once for every
   browser: whether to send downloads, a minimum size, the file types, and whether to list a page's videos.

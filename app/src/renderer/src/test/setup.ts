@@ -7,7 +7,7 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { DEFAULT_CAPTURE_RULES } from '@shared/captureRules'
-import type { InitialState } from '@shared/types'
+import { DEFAULT_ROUTING, type InitialState } from '@shared/types'
 
 const initialState: InitialState = {
   homeDir: '/Users/test',
@@ -23,7 +23,8 @@ const initialState: InitialState = {
   solidGlass: false,
   menuBarSpeed: true,
   notifyWhenDone: true,
-  captureRules: DEFAULT_CAPTURE_RULES
+  captureRules: DEFAULT_CAPTURE_RULES,
+  routing: DEFAULT_ROUTING
 }
 
 Object.defineProperty(window, 'mergelane', {

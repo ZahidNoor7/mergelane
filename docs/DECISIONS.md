@@ -738,3 +738,26 @@ until the owner overrides it.
     of it can be changed in Settings.
   - **Upgrading:** an extension built for protocol v2 shows "Update Mergelane" against a v3 app until its browser
     restarts with the copy Mergelane keeps up to date.
+
+## ADR-0040: Routing Mergelane's downloads to one network (M3.5a)
+
+- Status: Accepted (2026-11-11), from the final design's RoutingPanel. M3.5 is split: downloads now (M3.5a); uploads
+  and upload limits next (M3.5b), since torrent uploads follow each peer's network and nothing limits them yet.
+- Context:
+  - The design's Networks › "Which network carries what" sends every download over one chosen network, or over
+    all of them, and asks what to do when the chosen one drops.
+  - Before this, a download used the networks it was started on (and switched by hand). Nothing moved downloads
+    between networks, and nothing stood in for a network that dropped.
+- Decision:
+  - **The setting:** `routing: { down: 'all' | <network id>, fallback }`, saved in app settings.
+  - **The engine (`DownloadManager.reconcile`):**
+    - while `down` names a connected network, every download wants only that one, the running ones included;
+    - the others get a new network status, `routed`;
+    - each download's own choice (`enabled`) is untouched, and comes back when routing returns to all networks.
+  - **When the chosen network isn't connected:** with `fallback` on, each download uses its own networks; with it
+    off, every network is `routed` and downloads wait.
+  - **All transfers follow it:** HTTP, HLS/DASH and YouTube, Usenet and torrents, because each uses only the
+    networks whose status is `on`.
+- Consequences:
+  - Routing applies at once to running downloads (`limitsChanged` re-reconciles them).
+  - A download's details show "Not used: downloads go over another network" on the set-aside networks.

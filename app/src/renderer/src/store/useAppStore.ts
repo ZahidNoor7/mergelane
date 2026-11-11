@@ -2,6 +2,7 @@ import { applyDownloadUpdate } from '@shared/downloadUpdate'
 import type {
   AppSettings,
   DownloadSchedule,
+  DownloadRouting,
   DownloadState,
   DownloadUpdate,
   FinishedDownload,
@@ -146,6 +147,9 @@ interface AppStore {
   /** Settings › Browser extensions › What the extension does (ADR-0039). */
   captureRules: CaptureRules
   setCaptureRules: (patch: Partial<CaptureRules>) => void
+  /** Networks › Which network carries what (ADR-0040). */
+  routing: DownloadRouting
+  setRouting: (patch: Partial<DownloadRouting>) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -383,6 +387,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   notifyWhenDone: initial.notifyWhenDone,
   captureRules: initial.captureRules,
+  routing: initial.routing,
+  setRouting: (patch) => {
+    const routing = { ...get().routing, ...patch }
+    set({ routing })
+    persist({ routing })
+  },
   setCaptureRules: (patch) => {
     const captureRules = { ...get().captureRules, ...patch }
     set({ captureRules })

@@ -128,6 +128,13 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     }
     settings.browserContacts = contacts
   }
+  if (isRecord(parsed.routing)) {
+    const { down, fallback } = parsed.routing
+    settings.routing = {
+      down: typeof down === 'string' && down.length > 0 && down.length <= 64 ? down : 'all',
+      fallback: fallback !== false
+    }
+  }
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false

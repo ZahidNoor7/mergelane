@@ -12,6 +12,7 @@ import {
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { IpcContract } from '../../shared/ipc-contract'
 import {
+  DEFAULT_ROUTING,
   DEFAULT_SLOW_MODE_SPEED,
   DOWNLOADS_AT_ONCE,
   type InitialState,
@@ -173,6 +174,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         menuBarSpeed: settings.menuBarSpeed !== false,
         notifyWhenDone: settings.notifyWhenDone !== false,
         captureRules: sanitizeCaptureRules(settings.captureRules),
+        routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -192,7 +194,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         solidGlass: false,
         menuBarSpeed: true,
         notifyWhenDone: true,
-        captureRules: DEFAULT_CAPTURE_RULES
+        captureRules: DEFAULT_CAPTURE_RULES,
+        routing: DEFAULT_ROUTING
       } satisfies InitialState
     }
   })

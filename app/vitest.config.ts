@@ -81,6 +81,9 @@ export const COVERED = [
   'src/shared/captureRules.ts',
   'src/renderer/src/components/ExtensionSettings.tsx',
   'src/renderer/src/components/settingsParts.tsx',
+  // M3.5a: routing downloads to one network.
+  'src/renderer/src/components/RoutingPanel.tsx',
+  'src/renderer/src/components/networkStatus.ts',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
   // M3.1 pull request 6a: the Dashboard's Today.
   'src/renderer/src/components/DashboardToday.tsx',

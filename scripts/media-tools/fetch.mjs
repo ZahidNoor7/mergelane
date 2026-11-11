@@ -53,6 +53,7 @@ import https from 'node:https'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs, promisify } from 'node:util'
 
@@ -257,7 +258,9 @@ function get(url, timeoutMs) {
     )
     // 'timeout' only reports an idle socket; the request has to be destroyed by hand (Node docs).
     request.on('timeout', () => {
-      request.destroy(new Error(`no data from ${url} for ${timeoutMs / 1000}s`))
+      request.destroy(
+        Object.assign(new Error(`no data from ${url} for ${timeoutMs / 1000}s`), { code: 'ETIMEDOUT' })
+      )
     })
     request.on('error', reject)
   })
@@ -285,7 +288,7 @@ export async function download(url, dest, { maxRedirects = 10, timeoutMs = 60_00
     }
     if (statusCode !== 200) {
       response.resume()
-      throw new Error(`HTTP ${statusCode} from ${current}`)
+      throw Object.assign(new Error(`HTTP ${statusCode} from ${current}`), { statusCode })
     }
     const hash = createHash('sha256')
     let bytes = 0
@@ -301,6 +304,53 @@ export async function download(url, dest, { maxRedirects = 10, timeoutMs = 60_00
       createWriteStream(dest, { flags: 'wx', mode: 0o600 })
     )
     return { sha256: hash.digest('hex'), bytes, url: current }
+  }
+}
+
+// Failures that may pass if tried again: a connection that was reset, refused or went quiet, or a
+// name lookup that timed out. Upstream servers (ffmpeg.org above all) drop connections now and then.
+const TRANSIENT_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'EPIPE',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ERR_STREAM_PREMATURE_CLOSE'
+])
+
+/** Whether a download failure is worth another try: a network failure above, or a server error
+ * (HTTP 5xx or 429). Not a 404, a refused URL or a redirect loop, which would fail the same way. */
+export function isTransient(failure) {
+  const status = failure?.statusCode
+  if (typeof status === 'number') return status >= 500 || status === 429
+  return TRANSIENT_CODES.has(failure?.code)
+}
+
+/**
+ * download(), tried again when it fails for a reason that may pass (isTransient): `attempts` tries in
+ * all, waiting pauseMs before the second, twice that before the third, and so on. A failed try's
+ * partial file is removed first. Every other failure, and the last try's, is thrown as it was.
+ */
+export async function downloadWithRetries(
+  url,
+  dest,
+  { attempts = 3, pauseMs = 5_000, log = () => {}, sleep = delay, ...network } = {}
+) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await download(url, dest, network)
+    } catch (failure) {
+      await rm(dest, { force: true })
+      if (attempt >= attempts || !isTransient(failure)) throw failure
+      const wait = pauseMs * attempt
+      log(
+        `${url}: ${failure.message}; trying again in ${wait / 1000}s (attempt ${attempt + 1} of ${attempts})`
+      )
+      await sleep(wait)
+    }
   }
 }
 
@@ -507,7 +557,7 @@ const megabytes = (bytes) => `${(bytes / 1e6).toFixed(1)} MB`
 /** Downloads a pinned file into work and checks it against its hash; nothing else happens first. */
 async function downloadPinned(tool, url, expected, dest, log, network) {
   log(`${tool.name} ${tool.version}: downloading ${url}`)
-  const { sha256, bytes } = await download(url, dest, network)
+  const { sha256, bytes } = await downloadWithRetries(url, dest, { log, ...network })
   if (sha256 !== expected) {
     throw new Error(
       `${tool.name}: SHA-256 mismatch for ${url}\n` +

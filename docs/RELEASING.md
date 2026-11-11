@@ -240,7 +240,7 @@ Publishing makes the release public. Its tag, `v1.2.3`, points at the commit tha
 | `A release for v1.2.3 already exists` | A draft from an earlier run is still there. Delete it (below) and run again. |
 | The fuse audit, the packaging test or the zip check fails | The build is not safe to ship. Nothing was uploaded. Fix the cause in a pull request first. |
 | `fetch-media-tools: ffmpeg: the build failed: ...` | FFmpeg did not compile; the message ends with the build's last lines. Reproduce with `node scripts/media-tools/fetch.mjs` on a Mac and fix `build-ffmpeg.sh` in a pull request. |
-| `media-tools sources: ...` or `the checksum file does not list ...-source...` | A source archive could not be downloaded or did not match its pinned SHA-256, so the release would not carry the source it promises. Check the upstream link in `tools.json`; never ship without it. |
+| `media-tools sources: ...` or `the checksum file does not list ...-source...` | A source archive could not be downloaded or did not match its pinned SHA-256, so the release would not carry the source it promises. A dropped or stalled connection, or a server error, has already been tried three times (the log says `trying again`); if the upstream site is having a bad day, run the release again later. Otherwise check the upstream link in `tools.json`; never ship without it. |
 
 To delete a draft you don't want, open it on the **Releases** page and delete it, or in Terminal:
 

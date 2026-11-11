@@ -50,8 +50,18 @@ All notable changes to Mergelane are recorded here. The format follows
   - the helper keeps a history of the last 50 network changes, shown in the app;
   - new helper commands: `events` and `auto-resume on|off`.
 
+- Running every check on the owner's Mac instead of GitHub (ADR-0032):
+  - `scripts/ci/local.sh` runs the checks that need no administrator rights, read from `ci.yml`;
+  - `scripts/ci/local-root.sh` runs the network tests with the owner's password, pausing and restoring the
+    installed helper;
+  - `scripts/release/local-release.mjs` builds a release locally and uploads it only as a draft.
+- New network tests: IPv6 traffic through the simulated links, and a link that drops and comes back.
+- The notices of the third-party code built into Deno ship inside the app.
+
 ### Changed
 
+- `mergelane-daemon --probe-targets` sorts IPv4 and IPv6 targets by family; before, an IPv6 target failed every
+  IPv4 probe.
 - FFmpeg is now Mergelane's own minimal build from FFmpeg's official source: LGPL instead of GPL, and 4.1 MB
   instead of 66 MB. It only joins and rewraps media; it never re-encodes.
 - yt-dlp ships as its unpacked macOS build, which starts in a quarter of a second instead of about 24 seconds.

@@ -192,6 +192,10 @@ until the owner overrides it.
     tests compare against a measured single-link baseline, not the configured rate.
   - After `ifconfig down` and `up`, a link did not carry traffic again even with its route and ARP entry
     re-added. Link recovery is not a Phase 1 criterion, so M1.5 investigates it.
+    - Update (2026-11-11): XNU's source shows that `ifconfig down` deletes every IPv4 route that uses the link's
+      address, static ones included (the ARP entry, the scoped default and a `via` route), and `up` restores only
+      the interface route. `netsim.sh restore` now re-adds all of them. A new `gone` mode destroys and recreates
+      the link, so it returns with a new index. Proven only once the root suite runs.
   - pf `reply-to` does not work here: `arp -s` refuses a local address.
 
 ## ADR-0016: Harden Electron fuses, and audit them with REA in CI
@@ -449,8 +453,12 @@ until the owner overrides it.
     passed, so no unpinned code is fetched at run time.
 - Consequences:
   - About 81 MB more in the app. No source to attach, since Deno is MIT (ADR-0027).
-  - **Open:** the notices of the third-party code built into Deno (V8, TypeScript, Rust crates) are not collected
-    yet. Needed before the first public release.
+  - Resolved (2026-11-11): Deno publishes no notices file, so `scripts/media-tools/deno-notices.mjs` builds
+    `licenses/deno/THIRD-PARTY-NOTICES.txt` from pinned inputs. It reproduces byte for byte and ships in the app.
+    - **Rust:** every crate in Deno's `Cargo.lock`, each checked against its hash. 25 crates carry only their
+      licence's standard text, without the authors' copyright lines.
+    - **V8:** rusty_v8 and its submodules (V8, ICU, Abseil, LLVM's libc++ and others).
+    - **JavaScript and TypeScript:** TypeScript, and Node.js's own licence part.
 
 ## ADR-0030: How YouTube downloads run on several networks (implements ADR-0026)
 
@@ -491,3 +499,44 @@ until the owner overrides it.
   - Packaging re-signs every Mach-O file inside it.
   - The licence analysis is unchanged: the program as a whole is GPL-3.0-or-later, and its source is the same
     `yt-dlp.tar.gz`.
+
+## ADR-0032: CI checks and releases run on the owner's Mac (follows ADR-0020)
+
+- Status: Owner (2026-11-11). GitHub CI stays paused, and the owner chose to run everything on their own Mac.
+- Decision:
+  - `scripts/ci/local.sh` runs `ci.yml`'s jobs that need no root, reading the commands from `ci.yml` itself, so the
+    two can't drift. A new non-root step runs automatically. A root step, an unknown action or a `${{ }}`
+    expression stops the plan until a rule covers it.
+  - `scripts/ci/local-root.sh` runs the root jobs (netsim, daemon acceptance, app acceptance) with the owner's
+    password, typed once in their own Terminal:
+    - It refuses to start while a VPN is up, a test is already running or Mergelane is open.
+    - It backs up the installed helper (plist, binary, settings) to `/var/db/mergelane-local-ci`, checks the copies'
+      hashes, and pauses the helper.
+    - pf changes are limited to the harness's own anchor, released with a reference token.
+    - It restores everything on success, failure, Ctrl-C or a closed Terminal, with a root watchdog for a runner
+      that is killed outright. Then it verifies the routing table, the leftovers, the helper and the internet.
+    - It offers a dry run and a `--restore` mode.
+  - `scripts/release/local-release.mjs` mirrors `release.yml`. It uploads only with `--upload`, always as a draft,
+    and refuses an existing tag.
+  - "Works on a clean Mac" becomes the owner installing the DMG by hand.
+- Consequences:
+  - There is no CI record for new changes; the local logs in `local-ci-logs/` are the evidence.
+  - While the root suite runs, the owner's real internet is cut for short stretches (about 3 minutes in 20).
+
+## ADR-0033: The packaging test's local mode (amends ADR-0013 for local runs)
+
+- Status: Accepted (2026-11-11).
+- Decision: `package-test.sh --local` (or `MERGELANE_PACKAGE_TEST_LOCAL=1`):
+  - **No quarantine flag and no Gatekeeper assessment.** An earlier local quarantine test brought up Apple's
+    malware warning for the owner. A DMG that already carries the flag is refused.
+  - **The packaged app's launch is isolated:**
+    - it runs with `HOME` and `CFFIXED_USER_HOME` set to a test folder, plus `--user-data-dir` and
+      `--use-mock-keychain`;
+    - it is quit by PID, never through AppleScript;
+    - before-and-after snapshots of the owner's Mergelane data, the browsers' native-messaging manifests,
+      preferences and keychain item fail the test on any change;
+    - it is skipped unless the saved `mergelane:` handler is already Mergelane's.
+- Evidence: three local launches reached ready with all 106 snapshot entries unchanged, while the owner's own
+  Mergelane kept running. `CFFIXED_USER_HOME` is read by Apple's open-source CoreFoundation but is not documented by
+  Apple.
+- Consequences: the Gatekeeper verdict ("not notarised", not "damaged") is proven only by the CI path.

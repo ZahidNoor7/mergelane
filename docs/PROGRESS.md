@@ -120,8 +120,27 @@ Last updated: 2026-11-11
   - the FFmpeg build on the CI runner.
 - **Open before the first public release:** the notices of the third-party code built into Deno (ADR-0029).
 
+**Finishing Phase 2 on the owner's Mac** (branch `m2.7-finish-phase2`, ADR-0032, ADR-0033):
+- `scripts/ci/local.sh`: all 6 non-root jobs pass.
+  - repo-checks: 226 tests;
+  - app checks;
+  - smoke: 428 passed, 1 skipped;
+  - package: build, fuse audit, local package test;
+  - daemon: 567 passed, 7 skipped that need root;
+  - extension: 16 passed.
+- `scripts/ci/local-root.sh`: ready; run by the owner in Terminal. It adds the IPv6 and link-recovery acceptance
+  cases.
+- **The Deno notices** (ADR-0029) are generated and shipped.
+- **`local-release.mjs`:** a full dry run built the DMG, zip and sources; nothing was uploaded.
+- **Next:**
+  1. The owner runs the root suite.
+  2. Merge PRs #1–#11 in order.
+  3. Add the `[0.1.0]` changelog section and build the release on `main`, as a draft.
+  4. The owner installs the DMG by hand.
+
 **Owner choices for Phase 2:**
-- CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11).
+- CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11). Everything runs on the
+  owner's Mac instead (ADR-0032).
 - YouTube: option A with hard limits (ADR-0026); Deno shipped.
 - FFmpeg: our own LGPL build (ADR-0028); sources attached to every release (ADR-0027).
 - Probes and the quarantine test accepted (ADR-0008, ADR-0013); Telegram removed (ADR-0012, branch

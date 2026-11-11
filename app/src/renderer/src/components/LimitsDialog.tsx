@@ -41,6 +41,7 @@ const USENET_PAGE = 'usenet'
 type Draft = Pick<
   ReturnType<typeof useAppStore.getState>,
   | 'speedLimit'
+  | 'uploadLimit'
   | 'slowMode'
   | 'slowModeSpeed'
   | 'downloadsAtOnce'
@@ -52,6 +53,7 @@ type Draft = Pick<
 const GENERAL_DEFAULTS = {
   downloadSchedule: undefined,
   speedLimit: undefined,
+  uploadLimit: undefined,
   slowMode: false,
   slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
   downloadsAtOnce: DOWNLOADS_AT_ONCE.default
@@ -227,7 +229,7 @@ function GeneralPage({
   draft: Draft
   change: (patch: Partial<Draft>) => void
 }): React.JSX.Element {
-  const { speedLimit, slowMode, slowModeSpeed, downloadsAtOnce } = draft
+  const { speedLimit, uploadLimit, slowMode, slowModeSpeed, downloadsAtOnce } = draft
   const [confirmReset, setConfirmReset] = useState(false)
   const atDefaults = Object.entries(GENERAL_DEFAULTS).every(
     ([key, value]) => draft[key as keyof typeof GENERAL_DEFAULTS] === value
@@ -250,6 +252,19 @@ function GeneralPage({
           value={speedLimit}
           fallback={20 * MB}
           onChange={(speedLimit) => change({ speedLimit })}
+        />
+      </section>
+
+      <section className={sectionClass}>
+        <h4 className={headingClass}>Total upload speed</h4>
+        <p className={hintClass}>
+          Limits the combined speed torrents upload at, across all networks.
+        </p>
+        <LimitChoice
+          label="Total upload speed"
+          value={uploadLimit}
+          fallback={2 * MB}
+          onChange={(uploadLimit) => change({ uploadLimit })}
         />
       </section>
 
@@ -325,8 +340,8 @@ function GeneralPage({
           <AlertDialogHeader>
             <AlertDialogTitle>Reset all downloads to defaults?</AlertDialogTitle>
             <AlertDialogDescription>
-              This resets total speed, slow mode, downloads at once and the download schedule.
-              Network limits stay unchanged.
+              This resets total speed, total upload speed, slow mode, downloads at once and the
+              download schedule. Network limits stay unchanged.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -368,7 +383,7 @@ function NetworkPage({
       if (reset === 'usage') {
         await window.mergelane.resetNetworkUsage(id)
         onUsageReset()
-      } else change({ speedLimit: undefined, dataLimit: undefined })
+      } else change({ speedLimit: undefined, uploadLimit: undefined, dataLimit: undefined })
       setReset(null)
     } catch (cause) {
       setError(describeError(cause))
@@ -399,6 +414,17 @@ function NetworkPage({
           value={preference?.speedLimit}
           fallback={10 * MB}
           onChange={(speedLimit) => change({ speedLimit })}
+        />
+      </section>
+
+      <section className={sectionClass}>
+        <h4 className={headingClass}>Upload speed</h4>
+        <p className={hintClass}>Limits the combined speed torrents upload at on {name}.</p>
+        <LimitChoice
+          label={`${name} upload speed`}
+          value={preference?.uploadLimit}
+          fallback={1 * MB}
+          onChange={(uploadLimit) => change({ uploadLimit })}
         />
       </section>
 
@@ -463,7 +489,12 @@ function NetworkPage({
         <Button
           variant="secondary"
           size="sm"
-          disabled={busy || (preference?.speedLimit === undefined && dataLimit === undefined)}
+          disabled={
+            busy ||
+            (preference?.speedLimit === undefined &&
+              preference?.uploadLimit === undefined &&
+              dataLimit === undefined)
+          }
           onClick={() => setReset('limits')}
         >
           Remove limits
@@ -478,7 +509,7 @@ function NetworkPage({
             <AlertDialogDescription>
               {reset === 'usage'
                 ? `This resets ${name}’s usage ${dataUsageLabel(period)} to zero. Its configured limits and usage for other periods stay unchanged. Downloads can use this network again if its data limit was reached.`
-                : `This removes ${name}’s speed and data limits. Its recorded data usage stays unchanged. The total speed limit and slow mode still apply.`}
+                : `This removes ${name}’s speed, upload speed and data limits. Its recorded data usage stays unchanged. The total speed limits and slow mode still apply.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && (
@@ -491,7 +522,10 @@ function NetworkPage({
             <AlertDialogAction
               disabled={busy}
               onClick={(event) => {
-                event.preventDefault()
+                // Base UI's Close shuts the window on click whatever preventDefault says; it stays
+                // open until the reset is done, so a failure can say why (base-ui.com handbook,
+                // Customization: preventBaseUIHandler).
+                event.preventBaseUIHandler()
                 void confirmReset()
               }}
             >
@@ -632,6 +666,8 @@ function describeLimits(
   // A line each, said as the networks menu says them, so the two never read differently.
   const lines = [
     preference?.speedLimit !== undefined && `Limit ${formatSpeedLimit(preference.speedLimit)}`,
+    preference?.uploadLimit !== undefined &&
+      `Upload limit ${formatSpeedLimit(preference.uploadLimit)}`,
     preference?.dataLimit !== undefined && formatDataUsage(used, preference.dataLimit)
   ].filter((line): line is string => typeof line === 'string')
   return lines.length > 0 ? lines : ['No limit']
@@ -697,6 +733,7 @@ function LimitsEditor({
   const [draft, setDraft] = useState<Draft>(() => {
     const {
       speedLimit,
+      uploadLimit,
       slowMode,
       slowModeSpeed,
       downloadsAtOnce,
@@ -705,6 +742,7 @@ function LimitsEditor({
     } = useAppStore.getState()
     return {
       speedLimit,
+      uploadLimit,
       slowMode,
       slowModeSpeed,
       downloadsAtOnce,
@@ -742,6 +780,7 @@ function LimitsEditor({
     const store = useAppStore.getState()
     const patch: AppSettings = {}
     if (draft.speedLimit !== store.speedLimit) patch.speedLimit = draft.speedLimit
+    if (draft.uploadLimit !== store.uploadLimit) patch.uploadLimit = draft.uploadLimit
     if (draft.slowMode !== store.slowMode) patch.slowMode = draft.slowMode
     if (draft.slowModeSpeed !== store.slowModeSpeed) patch.slowModeSpeed = draft.slowModeSpeed
     if (draft.downloadsAtOnce !== store.downloadsAtOnce)
@@ -768,7 +807,7 @@ function LimitsEditor({
       setSaving(false)
     }
   }
-  const { speedLimit, slowMode, networkPreferences: preferences } = draft
+  const { speedLimit, uploadLimit, slowMode, networkPreferences: preferences } = draft
   const running = useAppStore(
     (store) =>
       Object.values(store.downloads).filter((download) => download.status === 'downloading').length
@@ -822,6 +861,7 @@ function LimitsEditor({
               : speedLimit
                 ? `Limit ${formatSpeedLimit(speedLimit)}`
                 : 'No limit',
+            ...(uploadLimit ? [`Upload limit ${formatSpeedLimit(uploadLimit)}`] : []),
             ...(draft.downloadSchedule?.enabled
               ? [
                   `${scheduleTime(draft.downloadSchedule.startMinute)}–${scheduleTime(draft.downloadSchedule.endMinute)}`

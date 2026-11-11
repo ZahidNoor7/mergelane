@@ -82,6 +82,8 @@ interface AppStore {
   downloadsAtOnce: number
   /** Persisted — the speed limits (see AppSettings). */
   speedLimit: number | undefined
+  /** Torrent uploads, every network together; set in Speed & data limits (ADR-0041). */
+  uploadLimit: number | undefined
   slowMode: boolean
   slowModeSpeed: number
   /** Persisted — MB/s or Mbps, for every speed shown. */
@@ -203,6 +205,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   newDownloadOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,
   speedLimit: initial.speedLimit,
+  uploadLimit: initial.uploadLimit,
   slowMode: initial.slowMode,
   slowModeSpeed: initial.slowModeSpeed,
   speedUnit: initial.speedUnit,

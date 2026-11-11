@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "state": "off",
+    "reason": "System merge was turned off because mergelane-daemon stopped unexpectedly.",
+    "since": "2026-11-10T09:31:12.25Z",
+    "version": "0.1.0",
+    "protocol": 1
+  }
+}

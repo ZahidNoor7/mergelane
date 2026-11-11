@@ -79,15 +79,21 @@ until the owner overrides it.
 
 ## ADR-0008: Faster link health checks
 
-- Status: Proposed (2026-11-10)
+- Status: Proposed (2026-11-10). Implemented in M1.3 (`daemon/internal/engine/probe.go`).
 - Context: Upstream marks a silent link down after about 19 s. Phase 1 requires that new flows avoid a dead link
   within 5 s.
 - Decision:
-  - Up links are probed every 1 s with a 1.5 s timeout and marked down after 2 consecutive failures.
-  - A link is also sidelined on connect timeouts and when its interface loses its address or route.
-  - Probe targets are configurable. They default to upstream's (`1.1.1.1:443`, `8.8.8.8:443`, TCP connect only,
-    no data sent); tests point them at the simulated network.
-- Consequences: Slightly more probe traffic: one TCP handshake per link per second.
+  - Up links are probed every 2 s. A probe dials every target in parallel and fails after 1.5 s.
+  - One failed probe moves the link to the "down" tier. A down link is probed every 1 s and rejoins on its
+    first success.
+  - A connect that times out or finds the host unreachable through a link triggers an immediate re-probe of
+    that link (`Scheduler.Suspect`). The link is not sidelined, because the destination may be at fault.
+  - Probe targets are configurable (`engine.SetProbeTargets`). They default to upstream's (`1.1.1.1:443`,
+    `8.8.8.8:443`, TCP connect only, no data sent); tests point them at the simulated network.
+  - Worst-case detection: 2 s interval + 1.5 s timeout + 1 s scheduler tick = 4.5 s, asserted by a unit test.
+- Consequences:
+  - About one TCP handshake per link every 2 s.
+  - A single lost probe briefly demotes a link for new flows only; existing flows are unaffected.
 - Owner question open: whether to probe only the gateway instead (PHASE-1 §4 Q3).
 
 ## ADR-0009: Keep Plexo's HTTP browser bridge in Phase 1

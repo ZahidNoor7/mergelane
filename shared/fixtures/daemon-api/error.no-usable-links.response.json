@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "2",
+  "ok": false,
+  "error": {
+    "code": "NO_USABLE_LINKS",
+    "message": "No network link can reach the internet right now."
+  }
+}

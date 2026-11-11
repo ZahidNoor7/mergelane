@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "10",
+  "ok": false,
+  "error": {
+    "code": "UNSUPPORTED_VERSION",
+    "message": "protocol version 2 is not supported; this daemon speaks version 1"
+  }
+}

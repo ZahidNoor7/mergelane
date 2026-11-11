@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "id": "5",
+  "ok": true,
+  "result": {
+    "links": [
+      {
+        "name": "en0",
+        "index": 11,
+        "kind": "Wi-Fi",
+        "ipv4": "192.168.1.23",
+        "ipv6": "2001:db8::23",
+        "up": true,
+        "state": "up",
+        "limitMbps": 50
+      },
+      {
+        "name": "en7",
+        "index": 19,
+        "kind": "iPhone USB",
+        "ipv4": "172.20.10.2",
+        "up": true,
+        "state": "unknown"
+      },
+      {
+        "name": "en5",
+        "index": 17,
+        "up": false,
+        "state": "down"
+      }
+    ]
+  }
+}

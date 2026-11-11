@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "11",
+  "ok": false,
+  "error": {
+    "code": "UNKNOWN_METHOD",
+    "message": "unknown method \"reboot\""
+  }
+}

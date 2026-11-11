@@ -108,3 +108,76 @@ jobs:
           name: mergelane-dmg
           path: app/dist/Mergelane-*-arm64.dmg
           retention-days: 7
+
+  daemon:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      # Upstream's SOCKS and probe tests need two extra loopback addresses.
+      - run: sudo ifconfig lo0 alias 127.0.0.2/32 && sudo ifconfig lo0 alias 127.0.0.3/32
+      - run: go vet ./...
+      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./... # staticcheck 2026.2.2
+      - run: go test -race -coverprofile=coverage.out ./...
+      - name: Coverage by package
+        run: go tool cover -func=coverage.out | tail -1 && rm coverage.out
+      - run: go build -trimpath -o mergelane-daemon ./cmd/mergelane-daemon && file mergelane-daemon
+
+  # Phase 1 M1.5: the simulated-network harness proves itself and its leak detection.
+  netsim:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # pinned-get.mjs loads koffi from app/node_modules; its prebuilt binary needs no install script.
+      - run: npm ci --ignore-scripts
+        working-directory: app
+      - run: node --test --experimental-test-coverage scripts/netsim/*.test.mjs
+      - name: Self-test with a 20 and a 50 Mbit/s link
+        run: bash scripts/netsim/with-netsim.sh "1:20:10:0 2:50:10:0" -- bash scripts/netsim/selftest.sh
+      - name: A leftover route fails the run
+        run: |
+          if bash scripts/netsim/with-netsim.sh "1:20:10:0" -- sudo route -q -n add -host 192.0.2.77 127.0.0.1; then
+            echo "with-netsim did not notice the leftover route" >&2
+            exit 1
+          fi
+          sudo route -q -n delete -host 192.0.2.77 127.0.0.1
+      - name: Clean up after a failure
+        if: always()
+        run: sudo bash scripts/netsim/netsim.sh down
+
+  # Phase 1 acceptance criteria 3, 4, 5 and the system half of 6, on simulated links.
+  daemon-acceptance:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    needs: [daemon, netsim]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Daemon acceptance on a 20 and a 50 Mbit/s link
+        run: bash scripts/netsim/with-netsim.sh "1:20:10:0 2:50:10:0" -- bash scripts/acceptance/daemon.sh
+      - name: Clean up after a failure
+        if: always()
+        run: |
+          sudo pkill -f mergelane-acceptance-bin || true
+          sudo /tmp/mergelane-acceptance-bin/mergelane-daemon uninstall || true
+          sudo /tmp/mergelane-acceptance-bin/mergelane-daemon cleanup || true
+          sudo bash scripts/netsim/netsim.sh down

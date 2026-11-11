@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "id": "2",
+  "ok": false,
+  "error": {
+    "code": "VPN_ACTIVE",
+    "message": "Another VPN is active: utun4 carries the default route. Turn it off to use system merge."
+  }
+}

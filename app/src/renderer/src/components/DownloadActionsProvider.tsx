@@ -18,7 +18,6 @@ export function DownloadActionsProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
-  const setView = useAppStore((store) => store.setView)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const [confirmation, setConfirmation] = useState<{
     mode: RemoveMode
@@ -67,8 +66,8 @@ export function DownloadActionsProvider({
           } catch (cause) {
             return fail(cause)
           }
+          // Forgetting it closes its details too.
           useAppStore.getState().forgetDownload(item.id)
-          setView({ name: 'list' })
           openNewDownload(item.url)
           return true
         }
@@ -102,7 +101,7 @@ export function DownloadActionsProvider({
           return true
       }
     },
-    [setView, openNewDownload]
+    [openNewDownload]
   )
 
   const askClearFinished = useCallback((): void => {
@@ -133,9 +132,12 @@ export function DownloadActionsProvider({
           }
         }
       }
-      // Showing one that's gone: back to the list.
-      const view = useAppStore.getState().view
-      if (view.name === 'download' && (clearAll || gone.has(view.id))) setView({ name: 'list' })
+      // Each one removed closed its own details (forgetDownload); a cleared finished list closes
+      // the details of any of them.
+      const { selectedId } = useAppStore.getState()
+      if (clearAll && items.some((item) => item.id === selectedId)) {
+        useAppStore.setState({ selectedId: null, detailOpen: false })
+      }
       const left = items.filter((item) => !gone.has(item.id))
       if (!clearAll && left.length > 0) {
         setConfirmation({ mode, items: left, clearAll })

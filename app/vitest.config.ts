@@ -52,7 +52,15 @@ export const COVERED = [
   ...['DownloadFilters', 'DownloadGlyphs'].map((name) => `src/renderer/src/components/${name}.tsx`),
   'src/renderer/src/components/fileTypeIcons.ts',
   'src/renderer/src/hooks/useMergeLanes.ts',
-  'src/shared/downloadFilters.ts'
+  'src/shared/downloadFilters.ts',
+  // M3.1 pull request 5b-2: a download's details (the Inspector) and where they sit.
+  ...['Inspector', 'InspectorProgress', 'InspectorFinished', 'InspectorFailed', 'parts'].map(
+    (name) => `src/renderer/src/components/inspector/${name}.tsx`
+  ),
+  'src/renderer/src/components/DownloadNetworks.tsx',
+  'src/renderer/src/components/networkStatus.ts',
+  'src/renderer/src/screens/DownloadsPlace.tsx',
+  'src/shared/windowSize.ts'
 ]
 
 export default defineConfig({

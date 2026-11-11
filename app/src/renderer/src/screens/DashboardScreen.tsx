@@ -220,7 +220,8 @@ function DashboardHero(): React.JSX.Element {
 
 function ActiveDownloadsSection(): React.JSX.Element {
   const downloads = Object.values(useAppStore((store) => store.downloads))
-  const setView = useAppStore((store) => store.setView)
+  const setScreen = useAppStore((store) => store.setScreen)
+  const openDownload = useAppStore((store) => store.openDownload)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const networkVisual = useNetworkVisuals()
@@ -247,7 +248,7 @@ function ActiveDownloadsSection(): React.JSX.Element {
             className="text-[var(--color-danger)]"
             onClick={() => {
               setFilter('failed')
-              setView({ name: 'list' })
+              setScreen('downloads')
             }}
           >
             <TriangleAlert data-icon="inline-start" aria-hidden />
@@ -275,7 +276,7 @@ function ActiveDownloadsSection(): React.JSX.Element {
               key={download.id}
               download={download}
               networkVisual={networkVisual}
-              onOpen={() => setView({ name: 'download', id: download.id })}
+              onOpen={() => openDownload(download.id)}
             />
           ))}
         </ul>

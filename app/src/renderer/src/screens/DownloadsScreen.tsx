@@ -13,7 +13,7 @@ import { useDownloadActions, useDownloadActionsState } from '../components/downl
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { MoreActionsMenu } from '../components/MoreActionsMenu'
-import { networkStatusText } from '../components/NetworkRow'
+import { networkStatusText } from '../components/networkStatus'
 import { NetworksMenu } from '../components/NetworksMenu'
 import { ScheduleIndicator } from '../components/ScheduleIndicator'
 import { SpeedText } from '../components/SpeedText'
@@ -107,10 +107,15 @@ function summaryOf(downloads: DownloadState[], listed: number): string {
   return parts.length > 0 ? parts.join(', ') : 'All finished'
 }
 
-export function DownloadsScreen(): React.JSX.Element {
+export function DownloadsScreen({
+  current
+}: {
+  /** The download whose details show beside the list, in a wide window. */
+  current?: string
+} = {}): React.JSX.Element {
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
-  const setView = useAppStore((store) => store.setView)
+  const openDownload = useAppStore((store) => store.openDownload)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
@@ -174,7 +179,7 @@ export function DownloadsScreen(): React.JSX.Element {
   // Stable, with the colors resolved once here, so a finished row skips every progress push.
   const networkVisual = useNetworkVisuals()
   const selectRow = useCallback((id: string, on: boolean) => toggle([id], on), [toggle])
-  const openRow = useCallback((id: string) => setView({ name: 'download', id }), [setView])
+  const openRow = useCallback((id: string) => openDownload(id), [openDownload])
   const focusSearch = (): void => {
     searchInputRef.current?.focus()
     searchInputRef.current?.select()
@@ -511,6 +516,7 @@ export function DownloadsScreen(): React.JSX.Element {
                             item={item}
                             now={now}
                             selected={selected.has(item.id)}
+                            current={item.id === current}
                             // Only a selected row's menu acts on the selection.
                             chosen={selected.has(item.id) ? chosen : NOT_CHOSEN}
                             networkVisual={
@@ -667,6 +673,7 @@ const DownloadRow = memo(function DownloadRow({
   item,
   now,
   selected,
+  current = false,
   networkVisual,
   onSelect,
   onOpen,
@@ -674,7 +681,10 @@ const DownloadRow = memo(function DownloadRow({
 }: {
   item: Item
   now: number
+  /** Checked, in the selection. */
   selected: boolean
+  /** Its details are open beside the list. */
+  current?: boolean
   /** Colors its progress bar and network dots; a finished row has none. */
   networkVisual?: ResolveNetworkVisual
   onSelect: (id: string, on: boolean) => void
@@ -749,7 +759,8 @@ const DownloadRow = memo(function DownloadRow({
       data-selected={selected || undefined}
       className={cn(
         'group/download-row relative flex items-center gap-3 rounded-[12px] px-2.5 py-2.5 transition-colors duration-100',
-        selected ? 'bg-selected' : 'hover:bg-hover active:bg-selected'
+        selected || current ? 'bg-selected' : 'hover:bg-hover active:bg-selected',
+        current && 'shadow-[inset_0_0_0_1px_var(--color-accent)]'
       )}
     >
       <Checkbox
@@ -764,6 +775,8 @@ const DownloadRow = memo(function DownloadRow({
           {/* The whole row opens the download: this button's area covers it (after:inset-0). */}
           <button
             type="button"
+            data-download-id={item.id}
+            aria-current={current || undefined}
             onClick={() => onOpen(item.id)}
             className="min-w-0 truncate text-left text-[13.5px] leading-tight font-[580] outline-none after:absolute after:inset-0 after:rounded-[12px] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
           >

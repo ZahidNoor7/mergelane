@@ -71,7 +71,9 @@ beforeEach(() => {
     showUpdateMenu: vi.fn(() => Promise.resolve())
   } as unknown as typeof window.mergelane
   useAppStore.setState({
-    view: { name: 'list' },
+    screen: 'downloads',
+    selectedId: null,
+    detailOpen: false,
     interfaces: [iface('en0', 'Wi-Fi', 'wifi'), iface('en7', 'iPhone USB', 'usb')],
     downloads: {
       a: download('a', 'downloading', [
@@ -115,14 +117,14 @@ describe('Sidebar', () => {
 
     const user = userEvent.setup()
     await user.click(dashboard)
-    expect(useAppStore.getState().view).toEqual({ name: 'dashboard' })
+    expect(useAppStore.getState().screen).toBe('dashboard')
     expect(dashboard.getAttribute('aria-current')).toBe('page')
 
-    // From one download's screen, Downloads is the place, and goes back to the list.
-    act(() => useAppStore.setState({ view: { name: 'download', id: 'a' } }))
+    // With a download's details open, Downloads is the place, and goes back to the list.
+    act(() => useAppStore.getState().openDownload('a'))
     expect(downloads.getAttribute('aria-current')).toBe('page')
     await user.click(downloads)
-    expect(useAppStore.getState().view).toEqual({ name: 'list' })
+    expect(useAppStore.getState()).toMatchObject({ screen: 'downloads', detailOpen: false })
   })
 
   it('has no count when nothing is in progress', () => {
@@ -195,13 +197,13 @@ describe('CompactBar', () => {
 
     const user = userEvent.setup()
     await user.click(dashboard)
-    expect(useAppStore.getState().view).toEqual({ name: 'dashboard' })
+    expect(useAppStore.getState().screen).toBe('dashboard')
     expect(dashboard.getAttribute('aria-pressed')).toBe('true')
     // Pressing the place already chosen keeps it: a segmented control is never empty.
     await user.click(dashboard)
-    expect(useAppStore.getState().view).toEqual({ name: 'dashboard' })
+    expect(useAppStore.getState().screen).toBe('dashboard')
     await user.click(downloads)
-    expect(useAppStore.getState().view).toEqual({ name: 'list' })
+    expect(useAppStore.getState().screen).toBe('downloads')
   })
 
   it('names slow mode for a screen reader, without showing the label', () => {

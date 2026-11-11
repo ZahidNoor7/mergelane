@@ -170,9 +170,9 @@ test.describe('Dashboard @smoke', () => {
       page.getByText('Each network’s speed is drawn here while something downloads.')
     ).toBeHidden()
 
-    // The row opens the download's own screen.
+    // The row opens the download's details.
     await row.getByRole('button', { name: 'test.bin' }).click()
-    await expect(page.getByRole('table', { name: 'Networks' })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Networks', exact: true })).toBeVisible()
 
     await mergelane.waitForHttpStatus('completed', 40_000)
     // The sidebar's places, not the download screen's own way back to the list.

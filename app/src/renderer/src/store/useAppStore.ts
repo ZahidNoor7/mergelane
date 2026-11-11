@@ -22,8 +22,9 @@ export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** What the window shows: the list of downloads, one download, or the dashboard. */
-export type View = { name: 'list' } | { name: 'download'; id: string } | { name: 'dashboard' }
+/** The window's places (the sidebar's): the downloads or the dashboard. The Networks and Settings
+ * screens join them in M3.1 pull requests 5d and 5e. */
+export type Screen = 'downloads' | 'dashboard'
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -47,7 +48,13 @@ interface AppStore {
   downloads: Record<string, DownloadState>
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
-  view: View
+  /** The place the window shows. */
+  screen: Screen
+  /** The download whose details show: beside the list in a wide window, or in its place in a
+   * narrow one while `detailOpen`. */
+  selectedId: string | null
+  /** A narrow window shows the selected download's details instead of the list. */
+  detailOpen: boolean
   /** The list's status tab. */
   downloadFilter: DownloadFilter
   setDownloadFilter: (filter: DownloadFilter) => void
@@ -93,7 +100,12 @@ interface AppStore {
   receiveHistory: (history: FinishedDownload[]) => void
   /** Drops a download from the window's view once the main process has removed it. */
   forgetDownload: (id: string) => void
-  setView: (view: View) => void
+  /** Goes to a place; in a narrow window, back to the list rather than a download's details. */
+  setScreen: (screen: Screen) => void
+  /** Shows a download's details, on the Downloads place. */
+  openDownload: (id: string) => void
+  /** Back to the list, in a narrow window. The download stays selected for a wide one. */
+  closeDownload: () => void
   /** Opens New download, with `link` in its link field when one is given. */
   openNewDownload: (link?: string) => void
   closeNewDownload: () => void
@@ -140,7 +152,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   downloads: {},
   history: [],
-  view: { name: 'list' },
+  screen: 'downloads',
+  selectedId: null,
+  detailOpen: false,
   downloadFilter: 'all',
   setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
   downloadFilters: NO_FILTERS,
@@ -232,10 +246,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   forgetDownload: (id) => {
     const { [id]: removed, ...downloads } = get().downloads
     void removed
-    set({ downloads, history: get().history.filter((entry) => entry.id !== id) })
+    set({
+      downloads,
+      history: get().history.filter((entry) => entry.id !== id),
+      // Its details go with it.
+      ...(get().selectedId === id ? { selectedId: null, detailOpen: false } : {})
+    })
   },
 
-  setView: (view) => set({ view }),
+  setScreen: (screen) => set({ screen, detailOpen: false }),
+  openDownload: (id) => set({ screen: 'downloads', selectedId: id, detailOpen: true }),
+  closeDownload: () => set({ detailOpen: false }),
 
   openNewDownload: (link) =>
     set(link === undefined ? { newDownloadOpen: true } : { newDownloadOpen: true, draftUrl: link }),

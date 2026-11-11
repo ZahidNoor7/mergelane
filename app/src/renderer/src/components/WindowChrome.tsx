@@ -4,7 +4,7 @@ import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, type Screen } from '../store/useAppStore'
 import { networkSummaries } from '../utils/dashboard'
 import { formatBytes } from '../utils/format'
 import { NetworkTile } from './NetworkTile'
@@ -26,20 +26,18 @@ import { UpdateIndicator } from './UpdateIndicator'
 /** Width of the window at which the sidebar replaces the compact bar. */
 export const SIDEBAR_FROM = 760
 
-type Place = 'dashboard' | 'downloads'
+type Place = Screen
 
 const PLACES: { id: Place; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine }
 ]
 
-/** Where the window is: the dashboard, or the downloads (the list or one download). */
+/** Where the window is: the dashboard, or the downloads (the list, and a download's details). */
 function usePlace(): [Place, (place: Place) => void] {
-  const place = useAppStore((store): Place =>
-    store.view.name === 'dashboard' ? 'dashboard' : 'downloads'
-  )
-  const setView = useAppStore((store) => store.setView)
-  return [place, (next) => setView(next === 'dashboard' ? { name: 'dashboard' } : { name: 'list' })]
+  const place = useAppStore((store) => store.screen)
+  const setScreen = useAppStore((store) => store.setScreen)
+  return [place, setScreen]
 }
 
 /** Every network, live: its tile, name and speed, or that it's out. */

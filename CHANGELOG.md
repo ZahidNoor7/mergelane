@@ -31,6 +31,12 @@ All notable changes to Mergelane are recorded here. The format follows
   - status tabs with counts (All, In progress, Finished, Needs attention), which replace the status menu;
   - new rows with a file-type icon, tags for torrents, Usenet and video links, and the progress in plain words.
   - Queued downloads are now listed as "Waiting".
+- A download's details now sit beside the list in a pane, as in the design, when the window is wide enough. In a
+  narrower window they take the list's place, with a "Downloads" button back. The pane replaces the three separate
+  download screens and keeps everything they showed: the speed on each network, the numbers, the last minute, each
+  network with its switch, streams and peers, the chunk map, a torrent's files and trackers, a Usenet download's
+  server and notes, and a failed download's reason and link.
+- Mergelane opens at 1280 × 800, the design's size, or smaller to fit the screen.
 - Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
   file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
   downloads it would leave, and the filters that are on show as chips you can remove.

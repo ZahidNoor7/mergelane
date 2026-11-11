@@ -6,6 +6,7 @@ import {
   nativeImage,
   nativeTheme,
   Notification,
+  screen,
   shell,
   Tray
 } from 'electron'
@@ -19,6 +20,7 @@ import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from '
 import { currentWindowBackground, setWindowTheme } from './windowBackground'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
+import { MIN_WINDOW, openingSize } from '../shared/windowSize'
 import type { DownloadManager } from './download/downloadManager'
 
 // In dev mode the app runs as the raw `electron` binary, which otherwise shows "Electron" in
@@ -108,13 +110,12 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    // Room for the final design's sidebar (236px) beside the downloads; it gives way to a compact bar
-    // below 760px (renderer components/WindowChrome.tsx).
-    width: 1040,
-    height: 720,
-    minWidth: 720,
-    // Room under the download screen's pinned block grid for a network row and a few of its rows.
-    minHeight: 620,
+    // The final design's window, where a download's details sit beside the list, fitted to the
+    // screen's work area (shared/windowSize.ts). The sidebar gives way to a compact bar below 760px
+    // (renderer components/WindowChrome.tsx).
+    ...openingSize(screen.getPrimaryDisplay().workAreaSize),
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     show: false,
     autoHideMenuBar: true,
     title: 'Mergelane',

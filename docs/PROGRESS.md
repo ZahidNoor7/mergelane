@@ -131,6 +131,28 @@ Last updated: 2026-11-11
     right-click menu, the network dots, and "Clear finished list".
   - **Unit tests:** `DownloadsScreen`, `DownloadFilters`, `DownloadGlyphs`, `fileTypeIcons`, `useMergeLanes`
     and `shared/downloadFilters` are in `COVERED`, at 97–100% of lines.
+- **M3.1, pull request 5b-2** (branch `m3.1-inspector`): a download's details pane.
+  - **Store:** `view` becomes `screen` ('downloads' | 'dashboard') plus `selectedId` and `detailOpen`, with
+    `setScreen`, `openDownload` and `closeDownload`. Forgetting a download closes its details.
+  - **Layout** (`screens/DownloadsPlace.tsx`): from 860px of content width (`screens/layout.ts`), the list with a
+    400px details pane beside it; narrower, the details in the list's place, focused, with a way back to the row.
+  - **Inspector** (`components/inspector/`): one pane for running, waiting, paused, finished, failed and
+    cancelled downloads. It replaces `DownloadingScreen`, `CompleteScreen`, `ErrorScreen` and `DetailHeader`
+    (deleted), keeping all they showed. Its buttons sit under the file's name, not at the bottom as in the
+    design, so Open and Show in Finder are in reach without scrolling.
+  - **Network list** (`components/DownloadNetworks.tsx`): the design's "By network" rows replace the 6-column
+    `NetworkRow` table (deleted), which needed about 590px. Kept: each network's switch, its pencil, proxy, limit,
+    status, upload, and streams or peers one by one.
+  - A labelled progress bar (the split bar) says the download's progress to a screen reader.
+  - **Window:** opens at the design's 1280 × 800, fitted to the screen's work area (`shared/windowSize.ts`;
+    `screen.getPrimaryDisplay().workAreaSize`, checked in Electron's docs). The owner chose this on 2026-11-11.
+  - Removed as unused: `HeroStats`, `ColorBadge`, `NETWORK_ROW_GRID_COLUMNS`.
+  - **Unit tests:** the Inspector, its parts, the network list, `DownloadsPlace` and `windowSize` are in `COVERED`,
+    at 98–100% of lines.
+  - **The disk filled up during one smoke run** (215 MB free; swap at 25.6 GB). Four tests failed with ENOSPC
+    or timing, and all passed once space was back. The leaked e2e temp folders (`mergelane-seed-*` and others,
+    121 of them, 140 MB) were not deleted: the permission check refused a sweep of the temp folder. The owner
+    can delete them, or allow it.
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

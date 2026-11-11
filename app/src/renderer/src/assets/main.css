@@ -308,6 +308,19 @@
   }
 }
 
+/* A notice arriving at the sidebar's foot or under the compact bar (CopiedLinkOffer.tsx): it rises a
+   little into place. Gone, it goes at once. */
+@keyframes mergelane-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -85,6 +85,10 @@ export const COVERED = [
   'src/renderer/src/components/RoutingPanel.tsx',
   'src/renderer/src/components/networkStatus.ts',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
+  // M3.6: Offer links I copy.
+  'src/shared/links.ts',
+  'src/renderer/src/components/CopiedLinkOffer.tsx',
+  'src/renderer/src/hooks/useCopiedLinks.ts',
   // M3.1 pull request 6a: the Dashboard's Today.
   'src/renderer/src/components/DashboardToday.tsx',
   // M3.1 pull request 6b: Mergelane on this Mac.

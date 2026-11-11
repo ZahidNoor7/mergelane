@@ -23,6 +23,7 @@ import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { UpdateNotice } from './UpdateNotice'
+import { CopiedLinkOffer } from './CopiedLinkOffer'
 
 // The window's frame in the final design (design-system/mergelane/redesign/prototype.html, Sidebar and
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
@@ -187,6 +188,7 @@ export function Sidebar(): React.JSX.Element {
         </section>
 
         <div className="mt-auto flex flex-col gap-3 pt-4">
+          <CopiedLinkOffer layout="sidebar" />
           <UpdateNotice />
           {schedule && <p className="px-1.5 text-[12px] leading-snug text-ink-2">{schedule}</p>}
           {free !== null && (

@@ -70,7 +70,7 @@ async function unzip(zip: string): Promise<Record<string, string>> {
   return files
 }
 
-test('Save Diagnostics… writes a redacted zip where the user chose, from Settings and the app menu', async ({
+test('Save Diagnostics… writes a redacted zip where the user chose, from Settings and the app menu @smoke', async ({
   mergelane,
   serve,
   dirs
@@ -203,7 +203,7 @@ test('Save Diagnostics… writes a redacted zip where the user chose, from Setti
 const networkActivity = (mergelane: MergelaneApp): Promise<NetworkActivity> =>
   mergelane.api.networkActivity() as Promise<NetworkActivity>
 
-test('dropouts and the day’s fastest merged speed survive a relaunch', async ({
+test('dropouts and the day’s fastest merged speed survive a relaunch @smoke', async ({
   mergelane,
   serve
 }) => {

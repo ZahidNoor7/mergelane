@@ -266,6 +266,93 @@ test.describe('uploading', () => {
   })
 })
 
+// Networks › Uploads use (M3.5b, docs/DECISIONS.md ADR-0041), over test networks a (loopback) and
+// b (this Mac's LAN address).
+test.describe('routing uploads', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the second network')
+
+  /**
+   * A seeder, and another client of the same torrent, counting what it receives from Mergelane
+   * over network b: from the LAN address, where nothing else in the swarm is. The other client
+   * announces first, so Mergelane hears of it from the tracker and dials it (over a or b, and its
+   * twin over the other): a peer that dials in instead is on whichever network it reached, and
+   * webtorrent doesn't say where it listens, so it can't be twinned. It wants nothing until
+   * `wantAll`: by then Mergelane is ahead of it, with pieces to give.
+   */
+  async function swarmWithLeecher(
+    data: Buffer,
+    name: string
+  ): Promise<{ torrent: Torrent; overB: () => number; wantAll: () => void }> {
+    const torrent = await swarm.seed([named(data, name)], {
+      pieceLength: PIECE,
+      uploadLimit: 400 * KB
+    })
+    const other = await swarm.leech(torrent, { deselect: true })
+    await new Promise((resolve) => other.once('trackerAnnounce', resolve))
+    let overB = 0
+    other.on('wire', (wire: Wire, address: string) => {
+      if (!address.replace(/^::ffff:/, '').startsWith(`${LAN_ADDRESS}:`)) return
+      wire.on('download', (bytes: number) => (overB += bytes))
+    })
+    return {
+      torrent,
+      overB: () => overB,
+      wantAll: () => other.files.forEach((file) => file.select())
+    }
+  }
+
+  test('downloads over a, uploads over b: b only uploads, and a never does', async ({
+    mergelane
+  }) => {
+    const data = seededBytes(4 * MB, 61)
+    const { torrent, overB, wantAll } = await swarmWithLeecher(data, 'split.bin')
+    await mergelane.api.updateSettings({ routing: { down: 'a', up: 'b', fallback: true } })
+
+    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
+    wantAll()
+    const done = await mergelane.waitForTorrentStatus('completed', 60_000)
+    const a = done.networks.find((network) => network.id === 'a')!
+    const b = done.networks.find((network) => network.id === 'b')!
+    // b is set aside for downloads, yet carries every upload.
+    expect(b.status).toBe('routed')
+    expect(b.bytesDownloaded).toBe(0)
+    expect(overB(), 'what the other client received over b').toBeGreaterThan(0)
+    expect(b.bytesUploaded).toBeGreaterThanOrEqual(overB())
+    expect(a.bytesUploaded).toBe(0)
+    expect(a.bytesDownloaded).toBe(data.length)
+    expect(done.bytesUploaded).toBe(b.bytesUploaded)
+  })
+
+  test('pinning uploads to a while running stops them on b; downloading over b goes on', async ({
+    mergelane
+  }) => {
+    const data = seededBytes(8 * MB, 62)
+    const { torrent, overB, wantAll } = await swarmWithLeecher(data, 'moved.bin')
+
+    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 4, 30_000)
+    wantAll()
+    // On All networks, b uploads as every network does.
+    await mergelane.waitUntil(() => overB() > 0, 30_000)
+
+    await mergelane.api.updateSettings({ routing: { down: 'all', up: 'a', fallback: true } })
+    // Blocks already on their way still land; nothing more goes out over b after that.
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const pinnedAt = await mergelane.currentTorrent()
+    const sentOverB = overB()
+    const atPin = pinnedAt!.networks.find((network) => network.id === 'b')!
+
+    const done = await mergelane.waitForTorrentStatus('completed', 60_000)
+    expect(overB(), 'nothing more received over b').toBe(sentOverB)
+    const b = done.networks.find((network) => network.id === 'b')!
+    expect(b.bytesUploaded).toBe(atPin.bytesUploaded)
+    // b is still a download network: only uploads were moved.
+    expect(b.status).toBe('on')
+    expect(b.bytesDownloaded).toBeGreaterThan(atPin.bytesDownloaded)
+  })
+})
+
 test.describe('managing trackers', () => {
   test('a torrent with an unreachable tracker finds the seeder after addTorrentTrackers', async ({
     mergelane

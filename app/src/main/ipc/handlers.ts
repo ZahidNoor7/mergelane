@@ -1,4 +1,5 @@
 import { stat, statfs } from 'node:fs/promises'
+import { basename } from 'node:path'
 import {
   clipboard,
   dialog,
@@ -58,6 +59,8 @@ import { DEFAULT_CAPTURE_RULES, sanitizeCaptureRules } from '../../shared/captur
 import { loginItemState, setOpenAtLogin } from '../loginItem'
 import { applyMenuBarSettings } from '../menuBar'
 import { applyClipboardSettings } from '../clipboardOffers'
+import { NetworkActivityLog, networkActivityPath } from '../networkActivity'
+import { registerDiagnostics, revealDiagnostics, saveDiagnostics } from '../diagnostics'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -102,13 +105,26 @@ async function freeSpace(dir: string): Promise<number | null> {
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): DownloadManager {
+  const send = (channel: string, value: unknown): void => {
+    const window = getWindow()
+    if (window && !window.isDestroyed()) window.webContents.send(channel, value)
+  }
+  // Networks that dropped or came back, and the day's fastest merged speed, kept across restarts.
+  const activity = new NetworkActivityLog(networkActivityPath(), (value) =>
+    send(IpcChannels.networkActivityChanged, value)
+  )
   // The main process keeps the network list, for downloads and the window alike.
   const networks = new NetworkMonitor((list) => {
     manager.networksChanged()
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.networksChanged, list)
+    activity.networksChanged(list)
+    send(IpcChannels.networksChanged, list)
   })
   const manager = new DownloadManager(getWindow, networks)
+  setInterval(() => activity.sample(manager.totalSpeed()), 1000).unref()
+  registerDiagnostics({
+    downloads: () => manager.listDownloads(),
+    activity: () => activity.snapshot()
+  })
   // Waking from sleep, the networks may have changed without a poll in between to see it.
   powerMonitor.on('resume', () => {
     manager.systemResumed()
@@ -116,6 +132,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   })
 
   handle('listInterfaces', () => networks.refresh())
+  handle('networkActivity', () => activity.snapshot())
+  handle('saveDiagnostics', async () => {
+    const saved = await saveDiagnostics(getWindow())
+    return saved === null ? null : { fileName: basename(saved) }
+  })
+  handle('revealDiagnostics', () => revealDiagnostics())
 
   // Started now so it has settled before the first download needs it.
   const bindingSupport = deviceBindingSupported()
@@ -168,6 +190,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         networkPreferences: settings.networkPreferences ?? {},
         downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
         speedLimit: settings.speedLimit,
+        uploadLimit: settings.uploadLimit,
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         speedUnit: settings.speedUnit ?? 'bytes',

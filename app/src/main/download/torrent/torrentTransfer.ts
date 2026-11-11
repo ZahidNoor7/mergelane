@@ -9,11 +9,12 @@ import { routesFor, type NetworkRoute } from '../../network/routes'
 import {
   recomputeAggregates,
   type Transfer,
-  type TransferHost,
+  type TorrentTransferHost,
   type TorrentTransferTarget
 } from '../transfer'
 import { createClient, isTorrentPrivate, loadClientNamer, storeNamed } from './engine'
 import { bitfieldOf, creditPiece, pickNetwork } from './peers'
+import { gateTorrent, gateWire, regate, type WireRules } from './wireGate'
 
 /** Peers each network in use may have at once (webtorrent's maxConns is this times the networks). */
 const PEERS_PER_NETWORK = 30
@@ -41,6 +42,10 @@ const addressOf = (host: string, port: number): string =>
 
 interface Peer {
   state: TorrentPeerState
+  /** Whether it's uploaded to: its network carries uploads (ADR-0041). */
+  uploads: boolean
+  /** Whether it's downloaded from: its network is one this download uses. */
+  downloads: boolean
 }
 
 /**
@@ -52,6 +57,13 @@ interface Peer {
  *
  * One webtorrent client per run: a pause destroys it, files kept, and a resume starts a new one
  * from the pieces already done.
+ *
+ * Uploads (ADR-0041): with "Uploads use" on All networks, a peer is uploaded to over the network it
+ * is on, as ever. Pinned to one network, only peers on that one are uploaded to; the others are
+ * kept choked and still downloaded from. When downloads don't use the upload network (routed or
+ * switched off), its peers are dialled anyway, for uploading only: never asked for pieces. Twins
+ * (dialTwins) reach a peer over both, so it can be downloaded from on one and uploaded to on the
+ * other. wireGate.ts is how webtorrent is told; Limits.takeUpload holds blocks to upload limits.
  */
 export class TorrentTransfer implements Transfer {
   private client: WebTorrent | null = null
@@ -85,27 +97,41 @@ export class TorrentTransfer implements Transfer {
   /** By twin key: when it may be dialled again. */
   private twinRetryAt = new Map<string, number>()
   private isPrivate: boolean | null = null
+  /** Each peer's say, for webtorrent's hooks (wireGate.ts). A wire not listed (yet, or any more)
+   * is left as webtorrent has it. */
+  private readonly rules: WireRules = {
+    mayUpload: (wire) => this.peers.get(wire)?.uploads ?? true,
+    mayDownload: (wire) => this.peers.get(wire)?.downloads ?? true
+  }
 
   constructor(
     private readonly runtime: TorrentTransferTarget,
-    private readonly host: TransferHost,
+    private readonly host: TorrentTransferHost,
     private readonly torrentFile: Uint8Array,
     /** The download, in place: the torrent's folder or file (TorrentDestination.path). */
     private readonly destination: string
   ) {}
 
   reconcile(): void {
-    const usable = this.usable()
+    const reachable = this.peerNetworks()
     if (!this.ended) this.ended = this.run()
-    if (this.client) this.client.maxConns = PEERS_PER_NETWORK * usable.length
-    // A network switched off, or gone, takes its peers with it.
+    if (this.client) this.client.maxConns = PEERS_PER_NETWORK * reachable.length
+    // A network switched off, or gone, takes its peers with it; one that only carries uploads now
+    // keeps them, for that. Each peer left is told what it may do now.
+    const downloading = new Set(this.usable().map((network) => network.id))
     for (const [wire, peer] of this.peers) {
-      if (!usable.some((network) => network.id === peer.state.interfaceId)) wire.destroy()
+      if (!reachable.some((network) => network.id === peer.state.interfaceId)) wire.destroy()
+      else this.applyRules(wire, peer, downloading)
     }
   }
 
   tick(now: number): void {
-    const withPeers = new Set([...this.peers.values()].map((peer) => peer.state.interfaceId))
+    // Peers kept only for uploading don't show that a network reaches the swarm to download.
+    const withPeers = new Set(
+      [...this.peers.values()]
+        .filter((peer) => peer.downloads)
+        .map((peer) => peer.state.interfaceId)
+    )
     for (const network of this.usable()) {
       const reach = this.reachOf(network.id, now)
       if (
@@ -174,7 +200,7 @@ export class TorrentTransfer implements Transfer {
       )
       const client = await createClient({
         connect: (options) => this.connect(options),
-        maxConns: PEERS_PER_NETWORK * Math.max(1, this.usable().length)
+        maxConns: PEERS_PER_NETWORK * Math.max(1, this.peerNetworks().length)
       })
       await new Promise<void>((resolve) => {
         let closing = false
@@ -270,6 +296,7 @@ export class TorrentTransfer implements Transfer {
       announce: custom && custom.length > 0 ? custom : undefined
     })
     this.engineTorrent = torrent
+    gateTorrent(torrent, this.rules)
     torrent.on('wire', (wire: Wire, address: string, key?: string) =>
       this.onWire(wire, address, key)
     )
@@ -287,6 +314,47 @@ export class TorrentTransfer implements Transfer {
     return this.runtime.state.networks.filter(
       (network) => network.status === 'on' || network.status === 'unreachable'
     )
+  }
+
+  /** Networks that carry this download's uploads only: routing's upload network, while it's
+   * connected and downloads are routed (or switched) off it. Not one at its data limit: that stops
+   * Mergelane using a network at all, as before. */
+  private uploadOnly(): TorrentDownloadNetwork[] {
+    const route = this.host.uploadRoute()
+    if (!route) return []
+    return this.runtime.state.networks.filter(
+      (network) =>
+        route.has(network.id) &&
+        (network.status === 'routed' || network.status === 'off') &&
+        Boolean(this.host.networks.find(network.id))
+    )
+  }
+
+  /** The networks peers may be on: those downloads use, and one only uploads use. */
+  private peerNetworks(): TorrentDownloadNetwork[] {
+    return [...this.usable(), ...this.uploadOnly()]
+  }
+
+  /** The networks a twin may be dialled over now: on, or carrying uploads only. */
+  private dialable(): TorrentDownloadNetwork[] {
+    return [...this.usable().filter((network) => network.status === 'on'), ...this.uploadOnly()]
+  }
+
+  /** Whether peers on `networkId` are uploaded to: on every network, unless uploads are routed. */
+  private uploadsOver(networkId: string): boolean {
+    const route = this.host.uploadRoute()
+    return route ? route.has(networkId) : true
+  }
+
+  /** Brings a peer's say up to date, telling webtorrent when it changed. */
+  private applyRules(wire: Wire, peer: Peer, downloading: Set<string>): void {
+    const uploads = this.uploadsOver(peer.state.interfaceId)
+    const downloads = downloading.has(peer.state.interfaceId)
+    const changed = { upload: uploads !== peer.uploads, download: downloads !== peer.downloads }
+    if (!changed.upload && !changed.download) return
+    peer.uploads = uploads
+    peer.downloads = downloads
+    if (this.engineTorrent) regate(this.engineTorrent, wire, this.rules, changed)
   }
 
   private reachOf(networkId: string, now = Date.now()): { dials: number; answeredAt: number } {
@@ -314,7 +382,7 @@ export class TorrentTransfer implements Transfer {
       (this.dialling.get(id) ?? 0) +
       [...this.peers.values()].filter((peer) => peer.state.interfaceId === id).length
     const routes = new Map<string, NetworkRoute>()
-    for (const network of this.usable()) {
+    for (const network of this.peerNetworks()) {
       const iface = this.host.networks.find(network.id)
       const route = family ? iface && routesFor(iface, [{ address, family }])[0] : undefined
       if (!route) continue
@@ -334,13 +402,14 @@ export class TorrentTransfer implements Transfer {
     return this.dial(routes.get(networkId)!, port, networkId)
   }
 
-  /** A twin's dial: over `networkId` only, if it is on and has a route to the peer. */
+  /** A twin's dial: over `networkId` only, if it may be dialled (dialable) and has a route to the
+   * peer. */
   private connectTwin(address: string, port: number, key: string, networkId: string): Socket {
     const family = isIP(address) as 0 | 4 | 6
-    const network = this.usable().find((entry) => entry.id === networkId)
+    const network = this.dialable().find((entry) => entry.id === networkId)
     const iface = network && this.host.networks.find(network.id)
     const route = family && iface ? routesFor(iface, [{ address, family }])[0] : undefined
-    if (!route || network?.status !== 'on') {
+    if (!route) {
       const socket = new Socket()
       process.nextTick(() => socket.destroy(new Error('Twin network cannot reach this peer')))
       return socket
@@ -353,11 +422,12 @@ export class TorrentTransfer implements Transfer {
    * Dials a peer again over every other network that is on, each as a client of its own (see
    * addTwinPeer in patches/webtorrent+3.0.21.patch): a swarm of one fast peer then fills more
    * than one network. Only peers this run dialled out to, whose address is where they listen.
+   * A network carrying uploads only gets twins too, so peers found on another are uploaded to on it.
    */
   private dialTwins(now: number): void {
     const torrent = this.engineTorrent
     if (!torrent) return
-    const on = this.usable().filter((network) => network.status === 'on')
+    const on = this.dialable()
     if (on.length < 2) return
     const originals = new Map<string, string>()
     for (const [wire, peer] of this.peers) {
@@ -435,7 +505,7 @@ export class TorrentTransfer implements Transfer {
   private onIncoming(socket: Socket): void {
     // A dual-stack server sees IPv4 as IPv4-mapped IPv6.
     const local = socket.localAddress?.replace(/^::ffff:/, '')
-    const network = this.usable().find((entry) =>
+    const network = this.peerNetworks().find((entry) =>
       this.host.networks.find(entry.id)?.addresses.some((address) => address.address === local)
     )
     // As webtorrent names an incoming peer: the address as the socket gives it, no brackets.
@@ -453,7 +523,8 @@ export class TorrentTransfer implements Transfer {
       return
     }
     // Every network uploads, whatever its kind: each has an address of its own, and webtorrent's
-    // tit-for-tat gives a network's peers back what they send it.
+    // tit-for-tat gives a network's peers back what they send it. Unless "Uploads use" names one
+    // network: then only its peers are (ADR-0041).
 
     const reach = this.reachOf(network.id)
     reach.dials = 0
@@ -470,8 +541,13 @@ export class TorrentTransfer implements Transfer {
       uploadSpeedBytesPerSec: 0,
       client: wire.peerId ? (this.nameClient?.(wire.peerId) ?? null) : null
     }
-    const peer: Peer = { state: peerState }
+    const peer: Peer = {
+      state: peerState,
+      uploads: this.uploadsOver(network.id),
+      downloads: this.usable().some((entry) => entry.id === network.id)
+    }
     this.peers.set(wire, peer)
+    gateWire(wire, this.rules, (bytes) => this.host.limits.takeUpload(network.id, bytes))
     const { state } = this.runtime
     state.peers.push(peerState)
     state.peakPeers = Math.max(state.peakPeers, state.peers.length)

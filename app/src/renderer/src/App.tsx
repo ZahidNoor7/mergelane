@@ -6,7 +6,7 @@ import { CompactBar, Sidebar, SIDEBAR_FROM } from './components/WindowChrome'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useElementWidth } from './hooks/useElementWidth'
-import { useNetworkEvents } from './hooks/useNetworks'
+import { useDiagnosticsMenu, useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { useSettingsShortcut } from './hooks/useSettingsShortcut'
 import { useGlassAttributes } from './hooks/useGlassAttributes'
@@ -41,6 +41,7 @@ function App(): React.JSX.Element {
   useSettingsShortcut()
   useGlassAttributes()
   useNetworkEvents()
+  useDiagnosticsMenu()
   useUpdates()
   useCopiedLinks()
   // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until

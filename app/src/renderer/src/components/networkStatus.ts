@@ -6,7 +6,7 @@ const STATUS_TEXT: Record<Exclude<NetworkStatus, 'on'>, string> = {
   unreachable: 'Can’t reach server',
   failed: 'Failed',
   limit: 'Data limit reached',
-  routed: 'Not used: downloads go over another network'
+  routed: 'Not used for downloads: they go over another network'
 }
 
 /** What a network that isn't simply on says: in a download's details, and in the list's tooltip. */

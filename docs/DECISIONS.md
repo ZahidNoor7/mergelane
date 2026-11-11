@@ -762,6 +762,102 @@ until the owner overrides it.
   - Routing applies at once to running downloads (`limitsChanged` re-reconciles them).
   - A download's details show "Not used: downloads go over another network" on the set-aside networks.
 
+## ADR-0041: Routing torrent uploads to one network, and upload speed limits (M3.5b)
+
+- Status: Accepted (2026-11-11), from the final design's RoutingPanel ("Uploads use") and its per-direction limits.
+- Context:
+  - Only torrents upload. Each peer is on one network (dialled over it, or reached on its address), and before this
+    every network uploaded to its own peers. Nothing limited uploads: `Limits` only metered received bytes.
+  - webtorrent's documented upload control is `uploadLimit` / `throttleUpload()`, for a whole client, on every
+    network at once (webtorrent docs/api.md). Mergelane runs one client per download, so it can give neither one
+    total for all downloads nor a limit per network.
+- Decision:
+  - **The setting:** `routing.up: 'all' | <network id>` beside `down`; the one `fallback` switch covers both, as the
+    design draws it. Saved settings without `up` read as `'all'` (`shared/routing.ts`, `sanitizeRouting`).
+    `routeFor(routing, 'up', connected)` is the same rule as downloads: the pin while it's connected; when it isn't,
+    `null` (as before) with fallback on, and nothing (uploads wait) with it off.
+  - **'all':** unchanged. A torrent uploads over the networks it downloads over.
+  - **Pinned:** only peers on the chosen network are uploaded to. Peers on other networks are kept choked (BEP 3)
+    and still downloaded from. Pinned to a network downloads don't use (routed, or switched off for that download),
+    its peers are dialled anyway, for uploading only: never asked for pieces, and told we're not interested. Twins
+    (the per-network second connection to a peer) are dialled on it too, so a peer found on one network can be
+    downloaded from there and uploaded to on the other. A network at its data limit carries nothing, as before.
+  - **How webtorrent is told (`torrent/wireGate.ts`), without a new patch:** on our own torrent and wires only,
+    wrap `Torrent._updateWire` (no requests to a peer we don't download from), `_updateWireInterest` (uninterested
+    in it), `_rechoke` (rank only peers we may upload to, so the others take no upload slot), `Wire.unchoke` (no
+    unchoke for them) and `Wire.piece` (hold each block for the upload limits). These are internal to webtorrent
+    3.0.21 and bittorrent-protocol 5.0.9, read from their source (neither README documents them); both are
+    pinned. Patching webtorrent again would also have meant changing the shared `node_modules` to test it.
+  - **Upload limits:** `AppSettings.uploadLimit` (total) and `NetworkPreference.uploadLimit` (per network), token
+    buckets beside the download ones in `Limits` (`takeUpload`). A block waits until both allow it; a peer choked
+    meanwhile gets it rejected (BEP 6), not sent. Slow mode stays download-only. Protocol messages other than blocks
+    aren't metered (a few bytes each).
+  - **Data limits** still count received bytes only, as the dialog says ("Uploads and other apps don't count").
+- Consequences:
+  - A peer that dialled in over another network is not uploaded to while uploads are pinned: webtorrent doesn't
+    send its listen port (BEP 10 `p`), so there's no address to twin it on. Peers Mergelane dials out to are.
+  - Tracker announces still go out over the Mac's default route, as before; they aren't routed.
+  - A running torrent follows a change at once (`limitsChanged` re-reconciles it): newly barred peers are choked,
+    newly allowed ones offered a slot, and the next rechoke (every 10 s) settles the slots.
+  - A routed network's status now reads "Not used for downloads: they go over another network", as it may still
+    upload.
+
+## ADR-0042: Diagnostics bundle, and Today's dropouts and fastest speed kept across restarts (M3.7)
+
+- Status: Owner (2026-11-11): keep the bundle as built below. Download hosts are included, because they help debug
+  server problems; file names, folders, paths, custom network names and IP addresses are not.
+- Context:
+  - CLAUDE.md asks for a diagnostics bundle in Phase 3, made on request and never sent anywhere.
+  - The final design's Dashboard "Today" shows the fastest merged speed and the network dropouts of the last 24
+    hours, and Networks lists recent dropouts. Both lived only in the window's memory, so a restart emptied them.
+    The app showed "Fastest download" (one download's peak) instead of the merged speed.
+  - Finished downloads (history.json) and unfinished ones (their saved block progress, per network) already
+    survive a restart, so Today's totals per network did too. Only the events and the merged peak were lost.
+- Decision:
+  - **Network activity moves to the main process** (`main/networkActivity.ts`, logic in
+    `shared/networkActivity.ts`):
+    - It is logged from `NetworkMonitor`'s lists, so it is kept even while the window is closed.
+    - It is saved to `userData/network-activity.json`: at most 50 events and none older than a week.
+    - At launch, a network whose last event is a drop and that is connected again is logged as "came back while
+      Mergelane was closed". How long it was out isn't known, so no duration is shown.
+    - A network that was there at the last quit and is missing now logs nothing: it may have been unplugged on
+      purpose.
+  - **The fastest merged speed** is the most `DownloadManager.totalSpeed()` held over 5 one-second samples (as a
+    download's own peak needs 5 seconds), kept per local calendar day. It is saved at most every 2 seconds.
+    Today shows the higher of it and the best single download's peak.
+  - **The window receives the activity** over `networkActivity` / `networkActivityChanged`. The Dashboard counts
+    the dropouts of the last 24 hours, as the design does.
+  - **The diagnostics bundle:**
+    - **Where:** Settings › General › Troubleshooting › Diagnostics (the design has no place for it), and the app
+      menu's "Save Diagnostics…", which opens that row and saves from there.
+    - **Saving:** Electron's `dialog.showSaveDialog`, defaulting to `Downloads/Mergelane-Diagnostics-<date>.zip`.
+      The files are written to a temporary folder, zipped with `/usr/bin/ditto -c -k --norsrc --keepParent`, and
+      copied to the chosen path. The temporary folder is always removed. Nothing is uploaded.
+    - **Contents:**
+      - `README.txt`: what is in it, and what was removed.
+      - `diagnostics.json`: the app, Electron, Chrome and Node versions; Rosetta or not; macOS version, kernel,
+        architecture, processor and memory; the helper's snapshot (read only, through the existing client);
+        each network's id, kind and macOS name, with addresses only as family and scope; the network activity;
+        the settings that change how downloads run; Usenet without host or user; unfinished downloads and the
+        last 50 finished ones.
+      - `helper-log.txt`: the last 200 lines of `/Library/Logs/Mergelane/daemon.log`, if it can be read.
+    - **Redaction:**
+      - Fields are picked from an allowlist, so a field added later stays out until someone decides it may go in.
+      - Links keep only their scheme and host; magnet links become `magnet:…`.
+      - File names keep only their extension. Destination folders are described ("a folder in the home folder"),
+        not named.
+      - Left out entirely: proxy hosts, user names and passwords; Usenet host and user; custom network names
+        (only whether a network was renamed); MAC addresses; IP addresses; cookies and browser sign-ins.
+      - Free text (errors, the helper's reasons, log lines) loses links, emails, paths in the home folder or on
+        other disks, the account name and public IP addresses.
+      - Every string then passes a second net, `redactIdentity`.
+- Consequences:
+  - Old events stay visible after a restart for up to a week, so the empty text now says "No network has dropped
+    in the last week".
+  - The bundle shows sites (hosts) of downloads and the processor model. The owner may want even less (hosts
+    hashed, say) or more (full settings).
+  - The bundle is macOS-only (`ditto`), like the app.
+
 ## ADR-0043: Offer links I copy: off by default, read only on switching to Mergelane (M3.6)
 
 - Status: Accepted (2026-11-11). The owner chose off by default and reading only when the user switches to

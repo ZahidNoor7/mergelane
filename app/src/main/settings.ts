@@ -14,6 +14,7 @@ import { readJson, updateJson } from './jsonFile'
 import { BROWSERS } from '../shared/browsers'
 import { sanitizeCaptureRules } from '../shared/captureRules'
 import { parseVersion } from '../shared/releases'
+import { sanitizeRouting } from '../shared/routing'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
 
@@ -79,6 +80,7 @@ function sanitizeNetworkPreferences(parsed: unknown): NetworkPreferences {
     if (proxy) preference.proxy = proxy
     if (value.off === true) preference.off = true
     preference.speedLimit = byteCount(value.speedLimit)
+    preference.uploadLimit = byteCount(value.uploadLimit)
     preference.dataLimit = byteCount(value.dataLimit)
     if (
       value.dataLimitPeriod === 'day' ||
@@ -128,13 +130,8 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     }
     settings.browserContacts = contacts
   }
-  if (isRecord(parsed.routing)) {
-    const { down, fallback } = parsed.routing
-    settings.routing = {
-      down: typeof down === 'string' && down.length > 0 && down.length <= 64 ? down : 'all',
-      fallback: fallback !== false
-    }
-  }
+  const routing = sanitizeRouting(parsed.routing)
+  if (routing) settings.routing = routing
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.offerCopiedLinks === true) settings.offerCopiedLinks = true
@@ -160,6 +157,8 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   }
   const speedLimit = byteCount(parsed.speedLimit)
   if (speedLimit !== undefined) settings.speedLimit = speedLimit
+  const uploadLimit = byteCount(parsed.uploadLimit)
+  if (uploadLimit !== undefined) settings.uploadLimit = uploadLimit
   const slowModeSpeed = byteCount(parsed.slowModeSpeed)
   if (slowModeSpeed !== undefined) settings.slowModeSpeed = slowModeSpeed
   if (parsed.slowMode === true) settings.slowMode = true

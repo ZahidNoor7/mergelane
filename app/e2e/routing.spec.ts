@@ -33,7 +33,7 @@ test.describe('routing downloads @smoke', () => {
     await mergelane.start(origin.url(), origin.sha256, { networks: ['a', 'b'], connections: 2 })
     await mergelane.waitUntil((state) => streamsOn(state, 'a') > 0 && streamsOn(state, 'b') > 0)
 
-    await mergelane.api.updateSettings({ routing: { down: 'b', fallback: true } })
+    await mergelane.api.updateSettings({ routing: { down: 'b', up: 'all', fallback: true } })
     const pinned = await mergelane.waitUntil(
       (state) => status(state, 'a') === 'routed' && streamsOn(state, 'a') === 0
     )
@@ -41,7 +41,7 @@ test.describe('routing downloads @smoke', () => {
     // The download's own choice is kept for later.
     expect(pinned.networks.find((entry) => entry.id === 'a')?.enabled).toBe(true)
 
-    await mergelane.api.updateSettings({ routing: { down: 'all', fallback: true } })
+    await mergelane.api.updateSettings({ routing: { down: 'all', up: 'all', fallback: true } })
     await mergelane.waitUntil((state) => status(state, 'a') === 'on' && streamsOn(state, 'a') > 0)
     await mergelane.waitForHttpStatus('completed')
   })
@@ -52,7 +52,7 @@ test.describe('routing downloads @smoke', () => {
   }) => {
     const origin = await serve({ size: 128 * BLOCK, bytesPerSecond: 256 * 1024 })
     // Started on a only: routing to b brings b in, the download's own pick notwithstanding.
-    await mergelane.api.updateSettings({ routing: { down: 'b', fallback: true } })
+    await mergelane.api.updateSettings({ routing: { down: 'b', up: 'all', fallback: true } })
     await mergelane.start(origin.url(), origin.sha256, { networks: ['a'], connections: 2 })
     await mergelane.waitUntil(
       (state) => streamsOn(state, 'b') > 0 && status(state, 'a') === 'routed'
@@ -63,14 +63,14 @@ test.describe('routing downloads @smoke', () => {
     await mergelane.waitUntil((state) => status(state, 'a') === 'on' && streamsOn(state, 'a') > 0)
 
     // Without fallback, nothing carries it until b is back.
-    await mergelane.api.updateSettings({ routing: { down: 'b', fallback: false } })
+    await mergelane.api.updateSettings({ routing: { down: 'b', up: 'all', fallback: false } })
     const waiting = await mergelane.waitUntil(
       (state) => status(state, 'a') === 'routed' && streamsOn(state, 'a') === 0
     )
     expect(waiting.status).toBe('downloading')
     await setNetworks(mergelane, NETWORKS)
     await mergelane.waitUntil((state) => status(state, 'b') === 'on' && streamsOn(state, 'b') > 0)
-    await mergelane.api.updateSettings({ routing: { down: 'all', fallback: true } })
+    await mergelane.api.updateSettings({ routing: { down: 'all', up: 'all', fallback: true } })
     await mergelane.waitForHttpStatus('completed')
   })
 })

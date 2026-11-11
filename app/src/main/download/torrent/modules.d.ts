@@ -52,7 +52,21 @@ declare module 'webtorrent' {
    * block it receives, and 'close'. */
   export interface Wire extends EventEmitter {
     destroy(): void
+    destroyed: boolean
+    /** Whether we're choking it, and whether it's interested in what we have (documented). */
+    amChoking: boolean
+    peerInterested: boolean
+    /** It speaks the Fast Extension (BEP 6), so a request can be rejected (documented). */
+    hasFast: boolean
+    reject(index: number, offset: number, length: number): void
+    /** Not in bittorrent-protocol's README, but its own methods (index.js): send choke, unchoke,
+     * uninterested, and a block of a piece. */
+    choke(): void
     unchoke(): void
+    uninterested(): void
+    piece(index: number, offset: number, buffer: Uint8Array): void
+    /** Set by webtorrent: the peer has every piece. */
+    isSeeder?: boolean
     /** The remote peer's id, hex: set once it has shaken hands. */
     peerId: string | null
   }

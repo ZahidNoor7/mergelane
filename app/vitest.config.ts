@@ -84,6 +84,9 @@ export const COVERED = [
   // M3.5a: routing downloads to one network.
   'src/renderer/src/components/RoutingPanel.tsx',
   'src/renderer/src/components/networkStatus.ts',
+  // M3.5b: routing uploads, and upload limits.
+  'src/shared/routing.ts',
+  'src/renderer/src/components/LimitsDialog.tsx',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
   // M3.6: Offer links I copy.
   'src/shared/links.ts',
@@ -95,7 +98,12 @@ export const COVERED = [
   'src/renderer/src/components/UsagePanel.tsx',
   'src/shared/appUsage.ts',
   // M3.1 pull request 7: Liquid Glass.
-  'src/renderer/src/hooks/useGlassAttributes.ts'
+  'src/renderer/src/hooks/useGlassAttributes.ts',
+  // M3.7: diagnostics, and Today and the dropouts kept across restarts.
+  'src/shared/networkActivity.ts',
+  'src/shared/diagnostics.ts',
+  'src/renderer/src/components/DiagnosticsSettings.tsx',
+  'src/renderer/src/hooks/useNetworks.ts'
 ]
 
 export default defineConfig({

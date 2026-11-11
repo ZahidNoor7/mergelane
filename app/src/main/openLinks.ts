@@ -3,6 +3,7 @@ import { statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { app, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
+import { testKnobs } from './testKnobs'
 import type { BrowserContext, PendingLink } from '../shared/types'
 
 // Links the OS hands Mergelane (a magnet link clicked in a browser, a .torrent or .nzb opened from the
@@ -42,6 +43,10 @@ export function linkFromArgs(argv: readonly string[]): string | null {
 /** Windows and macOS keep a background app from taking focus: Windows only flashes the taskbar
  * button unless the window is briefly on top, and macOS needs `steal`. */
 export function bringForward(window: BrowserWindow): void {
+  // A test run keeps its windows hidden (testKnobs.hideWindow). Bringing one forward would show it
+  // and take the Mac's keyboard focus from whatever the person at it is typing in, so their keys
+  // would land in the test's fields: what made two tests fail now and then ("…test.binerge").
+  if (testKnobs.hideWindow) return
   if (window.isMinimized()) window.restore()
   if (process.platform === 'win32') {
     window.setAlwaysOnTop(true)

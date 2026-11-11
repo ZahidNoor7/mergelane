@@ -241,19 +241,19 @@ Last updated: 2026-11-11
     while the app runs may need the theme reselected.
   - **e2e:** `glass.spec` reads the real window's background (cleared for the material, the theme's when
     solid), the saved settings, and a restart.
-- **Flaky test, `browserBridge.spec`, seen twice now** (5a and 6a): "a download is offered, confirmed, and opens
-  New download filled in". The Link field held the link with `erge` appended (`…/test.binerge`). With the
-  extension test's lost last character (below), two flakes change the Link field's text. No test sends OS
-  keystrokes. Suspect the dialog's link handling (the clipboard read or the link queue racing the draft).
-- **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
-  link without its last character, and the probe says "isn't a video".
-  - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.
-  - It passed 8 runs of the extension suite alone, and a full run with temporary logging at the bridge and the link
-    queue (since removed).
-  - **Ruled out:** the bridge's framing (JSON, so a lost byte would fail to parse), the link queue (no string
-    changes), the YouTube parser (11-character ids), the clipboard (no test writes it), and key presses (none in the
-    extension tests).
-  - Not yet understood. The next step is to keep that logging behind a debug switch to catch the next occurrence.
+- **The two flaky Link-field tests: explained and fixed (branch `fix-link-field`).**
+  - `browserBridge.spec` ("a download is offered…") twice had `erge` appended to the link (`…/test.binerge`);
+    `extensionMedia.spec` ("Send this video to Mergelane") twice lost the link's last character.
+  - **Cause:** a link arriving calls `bringForward` (`app/src/main/openLinks.ts`), which showed the window and took
+    the Mac's keyboard focus (`app.focus({ steal: true })`) even in a test run, whose windows are meant to stay
+    hidden. Keys typed at the Mac during the run landed in the test's Link field: "merge" typed in this chat, and
+    probably a Delete in the other case.
+  - **Fix:** `bringForward` does nothing while `testKnobs.hideWindow` is set. Real use is unchanged. No test relied
+    on the window coming forward.
+  - **Test:** `browserBridge.spec` now checks that the window stays hidden and unfocused after a link arrives.
+- **Flaky test seen once:** `writeWait.spec` ("a disk-held range is not fetched again…") failed once during a full
+  smoke and extension run (`expect(ranges).toHaveLength(4)`), then passed 4 times alone. It relies on timing (a
+  2-second hedge), so heavy load can upset it. Watch for it again.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 
@@ -385,8 +385,7 @@ Last updated: 2026-11-11
   2. The owner publishes the draft on GitHub (docs/RELEASING.md, steps 5 and 6).
 - **Follow-ups:**
   - `extensionMedia.spec.ts`'s "Send this video to Mergelane" failed once in a full `local.sh` run: the app's link field
-    lost its last character, and the probe said "isn't a video". Since then it passed 32 runs alone and two full
-    suites. The cause is not found.
+    lost its last character. Explained later: test windows took the Mac's focus (see "The two flaky Link-field tests").
   - The app has no "Remove helper" button: Phase 3 candidate.
   - `scripts/acceptance/daemon.sh` sets `GOCOVERDIR` only for `run`, so `install`/`uninstall` show 0% coverage.
 

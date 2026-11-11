@@ -81,6 +81,14 @@ test.describe('browser bridge socket @smoke', () => {
     expect(typeof added.token).toBe('string')
     expect(await send(OURS, { type: 'confirm', token: added.token })).toEqual({ ok: true })
     await expect(mergelane.page.getByRole('textbox', { name: 'Link' })).toHaveValue(origin.url())
+    // A test's window stays hidden and never takes the Mac's focus, even when a link comes in: keys
+    // typed at the Mac meanwhile mustn't land in it (openLinks.ts bringForward).
+    expect(
+      await mergelane.evaluateMain(({ BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        return { visible: window.isVisible(), focused: window.isFocused() }
+      }, null)
+    ).toEqual({ visible: false, focused: false })
     // Shown, not started; and a token works only once.
     expect(await mergelane.current()).toBeNull()
     expect(await send(OURS, { type: 'confirm', token: added.token })).toEqual({ ok: false })

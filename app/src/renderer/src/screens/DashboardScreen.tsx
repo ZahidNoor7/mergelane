@@ -522,7 +522,7 @@ function NetworkLine({
 }
 
 /** Which networks dropped or came back, and what that left: a network the computer lost, as the
- * network list saw it since this window opened, and, while system merge is on, a link its helper
+ * main process logged it (kept for a week across restarts, ADR-0042), and, while system merge is on, a link its helper
  * finds without internet. */
 function FailoverSection({ mergeLinks }: { mergeLinks: SystemMergeLink[] }): React.JSX.Element {
   const downloads = Object.values(useAppStore((store) => store.downloads))
@@ -598,7 +598,7 @@ function FailoverSection({ mergeLinks }: { mergeLinks: SystemMergeLink[] }): Rea
       <div role="log" aria-label="Network changes">
         {recent.length === 0 ? (
           <p className="pt-2 text-[12px] text-muted-foreground">
-            No network has dropped since Mergelane opened.
+            No network has dropped in the last week.
           </p>
         ) : (
           <ul className="flex flex-col pt-2">
@@ -619,7 +619,9 @@ function FailoverSection({ mergeLinks }: { mergeLinks: SystemMergeLink[] }): Rea
                     {lost
                       ? `dropped, ${event.left === 0 ? 'no network left' : `${event.left} left`}`
                       : event.change === 'recovered'
-                        ? `came back after ${formatDowntime(event.downForMs ?? 0)}`
+                        ? event.whileClosed
+                          ? 'came back while Mergelane was closed'
+                          : `came back after ${formatDowntime(event.downForMs ?? 0)}`
                         : 'connected'}
                   </span>
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">

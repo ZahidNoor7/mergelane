@@ -2,16 +2,47 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
 /** Keeps the network list current for the lifetime of the app: the main process watches the
- * networks and says whenever one comes, goes or changes. */
+ * networks and says whenever one comes, goes or changes, and what it logged of that (the dropouts
+ * and the day's fastest merged speed, kept across restarts). */
 export function useNetworkEvents(): void {
   const loadInterfaces = useAppStore((store) => store.loadInterfaces)
   const receiveInterfaces = useAppStore((store) => store.receiveInterfaces)
+  const receiveNetworkActivity = useAppStore((store) => store.receiveNetworkActivity)
 
   useEffect(() => {
     const unsubscribe = window.mergelane.onNetworksChanged(receiveInterfaces)
     void loadInterfaces()
     return unsubscribe
   }, [loadInterfaces, receiveInterfaces])
+
+  useEffect(() => {
+    let current = true
+    // Subscribed first, so a change while the saved log is read isn't missed. Main answers with
+    // what it holds once the log is read, so the answer is never older than a change sent before it.
+    const unsubscribe = window.mergelane.onNetworkActivity(receiveNetworkActivity)
+    window.mergelane.networkActivity().then(
+      (activity) => current && receiveNetworkActivity(activity),
+      () => {}
+    )
+    return () => {
+      current = false
+      unsubscribe()
+    }
+  }, [receiveNetworkActivity])
+}
+
+/** The app menu's "Save Diagnostics…": Settings › General, where the save shows how it went. */
+export function useDiagnosticsMenu(): void {
+  const openSettings = useAppStore((store) => store.openSettings)
+  const saveDiagnostics = useAppStore((store) => store.saveDiagnostics)
+  useEffect(
+    () =>
+      window.mergelane.onSaveDiagnosticsRequested(() => {
+        openSettings('general')
+        void saveDiagnostics()
+      }),
+    [openSettings, saveDiagnostics]
+  )
 }
 
 const USAGE_POLL_MS = 2000

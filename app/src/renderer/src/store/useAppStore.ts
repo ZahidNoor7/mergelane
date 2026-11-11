@@ -1,4 +1,5 @@
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
+import { describeError } from '@shared/errors'
 import type {
   AppSettings,
   DownloadSchedule,
@@ -20,7 +21,14 @@ import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
 import type { CaptureRules } from '@shared/captureRules'
 import type { ThemeId } from '@shared/themes'
 import { fadeTheme } from '../theme/appearance'
-import { appendNetworkEvents, type NetworkEvent } from '../utils/dashboard'
+import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
+
+/** A diagnostics bundle being saved, saved (its file's name), or not (why). */
+export type DiagnosticsState =
+  | { status: 'idle' }
+  | { status: 'saving' }
+  | { status: 'saved'; fileName: string }
+  | { status: 'error'; error: string }
 
 export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
@@ -36,9 +44,16 @@ interface AppStore {
   interfaces: NetworkInterfaceInfo[]
   interfacesStatus: LoadStatus
   interfacesError: string | null
-  /** Networks that dropped, came back or turned up since the window opened, oldest first (the
-   * dashboard's failover list). Not saved: it starts empty each launch. */
+  /** Networks that dropped, came back or turned up in the last week, oldest first: the main
+   * process keeps them across restarts (main/networkActivity.ts, ADR-0042). */
   networkEvents: NetworkEvent[]
+  /** The fastest merged speed of the day it names, kept the same way. */
+  fastestMerged: DailyFastest | undefined
+  receiveNetworkActivity: (activity: NetworkActivity) => void
+  /** Settings › General › Diagnostics: the last save, or one under way. */
+  diagnostics: DiagnosticsState
+  /** Asks where to save a diagnostics bundle (main shows the dialog) and saves it there. */
+  saveDiagnostics: () => Promise<void>
   /** User customizations (name/color) per network interface id — persisted in the main process. */
   networkPreferences: NetworkPreferences
 
@@ -172,6 +187,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
   interfacesStatus: 'idle',
   interfacesError: null,
   networkEvents: [],
+  fastestMerged: undefined,
+  receiveNetworkActivity: (activity) =>
+    set({ networkEvents: activity.events, fastestMerged: activity.fastest }),
+  diagnostics: { status: 'idle' },
+  saveDiagnostics: async () => {
+    if (get().diagnostics.status === 'saving') return
+    const before = get().diagnostics
+    set({ diagnostics: { status: 'saving' } })
+    try {
+      const saved = await window.mergelane.saveDiagnostics()
+      // Cancelled: what was said before stays.
+      set({ diagnostics: saved ? { status: 'saved', fileName: saved.fileName } : before })
+    } catch (error) {
+      set({ diagnostics: { status: 'error', error: describeError(error) } })
+    }
+  },
   networkPreferences: initial.networkPreferences,
   themeSource: initial.themeSource,
   appearanceTheme: initial.appearanceTheme,
@@ -229,17 +260,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   receiveInterfaces: (interfaces) => {
-    const { interfaces: previous, interfacesStatus, networkEvents } = get()
-    set({
-      interfaces,
-      interfacesStatus: 'ready',
-      interfacesError: null,
-      // The first list is what was there all along, not a change.
-      networkEvents:
-        interfacesStatus === 'ready'
-          ? appendNetworkEvents(networkEvents, previous, interfaces, Date.now())
-          : networkEvents
-    })
+    // The main process logs what came and went (receiveNetworkActivity).
+    set({ interfaces, interfacesStatus: 'ready', interfacesError: null })
   },
 
   // An explicit `undefined` in `patch` clears that field; main drops an entry left with neither.

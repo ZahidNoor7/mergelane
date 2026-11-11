@@ -13,6 +13,8 @@ import type {
   ThemeSource
 } from '@shared/types'
 import { create } from 'zustand'
+import type { ThemeId } from '@shared/themes'
+import { fadeTheme } from '../theme/appearance'
 import { appendNetworkEvents, type NetworkEvent } from '../utils/dashboard'
 
 export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
@@ -32,8 +34,10 @@ interface AppStore {
   /** User customizations (name/color) per network interface id — persisted in the main process. */
   networkPreferences: NetworkPreferences
 
-  /** Persisted in the main process alongside nativeTheme.themeSource. */
+  /** Persisted in the main process alongside nativeTheme.themeSource. 'system' is Auto. */
   themeSource: ThemeSource
+  /** The colour theme (shared/themes.ts), set on <html data-palette>. Persisted. */
+  appearanceTheme: ThemeId
 
   homeDir: string
   downloadsDir: string
@@ -76,6 +80,7 @@ interface AppStore {
   receiveInterfaces: (interfaces: NetworkInterfaceInfo[]) => void
   setNetworkPreference: (id: string, patch: NetworkPreference) => void
   setThemeSource: (source: ThemeSource) => void
+  setAppearanceTheme: (theme: ThemeId) => void
   /** A snapshot or an update of a download, from the main process. */
   receiveDownloadUpdate: (update: DownloadUpdate) => void
   /** Finished downloads as main lists them; any that finished leave `downloads`. */
@@ -122,6 +127,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   networkEvents: [],
   networkPreferences: initial.networkPreferences,
   themeSource: initial.themeSource,
+  appearanceTheme: initial.appearanceTheme,
 
   homeDir: initial.homeDir,
   downloadsDir: initial.downloadsDir,
@@ -185,8 +191,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setThemeSource: (themeSource) => {
+    fadeTheme(document)
     set({ themeSource })
     persist({ themeSource })
+  },
+
+  setAppearanceTheme: (appearanceTheme) => {
+    fadeTheme(document)
+    document.documentElement.dataset.palette = appearanceTheme
+    set({ appearanceTheme })
+    persist({ appearanceTheme })
   },
 
   receiveDownloadUpdate: (update) => {

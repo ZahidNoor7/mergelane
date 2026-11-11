@@ -49,6 +49,15 @@ Last updated: 2026-11-11
   - Vitest 5.1, React Testing Library, jsdom and V8 coverage.
   - Every file listed in `vitest.config.ts`'s `COVERED` must keep 90% of its lines covered, or the run fails.
   - Runs in `app-checks`.
+- **M3.1, pull request 1** (branch `m3.1-themes`): colours, themes and fonts.
+  - The seven themes' seeds are in `shared/themes.ts`, copied from the final design (a test checks that they match
+    it). `theme/appearance.ts` writes them as CSS, and `main.css` derives every other colour from them.
+  - Auto, Light and Dark: `nativeTheme.themeSource` `system` is the default on a new install.
+  - The window background follows the theme.
+  - Archivo and Fragment Mono are bundled with their OFL texts. They replace Manrope and Roboto Mono, which had no
+    notices.
+  - Contrast tests cover all 14 colour sets. One shortfall in the design is waiting for the owner: Dusk light, the
+    faintest text on a sidebar card, 4.26:1.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

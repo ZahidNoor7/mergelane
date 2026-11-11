@@ -1,13 +1,15 @@
 /* The app's tokens (src/renderer/src/assets/main.css), so the extension looks like Mergelane. */
+/* The app's fonts (OFL 1.1; their licences are copied in with them, see the app's assets/fonts/README.md). */
 @font-face {
-  font-family: 'Manrope';
-  font-weight: 400 700;
-  src: url('fonts/Manrope-Variable.woff2') format('woff2');
+  font-family: 'Archivo';
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('fonts/Archivo-Variable.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Roboto Mono';
-  font-weight: 400 600;
-  src: url('fonts/RobotoMono-Variable.woff2') format('woff2');
+  font-family: 'Fragment Mono';
+  font-weight: 400;
+  src: url('fonts/FragmentMono-Regular.woff2') format('woff2');
 }
 
 :root {
@@ -27,7 +29,7 @@
   --warn: #92400e;
   --warn-bg: #fef3c7;
   --warn-border: #fde68a;
-  --mono: 'Roboto Mono', ui-monospace, Menlo, monospace;
+  --mono: 'Fragment Mono', ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -56,7 +58,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font:
-    13px/1.45 Manrope,
+    13px/1.45 Archivo,
     -apple-system,
     'Helvetica Neue',
     sans-serif;

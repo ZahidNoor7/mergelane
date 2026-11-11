@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { app, nativeTheme } from 'electron'
+import { app } from 'electron'
 import {
   DOWNLOADS_AT_ONCE,
   type AppSettings,
@@ -11,6 +11,7 @@ import {
   type ThemeSource
 } from '../shared/types'
 import { readJson, updateJson } from './jsonFile'
+import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
 
 function settingsPath(): string {
@@ -104,8 +105,9 @@ function sanitizeSettings(parsed: unknown): AppSettings {
       ? parsed.downloadSchedule
       : { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true, days: [] }
   }
-  // 'system' was once an option — dropping it falls back to the OS appearance (loadThemeSource).
-  if (themeSource === 'light' || themeSource === 'dark') settings.themeSource = themeSource
+  const source = validThemeSource(themeSource)
+  if (source) settings.themeSource = source
+  if (isThemeId(parsed.appearanceTheme)) settings.appearanceTheme = parsed.appearanceTheme
   if (parsed.autoUpdate === false) settings.autoUpdate = false
   if (typeof destinationDir === 'string' && isAbsolute(destinationDir)) {
     settings.destinationDir = destinationDir
@@ -153,9 +155,8 @@ export function saveSettings(patch: unknown): Promise<void> {
 }
 
 export async function loadThemeSource(): Promise<ThemeSource> {
-  const { themeSource } = await loadSettings()
-  // First run — follow whatever the OS appearance is right now rather than a fixed theme.
-  return themeSource ?? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+  // First run: Auto, following the Mac (ADR-0034). A saved light or dark choice stays as it was.
+  return (await loadSettings()).themeSource ?? 'system'
 }
 
 /** Network names/colors lived in their own network-preferences.json up to 1.0.0-rc.8. Folds

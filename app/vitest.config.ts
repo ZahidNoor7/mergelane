@@ -4,12 +4,19 @@ import { defineConfig } from 'vitest/config'
 
 // Unit tests for renderer code (ADR-0034): React components and hooks in jsdom, with V8 coverage.
 // Playwright keeps the end-to-end tests in e2e/; it never runs these files, and Vitest never runs
-// those (its default include only matches *.test.* / *.spec.* under src/).
+// those (its include is only *.test.* files under src/renderer and src/shared).
 //
 // Coverage is enforced per file on the files listed here, at 90% of lines: a renderer file joins
 // the list in the pull request that changes it, so new and reworked code is held to the floor
 // while untouched upstream files are not counted against it.
-export const COVERED = ['src/renderer/src/theme.ts', 'src/renderer/src/components/ui/switch.tsx']
+export const COVERED = [
+  'src/renderer/src/theme.ts',
+  'src/renderer/src/components/ui/switch.tsx',
+  'src/shared/themes.ts',
+  'src/renderer/src/theme/appearance.ts',
+  'src/renderer/src/hooks/usePrefersDark.ts',
+  'src/renderer/src/components/ThemeToggle.tsx'
+]
 
 export default defineConfig({
   plugins: [react()],
@@ -21,7 +28,7 @@ export default defineConfig({
   },
   test: {
     root: '.',
-    include: ['src/renderer/**/*.test.{ts,tsx}'],
+    include: ['src/renderer/**/*.test.{ts,tsx}', 'src/shared/**/*.test.ts'],
     environment: 'jsdom',
     setupFiles: ['src/renderer/src/test/setup.ts'],
     coverage: {

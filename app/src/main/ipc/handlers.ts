@@ -39,6 +39,8 @@ import { deviceBindingSupported } from '../network/deviceBinding'
 import { pendingLink, pendingLinks, releaseLink } from '../openLinks'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
+import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
+import { currentWindowBackground, setWindowTheme } from '../windowBackground'
 import { showUpdateMenu, updateState } from '../updater'
 
 async function openNetworkSettings(): Promise<void> {
@@ -103,17 +105,17 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   const bindingSupport = deviceBindingSupported()
   handle('deviceBindingSupported', async () => bindingSupport)
 
-  // The app only ever assigns 'light'/'dark' to nativeTheme.themeSource (main/index.ts's startup
-  // call to loadThemeSource() never resolves to 'system') — narrow Electron's wider type here
-  // rather than widening our own ThemeSource just to match it.
-  const currentThemeSource = (): ThemeSource =>
-    nativeTheme.themeSource === 'dark' ? 'dark' : 'light'
+  // 'system' is Auto: follow the Mac (ADR-0034).
+  const currentThemeSource = (): ThemeSource => nativeTheme.themeSource
 
   handle('updateSettings', async (_event, patch) => {
-    // The one setting main also applies — before saving, so a failed write still switches the
-    // window to the theme the toggle now shows.
-    if (patch?.themeSource === 'light' || patch?.themeSource === 'dark') {
-      nativeTheme.themeSource = patch.themeSource
+    // The appearance is applied before saving, so a failed write still shows what was picked: light
+    // or dark (nativeTheme, which also drives prefers-color-scheme), and the theme's window ground.
+    const source = validThemeSource(patch?.themeSource)
+    if (source) nativeTheme.themeSource = source
+    if (isThemeId(patch?.appearanceTheme)) {
+      setWindowTheme(patch.appearanceTheme)
+      getWindow()?.setBackgroundColor(currentWindowBackground())
     }
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
@@ -142,6 +144,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         homeDir: getHomeDir(),
         downloadsDir: getDefaultDownloadsDir(),
         themeSource: currentThemeSource(),
+        appearanceTheme: settings.appearanceTheme ?? DEFAULT_THEME_ID,
         networkPreferences: settings.networkPreferences ?? {},
         downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
         speedLimit: settings.speedLimit,
@@ -157,6 +160,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         homeDir: '',
         downloadsDir: '',
         themeSource: currentThemeSource(),
+        appearanceTheme: DEFAULT_THEME_ID,
         networkPreferences: {},
         downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
         slowMode: false,

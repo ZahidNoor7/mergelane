@@ -76,11 +76,28 @@ WATCHED=(
   "$HOME/Library/Caches/Mergelane"
   "$HOME/Library/Caches/$BUNDLE_ID"
   "$HOME/Library/Logs/Mergelane"
-  "$HOME/Library/Preferences/$BUNDLE_ID.plist"
   "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState"
   "$HOME/Library/HTTPStorages/$BUNDLE_ID"
   "$HOME/Library/WebKit/$BUNDLE_ID"
 )
+
+# The app's preferences (its NSUserDefaults domain) are watched by content, read through macOS's
+# preferences service (`defaults export`), not as a file. Electron writes three keys there on every
+# launch (shell/browser/electron_browser_main_parts_mac.mm and browser_mac.mm), and the preferences
+# service saves them under the real home whatever CFFIXED_USER_HOME says, so a launch of the copy can
+# create or touch the owner's file. Those keys hold Electron's text direction and argument handling,
+# the same for every launch, not the owner's data: they are left out of the comparison, and a domain
+# holding only them counts as empty. Every other key is compared.
+ELECTRON_LAUNCH_KEYS=(AppleTextDirection NSForceRightToLeftWritingDirection NSTreatUnknownArgumentsAsOpen)
+app_preferences() {
+  local copy="$WORK/preferences.plist" key
+  defaults export "$BUNDLE_ID" "$copy" || return 1
+  for key in "${ELECTRON_LAUNCH_KEYS[@]}"; do
+    plutil -remove "$key" "$copy" >/dev/null 2>&1 || true
+  done
+  plutil -convert xml1 -o - "$copy" | shasum -a 256 | cut -d' ' -f1
+  rm -f "$copy"
+}
 
 # LaunchServices, read-only: which app opens mergelane: and magnet: links, the handlers saved in the
 # user's LaunchServices preferences, and every copy of Mergelane LaunchServices knows about.
@@ -116,7 +133,7 @@ JXA
 }
 
 # One line per file, folder or link under every watched path (type, size, modification time with
-# nanoseconds, SHA-256), Mergelane's keychain item (attributes only: never its secret) and
+# nanoseconds, SHA-256), the app's preferences without Electron's launch keys, Mergelane's keychain item (attributes only: never its secret) and
 # LaunchServices' state.
 snapshot() {
   local path entry
@@ -140,6 +157,9 @@ snapshot() {
   done
   local item
   item=$(security find-generic-password -s "Mergelane Safe Storage" 2>/dev/null | grep -E '"(cdat|mdat|svce|acct)"' || true)
+  local preferences
+  preferences=$(app_preferences) || fail "could not read the preferences of $BUNDLE_ID"
+  printf 'preferences\t%s\t(SHA-256 of %s, without Electron'"'"'s launch keys)\n' "$preferences" "$BUNDLE_ID"
   printf 'keychain\t%s\n' "${item:-no "Mergelane Safe Storage" item}" | tr '\n' ' '
   echo
   printf 'launchservices\t%s\n' "$(launch_services)"
@@ -186,7 +206,10 @@ fi
 
 step "Signatures: the bundle verifies and every Mach-O file inside is signed"
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -dv "$APP" 2>&1 | grep -q '^Signature=adhoc$' || fail "expected an ad-hoc signature"
+# Read codesign's whole report first: piped straight into `grep -q`, which stops at the match,
+# codesign could be cut off writing the lines after it, and pipefail would fail a good signature.
+signature=$(codesign -dv "$APP" 2>&1)
+grep -q '^Signature=adhoc$' <<<"$signature" || fail "expected an ad-hoc signature"
 bad=0
 checked=0
 while IFS= read -r -d '' f; do
@@ -314,7 +337,7 @@ if [ "$LOCAL" = 1 ]; then
   BEFORE="$WORK/before.txt"
   snapshot >"$BEFORE"
   echo "recorded $(wc -l <"$BEFORE" | tr -d ' ') entries"
-  grep -E '^(absent|keychain|launchservices)' "$BEFORE" | sed "s|$HOME|~|g"
+  grep -E '^(absent|preferences|keychain|launchservices)' "$BEFORE" | sed "s|$HOME|~|g"
   # The app tells macOS it opens mergelane: links (setAsDefaultProtocolClient, by bundle ID). That
   # only leaves the owner's preferences as they were when they already name Mergelane.
   saved_handler=$(sed -n 's/^launchservices\t//p' "$BEFORE" |
@@ -393,7 +416,7 @@ if [ "$LOCAL" = 1 ]; then
     fi
     fail "something of the owner's Mergelane changed during the test (above)"
   fi
-  echo "unchanged: $(grep -c . "$AFTER") entries (files with their SHA-256 and times, the keychain item, LaunchServices)"
+  echo "unchanged: $(grep -c . "$AFTER") entries (files with their SHA-256 and times, the app's preferences, the keychain item, LaunchServices)"
 fi
 
 echo

@@ -99,7 +99,13 @@ without reaching your own Mergelane:
 - **It proves it.** Before and after, it records every file under `~/Library/Application Support/Mergelane` and the
   Chrome, Chrome for Testing, Chromium and Firefox `NativeMessagingHosts` folders (with SHA-256s and modification
   times), Mergelane's caches, logs, preferences and saved state, its keychain item (attributes only, never the secret)
-  and which app opens `mergelane:` and `magnet:` links, and fails if anything changed. If your Mergelane is running and
+  and which app opens `mergelane:` and `magnet:` links, and fails if anything changed.
+- **Preferences are compared by content.** Electron writes three keys into the app's preferences on every launch
+  (`AppleTextDirection`, `NSForceRightToLeftWritingDirection`, `NSTreatUnknownArgumentsAsOpen`), and macOS's
+  preferences service saves them under your real home even with `CFFIXED_USER_HOME` set. So the test may leave
+  `~/Library/Preferences/io.github.zahidnoor7.mergelane.plist` holding just those three, as your own Mergelane does
+  when it opens. The test reads the preferences with `defaults export`, leaves those three keys out, and compares
+  everything else. If your Mergelane is running and
   writes its own files during the test, the test fails and says so: quit it and run again.
 - The app registers itself for `mergelane:` links by bundle ID on every start. That leaves your settings as they were
   only when they already name Mergelane, so if they don't (Mergelane never opened on this Mac), the launch is skipped

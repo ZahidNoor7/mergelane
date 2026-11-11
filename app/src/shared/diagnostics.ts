@@ -208,6 +208,7 @@ export function summarizeSettings(
     slowModeSpeed: settings.slowModeSpeed,
     menuBarSpeed: settings.menuBarSpeed,
     notifyWhenDone: settings.notifyWhenDone,
+    offerCopiedLinks: settings.offerCopiedLinks,
     updateAutoCheck: settings.updateAutoCheck,
     updateChannel: settings.updateChannel,
     updateBackgroundDownload: settings.updateBackgroundDownload,

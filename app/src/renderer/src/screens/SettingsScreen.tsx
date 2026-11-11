@@ -536,6 +536,9 @@ function DownloadSettings(): React.JSX.Element {
   const [limitsPage, setLimitsPage] = useState<string | null>(null)
   const [server, setServer] = useState<UsenetServer | null | undefined>(undefined)
   const [serverOpen, setServerOpen] = useState(false)
+  const offerCopiedLinks = useAppStore((store) => store.offerCopiedLinks)
+  const setOfferCopiedLinks = useAppStore((store) => store.setOfferCopiedLinks)
+  const offerId = useId()
 
   useEffect(() => {
     void window.mergelane
@@ -568,6 +571,17 @@ function DownloadSettings(): React.JSX.Element {
             <FolderOpen data-icon="inline-start" />
             Change…
           </Button>
+        </SettingRow>
+      </SettingsGroup>
+
+      {/* ADR-0043: off unless turned on, since macOS may ask the user about it. */}
+      <SettingsGroup title="Adding downloads">
+        <SettingRow
+          label="Offer links I copy"
+          htmlFor={offerId}
+          hint="When you switch to Mergelane, a link you copied in another app is offered for download. Mergelane looks at what you copied only then. macOS may ask once to allow it."
+        >
+          <Switch id={offerId} checked={offerCopiedLinks} onCheckedChange={setOfferCopiedLinks} />
         </SettingRow>
       </SettingsGroup>
 

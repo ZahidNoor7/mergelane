@@ -171,6 +171,24 @@ describe('Settings, Downloads', () => {
     expect(useAppStore.getState().screen).toBe('networks')
   })
 
+  it('turns Offer links I copy on and off, off to start with', async () => {
+    useAppStore.setState({ settingsSection: 'downloads', copiedLink: 'https://example.com/a' })
+    show()
+    const offer = screen.getByRole('switch', { name: 'Offer links I copy' })
+    expect(offer.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(/macOS may ask once to allow it/)).toBeTruthy()
+    const user = userEvent.setup()
+    await user.click(offer)
+    expect(useAppStore.getState().offerCopiedLinks).toBe(true)
+    expect(window.mergelane.updateSettings).toHaveBeenLastCalledWith({ offerCopiedLinks: true })
+    // An offer already showing goes when it's turned off; off is saved as nothing at all.
+    await user.click(offer)
+    expect(useAppStore.getState()).toMatchObject({ offerCopiedLinks: false, copiedLink: null })
+    expect(window.mergelane.updateSettings).toHaveBeenLastCalledWith({
+      offerCopiedLinks: undefined
+    })
+  })
+
   it('says when there’s no news server, or it is off, and when the schedule is on', async () => {
     usenetServer.mockImplementationOnce(() => Promise.reject(new Error('none')))
     useAppStore.setState({

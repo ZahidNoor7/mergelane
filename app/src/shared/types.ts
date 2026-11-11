@@ -637,6 +637,9 @@ export interface AppSettings {
   menuBarSpeed?: boolean
   /** Only ever saved as false: a finished download posts a notification unless turned off. */
   notifyWhenDone?: boolean
+  /** Only ever saved as true: a link copied elsewhere is offered when the user switches to
+   * Mergelane, which reads the clipboard to see it, only once turned on (ADR-0043). */
+  offerCopiedLinks?: boolean
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -700,6 +703,7 @@ export interface InitialState {
   solidGlass: boolean
   menuBarSpeed: boolean
   notifyWhenDone: boolean
+  offerCopiedLinks: boolean
   captureRules: CaptureRules
   routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */

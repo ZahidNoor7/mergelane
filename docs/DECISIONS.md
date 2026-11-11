@@ -857,3 +857,42 @@ until the owner overrides it.
   - The bundle shows sites (hosts) of downloads and the processor model. The owner may want even less (hosts
     hashed, say) or more (full settings).
   - The bundle is macOS-only (`ditto`), like the app.
+
+## ADR-0043: Offer links I copy: off by default, read only on switching to Mergelane (M3.6)
+
+- Status: Accepted (2026-11-11). The owner chose off by default and reading only when the user switches to
+  Mergelane.
+- Context:
+  - CLAUDE.md's Phase 3 lists a clipboard monitor: a link the user copied elsewhere is offered in New download.
+  - macOS controls programmatic pasteboard access. Apple's `NSPasteboard.AccessBehavior` says that with `ask`,
+    "The system will notify the user and ask for permission before granting pasteboard access. However, access
+    that is both user originated and paste related will always be allowed, and will not result in a
+    notification." Its `default` case says the general pasteboard asks upon programmatic access, and that the
+    first alert lists the app in System Settings, where the user can choose ask, always allow or always deny.
+  - Reading the clipboard by itself is not user-originated paste. On macOS 27 it may show that alert, and a
+    download manager polling the clipboard would read whatever the user copies in any app, passwords included.
+- Decision:
+  - **A setting, off by default:** Settings › Downloads › Adding downloads › "Offer links I copy", saved only as
+    `offerCopiedLinks: true`. Its hint says macOS may ask once to allow it.
+  - **When it is read:** only when one of Mergelane's windows gains focus (Electron's app
+    `'browser-window-focus'`), so only as the user switches to Mergelane. Never on a timer, and never while another
+    app is in front. When the setting is off, the clipboard is not read at all.
+  - **Where:** in main (`main/clipboardOffers.ts`), with Electron 44's `clipboard.readText()`, which returns a
+    promise. Only a link goes to the window, never other clipboard text: one web or magnet link with no spaces,
+    or a .torrent or .nzb path, at most 16 KB (`shared/links.ts copiedLink`, built on New download's
+    `acceptedLink`, which moved there).
+  - **Not the same link twice:** main keeps only the SHA-256 of the last link it offered, in memory. The clipboard
+    text is never written to disk. Turning the setting off forgets the hash. The window also skips a link that is
+    already in New download, was just started, or is downloading or in history.
+  - **The offer:** a notice in the update notice's style, at the sidebar's foot, or under the compact bar in a
+    narrow window: "Download the link you copied?" with the link's host and path (or a magnet link's name),
+    "Download…" (primary) and "Dismiss". It never takes focus and never starts anything. Download… opens New
+    download with the link in it. It hides while New download is open, where ⌘V already pastes the link.
+- Consequences:
+  - The first focus after turning it on may bring macOS's pasteboard alert. A user who chooses "always deny"
+    simply gets no offers (`readText` refusing is treated as nothing to offer). That alert cannot be checked in
+    CI or e2e. It needs a manual check on the owner's Mac.
+  - New download's existing read of the clipboard when it opens empty is unchanged. It happens on the user's
+    action, so it is outside this setting.
+  - Tests never change the owner's clipboard for longer than one test. The e2e suite swaps main's `readText` for a
+    stand-in, and the one real-clipboard test saves every format first and puts it back.

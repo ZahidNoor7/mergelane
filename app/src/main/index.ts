@@ -27,6 +27,7 @@ import {
 } from './windowBackground'
 import { openedAtLogin } from './loginItem'
 import { startMenuBar } from './menuBar'
+import { startClipboardOffers } from './clipboardOffers'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
 import { MIN_WINDOW, openingSize } from '../shared/windowSize'
@@ -276,6 +277,7 @@ app.whenReady().then(async () => {
   if (testKnobs.hideWindow) app.dock?.hide()
   const settings = await loadSettings()
   startUpdater(() => mainWindow, settings)
+  startClipboardOffers(settings)
   startMenuBar(
     {
       totalSpeed: () => downloadManager?.totalSpeed() ?? 0,

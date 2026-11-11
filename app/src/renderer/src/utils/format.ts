@@ -160,14 +160,8 @@ export function formatWhen(time: number, now: number): string {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-/** What Mergelane can download: a web link, a magnet link, or a .torrent or .nzb file on this
- * computer. */
-export function acceptedLink(text: string): string | null {
-  const link = text.trim()
-  if (/^(https?:\/\/|magnet:\?)/i.test(link)) return link
-  if (/^(\/|[a-z]:\\).*\.(torrent|nzb)$/i.test(link)) return link
-  return null
-}
+/** What Mergelane can download; in shared/links.ts, where main finds it too. */
+export { acceptedLink } from '@shared/links'
 
 /** Where a link's download comes from, in a word: its host. */
 export function sourceOf(url: string): string {

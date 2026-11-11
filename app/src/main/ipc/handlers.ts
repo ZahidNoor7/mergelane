@@ -58,6 +58,7 @@ import { revealExtension, scanBrowsers } from '../browsers'
 import { DEFAULT_CAPTURE_RULES, sanitizeCaptureRules } from '../../shared/captureRules'
 import { loginItemState, setOpenAtLogin } from '../loginItem'
 import { applyMenuBarSettings } from '../menuBar'
+import { applyClipboardSettings } from '../clipboardOffers'
 import { NetworkActivityLog, networkActivityPath } from '../networkActivity'
 import { registerDiagnostics, revealDiagnostics, saveDiagnostics } from '../diagnostics'
 
@@ -159,6 +160,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     // Read back rather than taken from the patch: what was saved is what passed the checks.
     const saved = await loadSettings()
     applyMenuBarSettings(saved)
+    applyClipboardSettings(saved)
     await manager.applySettings(saved)
   })
 
@@ -196,6 +198,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         solidGlass: settings.solidGlass ?? false,
         menuBarSpeed: settings.menuBarSpeed !== false,
         notifyWhenDone: settings.notifyWhenDone !== false,
+        offerCopiedLinks: settings.offerCopiedLinks === true,
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined
@@ -217,6 +220,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         solidGlass: false,
         menuBarSpeed: true,
         notifyWhenDone: true,
+        offerCopiedLinks: false,
         captureRules: DEFAULT_CAPTURE_RULES,
         routing: DEFAULT_ROUTING
       } satisfies InitialState

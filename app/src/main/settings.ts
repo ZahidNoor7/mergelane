@@ -134,6 +134,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (routing) settings.routing = routing
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
+  if (parsed.offerCopiedLinks === true) settings.offerCopiedLinks = true
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
   if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'
   if (parsed.updateBackgroundDownload === true) settings.updateBackgroundDownload = true

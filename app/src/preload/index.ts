@@ -117,6 +117,13 @@ const mergelaneApi = {
     return () => ipcRenderer.removeListener(IpcChannels.linkReceived, listener)
   },
 
+  /** A link the user copied, as they switched to Mergelane with "Offer links I copy" on. */
+  onCopiedLink: (callback: (link: string) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on(IpcChannels.copiedLink, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.copiedLink, listener)
+  },
+
   onDownloadUpdated: (callback: (update: DownloadUpdate) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, update: DownloadUpdate): void => callback(update)
     ipcRenderer.on(IpcChannels.downloadUpdated, listener)

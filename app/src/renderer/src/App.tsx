@@ -1,3 +1,4 @@
+import { CopiedLinkOffer } from './components/CopiedLinkOffer'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
@@ -9,6 +10,7 @@ import { useDiagnosticsMenu, useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { useSettingsShortcut } from './hooks/useSettingsShortcut'
 import { useGlassAttributes } from './hooks/useGlassAttributes'
+import { useCopiedLinks } from './hooks/useCopiedLinks'
 import { useUpdates } from './hooks/useUpdates'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
@@ -41,6 +43,7 @@ function App(): React.JSX.Element {
   useNetworkEvents()
   useDiagnosticsMenu()
   useUpdates()
+  useCopiedLinks()
   // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until
   // the first measurement, the sidebar (the window opens wider than that). The screens size their
   // layout by <main>'s width (a container), not the window's, since the sidebar takes part of it.
@@ -56,6 +59,7 @@ function App(): React.JSX.Element {
             className={`ml-content flex min-w-0 flex-1 flex-col bg-background ${sidebar ? 'ml-content-side' : ''}`}
           >
             {!sidebar && <CompactBar />}
+            {!sidebar && <CopiedLinkOffer layout="bar" />}
             <main className="@container min-h-0 flex-1">
               <CurrentScreen />
             </main>

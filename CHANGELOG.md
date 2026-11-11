@@ -20,6 +20,10 @@ All notable changes to Mergelane are recorded here. The format follows
 - The Dashboard's Today shows the fastest merged speed of the day, and the network dropouts of the last 24 hours.
   Dropouts and the fastest speed are now kept when Mergelane quits, for a week, and a network that came back
   while Mergelane was closed says so.
+- "Offer links I copy" (Settings › Downloads), off until you turn it on. When you switch to Mergelane, a link you
+  copied in another app is offered at the foot of the sidebar: "Download…" opens New download with it, and
+  "Dismiss" puts it away. The same link isn't offered again. Mergelane reads what you copied only when you switch
+  to it, and never saves it. macOS may ask once whether to allow it.
 - Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
   what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off.
 - "Download and install" downloads the new version's disk image, with progress and Cancel, and checks it against

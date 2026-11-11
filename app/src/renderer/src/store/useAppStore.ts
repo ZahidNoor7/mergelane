@@ -167,6 +167,17 @@ interface AppStore {
   /** Networks › Which network carries what (ADR-0040). */
   routing: DownloadRouting
   setRouting: (patch: Partial<DownloadRouting>) => void
+  /** Persisted — Settings › Downloads › Offer links I copy (ADR-0043). Off unless turned on. */
+  offerCopiedLinks: boolean
+  setOfferCopiedLinks: (on: boolean) => void
+  /** A link the user copied, offered for download; null when there's none. Kept in memory only. */
+  copiedLink: string | null
+  /** From main, as the user switched to Mergelane. Passed over when it's already being added or
+   * was downloaded. */
+  offerCopiedLink: (link: string) => void
+  dismissCopiedLink: () => void
+  /** Opens New download with the offered link in it. */
+  downloadCopiedLink: () => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -426,6 +437,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setNotifyWhenDone: (notifyWhenDone) => {
     set({ notifyWhenDone })
     persist({ notifyWhenDone: notifyWhenDone ? undefined : false })
+  },
+
+  offerCopiedLinks: initial.offerCopiedLinks,
+  setOfferCopiedLinks: (offerCopiedLinks) => {
+    // Turned off, an offer already showing goes too.
+    set(offerCopiedLinks ? { offerCopiedLinks } : { offerCopiedLinks, copiedLink: null })
+    // Only ever saved as true: off clears it.
+    persist({ offerCopiedLinks: offerCopiedLinks || undefined })
+  },
+  copiedLink: null,
+  offerCopiedLink: (link) => {
+    const { offerCopiedLinks, newDownloadOpen, draftUrl, startedUrl, downloads, history } = get()
+    if (!offerCopiedLinks) return
+    // Already in New download, or just started from it.
+    if ((newDownloadOpen && draftUrl === link) || link === startedUrl) return
+    // Downloaded before, or downloading.
+    const known = (entry: { url: string }): boolean => entry.url === link
+    if (Object.values(downloads).some(known) || history.some(known)) return
+    set({ copiedLink: link })
+  },
+  dismissCopiedLink: () => set({ copiedLink: null }),
+  downloadCopiedLink: () => {
+    const link = get().copiedLink
+    if (link === null) return
+    set({ copiedLink: null })
+    get().openNewDownload(link)
   },
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),

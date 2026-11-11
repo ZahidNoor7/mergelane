@@ -23,6 +23,7 @@ const initialState: InitialState = {
   solidGlass: false,
   menuBarSpeed: true,
   notifyWhenDone: true,
+  offerCopiedLinks: false,
   captureRules: DEFAULT_CAPTURE_RULES,
   routing: DEFAULT_ROUTING
 }

@@ -153,9 +153,17 @@ test.describe('Offer links I copy', () => {
       const formats: Array<{ type: string; size: number }> = []
       for (const item of await clipboard.read()) {
         const data: Record<string, Blob | Electron.ClipboardBookmark> = {}
+        // HTML written back as text/html gains a <meta charset='utf-8'> in front, one more on every
+        // run (seen on macOS 27, Electron 44). The same bytes, raw, as the Mac's own pasteboard type
+        // go back unchanged, so when read() gave those, they alone put the HTML back.
+        const rawHtml = item.types.some((type) =>
+          /^electron application\/osclipboard;format="(Apple HTML pasteboard type|public\.html)"$/.test(
+            type
+          )
+        )
         for (const type of item.types) {
           const value = await item.getType(type)
-          data[type] = value
+          if (!(type === 'text/html' && rawHtml)) data[type] = value
           formats.push({ type, size: value instanceof Blob ? value.size : -1 })
         }
         copies.push(new ClipboardItem(data))

@@ -5,6 +5,13 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Remove helper** (Networks › Other apps): takes system merge's helper off your Mac. After you confirm,
+  system merge turns off first, then your Mac asks for your administrator password once. Mergelane says whether
+  the helper was removed, whether you canceled the password prompt, or why it couldn't be removed. Downloads
+  keep working without the helper.
+
 ## [0.3.0] - 2026-11-12
 
 Mergelane now keeps itself up to date from GitHub, sits in the menu bar, and lets you choose which network carries

@@ -1,9 +1,19 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { SystemMergeOutage } from '../../../shared/types'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
 import { useSystemMerge } from '../hooks/useSystemMerge'
 import { formatEta, formatWhen } from '../utils/format'
-import { Button } from './ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from './ui/alert-dialog'
+import { Button, buttonVariants } from './ui/button'
 import { Switch } from './ui/switch'
 
 const STATE_TEXT = {
@@ -46,14 +56,18 @@ function OutageRow({ outage, now }: { outage: SystemMergeOutage; now: number }):
 /** System-wide merging (mergelane-daemon) at the foot of the networks menu: a switch, why it is
  * off when nobody turned it off, each link's merged traffic while it's on, the latest link
  * dropouts, whether it turns itself back on after a crash, and an update when the running helper
- * isn't the one this app bundles. It lives here because it is about the same networks. */
+ * isn't the one this app bundles. It lives here because it is about the same networks. At its foot,
+ * while the helper is installed, "Remove helper…" takes it off the Mac again, after a confirmation
+ * (ADR-0046). */
 export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Element {
   const formatSpeed = useFormatSpeed()
-  const { snapshot, now, busy, pending, run } = useSystemMerge(open)
+  const { snapshot, now, busy, pending, removal, run, remove } = useSystemMerge(open)
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
   const descriptionId = useId()
   const updateId = useId()
   const autoResumeId = useId()
   const autoResumeHelpId = useId()
+  const removeHelpId = useId()
 
   if (!snapshot) {
     return (
@@ -117,6 +131,16 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
         ) : (
           <p role="alert" className="text-[12px] text-[var(--color-danger)]">
             {note}
+          </p>
+        ))}
+      {removal &&
+        (removal.outcome === 'failed' ? (
+          <p role="alert" className="text-[12px] text-[var(--color-danger)]">
+            {removal.message}
+          </p>
+        ) : (
+          <p aria-live="polite" className="text-[12px] text-muted-foreground">
+            {removal.message}
           </p>
         ))}
       {snapshot.helperOutdated && (
@@ -202,6 +226,44 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
           ))}
         </ul>
       )}
+      {snapshot.installed && (
+        <div className="flex items-center justify-between gap-3 border-t-[0.5px] border-border pt-2">
+          <span id={removeHelpId} className="min-w-0 text-[12px] text-muted-foreground">
+            Mergelane&apos;s helper runs system merge. Downloads don&apos;t need it.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            aria-describedby={removeHelpId}
+            disabled={busy}
+            onClick={() => setConfirmingRemoval(true)}
+          >
+            {pending === 'remove' ? 'Removing…' : 'Remove helper…'}
+          </Button>
+        </div>
+      )}
+      <AlertDialog open={confirmingRemoval} onOpenChange={setConfirmingRemoval}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Mergelane&apos;s helper?</AlertDialogTitle>
+            <AlertDialogDescription>
+              System merge turns off, and can&apos;t be used until you install the helper again.
+              Your Mac asks for your administrator password. Downloads keep working on every
+              network.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive', size: 'sm' })}
+              onClick={remove}
+            >
+              Remove helper
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }

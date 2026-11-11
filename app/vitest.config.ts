@@ -103,7 +103,10 @@ export const COVERED = [
   'src/shared/networkActivity.ts',
   'src/shared/diagnostics.ts',
   'src/renderer/src/components/DiagnosticsSettings.tsx',
-  'src/renderer/src/hooks/useNetworks.ts'
+  'src/renderer/src/hooks/useNetworks.ts',
+  // ADR-0046: Remove helper, in the System merge section.
+  'src/renderer/src/components/SystemMergeSection.tsx',
+  'src/renderer/src/hooks/useSystemMerge.ts'
 ]
 
 export default defineConfig({

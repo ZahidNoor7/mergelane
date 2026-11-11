@@ -3,9 +3,10 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { SystemMergeSnapshot } from '../../shared/types'
-import { testKnobs } from '../testKnobs'
+import type { SystemMergeRemoval, SystemMergeSnapshot } from '../../shared/types'
+import { testDaemonInstalled, testKnobs, testRecord } from '../testKnobs'
 import { installCommand } from './installCommand'
+import { removeHelper, simulatedAdminPrompt } from './removal'
 import {
   afterInstall,
   mergeIsOn,
@@ -17,13 +18,15 @@ import {
 
 // System-wide merging is mergelane-daemon's job (CLAUDE.md architecture); the app only shows its
 // state, switches it on and off, and installs it with an administrator password: once, and again
-// whenever the running helper isn't the one this app bundles (M2.4).
+// whenever the running helper isn't the one this app bundles (M2.4). It removes it again the same
+// way (ADR-0046).
 
 const LABEL = 'io.github.zahidnoor7.mergelane.daemon'
 const PLIST = `/Library/LaunchDaemons/${LABEL}.plist`
 
 function installed(): boolean {
-  if (testKnobs.daemonInstalled !== undefined) return testKnobs.daemonInstalled === '1'
+  const claimed = testDaemonInstalled()
+  if (claimed !== undefined) return claimed === '1'
   return existsSync(PLIST)
 }
 
@@ -51,6 +54,23 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** The helper inside the app bundle, which installs and removes itself. */
+function bundledHelper(): string {
+  return join(process.resourcesPath, 'mergelane-daemon')
+}
+
+/** Runs an AppleScript with osascript(1), whose `-e` gives the script as one line: here, the
+ * administrator password prompt (installCommand.ts). A test run (MERGELANE_E2E_ADMIN_PROMPT)
+ * records the command it would run and answers the prompt itself; nothing is run. */
+async function runAsAdmin(script: string): Promise<void> {
+  const argv = ['-e', script]
+  if (testKnobs.adminPrompt !== undefined) {
+    testRecord('adminCommands', ['/usr/bin/osascript', ...argv])
+    return simulatedAdminPrompt(testKnobs.adminPrompt)
+  }
+  await promisify(execFile)('/usr/bin/osascript', argv)
+}
+
 /** What the networks menu shows: the helper's state, each link's merged traffic, its recent link
  * changes, and whether it needs updating. */
 export function systemMergeSnapshot(error?: string): Promise<SystemMergeSnapshot> {
@@ -74,13 +94,10 @@ export async function installSystemMerge(): Promise<SystemMergeSnapshot> {
   if (!app.isPackaged) {
     return systemMergeSnapshot('Installing the helper needs the packaged app.')
   }
-  const binary = join(process.resourcesPath, 'mergelane-daemon')
+  const binary = bundledHelper()
   const wasOn = await mergeIsOn(context())
   try {
-    await promisify(execFile)('/usr/bin/osascript', [
-      '-e',
-      installCommand(binary, process.getuid?.() ?? 0)
-    ])
+    await runAsAdmin(installCommand(binary, process.getuid?.() ?? 0))
     return await afterInstall(context(), wasOn)
   } catch (caught) {
     // osascript exits with -128 ("User canceled") when the password prompt is dismissed.
@@ -89,4 +106,18 @@ export async function installSystemMerge(): Promise<SystemMergeSnapshot> {
       canceled ? 'Installation was canceled.' : `Couldn't install the helper: ${message(caught)}`
     )
   }
+}
+
+/** Turns system merge off, then removes the helper: macOS asks for an administrator password once
+ * (removal.ts). Mergelane's own downloads don't use the helper, so they keep working. */
+export async function removeSystemMerge(): Promise<SystemMergeRemoval> {
+  // A development build has no bundled helper to run; a test run answers the prompt itself.
+  if (!app.isPackaged && testKnobs.adminPrompt === undefined) {
+    return {
+      outcome: 'failed',
+      message: 'Removing the helper needs the packaged app.',
+      snapshot: await systemMergeSnapshot()
+    }
+  }
+  return removeHelper(context, bundledHelper(), runAsAdmin)
 }

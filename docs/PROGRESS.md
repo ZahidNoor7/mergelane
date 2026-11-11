@@ -40,7 +40,7 @@ Last updated: 2026-11-11
 
 ### Phase 3 (proposed 2026-11-11)
 
-- Plan: `docs/PHASE-3.md`, waiting for the owner's approval and answers to its four questions.
+- Plan: `docs/PHASE-3.md` (PR #16). The owner answered its four questions on 2026-11-11; it waits for approval.
 - ADR-0034: the owner's redesign is M3.1, released as 0.2.0. All seven themes ship; the app opens on Downloads;
   Auto appearance comes back.
 - The final design is copied into `design-system/mergelane/redesign/`.

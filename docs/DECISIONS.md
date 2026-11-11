@@ -558,6 +558,10 @@ until the owner overrides it.
   - Screens for features the app doesn't have yet (updates, extension management, routing per direction, upload
     limits, daily totals, menu bar, login item, notifications) ship with the milestone that builds each feature. A
     control with nothing behind it is not shipped.
+  - Features the app has that the design leaves out are kept and restyled into the new layout.
+  - The per-network colour picker stays. A picked colour overrides the theme's colour, which is the default.
+  - Network rows show the connection type, not the Wi-Fi name, so no Location permission is asked for.
+  - Renderer code gets unit tests with Vitest, React Testing Library and V8 coverage: 90% of changed lines.
 - Consequences:
   - `design-system/mergelane/MASTER.md` no longer describes the app once M3.1 lands. It is updated in M3.1's first
     pull request, with the owner's OK.

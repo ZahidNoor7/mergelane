@@ -142,20 +142,18 @@ From CLAUDE.md. Offers a copied link in New download.
 The exit criterion: a self-hosted runner, or the local runner, on the owner's Mac. It covers Wi-Fi, iPhone USB and
 Ethernet together, unplugging, sleep and wake, and a VPN on and off.
 
-## Questions for the owner
+## Owner answers (2026-11-11)
 
-1. **Features the design leaves out:** keep them, restyled into the new layout? My recommendation is yes for all:
-   - the repeating download schedule (start, stop, days, end date), into Settings › Downloads;
-   - per-network data caps (day, week, month), into the Networks screen;
-   - Usenet, into Settings › Downloads;
-   - a proxy per network, and renaming a network, into the Networks screen;
-   - picking files inside a torrent, and the peers list, into the details pane;
-   - the selection toolbar and the right-click menu;
-   - Open, Show in Finder, Retry, Fix link and Move to Trash.
-2. **Network colours:** in the design, the theme sets each network's colour. The app also lets the user pick one per
-   network. Keep the picker (it overrides the theme), or drop it? Dropping it means saved picks are ignored.
-3. **Wi-Fi name in the network rows** ("Home network, 5 GHz"): reading the Wi-Fi name on macOS may need Location
-   permission (to check). My recommendation: show the connection type only, unless the owner wants the name.
-4. **Test coverage for screens:** the renderer has no unit-test runner, so coverage of components is not measured
-   today. My recommendation: add Vitest with React Testing Library and V8 coverage for renderer code, checked against
-   their docs first, with a 90% floor on changed files. Playwright keeps the end-to-end checks.
+1. **Features the design leaves out are all kept, restyled into the new layout:**
+   - the repeating schedule and Usenet go into Settings › Downloads;
+   - data caps, the proxy and renaming go into the Networks screen;
+   - torrent files and peers go into the details pane;
+   - the selection toolbar, the right-click menu, and Open, Show in Finder, Retry, Fix link and Move to Trash stay
+     as they work today.
+2. **The network colour picker stays.** A colour the user picks overrides the theme's colour for that network, in
+   every theme. The theme's colour is the default. The picker's swatches get values that pass contrast in all 14
+   colour sets, and saved ids keep working.
+3. **Network rows show the connection type only** (for example "Wi-Fi", "Tethered over USB"), not the Wi-Fi name.
+   No Location permission is asked for.
+4. **Vitest is added** for renderer code, with React Testing Library and V8 coverage, set up from their docs. Changed
+   renderer files must reach 90% line coverage. Playwright stays for the end-to-end tests.

@@ -5,76 +5,46 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-11
+
+The first release: a download manager for Apple silicon Macs on macOS 27 or later that can use every internet
+connection the Mac has at once.
+
 ### Added
 
-- Project rules (`CLAUDE.md`), Phase 1 plan (`docs/PHASE-1.md`) and pinned upstream commits (`docs/UPSTREAM.md`).
-- Repository foundation: MIT licence with upstream notices, `THIRD-PARTY-NOTICES.md`, README with honest limits and
-  install steps, progress and decision logs, and a CI workflow with repository checks.
-- The Mergelane app, from Plexo 1.0.0-rc.15 (commit `2e44a2f`):
-  - rebranded, and built only as an arm64 DMG and zip for macOS 27 or later, ad-hoc signed;
-  - Electron fuses hardened;
-  - a `GET /health` readiness endpoint on the local bridge.
-- CI jobs for the app: lint, typecheck and format; Playwright smoke tests on macOS; a packaging test that
-  installs the DMG like a user and waits for the ready state; an REA audit of the Electron fuses.
-
-- `mergelane-daemon`, from Net Merge 0.3.7, macOS only:
-  - a root LaunchDaemon with a versioned control API over a Unix socket, checking each caller's uid;
-  - a VPN guard that refuses to merge alongside another VPN and turns merging off when one appears;
-  - marked routes, so cleanup touches only Mergelane's own;
-  - dead links detected within 5 s.
-- Downloads pin each network's connections with `IP_BOUND_IF`, so they stay on their link while system merging
-  is on.
-- A System merge switch with live per-link traffic in the networks menu; the app installs the helper once with
-  an administrator password.
-- A simulated-network test harness, plus acceptance tests for Phase 1's criteria.
-
-- Browser capture through Chrome's native messaging (`mergelane-nmhost`): the extension hands downloads to the app over
-  a private channel. Mergelane registers the host with Chrome, Chromium and Firefox when it starts.
-
-- Video downloads from HLS (`.m3u8`) and DASH (`.mpd`) links, with a quality picker. They are fetched over every
-  selected network, then joined into MP4 or MKV by FFmpeg. Live and protected (DRM) streams are refused.
-- The extension lists the videos a page loads and hands one to Mergelane.
-- yt-dlp and FFmpeg ship inside the app, fetched at build time with pinned checksums.
-- A release workflow, run by hand.
-- A Dashboard, opened from the downloads list: every unfinished download with its progress, the total speed and
-  when all will be done; each network's speed and condition (up, limited, paused by a data limit, no connection);
-  failover (networks that dropped or came back since the app opened, and links system merge finds without
-  internet); system merge with each link's merged traffic charted; and the honest limits of combined speed.
-  Built on a design system set first (`design-system/mergelane/`).
-
-- YouTube downloads, through yt-dlp only: paste a YouTube link, or use the extension's "Send this video to
-  Mergelane" on a YouTube page. No cookies or sign-in; protected (DRM) videos, playlists, channels and live
-  streams are refused. Each network fetches its own share.
-- Deno ships inside the app as yt-dlp's JavaScript runtime.
-- Every release attaches the source code of yt-dlp and FFmpeg, and the script that builds FFmpeg.
-
-- System merge, for daily use:
+- Downloads split into parts and fetched over several connections, with queues, scheduling, speed limits and
+  torrents. The download engine comes from Plexo 1.0.0-rc.15.
+- Every network at once: a download can use Wi-Fi, Ethernet and a tethered phone together. Each network's
+  connections stay on that network, even while System merge is on.
+- System merge, one switch that combines the networks for every app on the Mac:
+  - a helper installed once, with an administrator password;
+  - it refuses to turn on while another VPN is on, and turns itself off if one appears;
+  - if any part of Mergelane stops, the Mac's own internet keeps working;
   - an optional "Turn back on after a crash" setting, off by default;
-  - networks that come back after unplugging, sleep or a reconnected phone are checked again from scratch, and
-    their routes are re-synced;
-  - the helper keeps a history of the last 50 network changes, shown in the app;
-  - new helper commands: `events` and `auto-resume on|off`.
+  - networks that come back after unplugging, sleep or a reconnected phone are checked again from scratch;
+  - the last 50 network changes, shown in the app.
+- A Dashboard, opened from the downloads list:
+  - every unfinished download, the total speed and when all will be done;
+  - each network's speed and condition (up, limited, paused by a data limit, no connection);
+  - networks that dropped or came back since the app opened;
+  - System merge's traffic on each link;
+  - the honest limits of combined speed.
+- Video downloads from HLS (`.m3u8`) and DASH (`.mpd`) links, with a quality picker, joined into MP4 or MKV. Live and
+  protected (DRM) streams are refused.
+- YouTube downloads, through yt-dlp only: paste a YouTube link, or use the extension's "Send this video to
+  Mergelane". There are no cookies and no sign-in, and protected (DRM) videos, playlists, channels and live streams
+  are refused.
+- A Chrome extension that hands the downloads you click to Mergelane, and lists the videos a page loads. It talks to
+  Mergelane only through Chrome's native messaging, with no open network port. It is not in the Chrome Web Store
+  yet: see "Browser extension" in the README.
+- Bundled tools, each pinned by checksum, with their licences inside the app:
+  - yt-dlp;
+  - Deno, yt-dlp's JavaScript runtime;
+  - Mergelane's own minimal LGPL build of FFmpeg, which only joins and rewraps media and never re-encodes.
+- Every release attaches the source code of these tools, and the script that builds FFmpeg.
 
-- Running every check on the owner's Mac instead of GitHub (ADR-0032):
-  - `scripts/ci/local.sh` runs the checks that need no administrator rights, read from `ci.yml`;
-  - `scripts/ci/local-root.sh` runs the network tests with the owner's password, pausing and restoring the
-    installed helper;
-  - `scripts/release/local-release.mjs` builds a release locally and uploads it only as a draft.
-- New network tests: IPv6 traffic through the simulated links, and a link that drops and comes back.
-- The notices of the third-party code built into Deno ship inside the app.
+### Removed, compared with Plexo
 
-### Changed
-
-- `mergelane-daemon --probe-targets` sorts IPv4 and IPv6 targets by family; before, an IPv6 target failed every
-  IPv4 probe.
-- FFmpeg is now Mergelane's own minimal build from FFmpeg's official source: LGPL instead of GPL, and 4.1 MB
-  instead of 66 MB. It only joins and rewraps media; it never re-encodes.
-- yt-dlp ships as its unpacked macOS build, which starts in a quarter of a second instead of about 24 seconds.
-- The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.
-
-- Automatic updates are off until updates can be checked through the GitHub Releases API (ADR-0010).
-
-### Removed
-
-- The Telegram download source from Plexo. It needed the user's own Telegram API keys and a sign-in. Telegram
-  downloads saved by an older build are dropped; finished files are kept.
+- The Telegram download source. It needed your own Telegram API keys and a sign-in.
+- Automatic updates. Without an Apple Developer ID signature, installing an update in place isn't proven safe yet;
+  a check for new releases on GitHub comes later (ADR-0010). Until then, download new releases from GitHub.

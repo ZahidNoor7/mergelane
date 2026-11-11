@@ -1,4 +1,6 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
+import type { BrowserContact, BrowserId } from './browsers'
+import type { CaptureRules } from './captureRules'
 import type { Release, UpdateChannel } from './releases'
 import type { ThemeId } from './themes'
 
@@ -606,6 +608,10 @@ export interface AppSettings {
   themeSource?: ThemeSource
   /** The colour theme (shared/themes.ts). Missing or unknown means the default, Porcelain. */
   appearanceTheme?: ThemeId
+  /** Settings › Browser extensions › What the extension does (ADR-0039). Missing: the defaults. */
+  captureRules?: CaptureRules
+  /** When each browser's extension last reached Mergelane, and its version (ADR-0039). */
+  browserContacts?: Partial<Record<BrowserId, BrowserContact>>
   /** Only ever saved as false: the menu bar shows the merged speed unless turned off (ADR-0037). */
   menuBarSpeed?: boolean
   /** Only ever saved as false: a finished download posts a notification unless turned off. */
@@ -669,6 +675,7 @@ export interface InitialState {
   solidGlass: boolean
   menuBarSpeed: boolean
   notifyWhenDone: boolean
+  captureRules: CaptureRules
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

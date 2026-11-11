@@ -1,4 +1,4 @@
-# Browser bridge, protocol v2 (native messaging)
+# Browser bridge, protocol v3 (native messaging)
 
 How the browser extension hands downloads to the app (ADR-0021). Chrome, Chromium and Microsoft Edge load the
 Chrome build; Firefox loads its own (ADR-0038). There are three processes:
@@ -31,8 +31,11 @@ Uses Chrome's native messaging, verified against
 - **Socket:** a Unix stream socket. The path comes from `MERGELANE_BROWSER_SOCKET`, else
   `$HOME/Library/Application Support/Mergelane/browser.sock`. The app creates it with mode 0600, so only the user's
   own processes can connect.
-- **Request:** one line of JSON, `{"v":2,"origin":"<caller>","message":<extension message>}`, then a newline. The
-  app answers with one line of JSON and closes the connection.
+- **Request:** one line of JSON, `{"v":3,"origin":"<caller>","browser":"<path>","message":<extension message>}`,
+  then a newline. The app answers with one line of JSON and closes the connection.
+  - `browser` (v3) is the executable of the process that started the host, as `/bin/ps -o comm= -p <parent pid>`
+    reports it (for example `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`). It's left out when it
+    can't be read. The app uses it only to show which browsers have connected (ADR-0039).
 - **App not running:** if the socket is missing or refuses the connection, the host answers
   `{"ok":false,"error":"unavailable"}` for every message except `wake`.
   - For `wake`, the host starts the app (`/usr/bin/open -g -b io.github.zahidnoor7.mergelane`).
@@ -43,9 +46,9 @@ Uses Chrome's native messaging, verified against
 
 | Message | Answer |
 |---|---|
-| `{"type":"ping"}` | `{"ok":true,"app":"mergelane","version":"<v>","api":2}` |
+| `{"type":"ping","extension":"<version>"}` | `{"ok":true,"app":"mergelane","version":"<v>","api":3,"rules":{"capture":<bool>,"videoButton":<bool>}}`. `extension` (v3) is the extension's version; `rules` (v3) is what the extension acts on itself: whether to send downloads at all, and whether to list a page's videos. |
 | `{"type":"wake"}` | Same as `ping`, once the app answers. The host starts the app first if it isn't running. |
-| `{"type":"add","request":<BridgeAddRequest>}` | `{"ok":true,"token":"<uuid>"}` when Mergelane will take the download, or `{"ok":false,"kept":"<reason>"}` when the browser should keep it. Answered within 8 s. |
+| `{"type":"add","request":<BridgeAddRequest>}` | `{"ok":true,"token":"<uuid>"}` when Mergelane will take the download, or `{"ok":false,"kept":"<reason>"}` when the browser should keep it. Answered within 8 s. The app applies Settings › Browser extensions' rules here (sending on or off, the minimum size, the file types), so every browser follows the same ones. |
 | `{"type":"confirm","token":"<uuid>"}` | `{"ok":true}`, or `{"ok":false}` when the token is unknown or expired (15 s). |
 | `{"type":"health"}` | `{"ok":true,"app":"mergelane","version":"<v>","ready":<bool>}`. Used by packaging tests through the socket; never sent by the extension. |
 

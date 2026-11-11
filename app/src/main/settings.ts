@@ -11,6 +11,8 @@ import {
   type ThemeSource
 } from '../shared/types'
 import { readJson, updateJson } from './jsonFile'
+import { BROWSERS } from '../shared/browsers'
+import { sanitizeCaptureRules } from '../shared/captureRules'
 import { parseVersion } from '../shared/releases'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
@@ -109,6 +111,23 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const source = validThemeSource(themeSource)
   if (source) settings.themeSource = source
   if (isThemeId(parsed.appearanceTheme)) settings.appearanceTheme = parsed.appearanceTheme
+  if (parsed.captureRules !== undefined) {
+    settings.captureRules = sanitizeCaptureRules(parsed.captureRules)
+  }
+  if (isRecord(parsed.browserContacts)) {
+    const contacts: NonNullable<AppSettings['browserContacts']> = {}
+    for (const { id } of BROWSERS) {
+      const contact = parsed.browserContacts[id]
+      if (!isRecord(contact) || typeof contact.at !== 'number' || !(contact.at > 0)) continue
+      contacts[id] = {
+        at: contact.at,
+        ...(typeof contact.extension === 'string'
+          ? { extension: contact.extension.slice(0, 32) }
+          : {})
+      }
+    }
+    settings.browserContacts = contacts
+  }
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false

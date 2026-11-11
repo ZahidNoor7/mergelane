@@ -6,6 +6,7 @@
 //    call one of its methods add that method themselves, so a missing one fails loudly.
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { DEFAULT_CAPTURE_RULES } from '@shared/captureRules'
 import type { InitialState } from '@shared/types'
 
 const initialState: InitialState = {
@@ -21,7 +22,8 @@ const initialState: InitialState = {
   glassLook: 'clear',
   solidGlass: false,
   menuBarSpeed: true,
-  notifyWhenDone: true
+  notifyWhenDone: true,
+  captureRules: DEFAULT_CAPTURE_RULES
 }
 
 Object.defineProperty(window, 'mergelane', {

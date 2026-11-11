@@ -21,6 +21,26 @@ export function saveSettings(patch: Partial<Settings>): Promise<void> {
   return api.storage.local.set(patch)
 }
 
+/** What Mergelane's Settings › Browser extensions says, as its last answer to a ping carried it
+ * (bridge api 3). Mergelane applies the rest of its rules to each download itself. */
+export interface AppRules {
+  capture: boolean
+  videoButton: boolean
+}
+
+const APP_RULES: AppRules = { capture: true, videoButton: true }
+
+export async function loadAppRules(): Promise<AppRules> {
+  const { appRules } = await api.storage.local.get({ appRules: APP_RULES })
+  return { ...APP_RULES, ...(appRules as Partial<AppRules>) }
+}
+
+export function saveAppRules(rules: AppRules): Promise<void> {
+  return api.storage.local.set({
+    appRules: { capture: rules.capture !== false, videoButton: rules.videoButton !== false }
+  })
+}
+
 /** The site rule typed or pasted ("https://Drive.Google.com/x", "*.example.com"), or null. */
 export function siteOf(input: string): string | null {
   const text = input.trim().toLowerCase().replace(/^\*\./, '')

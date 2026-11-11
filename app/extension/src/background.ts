@@ -4,7 +4,7 @@ import { youtubeLink } from '../../src/shared/youtube'
 import type { HandOver, MediaRequest } from './media'
 import { mediaOf, styleBadge, watchMedia } from './mediaWatch'
 import { browserContext, confirm, reach, send, storeOf, wake, type Reach } from './mergelane'
-import { excluded, loadSettings } from './settings'
+import { excluded, loadAppRules, loadSettings } from './settings'
 
 const MENU_ID = 'download-with-mergelane'
 // Mergelane can't tell the extension it has quit, so the toolbar icon checks on a timer.
@@ -17,15 +17,20 @@ const ICON = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' }
 const ICON_OFF = { 16: 'icons/icon-off-16.png', 32: 'icons/icon-off-32.png' }
 
 async function showState(reached?: Reach): Promise<void> {
-  const { capture } = await loadSettings()
   reached ??= await reach()
-  const title = !capture
+  const local = (await loadSettings()).capture
+  // Off here, or off for every browser in Mergelane's Settings › Browser extensions.
+  const app = (await loadAppRules()).capture
+  const capture = local && app
+  const title = !local
     ? 'Mergelane: capture is off'
-    : reached === 'closed'
-      ? 'Mergelane isn’t open: downloads stay in the browser'
-      : reached === 'update'
-        ? 'Update Mergelane to use this extension'
-        : 'Mergelane'
+    : !app
+      ? 'Mergelane: sending downloads is off in Mergelane’s settings'
+      : reached === 'closed'
+        ? 'Mergelane isn’t open: downloads stay in the browser'
+        : reached === 'update'
+          ? 'Update Mergelane to use this extension'
+          : 'Mergelane'
   await api.action.setIcon({ path: capture && reached === 'ok' ? ICON : ICON_OFF })
   await api.action.setTitle({ title })
 }
@@ -36,6 +41,7 @@ async function capture(item: chrome.downloads.DownloadItem): Promise<boolean> {
   const url = item.finalUrl || item.url
   // blob: and data: downloads exist only inside the browser.
   if (!settings.capture || !/^https?:/i.test(url)) return false
+  if (!(await loadAppRules()).capture) return false
   if (excluded(settings.sites, [item.url, item.finalUrl, item.referrer])) return false
 
   const request: BridgeAddRequest = {

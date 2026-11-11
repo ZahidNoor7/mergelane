@@ -85,6 +85,10 @@ func TestVersion(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	// The browser that started the host, as ps would name it.
+	defer func(real func() string) { parentApp = real }(parentApp)
+	parentApp = func() string { return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }
+	const browser = `"browser":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",`
 	path, got := app(t)
 	missing := filepath.Join(filepath.Dir(path), "missing.sock")
 	const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
@@ -99,10 +103,10 @@ func TestRun(t *testing.T) {
 	}{
 		{"empty stdin", []string{origin}, path, nil, 0, nil, ""},
 		{"chrome ping", []string{origin}, path, frame(`{"type":"ping"}`), 0, []string{pong},
-			`{"v":2,"origin":"` + origin + `","message":{"type":"ping"}}` + "\n"},
+			`{"v":3,"origin":"` + origin + `",` + browser + `"message":{"type":"ping"}}` + "\n"},
 		{"firefox ping", []string{"/x/io.github.zahidnoor7.mergelane.json", "mergelane@zahidnoor7.github.io"}, path,
 			frame(`{"type":"ping"}`), 0, []string{pong},
-			`{"v":2,"origin":"mergelane@zahidnoor7.github.io","message":{"type":"ping"}}` + "\n"},
+			`{"v":3,"origin":"mergelane@zahidnoor7.github.io",` + browser + `"message":{"type":"ping"}}` + "\n"},
 		{"bad message", []string{origin}, path, frame(`[]`), 0, []string{`{"ok":false,"error":"bad-message"}`}, ""},
 		{"app not running", []string{origin}, missing, frame(`{"type":"add","request":{}}`), 0,
 			[]string{`{"ok":false,"error":"unavailable"}`}, ""},
@@ -136,5 +140,12 @@ func TestRun(t *testing.T) {
 	case line := <-got:
 		t.Errorf("app got an unexpected request %q", line)
 	default:
+	}
+}
+
+func TestParentAppIsTheRealParent(t *testing.T) {
+	// The default reads the test's own parent through ps: some executable, never empty.
+	if got := parentApp(); got == "" {
+		t.Error("parentApp() is empty for a running parent")
 	}
 }

@@ -56,6 +56,8 @@ async function prepareExtension(kind: ExtensionKind): Promise<string | null> {
 /** Looks for every known browser, and readies the extension for those Mergelane supports. */
 export async function scanBrowsers(): Promise<BrowsersReport> {
   const folders = applicationFolders()
+  const settings = await loadSettings()
+  const contacts = settings.browserContacts ?? {}
   const prepared = new Map<ExtensionKind, string | null>()
   const browsers: BrowserState[] = []
   for (const spec of BROWSERS) {
@@ -73,11 +75,15 @@ export async function scanBrowsers(): Promise<BrowsersReport> {
       }
       folder = prepared.get(spec.kind) ?? null
     }
-    browsers.push({ ...spec, found, extensionFolder: folder })
+    browsers.push({ ...spec, found, extensionFolder: folder, contact: contacts[spec.id] ?? null })
   }
+  const shipped = await readFile(join(bundledExtension('chrome'), 'manifest.json'), 'utf8')
+    .then((text) => String(JSON.parse(text).version))
+    .catch(() => null)
   return {
     browsers,
-    extensionConnected: (await loadSettings()).browserExtensionUsed === true,
+    extensionConnected: settings.browserExtensionUsed === true,
+    extensionVersion: shipped,
     scannedAt: Date.now()
   }
 }

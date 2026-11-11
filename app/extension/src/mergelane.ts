@@ -1,4 +1,5 @@
 import { api } from './api'
+import { saveAppRules } from './settings'
 import {
   BRIDGE_API,
   BRIDGE_DEADLINE_MS,
@@ -41,8 +42,18 @@ function reachOf(reply: BridgeReply | null): Reach {
   return 'api' in reply && reply.api === BRIDGE_API ? 'ok' : 'update'
 }
 
+/** Keeps the rules Mergelane's answer carries (api 3), for the icon and the video list. */
+async function noteRules(reply: BridgeReply | null): Promise<void> {
+  if (reply?.ok && 'rules' in reply && reply.rules) await saveAppRules(reply.rules)
+}
+
+/** This extension's version, so Mergelane's Settings can show it per browser. */
+const extension = (): string => api.runtime.getManifest().version
+
 export async function reach(): Promise<Reach> {
-  return reachOf(await call({ type: 'ping' }, 3000))
+  const reply = await call({ type: 'ping', extension: extension() }, 3000)
+  await noteRules(reply)
+  return reachOf(reply)
 }
 
 /** Mergelane will take the download once confirmed (see BridgeReply's token). */
@@ -134,5 +145,7 @@ function browserName(): string {
 
 /** Only ever on a click: the host starts Mergelane if it isn't running, and waits for it. */
 export async function wake(): Promise<boolean> {
-  return reachOf(await call({ type: 'wake' }, 15_000)) === 'ok'
+  const reply = await call({ type: 'wake', extension: extension() }, 15_000)
+  await noteRules(reply)
+  return reachOf(reply) === 'ok'
 }

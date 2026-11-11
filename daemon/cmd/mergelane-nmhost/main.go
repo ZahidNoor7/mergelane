@@ -15,6 +15,9 @@ import (
 // Set at build time: -X main.version=...
 var version = "dev"
 
+// parentApp names the browser that started the host; a test replaces it.
+var parentApp = func() string { return nmhost.ParentApp(context.Background(), os.Getppid()) }
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Getenv, os.Stdin, os.Stdout, os.Stderr))
 }
@@ -27,6 +30,7 @@ func run(args []string, getenv func(string) string, stdin io.Reader, stdout, std
 	}
 	opts := nmhost.OptionsFromEnv(args, getenv)
 	opts.Log = stderr
+	opts.Browser = parentApp()
 	if err := nmhost.New(opts).Run(context.Background(), stdin, stdout); err != nil {
 		fmt.Fprintln(stderr, "mergelane-nmhost:", err)
 		return 1

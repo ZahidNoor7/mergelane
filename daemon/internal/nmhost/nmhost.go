@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-	// ProtocolVersion is the "v" of every request line sent to the app.
-	ProtocolVersion = 2
+	// ProtocolVersion is the "v" of every request line sent to the app. 3 added "browser" (M3.4b).
+	ProtocolVersion = 3
 	// BundleID is Mergelane.app's bundle identifier, which wake launches.
 	BundleID = "io.github.zahidnoor7.mergelane"
 	// EnvSocket overrides the app's socket path.
@@ -39,6 +41,22 @@ func Caller(args []string) string {
 		return args[i]
 	}
 	return ""
+}
+
+// ParentApp returns the executable of process pid, the browser that started the host, as ps(1)
+// reports it (its full path on macOS), or "" when it can't be read. It runs /bin/ps without a shell,
+// with a short timeout, and needs no privileges.
+func ParentApp(ctx context.Context, pid int) string {
+	if pid <= 0 {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/bin/ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // SocketPath returns the app's browser socket: $MERGELANE_BROWSER_SOCKET, else

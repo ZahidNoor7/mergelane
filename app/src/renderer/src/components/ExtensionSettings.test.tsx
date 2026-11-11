@@ -2,6 +2,7 @@ import { BROWSERS, type BrowsersReport } from '@shared/browsers'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '../store/useAppStore'
 import { ExtensionSettings } from './ExtensionSettings'
 
 const NOW = new Date(2026, 10, 11, 15, 0).getTime()
@@ -14,9 +15,11 @@ function report(found: string[], fields: Partial<BrowsersReport> = {}): Browsers
       extensionFolder:
         found.includes(spec.id) && spec.kind
           ? `/Users/test/Mergelane/Browser Extension/${spec.kind}`
-          : null
+          : null,
+      contact: null
     })),
     extensionConnected: false,
+    extensionVersion: '1.0.0',
     scannedAt: NOW,
     ...fields
   }
@@ -34,11 +37,15 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     browsers,
-    revealExtension
+    revealExtension,
+    updateSettings
   } as unknown as typeof window.mergelane
 })
+const initial = useAppStore.getState()
+const updateSettings = vi.fn(() => Promise.resolve())
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initial, true)
   vi.useRealTimers()
   vi.clearAllMocks()
 })
@@ -149,5 +156,61 @@ describe('Settings › Browser extensions', () => {
     browsers.mockImplementationOnce(() => Promise.reject(new Error('gone')))
     await show()
     expect(screen.getByRole('button', { name: 'Scan again' })).toBeTruthy()
+  })
+})
+
+describe('which browsers have connected', () => {
+  it('says when each one last reached Mergelane, its extension, and when it’s out of date', async () => {
+    answer = report(['chrome', 'edge', 'firefox'], { extensionConnected: true })
+    answer.browsers[0].contact = { at: NOW - 5 * 60_000, extension: '1.0.0' }
+    answer.browsers[1].contact = { at: NOW - 60 * 60_000, extension: '0.9.0' }
+    answer.browsers[3].contact = { at: NOW - 2 * 60_000 }
+    await show()
+    const clock = new Date(NOW - 60 * 60_000).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    expect(rows('Browsers on this Mac')).toEqual([
+      'Google ChromeReached Mergelane 5 min ago, extension 1.0.0.Install again…',
+      `Microsoft EdgeReached Mergelane today ${clock}, extension 0.9.0. Restart Edge to use 1.0.0.Install again…`,
+      'FirefoxReached Mergelane 2 min ago.Install again…'
+    ])
+  })
+})
+
+describe('what the extension does', () => {
+  it('shows the rules and saves each change for every browser', async () => {
+    const user = setupUser()
+    await show()
+    const group = screen.getByRole('region', { name: 'What the extension does' })
+    const types = within(group).getByRole('group', { name: 'File types' })
+    expect(
+      within(types)
+        .getAllByRole('button')
+        .map((button) => `${button.textContent}:${button.getAttribute('aria-pressed')}`)
+    ).toEqual([
+      'Video:true',
+      'Audio:false',
+      'Archives:true',
+      'Disk images:true',
+      'Apps and installers:true',
+      'Documents:false'
+    ])
+    await user.click(within(types).getByRole('button', { name: 'Documents' }))
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      captureRules: expect.objectContaining({ types: ['video', 'archive', 'disk', 'app', 'doc'] })
+    })
+    await user.click(within(types).getByRole('button', { name: 'Video' }))
+    expect(useAppStore.getState().captureRules.types).toEqual(['archive', 'disk', 'app', 'doc'])
+    await user.click(within(group).getByRole('button', { name: '100 MB' }))
+    expect(useAppStore.getState().captureRules.minSize).toBe('100mb')
+    await user.click(within(group).getByRole('switch', { name: 'List the videos on a page' }))
+    expect(useAppStore.getState().captureRules.videoButton).toBe(false)
+    // Off: the rest waits, greyed out.
+    await user.click(within(group).getByRole('switch', { name: 'Send downloads to Mergelane' }))
+    expect(useAppStore.getState().captureRules.capture).toBe(false)
+    expect(
+      (within(types).getByRole('button', { name: 'Audio' }) as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 })

@@ -94,6 +94,10 @@ through it.
 - **Brave and Vivaldi** don't document where they look for Mergelane's helper, so they aren't supported yet.
   **Safari** needs its own kind of extension, which comes later.
 
+**What it sends** is set once for every browser, in the same screen: sending on or off, a minimum size (1 MB by
+default), the file types (by default video, archives, disk images, apps, and any type Mergelane doesn't recognise),
+and whether to list the videos on a page. Mergelane checks each download against these rules itself.
+
 To build it yourself instead: `cd app && npm ci && npm run build:extension`, then load `app/extension/dist/chrome`.
 
 You can also paste any direct download link into **New download** without the extension.

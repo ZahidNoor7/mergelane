@@ -1,10 +1,14 @@
 import { installSteps, type BrowsersReport, type BrowserState } from '@shared/browsers'
+import { CAPTURE_TYPES, MIN_SIZES, type MinSize } from '@shared/captureRules'
 import { cn } from 'cn'
-import { Compass, Copy, FolderOpen, Globe, Puzzle, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { Check, Compass, Copy, FolderOpen, Globe, Puzzle, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useId, useState } from 'react'
+import { useAppStore } from '../store/useAppStore'
 import { formatWhen } from '../utils/format'
-import { SettingsGroup } from './settingsParts'
+import { SettingRow, SettingsGroup } from './settingsParts'
 import { Button } from './ui/button'
+import { Switch } from './ui/switch'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import {
   Dialog,
   DialogContent,
@@ -20,9 +24,22 @@ import {
 // unpacked", and release Firefox only as a temporary add-on. So the design's Install, Update and
 // Uninstall buttons become a guide, and the browsers say honestly what they need.
 
-function status(browser: BrowserState): string {
+/** "12 min ago", "today 08:55", or the date: formatWhen mid-sentence. */
+const when = (time: number): string =>
+  formatWhen(time, Date.now()).replace(/^(Just now|Today|Yesterday)/, (word) => word.toLowerCase())
+
+function status(browser: BrowserState, shipped: string | null): string {
   if (browser.notYet) return browser.notYet
   if (!browser.found) return 'Not on this Mac. Install it, then scan again.'
+  const { contact } = browser
+  if (contact) {
+    const version = contact.extension ? `, extension ${contact.extension}` : ''
+    const stale =
+      contact.extension && shipped && contact.extension !== shipped
+        ? ` Restart ${browser.short} to use ${shipped}.`
+        : ''
+    return `Reached Mergelane ${when(contact.at)}${version}.${stale}`
+  }
   if (!browser.extensionFolder) return 'The extension isn’t in this copy of Mergelane.'
   return browser.kind === 'firefox'
     ? 'Load the extension as a temporary add-on, after each Firefox restart.'
@@ -31,11 +48,7 @@ function status(browser: BrowserState): string {
 
 /** "Scanned 12 min ago. The extension has reached Mergelane." */
 function scannedText(report: BrowsersReport): string {
-  const when = formatWhen(report.scannedAt, Date.now()).replace(
-    /^(Just now|Today|Yesterday)/,
-    (word) => word.toLowerCase()
-  )
-  return `Scanned ${when}. ${
+  return `Scanned ${when(report.scannedAt)}. ${
     report.extensionConnected
       ? 'The extension has reached Mergelane.'
       : 'No browser’s extension has reached Mergelane yet.'
@@ -44,9 +57,11 @@ function scannedText(report: BrowsersReport): string {
 
 function BrowserRow({
   browser,
+  shipped,
   onInstall
 }: {
   browser: BrowserState
+  shipped: string | null
   onInstall: (browser: BrowserState) => void
 }): React.JSX.Element {
   const Icon = browser.id === 'safari' ? Compass : Globe
@@ -71,15 +86,20 @@ function BrowserRow({
             dim ? 'text-ink-3' : 'text-ink-2'
           )}
         >
-          {status(browser)}
+          {status(browser, shipped)}
         </p>
       </div>
-      {ready && (
-        <Button size="sm" onClick={() => onInstall(browser)}>
-          <Puzzle aria-hidden />
-          Install…
-        </Button>
-      )}
+      {ready &&
+        (browser.contact ? (
+          <Button variant="ghost" size="sm" onClick={() => onInstall(browser)}>
+            Install again…
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => onInstall(browser)}>
+            <Puzzle aria-hidden />
+            Install…
+          </Button>
+        ))}
     </li>
   )
 }
@@ -204,7 +224,12 @@ export function ExtensionSettings(): React.JSX.Element {
         {onMac.length > 0 ? (
           <ul aria-label="Browsers on this Mac" className="flex flex-col">
             {onMac.map((browser) => (
-              <BrowserRow key={browser.id} browser={browser} onInstall={setGuide} />
+              <BrowserRow
+                key={browser.id}
+                browser={browser}
+                shipped={report?.extensionVersion ?? null}
+                onInstall={setGuide}
+              />
             ))}
           </ul>
         ) : (
@@ -221,13 +246,115 @@ export function ExtensionSettings(): React.JSX.Element {
         <SettingsGroup title="Also supported, or coming">
           <ul aria-label="Other browsers" className="flex flex-col">
             {elsewhere.map((browser) => (
-              <BrowserRow key={browser.id} browser={browser} onInstall={setGuide} />
+              <BrowserRow
+                key={browser.id}
+                browser={browser}
+                shipped={report?.extensionVersion ?? null}
+                onInstall={setGuide}
+              />
             ))}
           </ul>
         </SettingsGroup>
       )}
 
+      <CaptureRulesGroup />
+
       <InstallGuide browser={guide} onClose={() => setGuide(null)} />
     </>
+  )
+}
+
+/** The design's "What the extension does": one set of rules for every browser (ADR-0039). Mergelane
+ * applies them to each download; the extension reads whether sending is on and whether to list a
+ * page's videos. */
+function CaptureRulesGroup(): React.JSX.Element {
+  const rules = useAppStore((store) => store.captureRules)
+  const setRules = useAppStore((store) => store.setCaptureRules)
+  const captureId = useId()
+  const videoId = useId()
+  const off = !rules.capture
+  return (
+    <SettingsGroup
+      title="What the extension does"
+      description="The same in every browser with the extension. Mergelane checks each download against these."
+    >
+      <SettingRow
+        label="Send downloads to Mergelane"
+        hint="Off, every browser keeps its downloads. Each browser’s extension can also be paused from its own menu."
+        htmlFor={captureId}
+      >
+        <Switch
+          id={captureId}
+          checked={rules.capture}
+          onCheckedChange={(capture) => setRules({ capture })}
+        />
+      </SettingRow>
+      <SettingRow label="Only files larger than" hint="Smaller files stay with the browser.">
+        <ToggleGroup
+          aria-label="Only files larger than"
+          disabled={off}
+          value={[rules.minSize]}
+          onValueChange={(values) => {
+            if (values[0] !== undefined) setRules({ minSize: values[0] as MinSize })
+          }}
+        >
+          {MIN_SIZES.map((size) => (
+            <ToggleGroupItem key={size.id} value={size.id}>
+              {size.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingRow>
+      <div className="flex flex-col gap-2.5 border-b border-rule py-3 last:border-b-0">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[13.5px] font-[600]">File types</span>
+          <p className="max-w-[60ch] text-[12.5px] leading-[1.5] text-ink-2">
+            Mergelane takes only the types you pick, and files of a type it doesn’t know. Torrents,
+            news files and video links always come.
+          </p>
+        </div>
+        <div role="group" aria-label="File types" className="flex flex-wrap gap-1.5">
+          {CAPTURE_TYPES.map((type) => {
+            const on = rules.types.includes(type.id)
+            return (
+              <button
+                key={type.id}
+                type="button"
+                aria-pressed={on}
+                disabled={off}
+                onClick={() =>
+                  setRules({
+                    types: on
+                      ? rules.types.filter((each) => each !== type.id)
+                      : [...rules.types, type.id]
+                  })
+                }
+                className={cn(
+                  'inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-[580] transition-colors duration-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50',
+                  on
+                    ? 'bg-selected text-foreground shadow-[inset_0_0_0_1px_var(--color-accent)]'
+                    : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--border)] hover:bg-hover'
+                )}
+              >
+                {on && <Check aria-hidden className="size-3.5" strokeWidth={2.5} />}
+                {type.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <SettingRow
+        label="List the videos on a page"
+        hint="In the extension’s menu, with how many on its icon: on YouTube and pages that play HLS or DASH video."
+        htmlFor={videoId}
+      >
+        <Switch
+          id={videoId}
+          checked={rules.videoButton}
+          disabled={off}
+          onCheckedChange={(videoButton) => setRules({ videoButton })}
+        />
+      </SettingRow>
+    </SettingsGroup>
   )
 }

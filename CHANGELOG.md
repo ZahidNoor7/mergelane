@@ -5,6 +5,12 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- By default the extension now sends Mergelane only files over 1 MB that are videos, archives, disk images, apps
+  or of a type Mergelane doesn't recognise. Documents, images and audio stay with the browser unless you tick them in
+  Settings › Browser extensions.
+
 ### Added
 
 - Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
@@ -13,6 +19,9 @@ All notable changes to Mergelane are recorded here. The format follows
   the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
   new version over the old one. Turn on "Download updates in the background" to have it download by itself;
   installing always waits for you.
+- Settings › Browser extensions shows when each browser's extension last reached Mergelane and its version, and
+  says when to restart a browser to use a newer one. "What the extension does" sets the rules once for every
+  browser: whether to send downloads, a minimum size, the file types, and whether to list a page's videos.
 - Settings › Browser extensions finds Chrome, Edge, Chromium and Firefox on your Mac and guides you through
   loading the Mergelane extension in each. The extension now comes inside Mergelane, so you no longer build it
   yourself, and Microsoft Edge is supported. Brave, Vivaldi and Safari are listed with what they still need.

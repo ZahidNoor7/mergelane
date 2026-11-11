@@ -95,7 +95,7 @@ test.describe('Chrome extension through the native host @extension', () => {
     void mergelane
     await expect
       .poll(() => nativeMessage({ type: 'ping' }), { timeout: 15_000 })
-      .toMatchObject({ ok: true, app: 'mergelane', api: 2 })
+      .toMatchObject({ ok: true, app: 'mergelane', api: 3 })
   })
 
   test('a download clicked in the browser is handed to Mergelane', async ({ mergelane, serve }) => {
@@ -132,5 +132,38 @@ test.describe('Chrome extension through the native host @extension', () => {
       )
       .toEqual([])
     await page.close()
+  })
+
+  test('the extension follows Settings › Browser extensions: sending off greys it out', async ({
+    mergelane
+  }) => {
+    await mergelane.api.updateSettings({
+      captureRules: { capture: false, minSize: 'any', types: [], videoButton: false }
+    })
+    // Opening the popup has the extension check Mergelane, which answers with its rules.
+    const popup = await browser.newPage()
+    await popup.goto(`chrome-extension://${CHROME_EXTENSION_ID}/popup.html`)
+    // Each runs in the extension's service worker, where `chrome` is the extension API.
+    type Chrome = {
+      storage: { local: { get: (key: string) => Promise<unknown> } }
+      action: { getTitle: (details: object) => Promise<string> }
+    }
+    await expect
+      .poll(
+        () =>
+          worker.evaluate(() =>
+            (globalThis as unknown as { chrome: Chrome }).chrome.storage.local.get('appRules')
+          ),
+        { timeout: 15_000 }
+      )
+      .toEqual({ appRules: { capture: false, videoButton: false } })
+    await expect
+      .poll(() =>
+        worker.evaluate(() =>
+          (globalThis as unknown as { chrome: Chrome }).chrome.action.getTitle({})
+        )
+      )
+      .toBe('Mergelane: sending downloads is off in Mergelane’s settings')
+    await popup.close()
   })
 })

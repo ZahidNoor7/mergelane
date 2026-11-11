@@ -8,7 +8,7 @@ import type { Fault, LoggedRequest, Origin, OriginRequest } from './origin'
 const BLOCKS = 12
 const SLOW = 3 // the block whose first request crawls
 
-test.describe('racing a slow block', () => {
+test.describe('racing a slow block @smoke', () => {
   test.use({ appEnv: { MERGELANE_E2E_HEDGE_MS: '400' } })
 
   const inSlowBlock = (range: OriginRequest['range']): boolean =>
@@ -119,7 +119,7 @@ test.describe('racing a slow block', () => {
 // what a block's holder has left, and the holder stops where it begins: each byte is fetched
 // once. What matters most is a server that caps each connection, where racing the holder would
 // only fetch the same bytes as slowly.
-test.describe('splitting a block at the end', () => {
+test.describe('splitting a block at the end @smoke', () => {
   const MIB = 1024 * 1024
   const RATE = 128 * 1024
   // Five 1 MiB blocks, four streams, every response at 128 KB/s: the fifth block goes to

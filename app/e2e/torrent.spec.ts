@@ -1,7 +1,7 @@
 import type { Torrent, Wire } from 'webtorrent'
 import { expect, LAN_ADDRESS, test, treeSha } from './fixtures'
 import { seededBytes, sha256 } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 
 // Downloading torrents: every byte right, every peer on a network, and the networks' controls,
 // pause and relaunch working as they do for HTTP. The swarm is local (see torrentSwarm.ts); the
@@ -19,12 +19,12 @@ test.afterEach(async () => {
   await swarm.stop()
 })
 
-test.describe('torrent downloads', () => {
+test.describe('torrent downloads @smoke', () => {
   test('a single-file torrent', async ({ mergelane }) => {
     const data = seededBytes(2 * MB, 11)
     const torrent = await swarm.seed([named(data, 'movie.mkv')], { pieceLength: PIECE })
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data))
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data))
     const done = await mergelane.waitForTorrentStatus('completed', 30_000)
     expect(done.kind).toBe('torrent')
     expect(done.fileName).toBe('movie.mkv')
@@ -42,7 +42,7 @@ test.describe('torrent downloads', () => {
     const expected = treeSha(
       files.map((data) => ({ path: (data as { name?: string }).name!, data }))
     )
-    await mergelane.start(await torrentFileOnDisk(torrent), expected)
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), expected)
     const done = await mergelane.waitForTorrentStatus('completed', 30_000)
     expect(done.fileName).toBe('Album')
   })
@@ -58,7 +58,7 @@ test.describe('torrent downloads', () => {
       torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit: 300 * KB })
     }
 
-    const id = await mergelane.start(await torrentFileOnDisk(torrent), sha256(data))
+    const id = await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data))
     await mergelane.waitUntil((state) => state.bytesDownloaded >= 2 * MB, 30_000)
     await mergelane.relaunch()
     const paused = await mergelane.waitForTorrentStatus('paused')
@@ -74,7 +74,7 @@ test.describe('torrent downloads', () => {
   })
 })
 
-test.describe('choosing files', () => {
+test.describe('choosing files @smoke', () => {
   /** Files of sizes that don't line up with pieces, so pieces straddle chosen and skipped ones. */
   function album(size: number, seed: number): Buffer[] {
     return ['a.bin', 'b.bin', 'c.bin', 'd.bin'].map((name, index) =>
@@ -89,7 +89,7 @@ test.describe('choosing files', () => {
     const torrent = await swarm.seed(files, { folder: 'Album', pieceLength: PIECE })
 
     // a and c chosen: b and d never appear, though the pieces at their edges are fetched.
-    await mergelane.start(await torrentFileOnDisk(torrent), shaOf([files[0], files[2]]), {
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), shaOf([files[0], files[2]]), {
       selectedFiles: [0, 2]
     })
     const done = await mergelane.waitForTorrentStatus('completed', 30_000)
@@ -114,7 +114,7 @@ test.describe('choosing files', () => {
     }
 
     const id = await mergelane.start(
-      await torrentFileOnDisk(torrent),
+      await swarm.torrentFileOnDisk(torrent),
       shaOf([files[1], files[3]]),
       {
         selectedFiles: [1, 3]
@@ -148,7 +148,7 @@ test.describe('choosing files', () => {
 
     // a and b chosen, then b swapped for c before either is near done.
     const id = await mergelane.start(
-      await torrentFileOnDisk(torrent),
+      await swarm.torrentFileOnDisk(torrent),
       shaOf([files[0], files[2]]),
       {
         selectedFiles: [0, 1]
@@ -163,7 +163,7 @@ test.describe('choosing files', () => {
   })
 })
 
-test.describe('torrents over two networks', () => {
+test.describe('torrents over two networks @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for a second network')
 
   /** Three seeders of `data`, at `uploadLimit` each. */
@@ -180,7 +180,9 @@ test.describe('torrents over two networks', () => {
     const data = seededBytes(4 * MB, 41)
     const torrent = await seedThree(data, 'both.bin', 1 * MB)
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
     const done = await mergelane.waitForTorrentStatus('completed', 30_000)
     for (const id of ['a', 'b']) {
       const network = done.networks.find((entry) => entry.id === id)!
@@ -196,7 +198,7 @@ test.describe('torrents over two networks', () => {
     const data = seededBytes(6 * MB, 42)
     const torrent = await seedThree(data, 'switch.bin', 300 * KB)
 
-    const id = await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), {
+    const id = await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
       networks: ['a', 'b']
     })
     await mergelane.waitUntil(
@@ -218,7 +220,9 @@ test.describe('torrents over two networks', () => {
       uploadLimit: 1 * MB
     })
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
     const done = await mergelane.waitForTorrentStatus('completed', 30_000)
     for (const id of ['a', 'b']) {
       const network = done.networks.find((entry) => entry.id === id)!
@@ -231,7 +235,7 @@ test.describe('torrents over two networks', () => {
   })
 })
 
-test.describe('uploading', () => {
+test.describe('uploading @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the network')
   // A USB-tethered network, the one kind once left out: every network uploads, whatever its kind.
   test.use({ appEnv: { MERGELANE_E2E_INTERFACES: `b=${LAN_ADDRESS}==usb` } })
@@ -253,7 +257,7 @@ test.describe('uploading', () => {
       wire.on('download', (bytes: number) => (fromMergelane += bytes))
     })
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
     const done = await mergelane.waitForTorrentStatus('completed', 60_000)
     expect(connected, 'Mergelane connected to the other client').toBe(true)
     expect(fromMergelane, 'what the other client received from Mergelane').toBeGreaterThan(0)
@@ -268,7 +272,7 @@ test.describe('uploading', () => {
 
 // Networks › Uploads use (M3.5b, docs/DECISIONS.md ADR-0041), over test networks a (loopback) and
 // b (this Mac's LAN address).
-test.describe('routing uploads', () => {
+test.describe('routing uploads @smoke', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the second network')
 
   /**
@@ -308,7 +312,9 @@ test.describe('routing uploads', () => {
     const { torrent, overB, wantAll } = await swarmWithLeecher(data, 'split.bin')
     await mergelane.api.updateSettings({ routing: { down: 'a', up: 'b', fallback: true } })
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
     await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
     wantAll()
     const done = await mergelane.waitForTorrentStatus('completed', 60_000)
@@ -330,7 +336,9 @@ test.describe('routing uploads', () => {
     const data = seededBytes(8 * MB, 62)
     const { torrent, overB, wantAll } = await swarmWithLeecher(data, 'moved.bin')
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
     await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 4, 30_000)
     wantAll()
     // On All networks, b uploads as every network does.
@@ -353,7 +361,7 @@ test.describe('routing uploads', () => {
   })
 })
 
-test.describe('managing trackers', () => {
+test.describe('managing trackers @smoke', () => {
   test('a torrent with an unreachable tracker finds the seeder after addTorrentTrackers', async ({
     mergelane
   }) => {
@@ -364,7 +372,7 @@ test.describe('managing trackers', () => {
     const realAnnounce = [...(parsed.announce as string[])]
     parsed.announce = ['http://127.0.0.1:9/announce']
     const rewritten = toTorrentFile(parsed)
-    const torrentPath = await torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
+    const torrentPath = await swarm.torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
 
     const id = await mergelane.start(torrentPath, sha256(data))
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -384,7 +392,7 @@ test.describe('managing trackers', () => {
     const realAnnounce = [...(parsed.announce as string[])]
     parsed.announce = ['http://127.0.0.1:9/announce']
     const rewritten = toTorrentFile(parsed)
-    const torrentPath = await torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
+    const torrentPath = await swarm.torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
 
     const id = await mergelane.start(torrentPath, sha256(data))
     await mergelane.api.pauseDownload(id)
@@ -411,7 +419,7 @@ test.describe('managing trackers', () => {
     parsed.info = { ...parsed.info, private: 1 }
     ;(parsed as { private?: number | boolean }).private = 1
     const rewritten = toTorrentFile(parsed)
-    const torrentPath = await torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
+    const torrentPath = await swarm.torrentFileOnDisk({ ...torrent, torrentFile: rewritten })
 
     const id = await mergelane.start(torrentPath, sha256(data))
     const trackers = await mergelane.api.torrentTrackers(id)

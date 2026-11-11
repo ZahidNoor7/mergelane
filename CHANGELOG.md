@@ -14,6 +14,10 @@ All notable changes to Mergelane are recorded here. The format follows
   at the next launch, and the download says it started late. The download schedule still wins: a time outside its
   hours waits for them, and New download says so.
 
+### Fixed
+
+- Selecting a download no longer nudges the download list up a few pixels.
+
 ## [0.3.0] - 2026-11-12
 
 Mergelane now keeps itself up to date from GitHub, sits in the menu bar, and lets you choose which network carries

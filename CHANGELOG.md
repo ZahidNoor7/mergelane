@@ -37,6 +37,10 @@ All notable changes to Mergelane are recorded here. The format follows
   network with its switch, streams and peers, the chunk map, a torrent's files and trackers, a Usenet download's
   server and notes, and a failed download's reason and link.
 - Mergelane opens at 1280 × 800, the design's size, or smaller to fit the screen.
+- New download is now a sheet that slides down from the top of the window, as in the design. Its fields sit in
+  labelled rows (Link, Quality, Networks, Streams, Save to). A video's qualities are listed with their sizes, each
+  network shows its tile and a checkbox, and the link says where it comes from (Torrent, Usenet, HLS, DASH,
+  YouTube).
 - Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
   file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
   downloads it would leave, and the filters that are on show as chips you can remove.

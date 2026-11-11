@@ -60,7 +60,9 @@ export const COVERED = [
   'src/renderer/src/components/DownloadNetworks.tsx',
   'src/renderer/src/components/networkStatus.ts',
   'src/renderer/src/screens/DownloadsPlace.tsx',
-  'src/shared/windowSize.ts'
+  'src/shared/windowSize.ts',
+  // M3.1 pull request 5c: New download as the design's sheet.
+  'src/renderer/src/components/NewDownloadDialog.tsx'
 ]
 
 export default defineConfig({

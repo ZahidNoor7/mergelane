@@ -153,6 +153,17 @@ Last updated: 2026-11-11
     or timing, and all passed once space was back. The leaked e2e temp folders (`mergelane-seed-*` and others,
     121 of them, 140 MB) were not deleted: the permission check refused a sweep of the temp folder. The owner
     can delete them, or allow it.
+- **M3.1, pull request 5c** (branch `m3.1-sheet`): New download as the design's sheet.
+  - `ui/dialog.tsx` gains a `sheet` variant: hung 60px from the top, 600px wide, sliding down 16px as it fades
+    in (320ms, the design's curve) and back up as it goes, using Base UI's `data-starting-style` and
+    `data-ending-style`. Under Reduce Motion it appears at once.
+  - `NewDownloadDialog` takes the design's layout: a Close button, labelled rows, a preview card with tags, a
+    quality list with sizes, network chips with tiles and checkboxes, and the footer. All its logic is kept:
+    the queue of links from the browser, resuming, a torrent's files, the Usenet server, the file name, Open
+    file, free space, data limits, subnets and single-connection files.
+  - **Not built:** the design's "When: Now / Add to queue / At a time". Mergelane has no start time for a
+    single download; the queue and the schedule decide. That would be new engine work, for the owner to decide.
+  - **Unit tests:** `NewDownloadDialog` is in `COVERED`, at 99.1% of lines.
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

@@ -172,7 +172,7 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
   await dialog.getByRole('button', { name: 'End date', exact: true }).click()
   const calendar = page.getByRole('dialog', { name: 'Choose end date' })
   await calendar.getByRole('button', { name: 'Go to the next month' }).click()
-  await page.screenshot({ path: '/tmp/mergelane-schedule-calendar.png' })
+  await page.screenshot({ path: test.info().outputPath('schedule-calendar.png') })
   // Choose a day in the displayed month, excluding the adjacent months' trailing dates.
   await calendar
     .locator('[data-slot="calendar"] td:not([data-outside]) button')
@@ -182,7 +182,7 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
     .getByRole('button', { name: 'End date', exact: true })
     .innerText()
   await testInfo.attach('schedule-dialog.png', {
-    body: await page.screenshot({ path: '/tmp/mergelane-schedule-dialog.png' }),
+    body: await page.screenshot({ path: test.info().outputPath('schedule-dialog.png') }),
     contentType: 'image/png'
   })
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
@@ -191,7 +191,7 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
   await expect(sidebarSchedule).toBeVisible()
   await mergelane.place('Downloads')
   await expect(indicator).toBeVisible()
-  await page.screenshot({ path: '/tmp/mergelane-schedule-toolbar.png' })
+  await page.screenshot({ path: test.info().outputPath('schedule-toolbar.png') })
   await indicator.click()
   await expect(dialog.getByRole('switch', { name: 'Enable download schedule' })).toBeFocused()
   await expect(dialog.getByRole('region', { name: 'Download schedule' })).toBeInViewport()
@@ -280,7 +280,7 @@ test('an overnight schedule remains usable at the minimum window size @smoke', a
   await minute.fill('00')
   await minute.fill('75')
   await expect(minute).toHaveValue('00')
-  await mergelane.page.screenshot({ path: '/tmp/mergelane-schedule-time-dark.png' })
+  await mergelane.page.screenshot({ path: test.info().outputPath('schedule-time-dark.png') })
   await expect(dialog.getByText('Next day', { exact: true })).toBeVisible()
   await dialog.getByRole('button', { name: 'Save', exact: true }).scrollIntoViewIfNeeded()
   await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeInViewport({

@@ -611,6 +611,25 @@ Last updated: 2026-11-11
       Standby b downloads nothing while a is connected, yet carries the uploads routed to it. With `routing`,
       `liveNetworks`, `torrent` and `ui`: all passed.
   - **Not proven:** real hardware (an iPhone's tethering dropping); system merge has no roles.
+- **Follow-ups: the mux test flake and the Dashboard's start times** (branch `followups-mux-dashboard`).
+  - **`e2e/mux.spec.ts` "joins H.264 and AAC…" flake:** not timing and not the app. Playwright splits a fully
+    parallel file that has afterAll hooks into one group per worker (40 tests, 4 workers: groups of 10) and runs
+    afterAll at the end of each group. The file's afterAll deleted its scratch folder but kept the promise of the
+    test media made inside it, so a worker that went on to a second group of the file handed the first real-FFmpeg
+    test of that group (always this one, the 31st) paths that no longer existed: "the video track is missing".
+    The failed test restarts the worker, so the rest of the group passed. It shows under load because a busy run
+    is when one worker picks up two groups. The afterAll now forgets the media with the folder.
+    - Before: `--repeat-each=10 --workers=4`, no extra load: 3 of 10 copies failed, all with that message.
+    - After: five runs of `--repeat-each=10 --workers=4` (2,000 test runs, this test 50 times), 0 failed: two
+      with no extra load, three with 12 `yes` processes running (load average 68–90).
+  - **Dashboard:** a download with a start time said "Waiting for a turn" in the Dashboard's Downloading list. It
+    now says "Starts at 1:00 AM" (or "tomorrow at …"), and a download that started late says "Started late", in the
+    download list's words: `activeDetail` in `utils/dashboard.ts` uses `describeStartAt` and the new `STARTED_LATE`
+    from `shared/startAt.ts` (the list uses it too). The section's clock ticks every 30 s, as the list's does.
+  - **Tests:** Vitest `utils/dashboard.test.ts` (5; `activeDetail` fully covered; the rest of `dashboard.ts` stays
+    covered by `e2e/dashboardModel.spec.ts`, so it isn't in `COVERED`). Full Vitest run: 363 passed.
+    `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
+    `dashboard`, `dashboardModel` and `mux`: 64 passed.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

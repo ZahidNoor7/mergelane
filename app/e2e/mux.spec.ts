@@ -29,16 +29,23 @@ import { NEEDS_FFMPEG, appFfmpeg, fixtureFfmpeg, inspect, missingFfmpeg } from '
 
 const run = promisify(execFile)
 let rootPromise: Promise<string> | undefined
+/** Media made by generate(), inside the root folder; forgotten when the folder is removed. */
+let mediaPromise: Promise<Media> | undefined
 /** One scratch folder per worker, removed after the file's tests. */
 function root(): Promise<string> {
   return (rootPromise ??= mkdtemp(join(tmpdir(), 'mergelane-mux-')))
 }
 
 // Fully parallel, a worker can be handed more of this file's tests after its afterAll: the folder
-// is made again on demand (as in streamTransfer.spec.ts).
+// is made again on demand (as in streamTransfer.spec.ts). Playwright splits a fully parallel file
+// with afterAll hooks into one group per worker and runs afterAll at the end of each group, so a
+// worker that picks up a second group of this file starts again from nothing. The media made in
+// the folder go with it: keeping their promise would hand the next group paths that no longer
+// exist (that was the "video track is missing" flake on the first real-FFmpeg test of a group).
 test.afterAll(async () => {
   const removed = rootPromise
   rootPromise = undefined
+  mediaPromise = undefined
   if (removed) await rm(await removed, { recursive: true, force: true })
 })
 
@@ -141,7 +148,7 @@ async function generate(): Promise<Media> {
   return media
 }
 
-let mediaPromise: Promise<Media> | undefined
+/** The test media, made once per group of tests (see the afterAll above). */
 function media(): Promise<Media> {
   return (mediaPromise ??= generate())
 }

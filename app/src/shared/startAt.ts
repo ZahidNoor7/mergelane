@@ -98,6 +98,10 @@ export function startAtScheduleNote(
 /** A download added to the queue, in its details: when its turn comes. */
 export const HELD_NOTE = 'Starts when a running download finishes, or when you start it.'
 
+/** A download's row while it runs after a start time missed because Mergelane was closed: the
+ * download list and the Dashboard both say it. */
+export const STARTED_LATE = 'Started late'
+
 /** A start time missed because Mergelane was closed, in the download's details. */
 export function missedStartNote(at: number, now = Date.now()): string {
   return `Planned to start ${when(at, now)}, while Mergelane was closed. It started when Mergelane opened.`

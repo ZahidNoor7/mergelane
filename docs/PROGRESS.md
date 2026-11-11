@@ -44,6 +44,11 @@ Last updated: 2026-11-11
 - ADR-0034: the owner's redesign is M3.1, released as 0.2.0. All seven themes ship; the app opens on Downloads;
   Auto appearance comes back.
 - The final design is copied into `design-system/mergelane/redesign/`.
+- **Plan approved 2026-11-11 (PR #16).**
+- **M3.1, pull request 0** (branch `m3.1-vitest`): Vitest for renderer unit tests.
+  - Vitest 5.1, React Testing Library, jsdom and V8 coverage.
+  - Every file listed in `vitest.config.ts`'s `COVERED` must keep 90% of its lines covered, or the run fails.
+  - Runs in `app-checks`.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

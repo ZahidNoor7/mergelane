@@ -36,6 +36,7 @@ import {
   parsePlaywright,
   parserFor,
   parseShellTests,
+  parseVitest,
   parseYaml,
   planWorkflow,
   ROOT,
@@ -427,6 +428,17 @@ describe('reading results', () => {
     assert.equal(parsePlaywright('Error: no tests found').counts, null)
   })
 
+  test('Vitest, from its summary line only', () => {
+    const passing = ' Test Files  2 passed (2)\n      Tests  12 passed (12)\n'
+    assert.deepEqual(parseVitest(passing), {
+      counts: { passed: 12, failed: 0, skipped: 0 },
+      coverage: []
+    })
+    const mixed = '      Tests  1 failed | 11 passed | 2 skipped | 1 todo (15)\n'
+    assert.deepEqual(parseVitest(mixed).counts, { passed: 11, failed: 1, skipped: 3 })
+    assert.equal(parseVitest(' Test Files  no tests\n').counts, null)
+  })
+
   test('go test -v and go tool cover', () => {
     const text = [
       '=== RUN   TestA',
@@ -457,6 +469,8 @@ describe('reading results', () => {
     assert.equal(parserFor('npx playwright test --grep @extension'), parsePlaywright)
     assert.equal(parserFor('go test -race ./...'), parseGoTest)
     assert.equal(parserFor('go tool cover -func=coverage.out | tail -1'), parseGoCoverTotal)
+    assert.equal(parserFor('npm run test:unit:coverage'), parseVitest)
+    assert.equal(parserFor('npx vitest run'), parseVitest)
     assert.equal(parserFor('npm run lint'), null)
   })
 

@@ -63,6 +63,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check
+      # Renderer unit tests in jsdom (Vitest, ADR-0034). Each file listed in vitest.config.ts's COVERED
+      # must keep 90% of its lines covered, or the run fails.
+      - name: Renderer unit tests, 90% line coverage per covered file
+        run: npm run test:unit:coverage
 
   app-e2e-smoke:
     runs-on: xcode-27

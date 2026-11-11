@@ -389,7 +389,7 @@ test.describe('NZB downloads', () => {
 
 /** Speed & data limits, on its Usenet page. */
 async function openUsenetPage(mergelane: MergelaneApp): Promise<Locator> {
-  await mergelane.page.getByRole('button', { name: /^\d+ networks?/ }).click()
+  await mergelane.place('Networks')
   await mergelane.page.getByRole('button', { name: 'Speed & data limits', exact: true }).click()
   const dialog = mergelane.page.getByRole('dialog', { name: 'Speed & data limits' })
   await dialog.getByRole('button', { name: /^Usenet/ }).click()

@@ -41,6 +41,11 @@ All notable changes to Mergelane are recorded here. The format follows
   labelled rows (Link, Quality, Networks, Streams, Save to). A video's qualities are listed with their sizes, each
   network shows its tile and a checkbox, and the link says where it comes from (Torrent, Usenet, HLS, DASH,
   YouTube).
+- A Networks place in the sidebar replaces the networks menu. It lists every network with its connection type,
+  what it's doing, its speed and data limits, its last minute and its speed, with a switch for whether new
+  downloads use it. System merge and the recent network dropouts are on it too, and Speed & data limits opens
+  from it.
+- A network's colour can be set back to the theme's colour.
 - Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
   file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
   downloads it would leave, and the filters that are on show as chips you can remove.

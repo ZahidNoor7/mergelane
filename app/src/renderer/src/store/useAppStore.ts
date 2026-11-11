@@ -22,9 +22,9 @@ export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** The window's places (the sidebar's): the downloads or the dashboard. The Networks and Settings
- * screens join them in M3.1 pull requests 5d and 5e. */
-export type Screen = 'downloads' | 'dashboard'
+/** The window's places (the sidebar's): the downloads, the dashboard or the networks. The Settings
+ * screen joins them in M3.1 pull request 5e. */
+export type Screen = 'downloads' | 'dashboard' | 'networks'
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]

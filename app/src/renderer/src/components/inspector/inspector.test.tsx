@@ -20,7 +20,6 @@ vi.mock('../TorrentFiles', () => ({
 vi.mock('../UsenetServerDialog', () => ({
   UsenetServerButton: ({ host }: { host: string }) => <button type="button">{host}</button>
 }))
-vi.mock('../NetworksMenu', () => ({ NetworksMenu: () => null }))
 vi.mock('../LimitsDialog', () => ({ LimitsDialog: () => null }))
 
 const MB = 1024 * 1024

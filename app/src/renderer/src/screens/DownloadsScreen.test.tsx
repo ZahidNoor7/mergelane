@@ -12,15 +12,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 import { useAppStore } from '../store/useAppStore'
 import { DownloadsScreen } from './DownloadsScreen'
 
-// The networks menu and the limits dialog talk to the helper and have their own tests end to end;
-// here they are stand-ins that show they were offered.
-vi.mock('../components/NetworksMenu', () => ({
-  NetworksMenu: ({ onOpenLimits }: { onOpenLimits: (page: string | null) => void }) => (
-    <button type="button" onClick={() => onOpenLimits('en0')}>
-      Networks menu
-    </button>
-  )
-}))
+// The limits dialog has its own tests end to end; here it is a stand-in that shows it was offered.
 vi.mock('../components/LimitsDialog', () => ({
   LimitsDialog: ({ open, showSchedule }: { open: boolean; showSchedule: boolean }) =>
     open ? <div role="dialog">{showSchedule ? 'Schedule' : 'Limits'}</div> : null
@@ -497,7 +489,7 @@ describe('DownloadsScreen, the selection', () => {
     expect(perform).not.toHaveBeenCalledWith('remove', expect.anything())
   })
 
-  it('clears the finished list, and offers the schedule and the network limits', async () => {
+  it('clears the finished list, and offers the schedule', async () => {
     show([waiting], [finished], {
       downloadSchedule: {
         enabled: true,
@@ -508,8 +500,8 @@ describe('DownloadsScreen, the selection', () => {
     })
     await user().click(screen.getByRole('button', { name: 'Clear finished list' }))
     expect(askClearFinished).toHaveBeenCalled()
-    await user().click(screen.getByRole('button', { name: 'Networks menu' }))
-    expect(screen.getByRole('dialog').textContent).toBe('Limits')
+    await user().click(screen.getByRole('button', { name: /^Download schedule/ }))
+    expect(screen.getByRole('dialog').textContent).toBe('Schedule')
   })
 
   it('while busy, holds the selection’s buttons', async () => {

@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { ArrowDownToLine, Gauge, HardDrive, LayoutDashboard, Unplug } from 'lucide-react'
+import { ArrowDownToLine, Gauge, HardDrive, LayoutDashboard, Unplug, Waypoints } from 'lucide-react'
 import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
@@ -20,8 +20,8 @@ import { UpdateIndicator } from './UpdateIndicator'
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
 // their top left (main/index.ts trafficLightPosition), on a strip the window is dragged by.
 //
-// The Networks place and Settings arrive with their screens (M3.1 pull requests 5d and 5e). Until then
-// the units and theme toggles, which Settings will hold, stay here so nothing is lost.
+// Settings arrives with its screen (M3.1 pull request 5e). Until then the units and theme toggles,
+// which Settings will hold, stay here so nothing is lost.
 
 /** Width of the window at which the sidebar replaces the compact bar. */
 export const SIDEBAR_FROM = 760
@@ -30,7 +30,8 @@ type Place = Screen
 
 const PLACES: { id: Place; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine }
+  { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine },
+  { id: 'networks', label: 'Networks', icon: Waypoints }
 ]
 
 /** Where the window is: the dashboard, or the downloads (the list, and a download's details). */

@@ -164,6 +164,23 @@ Last updated: 2026-11-11
   - **Not built:** the design's "When: Now / Add to queue / At a time". Mergelane has no start time for a
     single download; the queue and the schedule decide. That would be new engine work, for the owner to decide.
   - **Unit tests:** `NewDownloadDialog` is in `COVERED`, at 99.1% of lines.
+- **M3.1, pull request 5d** (branch `m3.1-networks`): the Networks screen.
+  - `screens/NetworksScreen.tsx`: the design's network list (tile, name, interface, connection type only,
+    state, limit tags, last-minute sparkline, speed and upload, the pencil, a limits button, and a switch for
+    new downloads, which is the saved `off` preference), system merge, recent dropouts, and the note on combined
+    speed. The sidebar and compact bar gain a Networks place (`screen: 'networks'`).
+  - `NetworksMenu` (the downloads toolbar's popover) is deleted: everything in it is on the screen.
+  - The colour picker gains "Theme colour", which clears a picked colour; a picked one overrides the theme's.
+  - **Kept for 5e:** the Speed & data limits dialog, opened from the screen. Its general page (total speed,
+    slow mode, downloads at once, schedule) and Usenet page move to Settings in 5e, and its network pages
+    can then move onto this screen.
+  - **Not built:** the design's "Which network carries what" (routing downloads and uploads to one network).
+    Mergelane has no such routing; it would be new engine work, for the owner to decide.
+  - **e2e:** a `place()` fixture goes to a place by the sidebar; `newDownload()` goes to Downloads first.
+    `systemMerge`, `nzb`, `scheduleQueue` and `ui` use it instead of the menu.
+  - **Unit tests:** `NetworksScreen` (100%) and `NetworkEditPopover` (98.4%) are in `COVERED`.
+  - One smoke run had one failure, `streamDownload.spec`'s "an HLS stream becomes one file" (an extra file in
+    the folder). It passed twice alone and in the next full run. Seen once.
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

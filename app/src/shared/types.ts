@@ -593,7 +593,13 @@ export interface AppSettings {
   /** How speeds are shown everywhere; sizes stay in bytes either way. */
   speedUnit?: SpeedUnit
   browserExtensionUsed?: boolean
+  /** The Liquid Glass theme's look: clear (the default) or tinted, thicker glass. */
+  glassLook?: GlassLook
+  /** Liquid Glass drawn solid, as Reduce Transparency does; only ever saved as true. */
+  solidGlass?: boolean
 }
+
+export type GlassLook = 'clear' | 'tinted'
 
 /** bytes: MB/s. bits: Mbps, as internet plans and speed tests count them. */
 export type SpeedUnit = 'bytes' | 'bits'
@@ -618,6 +624,8 @@ export interface InitialState {
   slowMode: boolean
   slowModeSpeed: number
   speedUnit: SpeedUnit
+  glassLook: GlassLook
+  solidGlass: boolean
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

@@ -1,5 +1,10 @@
 import { THEMES, type ThemeSeeds } from '@shared/themes'
-import { DOWNLOADS_AT_ONCE, type ThemeSource, type UsenetServer } from '@shared/types'
+import {
+  DOWNLOADS_AT_ONCE,
+  type GlassLook,
+  type ThemeSource,
+  type UsenetServer
+} from '@shared/types'
 import { cn } from 'cn'
 import {
   ArrowDownToLine,
@@ -14,7 +19,7 @@ import {
   SlidersHorizontal,
   Sun
 } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
@@ -34,7 +39,7 @@ import { toDisplayPath } from '../utils/format'
 
 // Settings, from the final design (design-system/mergelane/redesign/prototype.html, SettingsScreen):
 // General, Appearance and Downloads, the sections with something behind them today. Updates and
-// Browser extensions come with M3.2 and M3.4; Liquid Glass's own settings with M3.1 pull request 7.
+// Browser extensions come with M3.2 and M3.4.
 //
 // The schedule, the total speed and slow mode's speed are still edited in the Speed & data limits
 // dialog, and the news server in its own: the rows here open them.
@@ -452,6 +457,8 @@ function AppearanceSettings(): React.JSX.Element {
         </div>
       </section>
 
+      {appearanceTheme === 'liquid' && <GlassSettings />}
+
       <SettingsGroup
         title="Network colours in this theme"
         description="Within a theme a network keeps its colour everywhere: lanes, bars, charts and chunk maps. A colour you pick for a network, in Networks, overrides the theme’s."
@@ -479,6 +486,72 @@ function AppearanceSettings(): React.JSX.Element {
         </div>
       </SettingsGroup>
     </>
+  )
+}
+
+/** Whether the Mac has Reduce Transparency on (System Settings › Accessibility › Display). */
+function useSystemReducedTransparency(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(REDUCED_TRANSPARENCY)
+      query.addEventListener('change', onChange)
+      return () => query.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia(REDUCED_TRANSPARENCY).matches
+  )
+}
+const REDUCED_TRANSPARENCY = '(prefers-reduced-transparency: reduce)'
+
+/** The Liquid Glass theme's own settings, as the design has them (prototype.html, GlassSettings). */
+function GlassSettings(): React.JSX.Element {
+  const glassLook = useAppStore((store) => store.glassLook)
+  const setGlassLook = useAppStore((store) => store.setGlassLook)
+  const solidGlass = useAppStore((store) => store.solidGlass)
+  const setSolidGlass = useAppStore((store) => store.setSolidGlass)
+  const systemSolid = useSystemReducedTransparency()
+  const solidId = useId()
+  return (
+    <SettingsGroup
+      title="Liquid Glass"
+      description="Glass is used only for what floats above your downloads: the window, the sidebar and the content pane. Cards and lists stay easy to read."
+    >
+      <SettingRow
+        label="Look"
+        hint={
+          glassLook === 'clear'
+            ? 'Clear lets more of the desktop show through.'
+            : 'Tinted makes the glass thicker, for more contrast.'
+        }
+      >
+        <ToggleGroup
+          aria-label="Liquid Glass look"
+          value={[glassLook]}
+          disabled={solidGlass || systemSolid}
+          onValueChange={(values) => {
+            if (values[0] !== undefined) setGlassLook(values[0] as GlassLook)
+          }}
+        >
+          <ToggleGroupItem value="clear">Clear</ToggleGroupItem>
+          <ToggleGroupItem value="tinted">Tinted</ToggleGroupItem>
+        </ToggleGroup>
+      </SettingRow>
+      <SettingRow
+        label="Reduce transparency"
+        htmlFor={solidId}
+        hint={
+          systemSolid
+            ? 'Already on in your Mac’s Accessibility settings, so the glass is solid.'
+            : 'Makes the glass solid. Mergelane also follows this setting in System Settings › Accessibility › Display.'
+        }
+      >
+        <Switch
+          id={solidId}
+          checked={solidGlass || systemSolid}
+          disabled={systemSolid}
+          onCheckedChange={setSolidGlass}
+        />
+      </SettingRow>
+    </SettingsGroup>
   )
 }
 

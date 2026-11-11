@@ -224,7 +224,7 @@ export function CompactBar(): React.JSX.Element {
   const lanes = useNetworkLanes()
   const merged = lanes.reduce((sum, lane) => sum + (lane.out ? 0 : lane.speed), 0)
   return (
-    <div className="ml-surface window-drag flex flex-col gap-2.5 border-b border-rule bg-sidebar pt-3 pr-3 pb-2.5 pl-3">
+    <div className="ml-surface ml-compactbar window-drag flex flex-col gap-2.5 border-b border-rule bg-sidebar pt-3 pr-3 pb-2.5 pl-3">
       <div className="flex min-h-7 items-center gap-3">
         {/* Room for the window buttons. */}
         <span aria-hidden className="w-[64px] shrink-0" />

@@ -17,7 +17,9 @@ const initialState: InitialState = {
   downloadsAtOnce: 3,
   slowMode: false,
   slowModeSpeed: 2_000_000,
-  speedUnit: 'bytes'
+  speedUnit: 'bytes',
+  glassLook: 'clear',
+  solidGlass: false
 }
 
 Object.defineProperty(window, 'mergelane', {

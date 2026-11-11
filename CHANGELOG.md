@@ -52,6 +52,10 @@ All notable changes to Mergelane are recorded here. The format follows
 - The Dashboard shows "Mergelane on this Mac": how much CPU and memory Mergelane itself uses, in all and for the
   app, the system-merge helper and the video tools (yt-dlp, FFmpeg, Deno), as Activity Monitor counts them, with
   the last minute of CPU.
+- Liquid Glass: in that theme the window is drawn in macOS's own glass material, with the sidebar, the content
+  pane and the cards as layers of glass over it. Settings › Appearance offers a Clear or Tinted look and Reduce
+  transparency; Mergelane also follows Reduce Transparency and Increase Contrast from the Mac's Accessibility
+  settings.
 - A Settings screen (⌘, or the sidebar's foot) with General (speed units, slow mode, total speed), Appearance
   (Auto, Light or Dark, and the seven themes with previews) and Downloads (where downloads go, how many run at
   once, the schedule, the news server, and a way to each network's limits). The units and theme buttons leave the

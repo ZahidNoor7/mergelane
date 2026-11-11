@@ -41,9 +41,13 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
 - `src/main/network/deviceBinding.ts`: pin per-link sockets on darwin with `IP_BOUND_IF` / `IPV6_BOUND_IF` through
   koffi, replacing the `localAddress`-only path.
 - Bridge: added `GET /health` (ready signal for packaging tests).
-- Updater: auto-install disabled (ADR D10).
-- Telegram: decision pending (PHASE-1 Q4).
-- `extension/` moved to the repo top level with its own build.
+- Updater: auto-install disabled (ADR-0010).
+- Telegram: kept unchanged for now (ADR-0012).
+- The extension stays at `app/extension` in Phase 1 (ADR-0014).
+- Electron fuses hardened at package time (ADR-0016).
+- Removed: Plexo's website (`docs/`), its workflows, the release-notes script and its spec, the website download
+  spec, `CONTRIBUTING.md`, `SECURITY.md`, `build/installer.nsh` and `build/icon.ico`.
+- Two code comments that named another product's trademark were reworded (`download/plan.ts`).
 
 ### Net Merge → `daemon/`
 
@@ -57,10 +61,10 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
   IPC under `/var/run/net-merge`.
 - New VPN guard.
 - Routes the daemon adds are marked with `RTF_PROTO2`, and cleanup removes only marked routes.
-- Health probing tightened (ADR D8). Probe targets are configurable.
+- Health probing tightened (ADR-0008). Probe targets are configurable.
 
 ## Change log of imports
 
 | Date | Upstream | From → To | Mergelane commit | Notes |
 |---|---|---|---|---|
-| — | — | — | — | Nothing imported yet. |
+| 2026-11-10 | Plexo | — → `2e44a2f` | `ac203ef` | Verbatim import into `app/` (branch `m1.2-app`). |

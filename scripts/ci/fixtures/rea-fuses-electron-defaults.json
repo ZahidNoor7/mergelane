@@ -1,0 +1,78 @@
+{
+  "_note": "Trimmed REA inspect-electron-fuses evidence (rea-agents 6.8.0) for tests; local paths removed.",
+  "normalized_result": {
+    "slices": [
+      {
+        "index": 0,
+        "file_offset": 0,
+        "size": 201602144,
+        "architecture": "arm64",
+        "sentinel_count": 1,
+        "sentinels": [
+          {
+            "sentinel_offset": 158051492,
+            "wire_version": 1,
+            "declared_length": 9,
+            "fuses": [
+              {
+                "index": 0,
+                "name": "RunAsNode",
+                "state": "enabled",
+                "raw_byte": 49
+              },
+              {
+                "index": 1,
+                "name": "EnableCookieEncryption",
+                "state": "disabled",
+                "raw_byte": 48
+              },
+              {
+                "index": 2,
+                "name": "EnableNodeOptionsEnvironmentVariable",
+                "state": "enabled",
+                "raw_byte": 49
+              },
+              {
+                "index": 3,
+                "name": "EnableNodeCliInspectArguments",
+                "state": "enabled",
+                "raw_byte": 49
+              },
+              {
+                "index": 4,
+                "name": "EnableEmbeddedAsarIntegrityValidation",
+                "state": "disabled",
+                "raw_byte": 48
+              },
+              {
+                "index": 5,
+                "name": "OnlyLoadAppFromAsar",
+                "state": "disabled",
+                "raw_byte": 48
+              },
+              {
+                "index": 6,
+                "name": "LoadBrowserProcessSpecificV8Snapshot",
+                "state": "disabled",
+                "raw_byte": 48
+              },
+              {
+                "index": 7,
+                "name": "GrantFileProtocolExtraPrivileges",
+                "state": "enabled",
+                "raw_byte": 49
+              },
+              {
+                "index": 8,
+                "name": "WasmTrapHandlers",
+                "state": "enabled",
+                "raw_byte": 49
+              }
+            ],
+            "complete": true
+          }
+        ]
+      }
+    ]
+  }
+}

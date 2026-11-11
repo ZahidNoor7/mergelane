@@ -1,0 +1,88 @@
+appId: io.github.zahidnoor7.mergelane
+productName: Mergelane
+# Shown in the macOS About window and Finder's Get Info.
+copyright: Copyright © 2026 Mergelane contributors
+afterPack: scripts/check-torrent-package.mjs
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  # koffi ships prebuilds for every OS; Mergelane is macOS arm64 only and loads it there
+  # (network/deviceBinding.ts pins per-link sockets with IP_BOUND_IF).
+  - '!node_modules/koffi/{src,vendor,doc}/**'
+  - '!node_modules/koffi/build/koffi/!(darwin_arm64)/**'
+  # Mergelane uses TCP peers only. simple-peer is patched to use browser globals instead of loading
+  # the native WebRTC polyfill; don't ship its unused native binaries.
+  - '!node_modules/node-datachannel/**'
+  - '!node_modules/webrtc-polyfill/**'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+# Licences ship inside the bundle (Contents/Resources), as CLAUDE.md requires.
+extraResources:
+  - from: ../LICENSE
+    to: LICENSE
+  - from: ../THIRD-PARTY-NOTICES.md
+    to: THIRD-PARTY-NOTICES.md
+mac:
+  # Only the zips go by this name: the dmg has its own (dmg.artifactName).
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  minimumSystemVersion: '27.0'
+  # Ad-hoc signature ("-"): no Apple Developer ID yet (docs/DECISIONS.md ADR-0003). Every nested
+  # binary is signed too, which Apple silicon requires before anything can run.
+  # To switch to Developer ID later: set identity to the certificate name (or remove it and set
+  # CSC_LINK/CSC_KEY_PASSWORD), and set notarize: true with the APPLE_API_* secrets.
+  identity: '-'
+  hardenedRuntime: true
+  notarize: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSDownloadsFolderUsageDescription: Mergelane saves downloaded files to your Downloads folder.
+    # Magnet links, .torrent and .nzb files can be opened with Mergelane, as one choice among
+    # others: it's never made the default over a client the user already has (LSHandlerRank).
+    # mergelane:// is Mergelane's own scheme, so registering it takes nothing from another app.
+    - CFBundleURLTypes:
+        - CFBundleURLName: Magnet link
+          CFBundleURLSchemes: [magnet]
+        - CFBundleURLName: Mergelane
+          CFBundleURLSchemes: [mergelane]
+      CFBundleDocumentTypes:
+        - CFBundleTypeName: Torrent
+          CFBundleTypeRole: Viewer
+          LSHandlerRank: Alternate
+          CFBundleTypeExtensions: [torrent]
+          LSItemContentTypes: [org.bittorrent.torrent]
+        - CFBundleTypeName: NZB
+          CFBundleTypeRole: Viewer
+          LSHandlerRank: Alternate
+          CFBundleTypeExtensions: [nzb]
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+npmRebuild: false
+# Electron fuses, flipped at package time, before signing. An REA audit of the first build found them
+# all at Electron's defaults; with runAsNode on, anyone could run the signed app as a plain Node.js
+# interpreter. The app never forks Node processes. It loads its UI with loadFile (file://), so
+# grantFileProtocolExtraPrivileges stays at its default.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+# Where a future update check looks (docs/DECISIONS.md ADR-0010). Builds never publish themselves
+# (--publish never).
+publish:
+  provider: github
+  owner: ZahidNoor7
+  repo: mergelane

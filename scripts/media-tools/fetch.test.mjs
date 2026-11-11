@@ -143,7 +143,12 @@ before(async () => {
   mkdirSync(join(build, 'deno-zip'))
   compile('arm64', join(build, 'deno-zip', 'deno'))
   bodies.deno = readFileSync(join(build, 'deno-zip', 'deno'))
-  execFileSync('/usr/bin/ditto', ['-c', '-k', join(build, 'deno-zip', 'deno'), join(build, 'deno.zip')])
+  execFileSync('/usr/bin/ditto', [
+    '-c',
+    '-k',
+    join(build, 'deno-zip', 'deno'),
+    join(build, 'deno.zip')
+  ])
   bodies.denoZip = readFileSync(join(build, 'deno.zip'))
 
   // An archive whose "executable" sits behind a symlink that leads out of the archive.
@@ -176,7 +181,9 @@ before(async () => {
     return readFileSync(join(build, `${name}.tar.gz`))
   }
   bodies.folderX86 = variant('folder-x86', (dir) => compile('x86_64', join(dir, 'prog')))
-  bodies.folderOut = variant('folder-out', (dir) => symlinkSync(outside, join(dir, '_internal', 'out')))
+  bodies.folderOut = variant('folder-out', (dir) =>
+    symlinkSync(outside, join(dir, '_internal', 'out'))
+  )
   bodies.folderDangling = variant('folder-dangling', (dir) =>
     symlinkSync('nothing-here', join(dir, '_internal', 'dangling'))
   )
@@ -213,7 +220,13 @@ before(async () => {
   // A "source tarball" for the fake build scripts: the arm64 fixture (bodies.tar), or an x86_64 one.
   mkdirSync(join(build, 'x86src', 'pkg', 'bin'), { recursive: true })
   compile('x86_64', join(build, 'x86src', 'pkg', 'bin', 'tool'))
-  execFileSync('/usr/bin/tar', ['-czf', join(build, 'x86src.tar.gz'), '-C', join(build, 'x86src'), 'pkg'])
+  execFileSync('/usr/bin/tar', [
+    '-czf',
+    join(build, 'x86src.tar.gz'),
+    '-C',
+    join(build, 'x86src'),
+    'pkg'
+  ])
   bodies.x86src = readFileSync(join(build, 'x86src.tar.gz'))
 
   manifestDir = join(root, 'manifest')
@@ -413,12 +426,21 @@ describe('Deno, the JavaScript runtime yt-dlp needs for YouTube', () => {
     assert.notEqual(deno.sha256, deno.binarySha256)
   })
 
-  test('is MIT: its licence text is committed, and there is no source to attach', async () => {
+  test('is MIT: its licence text and the notices of what is built into it are committed, and there is no source to attach', async () => {
     const deno = await pinned()
     assert.equal(deno.license, 'MIT')
-    assert.deepEqual(deno.licenseFiles, ['licenses/deno/LICENSE.md'])
+    // THIRD-PARTY-NOTICES.txt: V8, TypeScript, the Rust crates and the rest (deno-notices.mjs, ADR-0029).
+    assert.deepEqual(deno.licenseFiles, [
+      'licenses/deno/LICENSE.md',
+      'licenses/deno/THIRD-PARTY-NOTICES.txt'
+    ])
     const text = readFileSync(join(HERE, 'licenses', 'deno', 'LICENSE.md'), 'utf8')
     assert.match(text, /^MIT License\n\nCopyright 2018-\d{4} the Deno authors\n/)
+    const notices = readFileSync(join(HERE, 'licenses', 'deno', 'THIRD-PARTY-NOTICES.txt'), 'utf8')
+    assert.match(
+      notices,
+      new RegExp(`^THIRD-PARTY NOTICES FOR DENO ${deno.version.replaceAll('.', '\\.')}\n`)
+    )
     // sources.mjs downloads the source of every tool with a sourceSha256 for each release; an MIT
     // program needs none (ADR-0027).
     assert.equal(deno.sourceSha256, undefined)
@@ -447,7 +469,10 @@ describe('Deno, the JavaScript runtime yt-dlp needs for YouTube', () => {
     // A zip that matches its pin but holds another program is refused, and nothing is installed.
     const elsewhere = freshOut()
     await assert.rejects(
-      fetchTool({ ...entry, binarySha256: hashOf('another deno') }, { outDir: elsewhere, manifestDir }),
+      fetchTool(
+        { ...entry, binarySha256: hashOf('another deno') },
+        { outDir: elsewhere, manifestDir }
+      ),
       /deno: SHA-256 mismatch for deno in the archive/
     )
     assert.deepEqual(readdirSync(elsewhere), [])
@@ -703,7 +728,11 @@ describe('fetchTool', () => {
     )
     assert.equal(hits['/arm64'], before, 'no second download')
     assert.equal(mode(installed), 0o755, 'mode restored')
-    assert.deepEqual(readdirSync(join(outDir, 'licenses', 'tiny')), ['LICENSE'], 'licences refreshed')
+    assert.deepEqual(
+      readdirSync(join(outDir, 'licenses', 'tiny')),
+      ['LICENSE'],
+      'licences refreshed'
+    )
     assert.deepEqual(lines, ['tiny 1.0.0: already installed with the pinned hash'])
 
     writeFileSync(installed, 'tampered')
@@ -831,7 +860,10 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
       links: {},
       treeSha256: await treeHash(dest)
     })
-    assert.match(lines.at(-1), /tiny 1\.0\.0: installed .*tiny\/ \(0\.0 MB downloaded; prog: arm64\)/)
+    assert.match(
+      lines.at(-1),
+      /tiny 1\.0\.0: installed .*tiny\/ \(0\.0 MB downloaded; prog: arm64\)/
+    )
   })
 
   test('is not downloaded again while the folder matches its stamp; a changed one is replaced', async () => {
@@ -882,8 +914,16 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
   })
 
   const refused = [
-    ['a link that leads out of the folder', 'folderOut', /tiny: "_internal\/out" leads outside the archive/],
-    ['a link to nothing', 'folderDangling', /tiny: "_internal\/dangling" leads outside the archive/],
+    [
+      'a link that leads out of the folder',
+      'folderOut',
+      /tiny: "_internal\/out" leads outside the archive/
+    ],
+    [
+      'a link to nothing',
+      'folderDangling',
+      /tiny: "_internal\/dangling" leads outside the archive/
+    ],
     ['a named pipe', 'folderFifo', /tiny: "_internal\/pipe" is not a file or a folder/],
     [
       'a program without arm64',
@@ -895,7 +935,11 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
     test(`refuses an archive with ${what}, and installs nothing`, async () => {
       const outDir = freshOut()
       const path = `/${body.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}.tar.gz`
-      const entry = folderTool({ url: `${base}${path}`, sha256: hashOf(bodies[body]), archive: 'tar' })
+      const entry = folderTool({
+        url: `${base}${path}`,
+        sha256: hashOf(bodies[body]),
+        archive: 'tar'
+      })
       await assert.rejects(fetchTool(entry, { outDir, manifestDir }), error)
       assert.deepEqual(readdirSync(outDir), [])
     })
@@ -937,7 +981,10 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
     for (const [path, target] of Object.entries(FRAMEWORK_LINKS)) {
       assert.equal(readlinkSync(join(outDir, 'tiny', path)), target, path)
     }
-    assert.equal(await sha256File(join(fw, 'Lib')), await sha256File(join(fw, 'Versions', '1', 'Lib')))
+    assert.equal(
+      await sha256File(join(fw, 'Lib')),
+      await sha256File(join(fw, 'Versions', '1', 'Lib'))
+    )
     assert.equal(readFileSync(join(fw, 'Resources', 'Info.plist'), 'utf8'), '<plist/>\n')
     // Stamped with the links, so it is up to date as installed, until the links asked for change.
     assert.equal(await fetchTool(entry, { outDir, manifestDir }), 'up-to-date')
@@ -956,7 +1003,10 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
       links: FRAMEWORK_LINKS
     })
     assert.equal(await fetchTool(entry, { outDir, manifestDir }), 'installed')
-    assert.equal(readlinkSync(join(outDir, 'tiny', '_internal', 'Lib.framework', 'Lib')), 'Versions/Current/Lib')
+    assert.equal(
+      readlinkSync(join(outDir, 'tiny', '_internal', 'Lib.framework', 'Lib')),
+      'Versions/Current/Lib'
+    )
   })
 
   test('refuses to make a link of something that is not a copy of its target, or is missing', async () => {
@@ -974,11 +1024,17 @@ describe('folder installs (yt-dlp’s unpacked build)', () => {
     assert.deepEqual(readdirSync(outDir), [])
     outDir = freshOut()
     await assert.rejects(
-      fetchTool(folderTool({ links: { '_internal/missing': 'data.txt' } }), { outDir, manifestDir }),
+      fetchTool(folderTool({ links: { '_internal/missing': 'data.txt' } }), {
+        outDir,
+        manifestDir
+      }),
       /tiny: "_internal\/missing" is not in the archive, so it can't be made a link/
     )
     await assert.rejects(
-      fetchTool(folderTool({ links: { '_internal/current': 'other.txt' } }), { outDir, manifestDir }),
+      fetchTool(folderTool({ links: { '_internal/current': 'other.txt' } }), {
+        outDir,
+        manifestDir
+      }),
       /tiny: "_internal\/current" is not a copy of "other\.txt"/
     )
     assert.deepEqual(readdirSync(outDir), [])
@@ -1039,8 +1095,15 @@ describe('build installs (FFmpeg from source)', () => {
     const dest = join(outDir, 'tiny')
     assert.equal(await sha256File(dest), hashOf(bodies.arm64))
     assert.equal(mode(dest), 0o755)
-    assert.equal(readFileSync(join(outDir, 'licenses', 'tiny', 'LICENSE'), 'utf8'), 'tiny licence text\n')
-    assert.deepEqual(readdirSync(outDir).sort(), ['.stamps', 'licenses', 'tiny'], 'no work folder left')
+    assert.equal(
+      readFileSync(join(outDir, 'licenses', 'tiny', 'LICENSE'), 'utf8'),
+      'tiny licence text\n'
+    )
+    assert.deepEqual(
+      readdirSync(outDir).sort(),
+      ['.stamps', 'licenses', 'tiny'],
+      'no work folder left'
+    )
     assert.deepEqual(await readJson(stampPath(outDir, 'tiny')), {
       name: 'tiny',
       version: '1.0.0',
@@ -1074,7 +1137,9 @@ describe('build installs (FFmpeg from source)', () => {
       await fetchTool(buildTool(), { outDir, manifestDir, log: (l) => lines.push(l) }),
       'up-to-date'
     )
-    assert.deepEqual(lines, ['tiny 1.0.0: already built from the pinned source with this build script'])
+    assert.deepEqual(lines, [
+      'tiny 1.0.0: already built from the pinned source with this build script'
+    ])
     assert.equal(buildRuns().length, runs, 'not built again')
     assert.equal(hits['/tool.tar.gz'], downloads, 'not downloaded again')
     assert.equal(mode(dest), 0o755)
@@ -1087,7 +1152,10 @@ describe('build installs (FFmpeg from source)', () => {
       () =>
         writeFileSync(
           stampPath(outDir, 'tiny'),
-          JSON.stringify({ ...JSON.parse(readFileSync(stampPath(outDir, 'tiny'), 'utf8')), sourceSha256: hashOf('9.0.1') })
+          JSON.stringify({
+            ...JSON.parse(readFileSync(stampPath(outDir, 'tiny'), 'utf8')),
+            sourceSha256: hashOf('9.0.1')
+          })
         )
     ]) {
       change()
@@ -1143,14 +1211,22 @@ describe('build installs (FFmpeg from source)', () => {
 
     // On its own, a failing build leaves nothing at all.
     const fresh = freshOut()
-    await assert.rejects(fetchTool(buildTool({ buildScript: 'build-fail.sh' }), { outDir: fresh, manifestDir }))
+    await assert.rejects(
+      fetchTool(buildTool({ buildScript: 'build-fail.sh' }), { outDir: fresh, manifestDir })
+    )
     assert.deepEqual(readdirSync(fresh), [])
   })
 
   test('a build that writes nothing, is killed, or makes an Intel program installs nothing', async () => {
     const cases = [
-      [{ buildScript: 'build-nothing.sh' }, /tiny: build-nothing\.sh finished but did not write tiny/],
-      [{ buildScript: 'build-killed.sh' }, /tiny: the build failed: build-killed\.sh was stopped by SIGKILL/],
+      [
+        { buildScript: 'build-nothing.sh' },
+        /tiny: build-nothing\.sh finished but did not write tiny/
+      ],
+      [
+        { buildScript: 'build-killed.sh' },
+        /tiny: the build failed: build-killed\.sh was stopped by SIGKILL/
+      ],
       [
         { sourceUrl: `${base}/x86src.tar.gz`, sourceSha256: hashOf(bodies.x86src) },
         /tiny: not built for Apple silicon: lipo -archs reports "x86_64", expected arm64/
@@ -1166,7 +1242,10 @@ describe('build installs (FFmpeg from source)', () => {
   test('a missing build script is reported before anything is downloaded', async () => {
     const downloads = hits['/tool.tar.gz']
     await assert.rejects(
-      fetchTool(buildTool({ buildScript: 'build-missing.sh' }), { outDir: freshOut(), manifestDir }),
+      fetchTool(buildTool({ buildScript: 'build-missing.sh' }), {
+        outDir: freshOut(),
+        manifestDir
+      }),
       /tiny: cannot read the build script .*build-missing\.sh/
     )
     assert.equal(hits['/tool.tar.gz'], downloads)

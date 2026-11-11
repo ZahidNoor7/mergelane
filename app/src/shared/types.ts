@@ -254,8 +254,22 @@ export type DownloadUnitState =
  *   on, reconnecting it, or resuming tries again.
  * - limit: it has used up its data for the chosen period (NetworkPreference.dataLimit). It's used again
  *   once the period ends or the limit is raised.
+ * - routed: Networks' "Downloads use" sends every download over another network (DownloadRouting). The
+ *   download's own choice (`enabled`) is kept for when routing is back on all networks.
  */
-export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit'
+export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit' | 'routed'
+
+/** Networks › Which network carries what (the final design's RoutingPanel, ADR-0040). */
+export interface DownloadRouting {
+  /** 'all': every download uses the networks it has on; otherwise a NetworkInterfaceInfo id that
+   * every download goes over, the running ones included. */
+  down: string
+  /** When the chosen network is gone: true, downloads use their own networks meanwhile; false, they
+   * wait for it. */
+  fallback: boolean
+}
+
+export const DEFAULT_ROUTING: DownloadRouting = { down: 'all', fallback: true }
 
 /** A network as one download sees it: whether the user has it on, and how it is doing. */
 interface DownloadNetworkBase {
@@ -612,6 +626,8 @@ export interface AppSettings {
   captureRules?: CaptureRules
   /** When each browser's extension last reached Mergelane, and its version (ADR-0039). */
   browserContacts?: Partial<Record<BrowserId, BrowserContact>>
+  /** Networks › Which network carries what. Missing: every network, with fallback. */
+  routing?: DownloadRouting
   /** Only ever saved as false: the menu bar shows the merged speed unless turned off (ADR-0037). */
   menuBarSpeed?: boolean
   /** Only ever saved as false: a finished download posts a notification unless turned off. */
@@ -676,6 +692,7 @@ export interface InitialState {
   menuBarSpeed: boolean
   notifyWhenDone: boolean
   captureRules: CaptureRules
+  routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

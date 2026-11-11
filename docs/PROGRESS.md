@@ -400,6 +400,22 @@ Last updated: 2026-11-11
       Its offered file is now 2 MB, over the new default minimum.
     - `extension.spec`: in real Chromium, the extension stores the app's rules and greys its icon when sending is
       off.
+  - Merged (#41).
+- **M3.5a Routing downloads** (branch `m3.5-routing`, ADR-0040). M3.5 is split: uploads and upload limits are
+  M3.5b (torrent uploads follow peers' networks, and nothing limits uploads yet).
+  - **Engine:** `routing: { down, fallback }`; `reconcile` gives the networks the route leaves out a new status,
+    `routed`; each download's `enabled` is kept. A pinned network that's gone means fallback (each download's own
+    networks) or waiting.
+  - **UI:** `RoutingPanel` on the Networks screen, as the design draws it: "Downloads use" (All networks, or each
+    network with its tile), the note when the chosen one is gone, and "Use the other networks if the chosen one
+    drops".
+  - **Tests:**
+    - Vitest: `RoutingPanel`, `networkStatus`, `NetworksScreen` at 100% of lines.
+    - `e2e/routing.spec.ts` (2 tests, two real test networks): pinning moves a running download and unpinning
+      spreads it again; with the pinned network dropped, fallback stands in, and without it the download waits
+      and resumes on its return.
+  - **Noticed:** the screenshot run read the owner's installed helper (0.1.0) and showed it as out of date
+    against this 0.2.0 build. It was read only; nothing was clicked.
 - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
     of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
     once. Each passed alone, and the full run passed with `--maxWorkers=3`.

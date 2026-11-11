@@ -26,6 +26,8 @@ import {
   type NetworkInterfaceInfo,
   type NetworkPreferences,
   type NetworkStatus,
+  DEFAULT_ROUTING,
+  type DownloadRouting,
   type HttpProbeResult,
   type NzbDownloadState,
   type NzbSegmentState,
@@ -452,6 +454,8 @@ export class DownloadManager {
   private usenetOn = true
   /** Settings › General › "Notify me when a download finishes" (ADR-0037). */
   private notifyWhenDone = true
+  /** Networks › Which network carries what (ADR-0040). */
+  private routing: DownloadRouting = DEFAULT_ROUTING
   /** Speed and data limits, for every download together. */
   readonly limits = new Limits(() => this.limitsChanged())
 
@@ -501,6 +505,7 @@ export class DownloadManager {
     const previousPreferences = this.networkPreferences
     this.networkPreferences = settings.networkPreferences ?? {}
     this.notifyWhenDone = settings.notifyWhenDone !== false
+    this.routing = settings.routing ?? DEFAULT_ROUTING
     this.downloadSchedule = settings.downloadSchedule
     this.scheduleLoaded = true
     const enrollmentChanged: DownloadRuntime[] = []
@@ -2374,19 +2379,28 @@ export class DownloadManager {
       }
     }
 
+    const route = this.downloadRoute()
     for (const network of state.networks) {
       const iface = this.networks.find(network.id)
       if (iface) {
         network.label = iface.displayName
         network.kind = iface.kind
       }
-      const status: NetworkStatus = !network.enabled
-        ? 'off'
+      // Routing decides for every download while it names a network; the download's own choice
+      // (enabled) stays as it was, for when routing goes back to all networks.
+      const wanted = route ? route.has(network.id) : network.enabled
+      const status: NetworkStatus = !wanted
+        ? route
+          ? 'routed'
+          : 'off'
         : !iface && known
           ? 'offline'
           : this.limits.limitReached(network.id)
             ? 'limit'
-            : network.status === 'off' || network.status === 'offline' || network.status === 'limit'
+            : network.status === 'off' ||
+                network.status === 'offline' ||
+                network.status === 'limit' ||
+                network.status === 'routed'
               ? 'on'
               : network.status
       if (status !== network.status) {
@@ -2402,13 +2416,25 @@ export class DownloadManager {
       return
     }
 
-    const enabled = state.networks.filter((network) => network.enabled)
+    const enabled = state.networks.filter(
+      (network) => network.status !== 'off' && network.status !== 'routed'
+    )
     if (enabled.length > 0 && enabled.every((network) => network.status === 'failed')) {
       this.failDownload(runtime, enabled[0].error ?? 'No network could reach the server')
       return
     }
 
     runtime.transfer.reconcile()
+  }
+
+  /** The networks routing sends every download over, or null when each download uses its own: the
+   * chosen network while it's connected; when it isn't, each download's own networks with fallback
+   * on, and none (the downloads wait) with it off. */
+  private downloadRoute(): Set<string> | null {
+    const { down, fallback } = this.routing
+    if (down === 'all') return null
+    if (this.networks.find(down)) return new Set([down])
+    return fallback ? null : new Set()
   }
 
   private notify(title: string, body: string, downloadId?: string): void {

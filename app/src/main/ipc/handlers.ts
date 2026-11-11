@@ -52,6 +52,8 @@ import {
   updateState
 } from '../updater'
 import { readAppUsage } from '../appUsage'
+import { loginItemState, setOpenAtLogin } from '../loginItem'
+import { applyMenuBarSettings } from '../menuBar'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -130,7 +132,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     }
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
-    await manager.applySettings(await loadSettings())
+    const saved = await loadSettings()
+    applyMenuBarSettings(saved)
+    await manager.applySettings(saved)
   })
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
@@ -164,6 +168,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         speedUnit: settings.speedUnit ?? 'bytes',
         glassLook: settings.glassLook ?? 'clear',
         solidGlass: settings.solidGlass ?? false,
+        menuBarSpeed: settings.menuBarSpeed !== false,
+        notifyWhenDone: settings.notifyWhenDone !== false,
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -180,7 +186,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
         speedUnit: 'bytes',
         glassLook: 'clear',
-        solidGlass: false
+        solidGlass: false,
+        menuBarSpeed: true,
+        notifyWhenDone: true
       } satisfies InitialState
     }
   })
@@ -315,6 +323,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   )
 
   handle('updateState', () => updateState())
+  handle('loginItem', () => loginItemState())
+  handle('setOpenAtLogin', (_event, on) => setOpenAtLogin(on === true))
   handle('checkForUpdates', () => checkForUpdates())
   handle('setUpdatePreferences', (_event, preferences) => setUpdatePreferences(preferences))
   handle('skipUpdate', (_event, version) => skipUpdate(version))

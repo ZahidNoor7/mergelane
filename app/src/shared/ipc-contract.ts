@@ -4,6 +4,7 @@ import type {
   AppSettings,
   DownloadUpdate,
   FinishedDownload,
+  LoginItemState,
   NetworkInterfaceInfo,
   PendingLink,
   ProbeResult,
@@ -94,6 +95,9 @@ export interface IpcContract {
   installUpdate: { args: []; result: void }
   /** The found release's page on GitHub, in the browser. */
   openReleasePage: { args: []; result: void }
+  /** Whether Mergelane opens at login, and what macOS says about it (ADR-0037). */
+  loginItem: { args: []; result: LoginItemState }
+  setOpenAtLogin: { args: [on: boolean]; result: LoginItemState }
   /** Oldest first: every link not yet started or dismissed. */
   pendingLinks: { args: []; result: PendingLink[] }
   /** Resumes the failed download a link was matched to, from that link (see relinkDownload). */

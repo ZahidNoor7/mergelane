@@ -50,6 +50,8 @@ export const IpcChannels = {
   installUpdate: 'update:install',
   openReleasePage: 'update:open-release-page',
   showUpdates: 'update:show',
+  loginItem: 'app:login-item',
+  setOpenAtLogin: 'app:set-open-at-login',
   usenetServer: 'usenet:server',
   saveUsenetServer: 'usenet:save-server',
   testUsenetServer: 'usenet:test-server'

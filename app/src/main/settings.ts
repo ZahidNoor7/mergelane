@@ -109,6 +109,8 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const source = validThemeSource(themeSource)
   if (source) settings.themeSource = source
   if (isThemeId(parsed.appearanceTheme)) settings.appearanceTheme = parsed.appearanceTheme
+  if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
+  if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
   if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'
   if (parsed.updateBackgroundDownload === true) settings.updateBackgroundDownload = true

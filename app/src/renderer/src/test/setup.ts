@@ -19,7 +19,9 @@ const initialState: InitialState = {
   slowModeSpeed: 2_000_000,
   speedUnit: 'bytes',
   glassLook: 'clear',
-  solidGlass: false
+  solidGlass: false,
+  menuBarSpeed: true,
+  notifyWhenDone: true
 }
 
 Object.defineProperty(window, 'mergelane', {

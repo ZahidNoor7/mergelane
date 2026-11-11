@@ -47,7 +47,7 @@ import { mergeTrackers, normalizeTrackerUrl } from '../../shared/torrentTrackers
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
 import { addToHistory, findInHistory, removeFromHistory } from './history'
-import { testKnobs, testStreamsPerNetwork } from '../testKnobs'
+import { testKnobs, testRecord, testStreamsPerNetwork } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
 import { normalizeEtag } from './fileVersion'
@@ -450,6 +450,8 @@ export class DownloadManager {
   private downloadsAtOnce = DOWNLOADS_AT_ONCE.default
   /** The Usenet switch, as last saved: while it's off, queued NZBs wait rather than start. */
   private usenetOn = true
+  /** Settings › General › "Notify me when a download finishes" (ADR-0037). */
+  private notifyWhenDone = true
   /** Speed and data limits, for every download together. */
   readonly limits = new Limits(() => this.limitsChanged())
 
@@ -474,6 +476,16 @@ export class DownloadManager {
     await this.configureSettings(settings)
   }
 
+  /** Bytes a second every running download is getting right now, together: the merged speed the
+   * menu bar shows (main/menuBar.ts). */
+  totalSpeed(): number {
+    let total = 0
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.state.status === 'downloading') total += runtime.state.speedBytesPerSec || 0
+    }
+    return total
+  }
+
   /** How many downloads are currently downloading or queued. */
   activeDownloadCount(): number {
     let count = 0
@@ -488,6 +500,7 @@ export class DownloadManager {
   private async configureSettings(settings: AppSettings): Promise<void> {
     const previousPreferences = this.networkPreferences
     this.networkPreferences = settings.networkPreferences ?? {}
+    this.notifyWhenDone = settings.notifyWhenDone !== false
     this.downloadSchedule = settings.downloadSchedule
     this.scheduleLoaded = true
     const enrollmentChanged: DownloadRuntime[] = []
@@ -2267,11 +2280,13 @@ export class DownloadManager {
         runtime.state.totalBytes - unwantedBytes(runtime.state) || runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discardLeftover().catch(() => {})
-      this.notify(
-        'Download complete',
-        `${runtime.state.fileName} has finished downloading. Click to show in folder.`,
-        runtime.state.id
-      )
+      if (this.notifyWhenDone) {
+        this.notify(
+          'Download complete',
+          `${runtime.state.fileName} has finished downloading. Click to show in folder.`,
+          runtime.state.id
+        )
+      }
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
@@ -2397,7 +2412,12 @@ export class DownloadManager {
   }
 
   private notify(title: string, body: string, downloadId?: string): void {
-    if (testKnobs.userDataDir || !Notification.isSupported()) return
+    // A test run never shows one on the Mac: it keeps what it would show, for the test to read.
+    if (testKnobs.userDataDir) {
+      testRecord('notifications', { title, body })
+      return
+    }
+    if (!Notification.isSupported()) return
     try {
       const notification = new Notification({ title, body })
       notification.on('click', () => {
@@ -2417,6 +2437,10 @@ export class DownloadManager {
           showWindow()
         }
       })
+      // Electron: an app macOS doesn't accept as code-signed gets 'failed' instead of a banner.
+      notification.on('failed', (_event, error) =>
+        console.error('[mergelane] notification failed', error)
+      )
       notification.show()
     } catch {
       // Best-effort notification

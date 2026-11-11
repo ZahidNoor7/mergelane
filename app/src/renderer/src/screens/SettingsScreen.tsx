@@ -25,6 +25,7 @@ import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
 import { SpeedUnitToggle } from '../components/SpeedUnitToggle'
+import { OnThisMacSettings } from '../components/OnThisMacSettings'
 import { SettingRow, SettingsGroup } from '../components/settingsParts'
 import { UpdateSettings } from '../components/UpdateSettings'
 import { UsenetServerDialog } from '../components/UsenetServerDialog'
@@ -207,6 +208,7 @@ function GeneralSettings(): React.JSX.Element {
           </Button>
         </SettingRow>
       </SettingsGroup>
+      <OnThisMacSettings />
       <LimitsDialog
         open={limitsOpen}
         showSchedule={false}

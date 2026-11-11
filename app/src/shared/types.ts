@@ -577,6 +577,16 @@ export interface UpdateState {
   error: string | null
 }
 
+/** What macOS says about Mergelane opening at login (app.getLoginItemSettings().status), or
+ * 'unavailable' in a build that never registers itself (development, tests, not macOS). */
+export type LoginItemStatus =
+  'enabled' | 'requires-approval' | 'not-registered' | 'not-found' | 'unavailable'
+
+export interface LoginItemState {
+  on: boolean
+  status: LoginItemStatus
+}
+
 /** A repeating window for all transfers, interpreted in the computer's local timezone. */
 export interface DownloadSchedule {
   enabled: boolean
@@ -596,6 +606,10 @@ export interface AppSettings {
   themeSource?: ThemeSource
   /** The colour theme (shared/themes.ts). Missing or unknown means the default, Porcelain. */
   appearanceTheme?: ThemeId
+  /** Only ever saved as false: the menu bar shows the merged speed unless turned off (ADR-0037). */
+  menuBarSpeed?: boolean
+  /** Only ever saved as false: a finished download posts a notification unless turned off. */
+  notifyWhenDone?: boolean
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -653,6 +667,8 @@ export interface InitialState {
   speedUnit: SpeedUnit
   glassLook: GlassLook
   solidGlass: boolean
+  menuBarSpeed: boolean
+  notifyWhenDone: boolean
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

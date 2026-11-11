@@ -324,6 +324,37 @@ Last updated: 2026-11-11
         Cancel mid-download; the background download, and clearing an old image at launch.
       - Smoke and extension: 473 passed, 1 skipped.
       - A test run writes the path it would open instead of opening a disk image or quitting.
+- **M3.3 Menu bar, Open at login, notifications** (branch `m3.3-menubar`, ADR-0037). The owner chose to try Open
+  at login and show macOS's real status.
+  - **Menu bar** (`main/menuBar.ts`):
+    - a `Tray` with `resources/trayTemplate.png` and `@2x` as a template image;
+    - its title is the merged speed (`DownloadManager.totalSpeed()`, `setTitle` with `monospacedDigit`) while bytes
+      move, in the window's units;
+    - its menu has Open Mergelane and Quit;
+    - saved as `menuBarSpeed: false` when off.
+    - `formatBytes` and `formatSpeed` moved to `shared/speedText.ts`, so the window and the menu bar say the
+      same; the renderer re-exports them.
+  - **Open at login** (`main/loginItem.ts`):
+    - `app.setLoginItemSettings({ openAtLogin })`, with the default `mainAppService`;
+    - Settings shows `getLoginItemSettings().status`: enabled, requires approval, or not registered (with where to
+      add it by hand);
+    - only a packaged app registers; development and test builds show it unavailable;
+    - opened at login (`wasOpenedAtLogin`), the window waits for the Dock or the menu bar.
+    - The design's default (on) isn't followed: Apple asks for the user's consent first.
+  - **Notifications:** Plexo's existing "Download complete" (click to show the file) is now gated by
+    `notifyWhenDone`. A `failed` event is logged. Failure notices are unchanged.
+  - **Tests:**
+    - In a test run, all three record to `globalThis.__mergelaneTest` (`testKnobs.testRecord`) instead of reaching
+      macOS, so the tests never touch the Mac's menu bar, Notification Centre or Login Items.
+    - `e2e/onThisMac.spec.ts` (4 tests): the speed title in bytes and bits, off and kept over a restart; the
+      notification, then none once turned off; Open at login unavailable; and "needs approval".
+    - Vitest: 223 passed, 100% of lines in `OnThisMacSettings`, `speedText`, `SettingsScreen`.
+    - Smoke and extension: 477 passed, 1 skipped.
+  - **Not provable in tests:** whether ad-hoc signing is enough for `SMAppService` and macOS notifications. The
+    first real install answers that, and the Settings row reports it.
+  - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
+    of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
+    once. Each passed alone, and the full run passed with `--maxWorkers=3`.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

@@ -78,6 +78,8 @@ const mergelaneApi = {
   installUpdate: () => invoke('installUpdate'),
   skipUpdate: (version: string) => invoke('skipUpdate', version),
   openReleasePage: () => invoke('openReleasePage'),
+  loginItem: () => invoke('loginItem'),
+  setOpenAtLogin: (on: boolean) => invoke('setOpenAtLogin', on),
   pendingLinks: () => invoke('pendingLinks'),
   resumeFromLink: (linkId: string, downloadId: string) =>
     invoke('resumeFromLink', linkId, downloadId),

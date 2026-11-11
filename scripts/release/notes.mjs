@@ -255,7 +255,8 @@ xattr -dr com.apple.quarantine /Applications/Mergelane.app
 **Applications**, and continue from step 3.
 
 System-wide merging needs a small helper (\`mergelane-daemon\`) that runs as a system service. Mergelane
-asks for your administrator password once to install it, and you can remove it from Mergelane's settings.`
+asks for your administrator password once to install it. To remove it, with its routes, run
+\`sudo /Library/PrivilegedHelperTools/io.github.zahidnoor7.mergelane.daemon uninstall\` in Terminal.`
 }
 
 /** The complete release notes, as Markdown. */

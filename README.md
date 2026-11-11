@@ -27,8 +27,11 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
   phone tethered to the same Wi-Fi, will not add speed.
 - **VPNs come first.** If another VPN is active, system-wide merging stays off (or turns itself off) and tells
   you why. Mergelane never installs its routes over a VPN's. Downloads inside Mergelane keep working where they can.
-- **No account, no servers, no telemetry.** Everything runs on your Mac. The only network request Mergelane makes
-  on its own is the update check against GitHub Releases.
+- **No account, no servers, no telemetry.** Everything runs on your Mac, and nothing about you is sent anywhere. One
+  thing reaches out on its own: once installed, the system-wide helper checks every 1 to 2 seconds that each
+  network still reaches the internet. It opens a connection to Cloudflare's and Google's public addresses (1.1.1.1
+  and 8.8.8.8, or their IPv6 equivalents) and closes it without sending any data. This version does not check for
+  updates.
 
 The app says the same on its Dashboard, under **About combined speed**, next to the speeds it describes.
 
@@ -49,7 +52,8 @@ xattr -dr com.apple.quarantine /Applications/Mergelane.app
 ```
 
 System-wide merging needs a small helper (`mergelane-daemon`) that runs as a system service. Mergelane asks for
-your administrator password once to install it. You can remove it from Mergelane's settings at any time.
+your administrator password once to install it. To remove it, with its routes, run
+`sudo /Library/PrivilegedHelperTools/io.github.zahidnoor7.mergelane.daemon uninstall` in Terminal.
 
 ### Helper commands
 
@@ -65,6 +69,7 @@ The helper can also be driven from Terminal. It is installed as
 | `mergelane-daemon events`                 | Shows the last 50 network changes (a network lost, back, or failing its check)                |
 | `mergelane-daemon auto-resume on` / `off` | Whether merging turns itself back on after the helper crashes (off by default)                |
 | `sudo mergelane-daemon cleanup`           | Removes any routes Mergelane left behind. Use it if your internet stops working after a crash |
+| `sudo mergelane-daemon uninstall`         | Removes the helper, its system service and its routes                                         |
 
 After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
 an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.

@@ -19,6 +19,12 @@ All notable changes to Mergelane are recorded here. The format follows
 - The Confluence replaces the old combine diagram and "TOTAL SPEED": each network is a lane as thick as its speed,
   merging into one road beside the merged speed. Its markings drift only while bytes flow, and stop under Reduce
   Motion. Its words are in sentence case ("Merged speed", "2.0× faster than Wi-Fi alone", "Last minute").
+- A sidebar replaces the title bar and the status bar. It holds the places (Dashboard and Downloads, with how many
+  downloads are in progress), every network with its speed or "Out", the merged speed, slow mode, free space,
+  updates and the schedule. In a window narrower than 760 points, a compact bar at the top takes its place.
+- The window opens at 1040 × 720 and can be made as narrow as 720 points.
+- The Dashboard button in the download list and the Dashboard's "Downloads" back button are gone: the sidebar or
+  the compact bar now moves between them.
 
 ### Fixed
 

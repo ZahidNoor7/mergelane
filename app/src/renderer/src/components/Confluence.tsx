@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import { Gauge, Unplug } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useElementWidth } from '../hooks/useElementWidth'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
 
 // The Confluence: the final design's signature (design-system/mergelane/redesign/prototype.html,
@@ -39,19 +40,6 @@ export const PLACEHOLDER_LANES: ConfluenceLane[] = [
 /** The design's scale: at this merged speed the road is two thirds of the drawing's height. Above it
  * the scale stretches to the merged speed, so a fast Ethernet doesn't max every lane out. */
 const CAPACITY = 36_000_000
-
-/** Measures an element's width as it changes. */
-function useWidth(): [(node: HTMLElement | null) => void, number] {
-  const [width, setWidth] = useState(0)
-  const observer = useRef<ResizeObserver | null>(null)
-  const ref = useCallback((node: HTMLElement | null) => {
-    observer.current?.disconnect()
-    if (!node) return
-    observer.current = new ResizeObserver((entries) => setWidth(entries[0]?.contentRect.width ?? 0))
-    observer.current.observe(node)
-  }, [])
-  return [ref, width]
-}
 
 function useReducedMotion(): boolean {
   const query = '(prefers-reduced-motion: reduce)'
@@ -137,8 +125,8 @@ export function Confluence({
 }): React.JSX.Element {
   const formatSpeed = useFormatSpeed()
   const reduced = useReducedMotion()
-  const [outerRef, outerWidth] = useWidth()
-  const [drawingRef, drawingWidth] = useWidth()
+  const [outerRef, outerWidth] = useElementWidth()
+  const [drawingRef, drawingWidth] = useElementWidth()
   const stacked = outerWidth > 0 && outerWidth < 440
 
   const rowHeight = compact ? 32 : 40

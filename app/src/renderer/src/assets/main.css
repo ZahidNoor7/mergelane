@@ -204,6 +204,17 @@
   letter-spacing: -0.005em;
 }
 
+/* What the window is dragged by, now there is no title bar: the sidebar's top strip, the compact bar and each
+   screen's header. Controls inside stay clickable. */
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-drag
+  :is(button, input, textarea, select, a, label, [role='button'], [role='switch'], [tabindex]) {
+  -webkit-app-region: no-drag;
+}
+
 /* While the theme changes, colours ease for 220ms instead of jumping (theme/appearance.ts fadeTheme). Nothing
    moves, so this outranks the reduced-motion rule below, as the design intends. */
 :root.mergelane-theme-fade,

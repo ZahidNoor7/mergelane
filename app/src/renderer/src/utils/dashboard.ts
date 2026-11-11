@@ -10,9 +10,6 @@ import { wantedBytes } from './format'
 // What the dashboard shows, worked out from the store without React or the window, so it can be
 // tested on its own (e2e/dashboardModel.spec.ts).
 
-/** The list's Dashboard button: focus goes back to it when the dashboard closes. */
-export const DASHBOARD_BUTTON_ID = 'dashboard-button'
-
 /** Every unfinished download, sorted the way the dashboard lists them. */
 export interface ActiveDownloads {
   /** Running now, oldest first. */

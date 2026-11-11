@@ -108,8 +108,10 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 760,
-    height: 640,
+    // Room for the final design's sidebar (236px) beside the downloads; it gives way to a compact bar
+    // below 760px (renderer components/WindowChrome.tsx).
+    width: 1040,
+    height: 720,
     minWidth: 720,
     // Room under the download screen's pinned block grid for a network row and a few of its rows.
     minHeight: 620,
@@ -120,13 +122,13 @@ function createWindow(): void {
     // raw window background) and the first frame don't flash another colour.
     backgroundColor: currentWindowBackground(),
     ...(process.platform !== 'darwin' ? { icon } : {}),
-    // One title bar on every OS: the renderer's own strip (see TitleBar.tsx), with the OS's
-    // window controls over it — macOS's traffic lights, or the minimize/maximize/close that
-    // Windows and Linux draw over the strip's right end.
+    // No title bar: the renderer's sidebar (or compact bar) holds macOS's window buttons at its top
+    // left, on a strip the window is dragged by (components/WindowChrome.tsx). Windows and Linux
+    // draw their controls over the top right instead.
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
-      ? // Center the 14px native buttons in the renderer’s 32px macOS title bar.
-        { trafficLightPosition: { x: 16, y: 9 } }
+      ? // Inside the sidebar's 40px top strip (its panel is inset 8px from the window's edge).
+        { trafficLightPosition: { x: 22, y: 22 } }
       : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

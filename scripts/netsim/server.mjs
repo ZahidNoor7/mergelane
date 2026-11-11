@@ -13,7 +13,9 @@
 // Control on 127.0.0.1:<control port>:
 //   GET /stats          {"links":{"1":{"bytes":…,"requests":…,"clients":[…]},…}}
 //   POST /reset         zeroes the counters
+import { realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { pathToFileURL } from 'node:url'
 
 const MIB = 1024 * 1024
 const LOCAL_SERVER_IP = '10.77.99.1'
@@ -166,4 +168,14 @@ export async function main(argv, host = LOCAL_SERVER_IP) {
   return started
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main(process.argv.slice(2))
+// Compared as file URLs, so a path with a space ("Personal Projects") or a symlink still counts.
+/** True when this file is the script Node was started with (Node runs the main module by real path). */
+function isMainModule() {
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
+
+if (isMainModule()) await main(process.argv.slice(2))

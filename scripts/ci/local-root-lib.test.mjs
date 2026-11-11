@@ -1,10 +1,12 @@
 // Tests for local-root-lib.mjs. Run: node --test scripts/ci/local-root-lib.test.mjs
 // The routing tables are in the exact format `netstat -rn` prints on macOS 27.0.1.
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   cli,
   diffLines,
@@ -296,4 +298,38 @@ test('cli: every command, with exit codes', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// local-root.sh runs this file with node from the owner's checkout, under "Personal Projects". A
+// guard comparing import.meta.url (percent-encoded) with the raw path never matched there, so every
+// command printed nothing and exited 0: the safety checks and the summary silently did nothing.
+test('run as a script from a path with a space, or through a symlink, the commands run', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'local-root-lib '))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const spaced = join(dir, 'Personal Projects')
+  mkdirSync(spaced)
+  const script = join(spaced, 'local-root-lib.mjs')
+  copyFileSync(join(dirname(fileURLToPath(import.meta.url)), 'local-root-lib.mjs'), script)
+  const link = join(dir, 'linked lib.mjs')
+  symlinkSync(script, link)
+  const results = join(dir, 'results')
+  writeFileSync(results, 'go|PASS|5|\nnetsim: self-test|FAIL|12|exit 1\n')
+  for (const path of [script, link]) {
+    const summary = spawnSync(process.execPath, [path, 'summary', results], { encoding: 'utf8' })
+    assert.equal(summary.status, 1, `summary through ${path}`)
+    assert.match(summary.stdout, /^PASS {2}go/m)
+    assert.match(summary.stdout, /^FAIL {2}netsim: self-test +12s {2}exit 1$/m)
+    const noise = spawnSync(process.execPath, [path, 'noise-regex'], { encoding: 'utf8' })
+    assert.equal(noise.status, 0)
+    assert.equal(noise.stdout, `${noiseRegex()}\n`)
+  }
+})
+
+test('imported, the file runs no command', () => {
+  // This test file imports it: had the guard matched here, cli() would have printed the usage.
+  const lib = join(dirname(fileURLToPath(import.meta.url)), 'local-root-lib.mjs')
+  const code = `await import(${JSON.stringify(pathToFileURL(lib).href)})`
+  const imported = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' })
+  assert.equal(imported.status, 0)
+  assert.equal(imported.stdout, '')
 })

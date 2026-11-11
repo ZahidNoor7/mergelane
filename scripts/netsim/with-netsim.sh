@@ -44,8 +44,10 @@ snapshot() {
   netstat -rn -f inet6 | awk 'NR>3 && $3 !~ /W/'
   ifconfig -l | tr ' ' '\n' | sort
   sudo pfctl -s Anchors 2>/dev/null | sort
-  # netsim's anchor sits below com.apple, where macOS adds and removes its own anchors too.
-  sudo pfctl -a com.apple -s Anchors 2>/dev/null | grep mergelane | sort
+  # netsim's anchor sits below com.apple, where macOS adds and removes its own anchors too. It is
+  # compared by its rules, not its name: macOS 27.0.1 kept listing it after 'netsim.sh down'.
+  local what
+  for what in rules nat dummynet; do sudo pfctl -q -a com.apple/mergelane-netsim -s "$what" 2>/dev/null; done
   sudo dnctl pipe show 2>/dev/null | grep -E '^[0-9]+:' | awk '{print $1}' | sort
 }
 kept() {

@@ -128,12 +128,29 @@ Last updated: 2026-11-11
   - package: build, fuse audit, local package test;
   - daemon: 567 passed, 7 skipped that need root;
   - extension: 16 passed.
-- `scripts/ci/local-root.sh`: ready; run by the owner in Terminal. It adds the IPv6 and link-recovery acceptance
-  cases.
+- `scripts/ci/local-root.sh`: run by the owner in Terminal. It adds the IPv6 and link-recovery acceptance cases.
+  - **First run, 2026-11-11 11:26: no network suite ran.** `go` passed and the netsim unit tests passed (11 + 93).
+    The netsim self-test, daemon and app suites all stopped at "the test server did not start".
+  - **Cause:** the checkout's path has a space ("Personal Projects"). `scripts/netsim/server.mjs` and
+    `scripts/ci/local-root-lib.mjs` compared `import.meta.url` (percent-encoded) with the raw path, so neither ran:
+    - the test server exited at once, silently;
+    - every check the library makes printed nothing and passed: VPN, address clashes, leftovers, routes, the
+      helper's restore, and the summary.
+    - CI paths have no space, so CI never showed it.
+  - **The Mac was fine afterwards** (checked read-only):
+    - the helper's plist and binary have the same SHA-256 as before, and merging is on again;
+    - no feth links, netsim addresses or routes, state folders or test processes are left.
+    - Not checkable without root: the pf anchor's rules and the dummynet pipes. The next run checks them.
+  - **Fixed:**
+    - both scripts use the repo's `pathToFileURL(realpathSync(argv[1]))` guard, with regression tests that run them
+      from a folder with a space and through a symlink;
+    - `with-netsim.sh` compares netsim's pf anchor by its rules, not its name: macOS 27.0.1 kept listing it after
+      `netsim.sh down`;
+    - the local leak step fails when the leftover route was never added. CI's step already did.
 - **The Deno notices** (ADR-0029) are generated and shipped.
 - **`local-release.mjs`:** a full dry run built the DMG, zip and sources; nothing was uploaded.
 - **Next:**
-  1. The owner runs the root suite.
+  1. The owner runs the root suite again, with the fixes.
   2. Merge PRs #1–#11 in order.
   3. Add the `[0.1.0]` changelog section and build the release on `main`, as a draft.
   4. The owner installs the DMG by hand.

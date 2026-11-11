@@ -522,7 +522,11 @@ suite_netsim_leak() { # the CI step "A leftover route fails the run"
   else
     say "(the FAIL above is expected: with-netsim noticed the route this step left behind)"
   fi
-  sudo -n route -q -n delete -host 192.0.2.77 127.0.0.1 >/dev/null
+  # As in CI: the route must be there to delete, or with-netsim failed for another reason.
+  if ! sudo -n route -q -n delete -host 192.0.2.77 127.0.0.1 >/dev/null; then
+    say "the leftover route was never added, so this step proved nothing (see the output above)"
+    rc=1
+  fi
   return "$rc"
 }
 suite_daemon() {

@@ -12,7 +12,8 @@
 //   node local-root-lib.mjs helper-diff <manifest before> <manifest after>
 //   node local-root-lib.mjs summary <results: name|PASS/FAIL/SKIP|seconds|note per line>
 //   node local-root-lib.mjs noise-regex
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 /** Destinations that capture traffic: a default route, or the /1 halves a VPN (or Mergelane) adds. */
 const CAPTURE = new Set(['default', '0/1', '0.0.0.0/1', '128.0/1', '128.0.0.0/1', '::/1', '8000::/1'])
@@ -249,4 +250,14 @@ export function cli(argv, out = console.log) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = cli(process.argv.slice(2))
+// Compared as file URLs, so a path with a space ("Personal Projects") or a symlink still counts.
+/** True when this file is the script Node was started with (Node runs the main module by real path). */
+function isMainModule() {
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
+
+if (isMainModule()) process.exitCode = cli(process.argv.slice(2))

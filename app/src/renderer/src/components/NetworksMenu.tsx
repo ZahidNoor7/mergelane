@@ -51,7 +51,7 @@ export function NetworksMenu({
             type="button"
             variant="secondary"
             aria-label={networkLabel}
-            className="gap-1.5 px-2 text-[13px] md:gap-2.5 md:px-3"
+            className="gap-1.5 px-2 text-[13px] @min-[768px]:gap-2.5 @min-[768px]:px-3"
           />
         }
       >
@@ -69,18 +69,18 @@ export function NetworksMenu({
           </span>
         )}
         {interfaces.length === 0 ? (
-          <span className="hidden text-[var(--color-danger)] md:inline">No network</span>
+          <span className="hidden text-[var(--color-danger)] @min-[768px]:inline">No network</span>
         ) : (
           <>
-            <span className="hidden md:inline">{networkLabel}</span>
+            <span className="hidden @min-[768px]:inline">{networkLabel}</span>
             {total > 0 && (
-              <span className="hidden font-mono text-[11.5px] text-muted-foreground md:inline">
+              <span className="hidden font-mono text-[11.5px] text-muted-foreground @min-[768px]:inline">
                 {formatSpeed(total)}
               </span>
             )}
           </>
         )}
-        <ChevronDown className="hidden size-3.5 text-muted-foreground md:block" />
+        <ChevronDown className="hidden size-3.5 text-muted-foreground @min-[768px]:block" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[340px] gap-0 p-0">
         <div className="border-b-[0.5px] border-border px-4 py-3 text-[14px] font-semibold">

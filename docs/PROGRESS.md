@@ -89,6 +89,29 @@ Last updated: 2026-11-11
     Dashboard, and draws the empty list's illustration.
   - The download screen's average, peak, cap, error and "× faster" chip move into its caption, in sentence case.
   - `dashboard.spec` follows the new words: "Merged speed", "Nothing downloading", "1 downloading, …".
+- **M3.1, pull request 5a** (branch `m3.1-sidebar`): the window's frame.
+  - `components/WindowChrome.tsx`: the design's sidebar from 760px of window width, and its compact bar below.
+    It replaces `TitleBar`, `StatusBar` and `ScreenFooter`, which are deleted.
+  - The macOS window buttons sit in the sidebar's top strip (`trafficLightPosition` 22, 22). The window is
+    dragged by that strip and by each screen's header (`.window-drag`; controls inside stay clickable).
+  - The window opens at 1040 × 720; its minimum width is 720.
+  - The sidebar's places replace the list's Dashboard button and the Dashboard's back button. The content is a
+    `main` landmark.
+  - `main` is a container (`@container`): the Downloads header, the networks menu button and the Dashboard
+    lay out by the content's width, not the window's (Tailwind container queries, `@min-[…]:`). Without this,
+    the sidebar's 236px made the search field and the networks button overlap at the default size.
+  - The units and theme toggles, and the update button, stay in the sidebar's footer until Settings (5e) and the
+    design's update notice take their place.
+  - Screenshots checked in light and dark, at 1040 × 720 and 720 × 620. Playwright pins Electron pages to the
+    light scheme, so dark screenshots need `page.emulateMedia({ colorScheme: 'dark' })`.
+  - New parts: `NetworkTile`, `SpeedText`, `SpeedUnitToggle` (moved out of the status bar) and the
+    `useElementWidth` hook, which the Confluence now shares. All are in `COVERED`, at 100% of lines.
+  - `dashboard.spec` and `ui.spec` follow the new navigation.
+  - Local results: unit 95 passed; smoke 448 passed, 1 skipped; extension 16 passed. One smoke run of three had
+    one failure, `browserBridge.spec`'s "a download is offered, confirmed, and opens New download filled in"; it
+    passed 4 repeats alone and the next full run. Its output wasn't kept, so the cause is unknown. Seen once.
+  - **Local runs need `env -u ELECTRON_RUN_AS_NODE`** when started from a VS Code terminal, which sets that
+    variable and makes Electron start as plain Node ("bad option: --remote-debugging-port=0").
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

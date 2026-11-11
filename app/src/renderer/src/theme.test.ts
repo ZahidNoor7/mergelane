@@ -9,8 +9,7 @@ import {
   isValidNetworkColorId,
   KIND_PALETTE,
   NETWORK_COLOR_SWATCHES,
-  resolveNetworkVisual,
-  TITLE_BAR_HEIGHT
+  resolveNetworkVisual
 } from './theme'
 
 const networks = (entries: [string, NetworkInterfaceKind][]): Map<string, NetworkInterfaceKind> =>
@@ -102,10 +101,6 @@ describe('resolveNetworkVisual', () => {
     expect(visual.bg).toBe('color-mix(in oklch, var(--swatch-violet) 16%, var(--bg-secondary))')
     expect(visual.label).toBe('USB')
   })
-})
-
-it('sizes the title bar for macOS', () => {
-  expect(TITLE_BAR_HEIGHT).toBe(32)
 })
 
 describe('an extra network’s colour never looks like a theme’s network colour', () => {

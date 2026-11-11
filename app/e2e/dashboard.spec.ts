@@ -41,12 +41,15 @@ async function tabTo(page: Page, name: string): Promise<void> {
 test.describe('Dashboard @smoke', () => {
   test.use({ appEnv: { MERGELANE_E2E_INTERFACES: ONE_NETWORK, ...NO_HELPER } })
 
-  test('opens from the list and goes back by keyboard, with every empty state saying what to do', async ({
+  test('opens from the sidebar and goes back by keyboard, with every empty state saying what to do', async ({
     mergelane
   }) => {
     const page = mergelane.page
-    const dashboardButton = page.getByRole('button', { name: 'Dashboard', exact: true })
+    const places = page.getByRole('navigation', { name: 'Mergelane' })
+    const dashboardButton = places.getByRole('button', { name: 'Dashboard', exact: true })
+    const downloadsButton = places.getByRole('button', { name: 'Downloads', exact: true })
     await expect(dashboardButton).toBeVisible()
+    await expect(downloadsButton).toHaveAttribute('aria-current', 'page')
 
     await tabTo(page, 'Dashboard')
     await expect(dashboardButton).toBeFocused()
@@ -99,14 +102,16 @@ test.describe('Dashboard @smoke', () => {
     await expect(about).toContainText('a video call or a single-connection download won’t')
     await expect(about).toContainText('has to reconnect')
 
-    // Back, by keyboard: focus lands where the dashboard was opened from.
-    await heading.focus()
-    await page.keyboard.press('Shift+Tab')
-    const back = page.getByRole('button', { name: 'Downloads', exact: true })
-    await expect(back).toBeFocused()
+    // The sidebar says where the window is.
+    await expect(dashboardButton).toHaveAttribute('aria-current', 'page')
+    await expect(downloadsButton).not.toHaveAttribute('aria-current', 'page')
+
+    // Back, by keyboard, from the sidebar; focus stays on the place chosen.
+    await downloadsButton.focus()
     await page.keyboard.press('Enter')
     await expect(page.getByText('No downloads yet')).toBeVisible()
-    await expect(dashboardButton).toBeFocused()
+    await expect(downloadsButton).toBeFocused()
+    await expect(downloadsButton).toHaveAttribute('aria-current', 'page')
   })
 
   test('fits the smallest window without scrolling sideways', async ({ mergelane }) => {
@@ -122,7 +127,7 @@ test.describe('Dashboard @smoke', () => {
     })
     await expect(page.getByText('Merged speed', { exact: true })).toBeInViewport()
     const about = page.getByRole('region', { name: 'About combined speed' })
-    await about.scrollIntoViewIfNeeded()
+    await about.getByText('VPNs come first.').scrollIntoViewIfNeeded()
     await expect(about.getByText('VPNs come first.')).toBeInViewport()
     expect(
       await page.evaluate(
@@ -170,8 +175,10 @@ test.describe('Dashboard @smoke', () => {
     await expect(page.getByRole('table', { name: 'Networks' })).toBeVisible()
 
     await mergelane.waitForHttpStatus('completed', 40_000)
-    await page.getByRole('button', { name: 'Downloads', exact: true }).click()
-    await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
+    // The sidebar's places, not the download screen's own way back to the list.
+    const places = page.getByRole('navigation', { name: 'Mergelane' })
+    await places.getByRole('button', { name: 'Downloads', exact: true }).click()
+    await places.getByRole('button', { name: 'Dashboard', exact: true }).click()
     await expect(downloads.getByText('Nothing downloading')).toBeVisible()
   })
 

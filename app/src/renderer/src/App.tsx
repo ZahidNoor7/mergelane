@@ -2,10 +2,10 @@ import type { DownloadState, FinishedDownload } from '@shared/types'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
-import { StatusBar } from './components/StatusBar'
-import { TitleBar } from './components/TitleBar'
+import { CompactBar, Sidebar, SIDEBAR_FROM } from './components/WindowChrome'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
+import { useElementWidth } from './hooks/useElementWidth'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
@@ -60,16 +60,23 @@ function App(): React.JSX.Element {
   useOpenedLinks()
   useNewDownloadShortcuts()
   useNetworkEvents()
+  // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until
+  // the first measurement, the sidebar (the window opens wider than that). The screens size their
+  // layout by <main>'s width (a container), not the window's, since the sidebar takes part of it.
+  const [windowRef, width] = useElementWidth()
+  const sidebar = width === 0 || width >= SIDEBAR_FROM
 
   return (
     <TooltipProvider>
       <DownloadActionsProvider>
-        <div className="flex h-full flex-col">
-          <TitleBar />
-          <div className="min-h-0 flex-1">
-            <CurrentScreen />
+        <div ref={windowRef} className="flex h-full bg-window text-foreground">
+          {sidebar && <Sidebar />}
+          <div className="flex min-w-0 flex-1 flex-col bg-background">
+            {!sidebar && <CompactBar />}
+            <main className="@container min-h-0 flex-1">
+              <CurrentScreen />
+            </main>
           </div>
-          <StatusBar />
           <NewDownloadDialog />
           <NetworkBindingDialog />
         </div>

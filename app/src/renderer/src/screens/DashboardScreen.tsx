@@ -4,16 +4,7 @@ import {
   type SystemMergeLink,
   type SystemMergeSnapshot
 } from '@shared/types'
-import {
-  ChevronLeft,
-  CircleCheck,
-  CirclePause,
-  Gauge,
-  Plug,
-  Plus,
-  TriangleAlert,
-  Unplug
-} from 'lucide-react'
+import { CircleCheck, CirclePause, Gauge, Plug, Plus, TriangleAlert, Unplug } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Confluence, PLACEHOLDER_LANES, type ConfluenceLane } from '../components/Confluence'
 import { HeroBand } from '../components/HeroBand'
@@ -32,7 +23,6 @@ import {
   activeDownloads,
   appendLinkSamples,
   combinedHistory,
-  DASHBOARD_BUTTON_ID,
   formatDowntime,
   networkSummaries,
   type NetworkCondition,
@@ -104,7 +94,6 @@ function SectionHeading({
 /** Every download that isn't finished, everything every network is doing, whether a network
  * dropped, system-wide merging, and what combined speed can and can't do — on one screen. */
 export function DashboardScreen(): React.JSX.Element {
-  const setView = useAppStore((store) => store.setView)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const [limitsOpen, setLimitsOpen] = useState(false)
   const [limitsPage, setLimitsPage] = useState<string | null>(null)
@@ -116,36 +105,26 @@ export function DashboardScreen(): React.JSX.Element {
   // A new screen: say so to a screen reader, and start keyboard focus here.
   useEffect(() => headingRef.current?.focus(), [])
 
-  const back = (): void => {
-    setView({ name: 'list' })
-    // Back where the dashboard was opened from.
-    requestAnimationFrame(() => document.getElementById(DASHBOARD_BUTTON_ID)?.focus())
-  }
-
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5">
-        <button
-          type="button"
-          onClick={back}
-          className="-ml-2 flex items-center gap-1 rounded-md px-1.5 py-1 font-sans text-[15px] leading-none font-medium text-[var(--text-secondary)] transition-colors duration-100 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:text-foreground"
-        >
-          <ChevronLeft className="size-4.5" aria-hidden />
-          Downloads
-        </button>
-        <span aria-hidden className="h-4 w-px bg-border" />
+      {/* The window's frame has the way back (the sidebar or the compact bar); the design's
+          Toolbar here is only the title (prototype.html, DashboardScreen). */}
+      <div className="window-drag flex min-h-14 shrink-0 flex-col justify-center border-b-[0.5px] border-border px-5 py-2.5">
         <h1
           ref={headingRef}
           tabIndex={-1}
-          className="px-1 font-sans text-[15px] leading-none font-semibold tracking-[-0.01em] outline-none"
+          className="truncate text-[18px] leading-tight font-[680] tracking-[-0.015em] outline-none"
         >
           Dashboard
         </h1>
+        <p className="truncate text-[12px] leading-snug text-ink-3">
+          Every download and network at a glance
+        </p>
       </div>
       <DashboardHero />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
         <ActiveDownloadsSection />
-        <div className="grid gap-x-8 min-[900px]:grid-cols-2">
+        <div className="grid gap-x-8 @min-[900px]:grid-cols-2">
           <NetworksSection
             onOpenLimits={(page) => {
               setLimitsPage(page)
@@ -157,7 +136,7 @@ export function DashboardScreen(): React.JSX.Element {
         <OtherAppsSection snapshot={snapshot} />
         <section aria-label="About combined speed">
           <SectionHeading label="About combined speed" />
-          <ul className="grid gap-x-8 gap-y-4 pt-4 min-[900px]:grid-cols-2">
+          <ul className="grid gap-x-8 gap-y-4 pt-4 @min-[900px]:grid-cols-2">
             {HONEST_LIMITS.map((limit) => (
               <li key={limit.title} className="flex max-w-[62ch] flex-col gap-1">
                 <p className="text-[13px] leading-[1.35] font-semibold">{limit.title}</p>
@@ -785,7 +764,7 @@ function MergedTraffic({
       <p className="text-[11.5px] text-muted-foreground">
         Merged download traffic, last {SPEED_HISTORY_SECONDS} seconds
       </p>
-      <ul className="grid gap-x-6 gap-y-3 min-[900px]:grid-cols-2">
+      <ul className="grid gap-x-6 gap-y-3 @min-[900px]:grid-cols-2">
         {charts.map(({ link, values, peak, name, solid }) => {
           const index = hovered?.link === link.name ? hovered.index : null
           return (

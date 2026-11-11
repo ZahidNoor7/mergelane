@@ -338,7 +338,8 @@ test.describe('settings @smoke', () => {
       expect(saved.destinationDir).toBe(dirs.dest)
       await page().keyboard.press('Escape')
       await networksMenu().click()
-      await expect(page().getByText('Office fibre')).toBeVisible()
+      // In the menu, not the sidebar, which lists the networks too.
+      await expect(page().getByRole('dialog').getByText('Office fibre')).toBeVisible()
       await page().getByRole('button', { name: 'Edit Office fibre' }).click()
       await expect(page().getByRole('button', { name: 'Violet' })).toHaveAttribute(
         'aria-pressed',

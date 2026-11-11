@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { Activity, ChevronRight, Plus, Search, X } from 'lucide-react'
+import { ChevronRight, Plus, Search, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SplitBar } from '../components/SplitBar'
@@ -41,7 +41,6 @@ import {
   wantedBytes
 } from '../utils/format'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
-import { DASHBOARD_BUTTON_ID } from '../utils/dashboard'
 import {
   availableActions,
   isFinished,
@@ -219,7 +218,7 @@ export function DownloadsScreen(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col bg-background">
       {chosen.length === 0 ? (
-        <div className="relative flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-3 sm:gap-3 sm:px-5">
+        <div className="window-drag relative flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-3 @min-[640px]:gap-3 @min-[640px]:px-5">
           <DownloadFilterMenu
             value={filter}
             counts={counts}
@@ -230,12 +229,12 @@ export function DownloadsScreen(): React.JSX.Element {
           />
           {/* One group already says it in its header. */}
           {allGroups.length > 1 && (
-            <div className="hidden font-mono text-[11.5px] leading-none whitespace-nowrap text-muted-foreground lg:block">
+            <div className="hidden font-mono text-[11.5px] leading-none whitespace-nowrap text-muted-foreground @min-[1024px]:block">
               {summaryOf(downloads)}
             </div>
           )}
           <div className="flex-1" />
-          <div className="relative w-44 shrink-0 sm:w-48 md:w-52 min-[900px]:absolute min-[900px]:left-1/2 min-[900px]:-translate-x-1/2 lg:w-60">
+          <div className="relative w-44 shrink-0 @min-[640px]:w-48 @min-[768px]:w-52 @min-[900px]:absolute @min-[900px]:left-1/2 @min-[900px]:-translate-x-1/2 @min-[1024px]:w-60">
             <InputGroup className="h-7 w-full border-border/70 bg-secondary/30">
               <InputGroupAddon align="inline-start">
                 <Search className="size-3.5 text-muted-foreground" />
@@ -272,7 +271,7 @@ export function DownloadsScreen(): React.JSX.Element {
                     <X className="size-3" />
                   </InputGroupButton>
                 ) : (
-                  <kbd className="hidden font-mono text-[10px] text-muted-foreground/60 select-none sm:inline-block">
+                  <kbd className="hidden font-mono text-[10px] text-muted-foreground/60 select-none @min-[640px]:inline-block">
                     {isMac ? '⌘F' : 'Ctrl+F'}
                   </kbd>
                 )}
@@ -280,24 +279,6 @@ export function DownloadsScreen(): React.JSX.Element {
             </InputGroup>
           </div>
           <ScheduleIndicator onClick={openSchedule} />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  id={DASHBOARD_BUTTON_ID}
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setView({ name: 'dashboard' })}
-                  aria-label="Dashboard"
-                  className="px-2.5"
-                >
-                  <Activity className="size-3.5" />
-                  <span className="hidden lg:inline">Dashboard</span>
-                </Button>
-              }
-            />
-            <TooltipContent>Speeds, networks and system merge</TooltipContent>
-          </Tooltip>
           <NetworksMenu
             onOpenLimits={(page) => {
               setShowSchedule(false)
@@ -315,7 +296,7 @@ export function DownloadsScreen(): React.JSX.Element {
           role="toolbar"
           aria-label="Selected downloads"
           aria-busy={busy}
-          className="flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
+          className="window-drag flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
         >
           <Tooltip>
             <TooltipTrigger

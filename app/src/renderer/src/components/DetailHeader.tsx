@@ -54,7 +54,7 @@ export function DetailHeader({ download }: { download: DownloadItem }): React.JS
   }
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5">
+    <div className="window-drag flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5">
       <button
         type="button"
         onClick={() => setView({ name: 'list' })}

@@ -41,7 +41,12 @@ export const COVERED = [
   'src/shared/colour.ts',
   'src/renderer/src/hooks/useNetworkVisuals.ts',
   // M3.1 pull request 4b: the Confluence.
-  'src/renderer/src/components/Confluence.tsx'
+  'src/renderer/src/components/Confluence.tsx',
+  // M3.1 pull request 5a: the window's frame (sidebar and compact bar) and its parts.
+  ...['WindowChrome', 'NetworkTile', 'SpeedText', 'SpeedUnitToggle'].map(
+    (name) => `src/renderer/src/components/${name}.tsx`
+  ),
+  'src/renderer/src/hooks/useElementWidth.ts'
 ]
 
 export default defineConfig({

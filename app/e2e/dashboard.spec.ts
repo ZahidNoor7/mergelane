@@ -63,7 +63,7 @@ test.describe('Dashboard @smoke', () => {
     await expect(
       page.getByText('Each network’s speed is drawn here while something downloads.')
     ).toBeVisible()
-    await expect(page.getByText(/^ACTIVE\s*0$/)).toBeVisible()
+    await expect(page.getByText('Nothing downloading', { exact: true }).first()).toBeVisible()
 
     // One network, up and idle, and nothing to fail over to.
     const network = page
@@ -120,7 +120,7 @@ test.describe('Dashboard @smoke', () => {
     await expect(page.getByRole('button', { name: 'Downloads', exact: true })).toBeInViewport({
       ratio: 1
     })
-    await expect(page.getByText('TOTAL SPEED')).toBeInViewport()
+    await expect(page.getByText('Merged speed', { exact: true })).toBeInViewport()
     const about = page.getByRole('region', { name: 'About combined speed' })
     await about.scrollIntoViewIfNeeded()
     await expect(about.getByText('VPNs come first.')).toBeInViewport()
@@ -149,7 +149,7 @@ test.describe('Dashboard @smoke', () => {
       .toBeGreaterThan(0)
     await expect(row).toContainText(/\d+% · [\d.]+ [KM]B of 2\.0 MB/)
     await expect(row).toContainText(/[\d.]+ [KM]B\/s/)
-    await expect(page.getByText(/^ACTIVE\s*1$/)).toBeVisible()
+    await expect(page.getByText(/^1 downloading/)).toBeVisible()
     await expect(
       page.getByRole('img', {
         name: /^Merged throughput over the last minute, split by network\. Now /

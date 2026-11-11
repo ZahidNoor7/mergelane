@@ -264,10 +264,20 @@
   }
 }
 
-@keyframes mergelane-dash {
+/* The Confluence's lane markings drift along each lane while it carries bytes (components/Confluence.tsx).
+   The reduced-motion rule below stops them; an idle lane sets mergelane-lane-still. */
+@keyframes mergelane-lane {
   to {
-    stroke-dashoffset: -60;
+    stroke-dashoffset: -12;
   }
+}
+
+.mergelane-lane-flow {
+  animation: mergelane-lane 1s linear infinite;
+}
+
+.mergelane-lane-still {
+  animation: none;
 }
 
 @keyframes mergelane-glow {

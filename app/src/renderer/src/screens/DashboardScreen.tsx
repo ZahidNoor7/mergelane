@@ -15,9 +15,8 @@ import {
   Unplug
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { CombineDiagram, type CombineDiagramNetwork } from '../components/CombineDiagram'
+import { Confluence, PLACEHOLDER_LANES, type ConfluenceLane } from '../components/Confluence'
 import { HeroBand } from '../components/HeroBand'
-import { BigStat, Dot, InlineStat } from '../components/HeroStats'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { Sparkline } from '../components/Sparkline'
 import { SystemMergeSection } from '../components/SystemMergeSection'
@@ -78,13 +77,6 @@ const HONEST_LIMITS = [
     title: 'VPNs come first.',
     body: 'While another VPN is on, system merge stays off, or turns itself off, and says why. Downloads in Mergelane keep working where they can.'
   }
-]
-
-// Grey placeholders for the diagram when there's no network at all (the list's empty state too).
-const PLACEHOLDER_NETWORKS: CombineDiagramNetwork[] = [
-  { solid: 'var(--icon-muted)', label: 'Wi-Fi' },
-  { solid: 'var(--icon-muted)', label: 'USB' },
-  { solid: 'var(--icon-muted)', label: 'Ethernet' }
 ]
 
 function SectionHeading({
@@ -188,7 +180,6 @@ export function DashboardScreen(): React.JSX.Element {
 /** The instrument a download's screen opens on, for every running download at once: each
  * network flowing into one stream, the total, and the last minute split by network. */
 function DashboardHero(): React.JSX.Element {
-  const formatSpeed = useFormatSpeed()
   const formatSpeedLimit = useFormatSpeedLimit()
   const downloads = Object.values(useAppStore((store) => store.downloads))
   const interfaces = useAppStore((store) => store.interfaces)
@@ -208,55 +199,59 @@ function DashboardHero(): React.JSX.Element {
     )
   )
   const summaries = networkSummaries(interfaces, downloads, {}, {})
-  const diagram: CombineDiagramNetwork[] = summaries.map((network) => {
+  // Each network as a lane: as thick as its speed while it carries bytes, and in words otherwise.
+  const lanes: ConfluenceLane[] = summaries.map((network) => {
     const visual = networkVisual(network.id, network.kind, network.osName)
     return {
-      solid: visual.solid,
-      label: visual.name,
-      speedBytesPerSec: network.speed,
-      active: carrying.has(network.id)
+      id: network.id,
+      interfaceName: network.id,
+      name: visual.name,
+      color: visual.solid,
+      speed: network.speed,
+      on: carrying.has(network.id),
+      down: network.condition === 'offline',
+      limited: network.condition === 'limited',
+      note:
+        network.condition === 'paused'
+          ? 'Data limit reached'
+          : network.condition === 'unreachable'
+            ? 'Can’t reach the server'
+            : 'Idle'
     }
   })
   // The chart draws the networks that carried something in the last minute, in the list's order.
   const charted = summaries.filter((network) => history[network.id]?.some((value) => value > 0))
-  const [speedValue, speedUnit] = formatSpeed(active.totalSpeed).split(' ')
   const speedCap = slowMode
-    ? ` · SLOW MODE ${formatSpeedLimit(slowModeSpeed)}`
+    ? `Slow mode: ${formatSpeedLimit(slowModeSpeed)}`
     : speedLimit !== undefined
-      ? ` · LIMIT ${formatSpeedLimit(speedLimit)}`
+      ? `Limited to ${formatSpeedLimit(speedLimit)}`
       : ''
+  // What's running and when it will be done, under the merged speed.
+  const progress = running
+    ? `${active.running.length} downloading${active.etaSeconds === undefined ? '' : `, about ${formatEta(active.etaSeconds)} left`}`
+    : 'Nothing downloading'
 
   return (
     <HeroBand className="shrink-0">
       <div className="flex items-center gap-[14px]">
-        {diagram.length > 0 ? (
-          <CombineDiagram networks={diagram} paused={!running} />
-        ) : (
-          <CombineDiagram networks={PLACEHOLDER_NETWORKS} muted />
-        )}
-        <div className="flex min-w-[130px] shrink-0 flex-col gap-[7px]">
-          <BigStat
-            label={`TOTAL SPEED${speedCap}`}
-            value={running ? speedValue : '—'}
-            unit={running ? speedUnit : undefined}
-            valueClass={running ? 'text-foreground' : 'text-muted-foreground'}
+        <div className="min-w-0 flex-[1.4]">
+          <Confluence
+            lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}
+            idle={!running || lanes.length === 0}
+            total={active.totalSpeed}
+            caption={
+              <span className="flex flex-col gap-0.5">
+                <span>{progress}</span>
+                {speedCap && <span>{speedCap}</span>}
+              </span>
+            }
           />
-          <div className="flex items-center gap-2 font-mono text-[10px] leading-none font-medium text-muted-foreground tabular-nums">
-            <InlineStat label="ACTIVE" value={String(active.running.length)} />
-            <Dot />
-            <InlineStat
-              label="DONE IN"
-              value={active.etaSeconds === undefined ? '—' : formatEta(active.etaSeconds)}
-            />
-          </div>
         </div>
         <div className="relative ml-auto max-w-[640px] min-w-0 flex-1">
           <div
             className={`transition-opacity duration-200 ${running ? 'opacity-100' : 'opacity-45'}`}
           >
-            <div className="font-mono text-[9.5px] leading-none font-medium tracking-[0.12em] text-muted-foreground">
-              THROUGHPUT · LAST {SPEED_HISTORY_SECONDS}S
-            </div>
+            <h3 className="text-[12.5px] leading-none font-[620] text-ink-2">Last minute</h3>
             <ThroughputChart
               order={charted.map((network) => {
                 const visual = networkVisual(network.id, network.kind, network.osName)

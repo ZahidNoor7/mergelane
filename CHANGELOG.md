@@ -16,6 +16,9 @@ All notable changes to Mergelane are recorded here. The format follows
   focus outline.
 - The chunk map, the download list's progress bars and the speed charts take the new look. The chunk map and the
   speed chart can be read with the keyboard: focus them and use the arrow keys.
+- The Confluence replaces the old combine diagram and "TOTAL SPEED": each network is a lane as thick as its speed,
+  merging into one road beside the merged speed. Its markings drift only while bytes flow, and stop under Reduce
+  Motion. Its words are in sentence case ("Merged speed", "2.0× faster than Wi-Fi alone", "Last minute").
 
 ### Fixed
 

@@ -82,7 +82,22 @@ Last updated: 2026-11-11
   - Fix: an extra network's colour now skips swatches within 0.1 (Oklab) of the theme's network colours. Porcelain's
     Ethernet and the Teal swatch looked alike. The swatches now live in `shared/themes.ts`, and the colour maths in
     `shared/colour.ts`.
-  - 4b (next) replaces CombineDiagram and the big total with the Confluence.
+- **M3.1, pull request 4b** (branch `m3.1-confluence`): the Confluence.
+  - `components/Confluence.tsx` is ported from the design. Lanes are as thick as their speed on the design's 36 MB/s
+    scale, stretched above it. Thickness eases (τ 0.16 s), and the markings drift only while carrying.
+  - It replaces `CombineDiagram`, which is deleted, and `BigStat`/`InlineStat` on the download screen and the
+    Dashboard, and draws the empty list's illustration.
+  - The download screen's average, peak, cap, error and "× faster" chip move into its caption, in sentence case.
+  - `dashboard.spec` follows the new words: "Merged speed", "Nothing downloading", "1 downloading, …".
+- **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
+  link without its last character, and the probe says "isn't a video".
+  - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.
+  - It passed 8 runs of the extension suite alone, and a full run with temporary logging at the bridge and the link
+    queue (since removed).
+  - **Ruled out:** the bridge's framing (JSON, so a lost byte would fail to parse), the link queue (no string
+    changes), the YouTube parser (11-character ids), the clipboard (no test writes it), and key presses (none in the
+    extension tests).
+  - Not yet understood. The next step is to keep that logging behind a debug switch to catch the next occurrence.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

@@ -39,7 +39,9 @@ export const COVERED = [
   ),
   // Networks' colours kept apart from the theme's (theme.ts assignNetworkColors).
   'src/shared/colour.ts',
-  'src/renderer/src/hooks/useNetworkVisuals.ts'
+  'src/renderer/src/hooks/useNetworkVisuals.ts',
+  // M3.1 pull request 4b: the Confluence.
+  'src/renderer/src/components/Confluence.tsx'
 ]
 
 export default defineConfig({

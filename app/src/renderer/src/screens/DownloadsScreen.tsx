@@ -8,7 +8,7 @@ import { useDownloadActions, useDownloadActionsState } from '../components/downl
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
 import { MoreActionsMenu } from '../components/MoreActionsMenu'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
-import { CombineDiagram } from '../components/CombineDiagram'
+import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { ScheduleIndicator } from '../components/ScheduleIndicator'
 import { networkStatusText } from '../components/NetworkRow'
@@ -458,13 +458,6 @@ export function DownloadsScreen(): React.JSX.Element {
   )
 }
 
-// Colors are irrelevant here — the diagram is rendered `muted`, which overrides them all to
-// var(--icon-muted) — these are just three placeholder rows to draw the illustration with.
-const PLACEHOLDER_NETWORKS = [
-  { solid: 'var(--icon-muted)', label: 'Wi-Fi' },
-  { solid: 'var(--icon-muted)', label: 'USB' },
-  { solid: 'var(--icon-muted)', label: 'Ethernet' }
-]
 const PASTE_SHORTCUT = window.mergelane.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
 const NEW_SHORTCUT = window.mergelane.platform === 'darwin' ? '⌘N' : 'Ctrl+N'
 
@@ -478,7 +471,9 @@ function EmptyState(): React.JSX.Element {
 
   return (
     <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
-      <CombineDiagram networks={PLACEHOLDER_NETWORKS} muted />
+      <div className="w-full max-w-[460px]">
+        <Confluence lanes={PLACEHOLDER_LANES} idle />
+      </div>
       {noNetworks ? (
         <>
           <div className="font-sans text-[16px] leading-[1.2] font-bold">No networks connected</div>

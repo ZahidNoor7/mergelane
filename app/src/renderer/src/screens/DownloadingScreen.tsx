@@ -1,13 +1,13 @@
-import { SPEED_HISTORY_SECONDS, type DownloadState } from '@shared/types'
+import type { DownloadState } from '@shared/types'
 import { AlertTriangle, Folder } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
-import { CombineDiagram } from '../components/CombineDiagram'
+import { Confluence } from '../components/Confluence'
+import { Dot } from '../components/HeroStats'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
-import { BigStat, Dot, InlineStat } from '../components/HeroStats'
-import { NetworkRow } from '../components/NetworkRow'
+import { NetworkRow, networkStatusText } from '../components/NetworkRow'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
@@ -111,13 +111,12 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const elapsedSeconds = Math.max(0, (now - download.startedAt - totalPausedMs) / 1000)
 
   const effectiveSpeed = isPaused ? 0 : download.speedBytesPerSec
-  const [speedValue, speedUnit] = formatSpeed(effectiveSpeed).split(' ')
-  // The cap over every download, beside the speed it holds down — slow mode named, so a low
+  // The cap over every download, under the speed it holds down — slow mode named, so a low
   // number explains itself.
   const speedCap = slowMode
-    ? ` · SLOW MODE ${formatSpeedLimit(slowModeSpeed)}`
+    ? `Slow mode: ${formatSpeedLimit(slowModeSpeed)}`
     : speedLimit !== undefined
-      ? ` · LIMIT ${formatSpeedLimit(speedLimit)}`
+      ? `Limited to ${formatSpeedLimit(speedLimit)}`
       : ''
   // Every network is a row, for switching it on or off; the charts draw only those in play.
   const rows = groupByNetwork(download)
@@ -152,7 +151,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           .sort((a, b) => a.ratio - b.ratio)
           .map(({ ratio, visual }) => ({
             visual,
-            label: `${ratio.toFixed(1)}× ${visual.name.toUpperCase()} ALONE`,
+            label: `${ratio.toFixed(1)}× faster than ${visual.name} alone`,
             tooltip: bySpeed
               ? `Total speed is ${ratio.toFixed(1)}× faster than ${visual.name} alone`
               : `Total downloaded is ${ratio.toFixed(1)}× compared to ${visual.name} alone`
@@ -165,8 +164,6 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const statusBadge = isPaused
     ? { label: isQueued ? 'QUEUED' : 'PAUSED', palette: KIND_PALETTE.usb }
     : null
-
-  const throughputStatusLabel = isPaused ? null : `LAST ${SPEED_HISTORY_SECONDS}S`
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -181,78 +178,81 @@ export const DownloadingScreen = memo(function DownloadingScreen({
         {/* At their designed size: a wider window opens a gap between the speed and the chart
             (ml-auto) rather than stretching the merge into rails or the chart into a ribbon. */}
         <div className="flex items-center gap-[14px]">
-          <CombineDiagram
-            networks={groups.map((group, index) => ({
-              solid: visuals[index].solid,
-              label: visuals[index].name,
-              speedBytesPerSec: isPaused ? 0 : group.speedBytesPerSec,
-              active: networkActive(group)
-            }))}
-            paused={isPaused}
-          />
-
-          <div className="flex min-w-[130px] shrink-0 flex-col gap-[7px]">
-            <>
-              <BigStat
-                label={`TOTAL SPEED${speedCap}`}
-                value={isPaused ? '—' : speedValue}
-                unit={isPaused ? undefined : speedUnit}
-                valueClass={isPaused ? 'text-muted-foreground' : 'text-foreground'}
-                note={
-                  !isPaused &&
-                  download.kind === 'http' &&
-                  download.diskLimited && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span
-                            role="img"
-                            aria-label="Slow drive"
-                            className="inline-flex text-[var(--swatch-amber)]"
-                          >
-                            <AlertTriangle aria-hidden className="size-3" />
-                          </span>
-                        }
-                      />
-                      <TooltipContent>
-                        Your drive can’t save any faster, so this download is going slower.
-                      </TooltipContent>
-                    </Tooltip>
-                  )
-                }
-              />
-              <div className="flex items-center gap-2 font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground">
-                <InlineStat label="AVG" value={formatSpeed(avgSpeedBytesPerSec)} />
-                <Dot />
-                {/* A dash until a speed has been held long enough to call it the peak. */}
-                <InlineStat
-                  label="PEAK"
-                  value={
-                    peakSpeedBytesPerSec === undefined ? '—' : formatSpeed(peakSpeedBytesPerSec)
-                  }
-                />
-              </div>
-              {isPaused || waiting
-                ? (download.error || waiting) && (
-                    <div
-                      role="alert"
-                      className="mt-0.5 font-sans text-[11px] leading-[1.2] font-medium text-destructive"
-                    >
-                      {download.error ? describeError(download.error) : waiting}
-                    </div>
-                  )
-                : activeChipOption && (
-                    <CyclableChip
-                      label={activeChipOption.label}
-                      tooltip={`${activeChipOption.tooltip}${chipOptions.length > 1 ? ' (click to toggle)' : ''}`}
-                      bg={activeChipOption.visual.bg}
-                      border={activeChipOption.visual.border}
-                      color={activeChipOption.visual.text}
-                      cyclable={chipOptions.length > 1}
-                      onClick={() => setChipModeIndex((i) => (i + 1) % chipOptions.length)}
+          <div className="min-w-0 flex-[1.4]">
+            <Confluence
+              compact
+              idle={isPaused}
+              lanes={groups.map((group, index) => ({
+                id: group.id,
+                name: visuals[index].name,
+                color: visuals[index].solid,
+                speed: isPaused ? 0 : group.speedBytesPerSec,
+                on: !isPaused && networkActive(group),
+                down: group.status === 'offline',
+                note:
+                  group.status !== 'on'
+                    ? networkStatusText(group.status, group.transfer)
+                    : isPaused
+                      ? 'Paused'
+                      : 'Idle'
+              }))}
+              total={effectiveSpeed}
+              labelNote={
+                !isPaused &&
+                download.kind === 'http' &&
+                download.diskLimited && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span
+                          role="img"
+                          aria-label="Slow drive"
+                          className="inline-flex text-[var(--color-warning)]"
+                        >
+                          <AlertTriangle aria-hidden className="size-3" />
+                        </span>
+                      }
                     />
-                  )}
-            </>
+                    <TooltipContent>
+                      Your drive can’t save any faster, so this download is going slower.
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              }
+              caption={
+                <div className="flex flex-col items-start gap-1.5">
+                  <span>
+                    Average{' '}
+                    <span className="figures font-[600] text-foreground">
+                      {formatSpeed(avgSpeedBytesPerSec)}
+                    </span>
+                    , peak{' '}
+                    {/* A dash until a speed has been held long enough to call it the peak. */}
+                    <span className="figures font-[600] text-foreground">
+                      {peakSpeedBytesPerSec === undefined ? '—' : formatSpeed(peakSpeedBytesPerSec)}
+                    </span>
+                  </span>
+                  {speedCap && <span>{speedCap}</span>}
+                  {isPaused || waiting
+                    ? (download.error || waiting) && (
+                        <span role="alert" className="font-[580] text-destructive">
+                          {download.error ? describeError(download.error) : waiting}
+                        </span>
+                      )
+                    : activeChipOption && (
+                        <CyclableChip
+                          label={activeChipOption.label}
+                          tooltip={`${activeChipOption.tooltip}${chipOptions.length > 1 ? ' (click to toggle)' : ''}`}
+                          bg={activeChipOption.visual.bg}
+                          border={activeChipOption.visual.border}
+                          color={activeChipOption.visual.text}
+                          cyclable={chipOptions.length > 1}
+                          onClick={() => setChipModeIndex((i) => (i + 1) % chipOptions.length)}
+                        />
+                      )}
+                </div>
+              }
+            />
           </div>
 
           <div
@@ -260,9 +260,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               isPaused ? 'opacity-45' : 'opacity-100'
             }`}
           >
-            <div className="font-mono text-[9.5px] leading-none font-medium tracking-[0.12em] text-muted-foreground">
-              THROUGHPUT{throughputStatusLabel ? ` · ${throughputStatusLabel}` : ''}
-            </div>
+            <h3 className="text-[12.5px] leading-none font-[620] text-ink-2">Last minute</h3>
             <ThroughputChart
               order={groups.map((g, i) => ({
                 interfaceId: g.id,

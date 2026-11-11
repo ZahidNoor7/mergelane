@@ -7,9 +7,11 @@ import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useElementWidth } from './hooks/useElementWidth'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
+import { useSettingsShortcut } from './hooks/useSettingsShortcut'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
 import { NetworksScreen } from './screens/NetworksScreen'
+import { SettingsScreen } from './screens/SettingsScreen'
 import { useAppStore } from './store/useAppStore'
 
 /** The place the window shows: the downloads (with a download's details), the dashboard or the
@@ -21,6 +23,8 @@ function CurrentScreen(): React.JSX.Element {
     <DashboardScreen />
   ) : screen === 'networks' ? (
     <NetworksScreen />
+  ) : screen === 'settings' ? (
+    <SettingsScreen />
   ) : (
     <DownloadsPlace />
   )
@@ -30,6 +34,7 @@ function App(): React.JSX.Element {
   useDownloadEvents()
   useOpenedLinks()
   useNewDownloadShortcuts()
+  useSettingsShortcut()
   useNetworkEvents()
   // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until
   // the first measurement, the sidebar (the window opens wider than that). The screens size their

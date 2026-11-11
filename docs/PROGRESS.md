@@ -181,6 +181,23 @@ Last updated: 2026-11-11
   - **Unit tests:** `NetworksScreen` (100%) and `NetworkEditPopover` (98.4%) are in `COVERED`.
   - One smoke run had one failure, `streamDownload.spec`'s "an HLS stream becomes one file" (an extra file in
     the folder). It passed twice alone and in the next full run. Seen once.
+- **M3.1, pull request 5e** (branch `m3.1-settings`): the Settings screen.
+  - `screens/SettingsScreen.tsx`: General, Appearance and Downloads, with the design's section list (a segmented
+    control under 620px). The store gains `screen: 'settings'`, `settingsSection` and `openSettings()`; ⌘,
+    opens it (`hooks/useSettingsShortcut.ts`).
+  - **General:** speed units, the merged speed now, slow mode, and the total speed (opens Speed & data limits).
+  - **Appearance:** Auto, Light or Dark; the seven themes with mini-window previews of the mode shown; the
+    network colours in the theme.
+  - **Downloads:** save folder, downloads at once, the schedule (opens Speed & data limits at it), the news
+    server (opens its dialog), and per-network limits (opens Networks).
+  - The sidebar ends with Settings (and the update button until M3.2); the compact bar has a Settings button.
+    The units and theme toggles leave the frame; `ThemeToggle` is deleted.
+  - **Still a dialog:** Speed & data limits holds the total speed, slow mode's speed, the schedule and each
+    network's limits; Settings and Networks open it. Moving those fields onto the screens is left for later.
+  - **Not built here:** Updates and Browser extensions (M3.2, M3.4); Liquid Glass's settings (pull request 7);
+    the design's "On this Mac" (open at login, menu-bar speed, notifications), which have no setting today.
+  - **e2e:** an `openSettings()` fixture; `ui.spec` sets Dark and the Sage theme in Settings.
+  - **Unit tests:** `SettingsScreen` and `useSettingsShortcut` are in `COVERED` at 100%.
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

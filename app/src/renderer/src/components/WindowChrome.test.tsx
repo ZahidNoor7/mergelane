@@ -179,10 +179,16 @@ describe('Sidebar', () => {
     expect(updateSettings).toHaveBeenCalledWith({ slowMode: true })
   })
 
-  it('keeps the units and the theme within reach until Settings has them', () => {
+  it('opens Settings from its foot, and marks it while it shows', async () => {
     renderIn(<Sidebar />)
-    expect(screen.getByRole('group', { name: 'Speed units' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^Switch to (dark|light) theme$/ })).toBeTruthy()
+    const settings = screen.getByRole('button', { name: /^Settings/ })
+    expect(settings.getAttribute('aria-current')).toBeNull()
+    await userEvent.setup().click(settings)
+    expect(useAppStore.getState().screen).toBe('settings')
+    expect(settings.getAttribute('aria-current')).toBe('page')
+    // Networks is a place too.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Networks' }))
+    expect(useAppStore.getState().screen).toBe('networks')
   })
 })
 
@@ -206,9 +212,13 @@ describe('CompactBar', () => {
     expect(useAppStore.getState().screen).toBe('downloads')
   })
 
-  it('names slow mode for a screen reader, without showing the label', () => {
+  it('names slow mode for a screen reader, without showing the label, and opens Settings', async () => {
     renderIn(<CompactBar />)
     expect(screen.getByText('Slow mode').className).toContain('sr-only')
     expect(screen.getByRole('switch', { name: 'Slow mode' })).toBeTruthy()
+    const settings = screen.getByRole('button', { name: 'Settings' })
+    await userEvent.setup().click(settings)
+    expect(useAppStore.getState().screen).toBe('settings')
+    expect(settings.getAttribute('aria-current')).toBe('page')
   })
 })

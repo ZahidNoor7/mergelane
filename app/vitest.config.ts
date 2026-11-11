@@ -15,7 +15,6 @@ export const COVERED = [
   'src/shared/themes.ts',
   'src/renderer/src/theme/appearance.ts',
   'src/renderer/src/hooks/usePrefersDark.ts',
-  'src/renderer/src/components/ThemeToggle.tsx',
   // M3.1 pull request 3: the basic controls.
   ...[
     'alert',
@@ -65,7 +64,10 @@ export const COVERED = [
   'src/renderer/src/components/NewDownloadDialog.tsx',
   // M3.1 pull request 5d: the Networks screen.
   'src/renderer/src/screens/NetworksScreen.tsx',
-  'src/renderer/src/components/NetworkEditPopover.tsx'
+  'src/renderer/src/components/NetworkEditPopover.tsx',
+  // M3.1 pull request 5e: Settings.
+  'src/renderer/src/screens/SettingsScreen.tsx',
+  'src/renderer/src/hooks/useSettingsShortcut.ts'
 ]
 
 export default defineConfig({

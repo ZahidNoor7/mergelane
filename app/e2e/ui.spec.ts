@@ -293,12 +293,21 @@ test.describe('settings @smoke', () => {
     dirs
   }) => {
     const page = (): Page => mergelane.page
-    const themeToggle = page().getByRole('button', { name: /^Switch to (dark|light) theme$/ })
-    // After switching, the toggle offers to switch back.
-    const labelAfterSwitch = (await themeToggle.getAttribute('aria-label'))!.includes('dark')
-      ? 'Switch to light theme'
-      : 'Switch to dark theme'
-    await themeToggle.click()
+    // Settings › Appearance: Dark, and the Sage theme.
+    const appearance = async (): Promise<void> => {
+      await mergelane.openSettings()
+      await page()
+        .getByRole('navigation', { name: 'Settings sections' })
+        .getByRole('button', { name: 'Appearance' })
+        .click()
+    }
+    await appearance()
+    await page()
+      .getByRole('group', { name: 'Light or dark' })
+      .getByRole('button', { name: 'Dark' })
+      .click()
+    // The card, as a person picks it; its radio is for keyboards and screen readers.
+    await page().getByText('Sage', { exact: true }).click()
 
     await stubNativeUi(mergelane, dirs.dest)
     await mergelane.newDownload()
@@ -321,7 +330,11 @@ test.describe('settings @smoke', () => {
     await page().keyboard.press('Escape')
 
     const expectAllKept = async (): Promise<void> => {
-      await expect(page().getByRole('button', { name: labelAfterSwitch })).toBeVisible()
+      await appearance()
+      await expect(
+        page().getByRole('group', { name: 'Light or dark' }).getByRole('button', { name: 'Dark' })
+      ).toHaveAttribute('aria-pressed', 'true')
+      await expect(page().getByRole('radio', { name: /^Sage/ })).toBeChecked()
       await mergelane.newDownload()
       await expect.poll(destination).toBe(chosenDestination)
       // Presentation may abbreviate home; persistence must retain the usable absolute path.

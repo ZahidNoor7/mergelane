@@ -310,6 +310,14 @@ export class MergelaneApp {
     return link
   }
 
+  /** Opens Settings, as its button at the sidebar's foot (or in the compact bar) does. */
+  async openSettings(): Promise<void> {
+    await this.page
+      .getByRole('button', { name: /^Settings/ })
+      .first()
+      .click()
+  }
+
   /** Goes to one of the window's places by the sidebar (or the compact bar). */
   async place(name: 'Downloads' | 'Dashboard' | 'Networks'): Promise<void> {
     await this.page

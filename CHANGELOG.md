@@ -13,6 +13,13 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Added
 
+- Settings › General › Troubleshooting › Save Diagnostics… (also in the app menu) saves a zip to attach to a GitHub
+  issue: Mergelane's and macOS's versions, your Mac's networks, settings and recent downloads, and the helper's
+  log. Links keep only their site, file names only their type, and passwords, cookies, proxy and news-server
+  sign-ins, your home folder and public IP addresses are left out. Mergelane never sends it anywhere.
+- The Dashboard's Today shows the fastest merged speed of the day, and the network dropouts of the last 24 hours.
+  Dropouts and the fastest speed are now kept when Mergelane quits, for a week, and a network that came back
+  while Mergelane was closed says so.
 - Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
   what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off.
 - "Download and install" downloads the new version's disk image, with progress and Cancel, and checks it against

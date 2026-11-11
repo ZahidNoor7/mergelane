@@ -1,13 +1,23 @@
 import { join } from 'node:path'
 import { app } from 'electron'
 import { dataPeriodKey } from '../../shared/dataLimits'
-import { DEFAULT_SLOW_MODE_SPEED, type AppSettings, type DataLimitPeriod } from '../../shared/types'
+import {
+  DEFAULT_SLOW_MODE_SPEED,
+  type AppSettings,
+  type DataLimitPeriod,
+  type NetworkPreference,
+  type NetworkPreferences
+} from '../../shared/types'
 import { readJson, updateJson } from '../jsonFile'
 
 // Speed and data limits, for every download together: what the user sets in Speed & data limits.
 // Every byte Mergelane receives passes through take(), on the network it came in on — an HTTP
 // response's body and a torrent peer's socket alike — which says how long to stop reading for.
 // Stopping reading is what slows the sender: TCP's window fills, and it waits.
+//
+// Torrent uploads have limits of their own (ADR-0041): every block a peer is sent passes through
+// takeUpload(), on the network the peer is on, which says how long to hold it back. Data limits
+// count received bytes only, as before: "Uploads and other apps don't count."
 
 /** A rate as a bucket of tokens (bytes) that refills at `rate` per second. Taking more than it
  * holds leaves it in debt, and the debt is the wait. A second's worth is all it ever holds, so a
@@ -42,6 +52,9 @@ const USAGE_SAVE_MS = 10_000
 export class Limits {
   private total: Bucket | null = null
   private perNetwork = new Map<string, Bucket>()
+  /** The same, for torrent uploads. */
+  private uploadTotal: Bucket | null = null
+  private uploadPerNetwork = new Map<string, Bucket>()
   /** Each network's data limit and selected calendar period. */
   private dataLimits = new Map<string, number>()
   private periods = new Map<string, DataLimitPeriod>()
@@ -86,19 +99,18 @@ export class Limits {
     return join(app.getPath('userData'), 'network-usage.json')
   }
 
-  /** Takes up the limits in `settings`. Slow mode, when on, stands in for the total limit. */
+  /** Takes up the limits in `settings`. Slow mode, when on, stands in for the total download
+   * limit; upload limits are their own. */
   configure(settings: AppSettings): void {
     // A slow mode speed never changed isn't saved: it's the default the window shows.
     const total = settings.slowMode
       ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
       : settings.speedLimit
     this.total = adjust(this.total, total)
+    this.uploadTotal = adjust(this.uploadTotal, settings.uploadLimit)
     const preferences = settings.networkPreferences ?? {}
-    for (const id of new Set([...this.perNetwork.keys(), ...Object.keys(preferences)])) {
-      const bucket = adjust(this.perNetwork.get(id) ?? null, preferences[id]?.speedLimit)
-      if (bucket) this.perNetwork.set(id, bucket)
-      else this.perNetwork.delete(id)
-    }
+    adjustEach(this.perNetwork, preferences, (preference) => preference?.speedLimit)
+    adjustEach(this.uploadPerNetwork, preferences, (preference) => preference?.uploadLimit)
     this.dataLimits.clear()
     this.periods.clear()
     for (const [id, preference] of Object.entries(preferences)) {
@@ -126,6 +138,16 @@ export class Limits {
     return Math.max(
       this.total?.take(bytes, now) ?? 0,
       this.perNetwork.get(networkId)?.take(bytes, now) ?? 0
+    )
+  }
+
+  /** Counts `bytes` about to be sent to a torrent peer on `networkId`, and says how many ms to
+   * hold them back for. Not counted against data limits. */
+  takeUpload(networkId: string, bytes: number): number {
+    const now = Date.now()
+    return Math.max(
+      this.uploadTotal?.take(bytes, now) ?? 0,
+      this.uploadPerNetwork.get(networkId)?.take(bytes, now) ?? 0
     )
   }
 
@@ -194,4 +216,18 @@ function adjust(current: Bucket | null, rate: number | undefined): Bucket | null
   if (!current) return new Bucket(rate)
   current.rate = rate
   return current
+}
+
+/** Each network's bucket for the rate `rateOf` its preference gives: kept and adjusted, made, or
+ * dropped. */
+function adjustEach(
+  buckets: Map<string, Bucket>,
+  preferences: NetworkPreferences,
+  rateOf: (preference: NetworkPreference | undefined) => number | undefined
+): void {
+  for (const id of new Set([...buckets.keys(), ...Object.keys(preferences)])) {
+    const bucket = adjust(buckets.get(id) ?? null, rateOf(preferences[id]))
+    if (bucket) buckets.set(id, bucket)
+    else buckets.delete(id)
+  }
 }

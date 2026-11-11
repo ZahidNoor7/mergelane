@@ -166,6 +166,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         networkPreferences: settings.networkPreferences ?? {},
         downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
         speedLimit: settings.speedLimit,
+        uploadLimit: settings.uploadLimit,
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         speedUnit: settings.speedUnit ?? 'bytes',

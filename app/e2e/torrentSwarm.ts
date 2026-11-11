@@ -75,11 +75,12 @@ export class Swarm {
     )
   }
 
-  /** A client fetching `torrent` from the swarm, into a folder of its own. */
-  async leech(torrent: Torrent): Promise<Torrent> {
+  /** A client fetching `torrent` from the swarm, into a folder of its own. With `deselect`, it
+   * joins the swarm wanting nothing, until its files are selected. */
+  async leech(torrent: Torrent, options: { deselect?: boolean } = {}): Promise<Torrent> {
     const client = await this.client()
     const path = await mkdtemp(join(tmpdir(), 'mergelane-leech-'))
-    return client.add(torrent.torrentFile, { path })
+    return client.add(torrent.torrentFile, { path, deselect: options.deselect })
   }
 
   /** What every client has uploaded, all together. */

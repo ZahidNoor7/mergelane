@@ -45,6 +45,7 @@ import {
   type TorrentPieceState,
   type TorrentTrackersResult
 } from '../../shared/types'
+import { routeFor } from '../../shared/routing'
 import { mergeTrackers, normalizeTrackerUrl } from '../../shared/torrentTrackers'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
@@ -103,6 +104,7 @@ import {
   updateSpeeds,
   updateTimeLeft,
   type Transfer,
+  type TorrentTransferHost,
   type TransferHost,
   type HttpTransferTarget,
   type NzbTransferTarget,
@@ -750,14 +752,15 @@ export class DownloadManager {
       uploadMeters: new Meters(),
       customTrackers
     }
-    const host: TransferHost = {
+    const host: TorrentTransferHost = {
       networks: this.networks,
       limits: this.limits,
       downloadsOn: (networkId) => this.httpDownloadsOn(networkId),
       reconcile: () => this.reconcile(runtime),
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
-      scheduleUpdate: () => this.scheduleUpdate(runtime)
+      scheduleUpdate: () => this.scheduleUpdate(runtime),
+      uploadRoute: () => this.uploadRoute()
     }
     const runtime: TorrentDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'torrent' as const,
@@ -2430,11 +2433,14 @@ export class DownloadManager {
   /** The networks routing sends every download over, or null when each download uses its own: the
    * chosen network while it's connected; when it isn't, each download's own networks with fallback
    * on, and none (the downloads wait) with it off. */
-  private downloadRoute(): Set<string> | null {
-    const { down, fallback } = this.routing
-    if (down === 'all') return null
-    if (this.networks.find(down)) return new Set([down])
-    return fallback ? null : new Set()
+  private downloadRoute(): ReadonlySet<string> | null {
+    return routeFor(this.routing, 'down', (id) => Boolean(this.networks.find(id)))
+  }
+
+  /** The same for torrent uploads (ADR-0041): null, each torrent uploads over the networks it
+   * downloads over. */
+  private uploadRoute(): ReadonlySet<string> | null {
+    return routeFor(this.routing, 'up', (id) => Boolean(this.networks.find(id)))
   }
 
   private notify(title: string, body: string, downloadId?: string): void {

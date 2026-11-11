@@ -165,6 +165,7 @@ const input: DiagnosticsInput = {
     captureRules: { capture: true, minSize: '1mb', types: ['video'], videoButton: false },
     routing: { down: 'en0', up: 'en7', fallback: false },
     uploadLimit: 50_000,
+    offerCopiedLinks: true,
     browserContacts: { chrome: { at: NOW, extension: '0.3.0' } },
     networkPreferences: {
       en7: {
@@ -290,6 +291,7 @@ describe('the bundle', () => {
       destination: 'a folder in the home folder',
       routing: { down: 'en0', up: 'en7', fallback: false },
       uploadLimit: 50_000,
+      offerCopiedLinks: true,
       browsers: { chrome: { extension: '0.3.0' } },
       networks: {
         en7: {

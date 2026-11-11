@@ -3,15 +3,24 @@ import { youtubeLink } from '@shared/youtube'
 import { cn } from 'cn'
 import {
   AlertTriangle,
+  Check,
   ChevronLeft,
   ChevronRight,
   Film,
+  Folder,
   FolderOpen,
   Globe,
+  HardDrive,
+  Link as LinkIcon,
   Lock,
+  Magnet,
+  Newspaper,
   Pencil,
   X
 } from 'lucide-react'
+import { fileTypeOf } from '@shared/downloadFilters'
+import { FILE_TYPE_ICON } from './fileTypeIcons'
+import { NetworkTile } from './NetworkTile'
 import { useEffect, useRef, useState } from 'react'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
@@ -23,12 +32,12 @@ import {
   acceptedLink,
   describeError,
   describeFileCount,
-  fileExtensionBadge,
   formatBytes,
   formatDuration,
   streamQualityOptions,
   toDisplayPath
 } from '../utils/format'
+import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
@@ -50,7 +59,9 @@ type StreamsChoice = 'auto' | number
 /** Streams per network the user can pick instead of Auto. */
 const STREAMS_CHOICES: StreamsChoice[] = ['auto', 4, 8, 16, 32]
 
-const labelClass = 'w-16 shrink-0 text-[12.5px] text-[var(--text-secondary)]'
+// The design's field rows: a label column beside the field once the sheet is wide enough.
+const ROW = 'grid gap-x-4 gap-y-2 @min-[512px]:grid-cols-[6.5rem_minmax(0,1fr)]'
+const FIELD_LABEL = 'pt-2 text-[12.5px] font-[600] text-ink-2'
 
 function NetworkListNotice({
   status,
@@ -62,13 +73,11 @@ function NetworkListNotice({
   onScan: () => void
 }): React.JSX.Element {
   if (status === 'idle' || status === 'loading') {
-    return (
-      <span className="font-mono text-[12px] text-muted-foreground">Looking for networks…</span>
-    )
+    return <span className="text-[12px] text-ink-3">Looking for networks…</span>
   }
   const detail = error ? describeError(error) : ''
   return (
-    <span className="flex flex-wrap items-center gap-2 text-[12.5px] leading-snug text-[var(--text-secondary)]">
+    <span className="flex flex-wrap items-center gap-2 text-[12.5px] leading-snug text-ink-2">
       {status === 'error'
         ? `Mergelane couldn’t list this computer’s networks.${detail ? ` ${detail}` : ''}`
         : 'No networks connected. Join a Wi-Fi network, plug in Ethernet, or connect your phone using USB tethering.'}
@@ -90,8 +99,9 @@ export function NewDownloadDialog(): React.JSX.Element {
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
       <DialogContent
+        sheet
         showCloseButton={false}
-        className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]"
+        className="flex flex-col gap-0 overflow-hidden p-0"
       >
         {/* Mounted only while open, and keyed by what it shows, so each opening and each
             download stacked in it starts fresh. */}
@@ -431,17 +441,25 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   }
 
   const fileName = ready ? (fileNameOverride ?? ready.suggestedFileName) : ''
+  const PreviewIcon =
+    (torrent && torrent.files.length > 1) || nzb
+      ? Folder
+      : stream
+        ? Film
+        : FILE_TYPE_ICON[fileTypeOf({ kind: 'http', fileName })]
 
   return (
     <form
-      className="flex min-h-0 flex-col"
+      className="flex min-h-0 flex-col @container"
       onSubmit={(event) => {
         event.preventDefault()
         void handleStart()
       }}
     >
-      <div className="flex items-center gap-2 border-b-[0.5px] border-border py-3 pr-3 pl-5">
-        <DialogTitle className="flex-1 py-1 text-[16px] font-semibold">New download</DialogTitle>
+      <div className="flex items-center gap-2 border-b border-rule py-3 pr-3 pl-5">
+        <DialogTitle className="flex-1 text-[16px] font-[680] tracking-[-0.01em]">
+          New download
+        </DialogTitle>
         {shownLink && links.length > 1 && (
           <div className="flex items-center gap-1">
             <Button
@@ -454,7 +472,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             >
               <ChevronLeft />
             </Button>
-            <span className="min-w-12 text-center font-mono text-[11.5px] text-muted-foreground tabular-nums">
+            <span className="figures min-w-12 text-center text-[12px] text-ink-2">
               {position + 1} of {links.length}
             </span>
             <Button
@@ -469,63 +487,94 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             </Button>
           </div>
         )}
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" onClick={onDone}>
+          <X />
+        </Button>
       </div>
 
-      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              'flex h-9 min-w-0 flex-1 items-center gap-2 rounded-[9px] border bg-[var(--input-bg)] px-3',
-              probe.status === 'error' ? 'border-destructive' : 'border-input'
-            )}
-          >
-            <input
-              ref={linkInput}
-              autoFocus
-              type="text"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="Paste a link: https:// or magnet:"
-              spellCheck={false}
-              aria-label="Link"
-              className="min-w-0 flex-1 border-none bg-transparent font-mono text-[13px] text-foreground outline-none"
-            />
-            {url && (
+      <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-5 py-4">
+        <div className={ROW}>
+          <label htmlFor="new-download-link" className={FIELD_LABEL}>
+            Link
+          </label>
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div
+                className={cn(
+                  'flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-[var(--input-bg)] px-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
+                  probe.status === 'error'
+                    ? 'shadow-[inset_0_0_0_1px_var(--color-danger)]'
+                    : 'shadow-[inset_0_0_0_1px_var(--control)]'
+                )}
+              >
+                <LinkIcon aria-hidden className="size-3.5 shrink-0 text-ink-3" />
+                <input
+                  ref={linkInput}
+                  id="new-download-link"
+                  autoFocus
+                  type="text"
+                  inputMode="url"
+                  autoComplete="off"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="Paste a web address or a magnet link"
+                  spellCheck={false}
+                  aria-invalid={probe.status === 'error' || undefined}
+                  className="h-full min-w-0 flex-1 bg-transparent font-mono text-[12.5px] text-foreground outline-none placeholder:font-sans placeholder:text-[13px] placeholder:text-ink-3"
+                />
+                {url && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUrl('')
+                            linkInput.current?.focus()
+                          }}
+                          aria-label="Clear link"
+                          className="grid size-5 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <X aria-hidden className="size-3.5" />
+                        </button>
+                      }
+                    />
+                    <TooltipContent>Clear link</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUrl('')
-                        linkInput.current?.focus()
-                      }}
-                      aria-label="Clear link"
-                      className="flex size-5 shrink-0 cursor-default items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    >
-                      <X aria-hidden className="size-3.5" />
-                    </button>
+                    <Button type="button" variant="secondary" onClick={handleOpenFile}>
+                      <FolderOpen data-icon="inline-start" />
+                      Open file
+                    </Button>
                   }
                 />
-                <TooltipContent>Clear link</TooltipContent>
+                <TooltipContent>Open a .torrent or .nzb file</TooltipContent>
               </Tooltip>
+            </div>
+            {probe.status === 'probing' && (
+              <p className="text-[12px] text-ink-3">
+                {probe.noPeersYet
+                  ? 'No peers found yet, still looking…'
+                  : askingYoutube
+                    ? 'Asking YouTube about this video… it can take a minute.'
+                    : 'Checking the link…'}
+              </p>
+            )}
+            {probe.status === 'error' && (
+              <p className="flex items-start gap-1.5 text-[12px] leading-snug text-destructive">
+                <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
+                {probe.message}
+              </p>
             )}
           </div>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button type="button" variant="secondary" onClick={handleOpenFile} className="h-9">
-                  <FolderOpen data-icon="inline-start" />
-                  Open file
-                </Button>
-              }
-            />
-            <TooltipContent>Open a .torrent or .nzb file</TooltipContent>
-          </Tooltip>
         </div>
 
         {shownLink?.from && (
-          <div className="flex h-6 items-center gap-1.5 self-start rounded-full border-[0.5px] border-[var(--color-wifi-border)] bg-[var(--color-wifi-bg)] px-2.5 text-[12px] font-medium text-[var(--color-wifi-text)]">
+          <p className="flex items-center gap-1.5 self-start rounded-full bg-sunken px-2.5 py-1 text-[12px] font-[560] text-ink-2 shadow-[inset_0_0_0_1px_var(--border)]">
             {shownLink.signedInTo ? (
               <Lock aria-hidden className="size-3" />
             ) : (
@@ -536,14 +585,14 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               shownLink.signedInTo && `with your ${shownLink.signedInTo} sign-in`
             ]
               .filter(Boolean)
-              .join(' · ')}
-          </div>
+              .join(', ')}
+          </p>
         )}
 
         {shownLink?.resumes && (
-          <div className="flex items-center gap-3 rounded-lg border-[0.5px] border-border bg-card px-3 py-2 text-[12.5px]">
+          <div className="flex items-center gap-3 rounded-[12px] bg-sunken px-3 py-2.5 text-[12.5px] shadow-[inset_0_0_0_1px_var(--border-subtle)]">
             <span className="min-w-0 flex-1">
-              Same file as <span className="font-medium">{shownLink.resumes.fileName}</span>, which
+              Same file as <span className="font-[600]">{shownLink.resumes.fileName}</span>, which
               failed. Resume that instead?
             </span>
             <Button
@@ -558,38 +607,38 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           </div>
         )}
 
-        {probe.status === 'probing' && (
-          <div className="font-mono text-[11.5px] text-muted-foreground">
-            {probe.noPeersYet
-              ? 'No peers found yet, still looking…'
-              : askingYoutube
-                ? 'Asking YouTube about this video… it can take a minute.'
-                : 'Checking the link…'}
-          </div>
-        )}
-        {probe.status === 'error' && (
-          <div className="flex items-center gap-2 text-[12.5px] text-[var(--color-danger)]">
-            <AlertTriangle className="size-4 shrink-0" />
-            {probe.message}
-          </div>
-        )}
-
         {ready && (
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
-              {(torrent && torrent.files.length > 1) || nzb ? (
-                'DIR'
-              ) : youtube ? (
-                <Film aria-hidden className="size-4" strokeWidth={1.75} />
-              ) : stream ? (
-                stream.protocol.toUpperCase()
-              ) : (
-                fileExtensionBadge(fileName)
+          <div className="flex items-center gap-3 rounded-[12px] bg-sunken p-3 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
+            <span
+              aria-hidden
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-card text-ink-2 shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              <PreviewIcon className="size-[48%]" strokeWidth={1.75} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              {/* Where it comes from, when its name doesn't say, as the list's rows tag it. */}
+              {(torrent || nzb || stream) && (
+                <span className="flex flex-wrap gap-1.5">
+                  <Badge>
+                    {torrent ? (
+                      <Magnet aria-hidden />
+                    ) : nzb ? (
+                      <Newspaper aria-hidden />
+                    ) : (
+                      <Film aria-hidden />
+                    )}
+                    {torrent
+                      ? 'Torrent'
+                      : nzb
+                        ? 'Usenet'
+                        : stream!.protocol === 'youtube'
+                          ? 'YouTube'
+                          : stream!.protocol.toUpperCase()}
+                  </Badge>
+                </span>
               )}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
               {torrent ? (
-                <div className="truncate text-[14px] font-medium">{ready.suggestedFileName}</div>
+                <p className="truncate text-[13.5px] font-[600]">{ready.suggestedFileName}</p>
               ) : (
                 <input
                   type="text"
@@ -597,10 +646,10 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                   onChange={(event) => setFileNameOverride(event.target.value)}
                   aria-label="File name"
                   spellCheck={false}
-                  className="min-w-0 rounded-md border border-transparent bg-transparent px-1 -ml-1 text-[14px] font-medium outline-none hover:border-input focus:border-input"
+                  className="-ml-1 min-w-0 rounded-[6px] bg-transparent px-1 text-[13.5px] font-[600] outline-none hover:shadow-[inset_0_0_0_1px_var(--control)] focus-visible:shadow-[inset_0_0_0_1px_var(--control)]"
                 />
               )}
-              <div className="font-mono text-[11.5px] text-muted-foreground">
+              <p className="text-[12px] text-ink-2">
                 {[
                   torrent && describeFileCount(chosenFiles.length, torrent.files.length),
                   nzb && describeFileCount(nzb.files.length, nzb.files.length),
@@ -619,8 +668,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                       : 'resumable')
                 ]
                   .filter(Boolean)
-                  .join(' · ')}
-              </div>
+                  .join(', ')}
+              </p>
             </div>
           </div>
         )}
@@ -634,194 +683,222 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         )}
 
         {qualities.length > 1 && (
-          <div className="flex items-start gap-3">
-            <div className={cn(labelClass, 'pt-1')} id="new-download-quality">
+          <div className={ROW}>
+            <span className={FIELD_LABEL} id="new-download-quality">
               Quality
-            </div>
+            </span>
             <ToggleGroup
               value={quality === undefined ? [] : [quality]}
               onValueChange={(values) => {
                 if (values.length > 0) setQualityChoice(values[0])
               }}
               aria-labelledby="new-download-quality"
-              variant="pill"
-              size="xs"
-              spacing={1}
-              className="min-w-0 flex-1 flex-wrap"
+              variant="outline"
+              orientation="vertical"
+              spacing={0}
+              className="w-full gap-0.5 rounded-[12px]"
             >
-              {qualities.map((option) => (
-                // h-6: WCAG 2.5.8's 24px floor, as the Streams row's pills.
-                <ToggleGroupItem key={option.id} value={option.id} className="h-6 min-w-6 px-2">
-                  {option.label}
-                </ToggleGroupItem>
-              ))}
+              {qualities.map((option) => {
+                const bytes = stream?.variants.find((variant) => variant.id === option.id)?.bytes
+                return (
+                  <ToggleGroupItem
+                    key={option.id}
+                    value={option.id}
+                    className="group/quality h-8 w-full justify-start gap-3 rounded-[10px] px-2.5 text-[13px] shadow-none hover:bg-hover aria-pressed:bg-selected aria-pressed:shadow-none data-pressed:bg-selected data-pressed:shadow-none"
+                  >
+                    <span
+                      aria-hidden
+                      className="grid size-4 place-items-center rounded-full shadow-[inset_0_0_0_1.5px_var(--control)] group-aria-pressed/quality:bg-primary group-aria-pressed/quality:shadow-none"
+                    >
+                      <span className="hidden size-1.5 rounded-full bg-[var(--color-accent-onsolid)] group-aria-pressed/quality:block" />
+                    </span>
+                    <span className="flex-1 text-left font-[580]">{option.label}</span>
+                    {bytes !== undefined && (
+                      <span className="figures text-ink-2">{formatBytes(bytes)}</span>
+                    )}
+                  </ToggleGroupItem>
+                )
+              })}
             </ToggleGroup>
           </div>
         )}
 
         {nzb && server !== undefined && (
-          <div className="flex items-center gap-3">
-            <div className={labelClass}>Server</div>
-            {server ? (
-              <div className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
-                {server.host}
-                <span className="text-muted-foreground">
-                  {' '}
-                  · {server.connections} {server.connections === 1 ? 'connection' : 'connections'}
+          <div className={ROW}>
+            <span className={FIELD_LABEL}>Server</span>
+            <div className="flex min-w-0 items-center gap-2">
+              {server ? (
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
+                  {server.host}
+                  <span className="text-ink-3">
+                    , {server.connections} {server.connections === 1 ? 'connection' : 'connections'}
+                  </span>
                 </span>
-              </div>
-            ) : (
-              <div className="flex min-w-0 flex-1 items-center gap-2 text-[12.5px] text-[var(--color-usb-text)]">
-                <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
-                Set up your news server to download this NZB.
-              </div>
-            )}
-            <Button type="button" variant="secondary" size="sm" onClick={() => setServerOpen(true)}>
-              {server ? 'Change' : 'Set up'}
-            </Button>
+              ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[12.5px] text-[var(--color-warning)]">
+                  <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
+                  Set up your news server to download this NZB.
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setServerOpen(true)}
+              >
+                {server ? 'Change' : 'Set up'}
+              </Button>
+            </div>
           </div>
         )}
 
-        <div className="flex items-center gap-3">
-          <div className={labelClass}>Save to</div>
-          <div className="flex min-w-0 flex-1 items-baseline gap-2 truncate font-mono text-[12.5px]">
-            <span className="truncate">{toDisplayPath(destinationDir, homeDir)}</span>
-            {availableFreeSpace !== null && (
-              <span
-                className={cn(
-                  'shrink-0 text-[11.5px] tabular-nums',
-                  hasInsufficientSpace
-                    ? 'font-medium text-[var(--color-danger)]'
-                    : 'text-muted-foreground'
-                )}
-              >
-                ({formatBytes(availableFreeSpace)} free)
-              </span>
-            )}
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={handleBrowse}>
-            Change
-          </Button>
-        </div>
-
-        <div className="flex items-start gap-3">
-          <div className={cn(labelClass, 'pt-1.5')} id="new-download-networks">
+        <div className={ROW}>
+          <span className={FIELD_LABEL} id="new-download-networks">
             Networks
-          </div>
-          <div
-            role="group"
-            aria-labelledby="new-download-networks"
-            className="flex min-w-0 flex-1 flex-wrap gap-1.5"
-          >
-            {interfaces.length === 0 && (
-              <NetworkListNotice
-                status={interfacesStatus}
-                error={interfacesError}
-                onScan={() => void loadInterfaces()}
-              />
+          </span>
+          <div className="flex min-w-0 flex-col gap-2">
+            <div
+              role="group"
+              aria-labelledby="new-download-networks"
+              className="flex flex-wrap gap-2"
+            >
+              {interfaces.length === 0 && (
+                <NetworkListNotice
+                  status={interfacesStatus}
+                  error={interfacesError}
+                  onScan={() => void loadInterfaces()}
+                />
+              )}
+              {interfaces.map((iface) => {
+                const visual = networkVisual(iface.id, iface.kind, iface.displayName)
+                const selected = selectedInterfaceIds.includes(iface.id)
+                const reached = isReached(iface.id)
+                const preference = networkPreferences[iface.id]
+                const speedLimit = preference?.speedLimit
+                const proxy = preference?.proxy
+                const isProxyActive = Boolean(proxy?.enabled && proxy.host)
+                // What's worth knowing before it's picked: it can't be, or it's capped.
+                const note = reached
+                  ? 'Data limit reached'
+                  : speedLimit !== undefined
+                    ? `Limited to ${formatSpeedLimit(speedLimit)}`
+                    : null
+
+                const toggleButton = (
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    // Not `disabled`: a disabled button never gets the hover that says why.
+                    aria-disabled={reached || undefined}
+                    onClick={() => handleToggleInterface(iface.id)}
+                    className={cn(
+                      'flex min-w-0 items-center gap-2 rounded-full py-1 pr-1 pl-1 outline-none',
+                      reached && 'cursor-not-allowed line-through'
+                    )}
+                  >
+                    <NetworkTile
+                      kind={iface.kind}
+                      color={visual.solid}
+                      onColor={visual.onSolid}
+                      size={26}
+                      dim={!selected}
+                    />
+                    <span className="truncate font-[580]">{visual.name}</span>
+                    <span className="font-mono text-[11px] text-ink-3">{iface.id}</span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'grid size-4 shrink-0 place-items-center rounded-[5px]',
+                        selected
+                          ? 'bg-primary text-primary-foreground'
+                          : 'shadow-[inset_0_0_0_1.5px_var(--control)]'
+                      )}
+                    >
+                      {selected && <Check className="size-3" strokeWidth={3} />}
+                    </span>
+                  </button>
+                )
+
+                return (
+                  <div
+                    key={iface.id}
+                    className={cn(
+                      'flex h-9 max-w-full items-center gap-0.5 rounded-full pr-1.5 text-[13px] transition-colors duration-100 has-[button[aria-pressed]:focus-visible]:outline-2 has-[button[aria-pressed]:focus-visible]:outline-offset-2 has-[button[aria-pressed]:focus-visible]:outline-ring',
+                      selected
+                        ? 'bg-selected shadow-[inset_0_0_0_1px_var(--border-strong)]'
+                        : 'shadow-[inset_0_0_0_1px_var(--border)] hover:bg-hover',
+                      reached && 'opacity-50'
+                    )}
+                  >
+                    {note === null ? (
+                      toggleButton
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger render={toggleButton} />
+                        <TooltipContent>{note}</TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    <NetworkEditPopover
+                      interfaceId={iface.id}
+                      interfaceKind={iface.kind}
+                      osName={iface.displayName}
+                      defaultFocusProxy={true}
+                      trigger={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          aria-label={
+                            isProxyActive
+                              ? `Configure proxy (${proxy!.type.toUpperCase()}) or edit ${visual.name}`
+                              : `Configure proxy or edit ${visual.name}`
+                          }
+                          className={cn(
+                            'h-6 shrink-0 gap-1 rounded-full px-2 text-[11.5px]',
+                            isProxyActive && 'bg-sunken font-[620] text-foreground'
+                          )}
+                        >
+                          <Pencil aria-hidden className="size-3" />
+                          {isProxyActive ? `Proxy, ${proxy!.type.toUpperCase()}` : 'Proxy'}
+                        </Button>
+                      }
+                      tooltip={
+                        isProxyActive
+                          ? `Proxy on (${proxy!.type.toUpperCase()}, ${proxy!.host}:${proxy!.port}). Click to change it.`
+                          : `Configure proxy or edit ${visual.name}`
+                      }
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            {subnetConflict && (
+              <Note tone="warning">
+                {subnetConflict.names.join(' and ')} share a subnet ({subnetConflict.subnet}), so
+                the computer sends both down one route and they can’t be combined.
+              </Note>
             )}
-            {interfaces.map((iface) => {
-              const visual = networkVisual(iface.id, iface.kind, iface.displayName)
-              const selected = selectedInterfaceIds.includes(iface.id)
-              const reached = isReached(iface.id)
-              const preference = networkPreferences[iface.id]
-              const speedLimit = preference?.speedLimit
-              const proxy = preference?.proxy
-              const isProxyActive = Boolean(proxy?.enabled && proxy.host)
-              // What's worth knowing before it's picked: it can't be, or it's capped.
-              const note = reached
-                ? 'Data limit reached'
-                : speedLimit !== undefined
-                  ? `Limited to ${formatSpeedLimit(speedLimit)}`
-                  : null
-
-              const toggleButton = (
-                <button
-                  type="button"
-                  aria-pressed={selected}
-                  // Not `disabled`: a disabled button never gets the hover that says why.
-                  aria-disabled={reached || undefined}
-                  onClick={() => handleToggleInterface(iface.id)}
-                  className={cn(
-                    'flex items-center gap-1.5 focus-visible:outline-none cursor-pointer select-none py-1',
-                    reached && 'cursor-not-allowed line-through'
-                  )}
-                >
-                  <span
-                    className="size-2 rounded-full shrink-0"
-                    style={{ background: visual.solid }}
-                  />
-                  <span className="truncate">{visual.name}</span>
-                </button>
-              )
-
-              return (
-                <div
-                  key={iface.id}
-                  className={cn(
-                    'group/chip inline-flex h-7 items-center rounded-full border text-[12.5px] transition-colors pl-2.5 pr-1 gap-1',
-                    selected
-                      ? 'border-transparent'
-                      : 'border-border text-[var(--text-secondary)] opacity-70',
-                    reached && 'opacity-50'
-                  )}
-                  style={
-                    selected ? { background: visual.bg, borderColor: visual.border } : undefined
-                  }
-                >
-                  {note === null ? (
-                    toggleButton
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger render={toggleButton} />
-                      <TooltipContent>{note}</TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  <NetworkEditPopover
-                    interfaceId={iface.id}
-                    interfaceKind={iface.kind}
-                    osName={iface.displayName}
-                    defaultFocusProxy={true}
-                    trigger={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        aria-label={
-                          isProxyActive
-                            ? `Configure proxy (${proxy!.type.toUpperCase()}) or edit ${visual.name}`
-                            : `Configure proxy or edit ${visual.name}`
-                        }
-                        className={cn(
-                          'h-5 px-1.5 rounded-full text-muted-foreground hover:text-foreground shrink-0 gap-1 flex items-center font-mono text-[9px] uppercase tracking-[0.04em]',
-                          isProxyActive
-                            ? 'font-semibold text-foreground bg-foreground/10 hover:bg-foreground/15'
-                            : 'hover:bg-foreground/10'
-                        )}
-                      >
-                        {isProxyActive ? (
-                          <>
-                            <span>PROXY · {proxy!.type}</span>
-                            <Pencil className="size-2.5 opacity-70" />
-                          </>
-                        ) : (
-                          <>
-                            <Pencil className="size-2.5 opacity-70" />
-                            <span className="capitalize font-sans text-[10.5px]">Proxy</span>
-                          </>
-                        )}
-                      </Button>
-                    }
-                    tooltip={
-                      isProxyActive
-                        ? `Proxy active (${proxy!.type.toUpperCase()} · ${proxy!.host}:${proxy!.port}) — click to configure`
-                        : `Configure proxy or edit ${visual.name}`
-                    }
-                  />
-                </div>
-              )
-            })}
+            {usedUpPick.length > 0 && (
+              <Note tone="warning">
+                {usedUpPick
+                  .map((iface) => networkVisual(iface.id, iface.kind, iface.displayName).name)
+                  .join(' and ')}{' '}
+                {usedUpPick.length === 1 ? 'has' : 'have'} reached{' '}
+                {usedUpPick.length === 1 ? 'its' : 'their'} data limit. Choose another network for
+                this download.
+              </Note>
+            )}
+            {interfaces.length > 0 && availableIds.length === 0 && (
+              <Note tone="warning">
+                Every network has reached its data limit. Raise one in Speed &amp; data limits.
+              </Note>
+            )}
+            {isSingleStreamOnly && selectedInterfaceIds.length === 1 && interfaces.length > 1 && (
+              <p className="text-[12px] text-ink-3">
+                This download uses one connection on one network.
+              </p>
+            )}
           </div>
         </div>
 
@@ -829,84 +906,77 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             video's segment requests are shared out by the app, and an unsplittable file has one
             stream. */}
         {ready && !torrent && !nzb && !stream && !isSingleStreamOnly && (
-          <div className="flex items-center gap-3">
-            <div className={labelClass} id="new-download-streams">
+          <div className={ROW}>
+            <span className={FIELD_LABEL} id="new-download-streams">
               Streams
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <ToggleGroup
+                value={[String(streamsChoice)]}
+                onValueChange={(values) => {
+                  if (values.length === 0) return
+                  setStreamsChoice(values[0] === 'auto' ? 'auto' : Number(values[0]))
+                }}
+                aria-labelledby="new-download-streams"
+              >
+                {STREAMS_CHOICES.map((choice) => (
+                  <ToggleGroupItem key={choice} value={String(choice)}>
+                    {choice === 'auto' ? 'Auto' : choice}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <span className="text-[12px] text-ink-3">per network</span>
             </div>
-            <ToggleGroup
-              value={[String(streamsChoice)]}
-              onValueChange={(values) => {
-                if (values.length === 0) return
-                setStreamsChoice(values[0] === 'auto' ? 'auto' : Number(values[0]))
-              }}
-              aria-labelledby="new-download-streams"
-              variant="pill"
-              size="xs"
-              spacing={1}
-            >
-              {STREAMS_CHOICES.map((choice) => (
-                // h-6/min-w-6: WCAG 2.5.8's 24px floor — the xs toggle size is 20px.
-                <ToggleGroupItem key={choice} value={String(choice)} className="h-6 min-w-6 px-2">
-                  {choice === 'auto' ? 'Auto' : choice}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <div className="font-mono text-[11px] text-muted-foreground">per network</div>
           </div>
         )}
 
-        {subnetConflict && (
-          <div className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-usb-text)]">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {subnetConflict.names.join(' and ')} share a subnet ({subnetConflict.subnet}), so the
-            computer sends both down one route and they can’t be combined.
+        <div className={ROW}>
+          <span className={FIELD_LABEL}>Save to</span>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <HardDrive aria-hidden className="size-3.5 shrink-0 text-ink-3" />
+              <span className="min-w-0 truncate font-mono text-[12.5px]">
+                {toDisplayPath(destinationDir, homeDir)}
+              </span>
+              {availableFreeSpace !== null && (
+                <span
+                  className={cn(
+                    'figures shrink-0 text-[12px]',
+                    hasInsufficientSpace ? 'font-[620] text-destructive' : 'text-ink-3'
+                  )}
+                >
+                  ({formatBytes(availableFreeSpace)} free)
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="ml-auto"
+                onClick={handleBrowse}
+              >
+                Change
+              </Button>
+            </div>
+            {hasInsufficientSpace && (
+              <Note tone="danger" alert>
+                Not enough disk space: this download needs {formatBytes(sizeToFetch)}, but only{' '}
+                {formatBytes(availableFreeSpace)} is free on this drive.
+              </Note>
+            )}
           </div>
-        )}
-        {hasInsufficientSpace && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-danger)]"
-          >
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              Not enough disk space: this download needs {formatBytes(sizeToFetch)}, but only{' '}
-              {formatBytes(availableFreeSpace)} is free on this drive.
-            </span>
-          </div>
-        )}
-        {usedUpPick.length > 0 && (
-          <div className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-usb-text)]">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {usedUpPick
-              .map((iface) => networkVisual(iface.id, iface.kind, iface.displayName).name)
-              .join(' and ')}{' '}
-            {usedUpPick.length === 1 ? 'has' : 'have'} reached{' '}
-            {usedUpPick.length === 1 ? 'its' : 'their'} data limit. Choose another network for this
-            download.
-          </div>
-        )}
-        {interfaces.length > 0 && availableIds.length === 0 && (
-          <div className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-usb-text)]">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            Every network has reached its data limit. Raise one in Speed &amp; data limits.
-          </div>
-        )}
-        {isSingleStreamOnly && selectedInterfaceIds.length === 1 && interfaces.length > 1 && (
-          <div className="text-[12px] text-muted-foreground">
-            This download uses one connection on one network.
-          </div>
-        )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t-[0.5px] border-border px-4 py-2">
+      <div className="flex items-center gap-2 border-t border-rule bg-popover px-5 py-3">
         {startError ? (
-          <div className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--color-danger)]">
+          <p role="alert" className="min-w-0 flex-1 truncate text-[12.5px] text-destructive">
             {startError}
-          </div>
+          </p>
         ) : (
           <div className="flex-1" />
         )}
-        <Button type="button" variant="secondary" onClick={onDone}>
+        <Button type="button" variant="ghost" onClick={onDone}>
           Cancel
         </Button>
         <Button type="submit" disabled={!canStart}>
@@ -921,5 +991,29 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         onSaved={setServer}
       />
     </form>
+  )
+}
+
+/** A warning or a problem under a field, said beside an icon. */
+function Note({
+  tone,
+  alert = false,
+  children
+}: {
+  tone: 'warning' | 'danger'
+  alert?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <p
+      role={alert ? 'alert' : undefined}
+      className={cn(
+        'flex items-start gap-1.5 text-[12px] leading-snug',
+        tone === 'danger' ? 'text-destructive' : 'text-[var(--color-warning)]'
+      )}
+    >
+      <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
+      <span>{children}</span>
+    </p>
   )
 }

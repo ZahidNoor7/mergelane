@@ -139,18 +139,17 @@ test.describe('YouTube downloads @smoke', () => {
     const low = quality.getByRole('button', { name: '120p' })
     await expect(best).toHaveAttribute('aria-pressed', 'true')
     // Only qualities Mergelane may download: not the DRM ones (480p, 720p).
-    await expect(quality.getByRole('button')).toHaveText(['240p', '120p'])
+    // Each with its size beside it.
+    await expect(quality.getByRole('button')).toHaveText([/^240p/, /^120p/])
     await expect(page.getByRole('textbox', { name: 'File name' })).toHaveValue('Test card')
     const sizes = await mediaSizes()
     const sizeText = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KB`
-    await expect(
-      page.getByText(sizeText(sizes['v240.mp4'] + sizes['a.m4a']), { exact: false })
-    ).toBeVisible()
+    // The size of what will be fetched, in the summary under the name.
+    const summary = (bytes: number): RegExp => new RegExp(`${sizeText(bytes)}, from YouTube`)
+    await expect(page.getByText(summary(sizes['v240.mp4'] + sizes['a.m4a']))).toBeVisible()
     await expect(page.getByText('from YouTube', { exact: false })).toBeVisible()
     await low.click()
-    await expect(
-      page.getByText(sizeText(sizes['v120.mp4'] + sizes['a.m4a']), { exact: false })
-    ).toBeVisible()
+    await expect(page.getByText(summary(sizes['v120.mp4'] + sizes['a.m4a']))).toBeVisible()
     // Slow enough for its own screen to be seen while it downloads, with the source beside its
     // name.
     server.delayMs = 150

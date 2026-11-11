@@ -38,9 +38,13 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  sheet = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** The final design's sheet (prototype.html, NewDownloadSheet): hung from near the top of the
+   * window, 600px wide, sliding down into place as it fades in, and back up as it goes. */
+  sheet?: boolean
 }): React.JSX.Element {
   return (
     <DialogPortal>
@@ -48,7 +52,10 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-[var(--shadow-sheet)] duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed left-1/2 z-50 grid -translate-x-1/2 gap-4 bg-popover text-sm text-popover-foreground shadow-[var(--shadow-sheet)] outline-none',
+          sheet
+            ? 'top-[60px] max-h-[calc(100%-76px)] w-[min(600px,calc(100%-32px))] translate-y-0 rounded-[16px] transition-[translate,opacity] duration-[320ms] ease-[cubic-bezier(0.2,0.9,0.25,1)] data-ending-style:-translate-y-4 data-ending-style:opacity-0 data-ending-style:duration-200 data-ending-style:ease-in data-starting-style:-translate-y-4 data-starting-style:opacity-0'
+            : 'top-1/2 w-full max-w-[calc(100%-2rem)] -translate-y-1/2 rounded-xl p-4 duration-100 sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className
         )}
         {...props}

@@ -15,7 +15,24 @@ export const COVERED = [
   'src/shared/themes.ts',
   'src/renderer/src/theme/appearance.ts',
   'src/renderer/src/hooks/usePrefersDark.ts',
-  'src/renderer/src/components/ThemeToggle.tsx'
+  'src/renderer/src/components/ThemeToggle.tsx',
+  // M3.1 pull request 3: the basic controls.
+  ...[
+    'alert',
+    'alert-dialog',
+    'badge',
+    'button',
+    'checkbox',
+    'context-menu',
+    'dialog',
+    'dropdown-menu',
+    'input',
+    'input-group',
+    'popover',
+    'textarea',
+    'toggle',
+    'toggle-group'
+  ].map((name) => `src/renderer/src/components/ui/${name}.tsx`)
 ]
 
 export default defineConfig({

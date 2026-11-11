@@ -112,7 +112,7 @@ test.describe('a torrent through the UI', () => {
         page.getByRole('progressbar', { name: 'Download progress', exact: true })
       ).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
-      await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
+      await expect(page.getByText(/^\d+ pieces of about /)).toBeVisible()
       // Each network's upload, even before anything is sent; nothing at the top. A peer that has
       // sent nothing carries no upload line, and no arrows: a lone download figure needs none.
       await expect(page.getByText(/^UP \d/)).toHaveCount(0)
@@ -215,7 +215,7 @@ test.describe('UI journeys @smoke', () => {
     await expect(page.getByRole('columnheader', { name: 'Progress', exact: true })).toBeVisible()
     // An HTTP download's connections are streams, and its blocks chunks.
     await expect(page.getByRole('button', { name: /^\d+ streams?/ }).first()).toBeVisible()
-    await expect(page.getByText(/^\d+ chunks · /)).toBeVisible()
+    await expect(page.getByText(/^\d+ chunks of about /)).toBeVisible()
     origin.release()
     await page.getByRole('button', { name: 'Resume' }).click()
 

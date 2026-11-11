@@ -2,25 +2,21 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { THEMES, type ThemeSeeds } from '@shared/themes'
-import { contrast, mix, parseHex } from '../test/colour'
+import { NETWORK_SWATCHES, THEMES, type ThemeSeeds } from '@shared/themes'
+import { contrast, mix, parseHex } from '@shared/colour'
 
 // Every theme, in light and dark, checked the way assets/main.css derives its colours (the same
 // color-mix formulas), against WCAG 2: text 4.5:1, controls and graphics 3:1 (1.4.3, 1.4.11).
 
 const DANGER = { light: '#BB2F28', dark: '#FF8B82' }
 const WARNING = { light: '#8F5300', dark: '#F0B35E' }
-// main.css's swatches: [light, light glyph, dark, dark glyph].
-const SWATCHES: Record<string, [string, string, string, string]> = {
-  teal: ['#1F8A70', '#FFFFFF', '#4EA89A', '#10201D'],
-  amber: ['#D97706', '#FFFFFF', '#D8A44C', '#221806'],
-  steel: ['#4F64A5', '#FFFFFF', '#7E93BD', '#141A26'],
-  rose: ['#B5525A', '#FFFFFF', '#C97B7B', '#210F0F'],
-  violet: ['#6C5AC4', '#FFFFFF', '#9C8FD6', '#17131F'],
-  lime: ['#5B8A1E', '#FFFFFF', '#A3C66A', '#161F0D'],
-  cyan: ['#0E7D93', '#FFFFFF', '#6DB8C9', '#0D1A1E'],
-  coral: ['#C4572A', '#FFFFFF', '#D99168', '#241209']
-}
+// The pickable network colours (shared/themes.ts): [light, light glyph, dark, dark glyph].
+const SWATCHES = Object.fromEntries(
+  NETWORK_SWATCHES.map((swatch) => [
+    swatch.id,
+    [swatch.light, swatch.lightOn, swatch.dark, swatch.darkOn] as [string, string, string, string]
+  ])
+)
 
 const pct = (value: string | undefined, fallback: number): number =>
   value ? parseFloat(value) : fallback

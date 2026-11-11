@@ -14,6 +14,13 @@ All notable changes to Mergelane are recorded here. The format follows
 - A new app icon: the blue Mergelane mark on a charcoal tile.
 - Buttons, switches, fields, checkboxes, tags, menus and dialogs take the new look: capsule controls and a clearer
   focus outline.
+- The chunk map, the download list's progress bars and the speed charts take the new look. The chunk map and the
+  speed chart can be read with the keyboard: focus them and use the arrow keys.
+
+### Fixed
+
+- Two networks of the same kind, or a network with no known kind, could get colours that look alike (for example,
+  two teals in the Porcelain theme). An extra network now skips colours close to the theme's network colours.
 - On a new install, Mergelane follows the Mac's light or dark appearance. A light or dark choice you made before
   stays.
 

@@ -1,6 +1,8 @@
 import type { NetworkInterfaceKind } from '@shared/types'
+import { themeNetworkColours } from '@shared/themes'
 import { useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { usePrefersDark } from './usePrefersDark'
 import { assignNetworkColors, resolveNetworkVisual, type NetworkVisual } from '../theme'
 
 export type ResolveNetworkVisual = (
@@ -34,11 +36,18 @@ function knownNetworks(store: ReturnType<typeof useAppStore.getState>): string {
 export function useNetworkVisuals(): ResolveNetworkVisual {
   const known = useAppStore(knownNetworks)
   const preferences = useAppStore((store) => store.networkPreferences)
+  // The theme's network colours in the current mode, which an extra network's colour must not
+  // look like (assignNetworkColors).
+  const theme = useAppStore((store) => store.appearanceTheme)
+  const dark = usePrefersDark()
 
   return useMemo(() => {
     const networks = new Map<string, NetworkInterfaceKind>(JSON.parse(known))
-    const colors = assignNetworkColors(networks, preferences)
+    const colors = assignNetworkColors(networks, preferences, {
+      dark,
+      colours: themeNetworkColours(theme, dark)
+    })
     return (id, kind, osName) =>
       resolveNetworkVisual(kind, osName, preferences[id], colors.get(id) ?? 'teal')
-  }, [known, preferences])
+  }, [known, preferences, theme, dark])
 }

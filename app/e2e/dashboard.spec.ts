@@ -151,7 +151,9 @@ test.describe('Dashboard @smoke', () => {
     await expect(row).toContainText(/[\d.]+ [KM]B\/s/)
     await expect(page.getByText(/^ACTIVE\s*1$/)).toBeVisible()
     await expect(
-      page.getByRole('img', { name: /^Combined throughput over the last minute\. Currently / })
+      page.getByRole('img', {
+        name: /^Merged throughput over the last minute, split by network\. Now /
+      })
     ).toBeVisible()
 
     // The network carrying it says how fast; the hero's chart now has something to draw.

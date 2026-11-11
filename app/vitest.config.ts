@@ -32,7 +32,14 @@ export const COVERED = [
     'textarea',
     'toggle',
     'toggle-group'
-  ].map((name) => `src/renderer/src/components/ui/${name}.tsx`)
+  ].map((name) => `src/renderer/src/components/ui/${name}.tsx`),
+  // M3.1 pull request 4a: the chunk map, split bar, speed chart and sparkline.
+  ...['BlockGrid', 'SplitBar', 'ThroughputChart', 'Sparkline'].map(
+    (name) => `src/renderer/src/components/${name}.tsx`
+  ),
+  // Networks' colours kept apart from the theme's (theme.ts assignNetworkColors).
+  'src/shared/colour.ts',
+  'src/renderer/src/hooks/useNetworkVisuals.ts'
 ]
 
 export default defineConfig({

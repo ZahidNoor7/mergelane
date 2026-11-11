@@ -1,9 +1,10 @@
-// Test helper: the colour maths CSS uses, so tests can check what assets/main.css derives.
+// The colour maths CSS uses: the contrast tests check what assets/main.css derives with it, and the
+// renderer uses the Oklab distance to keep networks' colours apart (theme.ts assignNetworkColors).
 // color-mix(in oklab, A p%, B) interpolates A and B in Oklab (CSS Color 5); Oklab is Björn
 // Ottosson's, as CSS Color 4 defines it. Contrast is WCAG 2's relative-luminance ratio. Results are
 // clamped to sRGB, which is all a mix of two sRGB colours can need here.
 
-type Rgb = [number, number, number]
+export type Rgb = [number, number, number]
 
 const toLinear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
 const fromLinear = (c: number): number =>
@@ -55,4 +56,12 @@ function luminance(rgb: Rgb): number {
 export function contrast(a: Rgb, b: Rgb): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((p, q) => q - p)
   return (hi + 0.05) / (lo + 0.05)
+}
+
+/** How far apart two colours look: their straight-line distance in Oklab (0 is the same colour;
+ * black to white is 1). */
+export function oklabDistance(a: string, b: string): number {
+  const x = toOklab(parseHex(a))
+  const y = toOklab(parseHex(b))
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2])
 }

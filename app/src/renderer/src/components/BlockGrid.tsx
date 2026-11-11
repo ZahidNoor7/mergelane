@@ -1,7 +1,7 @@
 import type { DownloadUnitState } from '@shared/types'
 import { cn } from 'cn'
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { formatBytes, type NetworkGroup } from '../utils/format'
@@ -22,24 +22,24 @@ import { formatBytes, type NetworkGroup } from '../utils/format'
 // grid scrolls instead of growing without bound or shrinking its squares: keeping the squares at
 // a fixed size is what keeps them the same unit of meaning on every download, and the scroll
 // height is what a multi-gigabyte file's chunk count honestly looks like.
-const TARGET_CELL_PX = 12
-const CELL_GAP_PX = 3
-const CELL_HEIGHT_PX = 13
+// The final design's chunk map (design-system/mergelane/redesign/prototype.html, LaneMap): each chunk
+// is a capsule dash like a lane marking, 6px tall in a 14px row, about 14px wide with 4px gaps.
+const TARGET_CELL_PX = 14
+const CELL_GAP_PX = 4
+const CELL_HEIGHT_PX = 14
+const DASH_HEIGHT_PX = 6
 const MIN_COLS = 8
 // Rows visible before the grid starts scrolling: few enough that the network table below keeps
 // room for its rows at the window's minimum height.
 const MAX_VISIBLE_ROWS = 4
-// Room for the hover outline (1.5px, offset 1) so it isn't clipped against the scroll edges.
-const GRID_INSET_PX = 3
+// Room for the pointed-at outline (2px, offset 2) so it isn't clipped against the scroll edges.
+const GRID_INSET_PX = 4
 // Rows drawn beyond the visible ones on each side, so a scroll doesn't show blank rows first.
 const BUFFER_ROWS = 2
 
-// A cell whose bytes can't be traced to a network must not borrow a network's color: the brand
-// amber IS the USB network's color (--color-accent and --color-usb are the same hex), so the old
-// accent fallback rendered every unattributed cell as though the USB network had downloaded it.
-// Unknown provenance reads as neutral gray instead, which is honest and impossible to misread.
+// A cell whose bytes can't be traced to a network must not borrow a network's colour: unknown
+// provenance reads as neutral ink instead, which is honest and impossible to misread.
 const UNATTRIBUTED_SOLID = 'var(--text-tertiary)'
-const UNATTRIBUTED_BG = 'var(--track-bg)'
 
 /** One network's share of a cell's downloaded bytes. */
 interface CellSegment {
@@ -150,7 +150,7 @@ function describeContributors(
   const total = named.reduce((sum, entry) => sum + entry.bytes, 0)
   return named
     .map((entry) => `${entry.name} ${Math.round((entry.bytes / total) * 100)}%`)
-    .join(' · ')
+    .join(', ')
 }
 
 interface BlockGridProps {
@@ -180,7 +180,9 @@ export function BlockGrid({
   const segments = blocks?.[0]?.kind === 'stream'
   const unit = pieces ? 'Piece' : articles ? 'Article' : segments ? 'Segment' : 'Chunk'
   const [gridWidth, setGridWidth] = useState(0)
+  // The chunk pointed at, by the mouse or by the arrow keys: what the readout describes.
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const readoutId = useId()
   const observerRef = useRef<ResizeObserver | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   // How far the grid is scrolled: which rows are in view, for the way to what's active (below).
@@ -264,58 +266,92 @@ export function BlockGrid({
       })
     }
 
-    // Hovering reads out into the legend line rather than a native `title` tooltip: the grid
-    // re-renders on every progress push, which resets Chromium's tooltip timer so it never
-    // appears on an active block — and a tooltip advertises nothing to hover in the first place.
+    // Pointing reads out below the map rather than in a native `title` tooltip: the grid re-renders
+    // on every progress push, which resets Chromium's tooltip timer so it never appears on an active
+    // block — and a tooltip advertises nothing to point at in the first place.
     const hoveredCell =
       hoveredIndex !== null && blocks[hoveredIndex]
         ? describeBlocks([blocks[hoveredIndex]], orderedInterfaceIds, hoveredIndex)[0]
         : undefined
     let readout: string
     if (hoveredCell) {
+      const contributors = describeContributors(hoveredCell, visualByInterfaceId)
       const where =
-        describeContributors(hoveredCell, visualByInterfaceId) ??
-        (hoveredCell.status === 'pending'
-          ? 'queued'
+        hoveredCell.status === 'pending'
+          ? 'not fetched yet'
           : hoveredCell.status === 'skipped'
             ? 'skipped: in no file chosen'
             : hoveredCell.status === 'missing'
               ? 'missing on the server: needs a par2 repair'
-              : '—')
+              : contributors
+                ? `${hoveredCell.status === 'downloading' ? 'in progress over' : 'fetched over'} ${contributors}`
+                : 'not attributed to a network'
       const provisional =
         hoveredCell.provisionalBytes > 0
-          ? ` · ${formatBytes(hoveredCell.provisionalBytes)} received, awaiting verification`
+          ? `, ${formatBytes(hoveredCell.provisionalBytes)} more received and awaiting verification`
           : ''
-      readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} verified${provisional} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
+      readout = `${unit} ${hoveredCell.chunkNumber} of ${blocks.length}: ${formatBytes(hoveredCell.bytesDownloaded)} of ${formatBytes(hoveredCell.totalBytes)} verified${provisional}, ${where}`
     } else {
-      readout = segments
-        ? `${blocks.length} segments`
-        : `${blocks.length} ${unit.toLowerCase()}s · ${articles ? 'about ' : ''}${formatBytes(chunkBytes)} each`
+      const how = 'Point at one, or focus the map and use the arrow keys.'
+      readout =
+        segments || chunkBytes <= 0
+          ? `${blocks.length} ${unit.toLowerCase()}s. ${how}`
+          : `${blocks.length} ${unit.toLowerCase()}s of about ${formatBytes(chunkBytes)}. ${how}`
     }
 
+    // The arrow keys move along the map (up and down a row), Home and End jump to either end, and
+    // Escape lets go. The scroller follows, so the chunk read out is always in view.
+    const pointAt = (index: number): void => {
+      setHoveredIndex(index)
+      const row = Math.floor(index / cols)
+      const scroller = scrollerRef.current
+      if (!scroller) return
+      if (row < firstInView) scroller.scrollTop = row * rowStride
+      else if (row > lastInView) scroller.scrollTop = (row - visibleRows + 1) * rowStride
+    }
+    const onKeyDown = (event: React.KeyboardEvent): void => {
+      const last = blocks.length - 1
+      const moves: Record<string, number> = {
+        ArrowRight: 1,
+        ArrowLeft: -1,
+        ArrowDown: cols,
+        ArrowUp: -cols
+      }
+      if (event.key in moves) {
+        event.preventDefault()
+        const from = hoveredIndex ?? -1
+        pointAt(Math.min(last, Math.max(0, hoveredIndex === null ? 0 : from + moves[event.key])))
+      } else if (event.key === 'Home') {
+        event.preventDefault()
+        pointAt(0)
+      } else if (event.key === 'End') {
+        event.preventDefault()
+        pointAt(last)
+      } else if (event.key === 'Escape') {
+        setHoveredIndex(null)
+      }
+    }
+    const mapLabel = `${unit} map`
+
     return (
-      <div className="flex flex-col gap-[9px] rounded-[9px] border-[0.5px] border-border bg-card px-[14px] pt-[10px] pb-[11px]">
-        <div className="flex flex-wrap items-center gap-[14px]">
+      <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 pt-3 pb-2.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {groups.map((group, idx) => {
             const visual = visuals[idx]
             return (
-              <div
+              <span
                 key={group.id}
-                className="flex items-center gap-[5.5px] font-mono text-[10.5px] leading-none font-medium text-[var(--text-secondary)]"
+                className="inline-flex items-center gap-1.5 text-[12px] leading-none text-ink-2"
               >
                 <span
-                  className="size-[7px] shrink-0 rounded-full"
+                  aria-hidden
+                  className="h-1.5 w-3 shrink-0 rounded-full"
                   style={{ background: visual.solid }}
                 />
-                <span className="font-semibold text-foreground">{visual.name}</span>
-              </div>
+                {visual.name}
+              </span>
             )
           })}
-          {cells.length > 0 && chunkBytes > 0 && (
-            <div className="ml-auto font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground">
-              {readout}
-            </div>
-          )}
         </div>
 
         <div className="relative">
@@ -328,7 +364,7 @@ export function BlockGrid({
                     onClick={goToActive}
                     aria-label={`Show the ${unit.toLowerCase()}s in progress`}
                     className={cn(
-                      'absolute right-4 z-10 flex size-6 cursor-default items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:text-foreground dark:shadow-[0_2px_8px_rgba(0,0,0,0.55)] focus-visible:outline-2 focus-visible:outline-ring',
+                      'absolute right-4 z-10 flex size-6 cursor-default items-center justify-center rounded-full bg-card text-ink-2 shadow-[var(--shadow-raise)] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                       nearestActive < firstInView ? '-top-1' : '-bottom-1'
                     )}
                   >
@@ -361,6 +397,13 @@ export function BlockGrid({
           >
             <div
               ref={measureGrid}
+              tabIndex={0}
+              role="group"
+              aria-label={mapLabel}
+              aria-describedby={readoutId}
+              onKeyDown={onKeyDown}
+              onBlur={() => setHoveredIndex(null)}
+              className="rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
               style={{
                 display: 'grid',
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -376,87 +419,89 @@ export function BlockGrid({
                 const visual = cell.interfaceId
                   ? visualByInterfaceId.get(cell.interfaceId)
                   : undefined
+                const color = visual?.solid || UNATTRIBUTED_SOLID
 
-                // Base track uses theme-aware tokens (not hardcoded white-based rgba) so a
-                // mostly-pending bucket stays visible in light theme, not just dark.
+                // Fetched: the dash in the colour of the network that delivered most of it. In
+                // flight: a ring in that colour, filling as it comes in. Not yet: the bare track.
                 let background = 'var(--track-bg)'
-                let border = '0.5px solid var(--border-strong)'
-                let boxShadow = 'none'
+                let boxShadow: string | undefined
                 let opacity = 1
-                const fillColor = visual?.solid || UNATTRIBUTED_SOLID
-
-                if (cell.status === 'downloading') {
-                  background = visual?.bg || UNATTRIBUTED_BG
-                  border = `1px solid ${visual?.solid || UNATTRIBUTED_SOLID}`
-                  boxShadow = isPaused ? 'none' : `0 0 7px ${visual?.solid || UNATTRIBUTED_SOLID}`
-                  opacity = isPaused ? 0.6 : 1
-                } else if (cell.status === 'completed') {
-                  border = 'none'
-                  opacity = 0.92
+                if (cell.status === 'completed') {
+                  background = color
+                } else if (cell.status === 'downloading') {
+                  boxShadow = `0 0 0 1px ${color}`
+                  opacity = isPaused ? 0.5 : 1
                 } else if (cell.status === 'skipped') {
                   // None of the files chosen needs it: there, but not this download's.
-                  border = '0.5px dashed var(--border-strong)'
-                  opacity = 0.3
+                  opacity = 0.35
                 } else if (cell.status === 'missing') {
                   // The server didn't have it: a hole in its file, for a par2 repair to fill.
-                  background = 'color-mix(in srgb, var(--color-danger) 22%, transparent)'
-                  border = '1px dashed var(--color-danger)'
+                  background = 'var(--color-danger-bg)'
+                  boxShadow = '0 0 0 1px var(--color-danger)'
                 }
 
                 const rawFillPercent = Math.min(1, Math.max(0, cell.fillRatio)) * 100
-                // A square is only ~12px wide, so the first bytes of a chunk round to nothing —
+                // A dash is only ~14px wide, so the first bytes of a chunk round to nothing —
                 // floor a started chunk to a visible sliver rather than 0 width.
-                const fillPercent = rawFillPercent > 0 ? Math.max(6, Math.round(rawFillPercent)) : 0
+                const fillPercent =
+                  cell.status === 'completed' || rawFillPercent <= 0
+                    ? 0
+                    : Math.max(8, Math.round(rawFillPercent))
 
                 return (
-                  <div
+                  <span
                     key={index}
+                    data-chunk={index + 1}
                     onMouseEnter={() => setHoveredIndex(index)}
-                    style={{
-                      position: 'relative',
-                      height: CELL_HEIGHT_PX,
-                      borderRadius: 2.5,
-                      background,
-                      border,
-                      boxShadow,
-                      opacity,
-                      outline:
-                        hoveredIndex === index ? '1.5px solid var(--text-secondary)' : 'none',
-                      outlineOffset: 1,
-                      overflow: 'hidden',
-                      transition: 'opacity 0.3s, box-shadow 0.15s'
-                    }}
+                    className="flex items-center"
+                    style={{ height: CELL_HEIGHT_PX }}
                   >
-                    {/* One square, one color: the network that actually delivered most of this
-                    square's bytes. The full per-network breakdown is still exact underneath —
-                    hovering reads it out — but the grid itself stays a glanceable map of which
-                    network owns which stretch of the file rather than a stack of gradients. */}
-                    {fillPercent > 0 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          width: `${fillPercent}%`,
-                          background: fillColor,
-                          opacity:
-                            cell.provisionalBytes > 0 && cell.bytesDownloaded === 0 ? 0.55 : 1,
-                          transition: 'width 0.15s, background 0.15s'
-                        }}
-                      />
-                    )}
-                  </div>
+                    <span
+                      className="relative block w-full overflow-hidden rounded-full"
+                      style={{
+                        height: DASH_HEIGHT_PX,
+                        background,
+                        boxShadow,
+                        opacity,
+                        outline: hoveredIndex === index ? '2px solid var(--focus)' : undefined,
+                        outlineOffset: 2,
+                        transition: 'opacity 0.3s'
+                      }}
+                    >
+                      {fillPercent > 0 && (
+                        <span
+                          className="absolute inset-y-0 left-0"
+                          style={{
+                            width: `${fillPercent}%`,
+                            background: color,
+                            opacity:
+                              cell.provisionalBytes > 0 && cell.bytesDownloaded === 0 ? 0.55 : 1,
+                            transition: 'width 0.15s, background 0.15s'
+                          }}
+                        />
+                      )}
+                    </span>
+                  </span>
                 )
               })}
             </div>
           </div>
         </div>
+
+        <p
+          id={readoutId}
+          aria-live="polite"
+          className="min-h-[1.5em] text-[12px] leading-snug text-ink-2"
+        >
+          {readout}
+        </p>
       </div>
     )
   }
 
   // Fallback for single stream / non-splittable download: clean horizontal bar
   return (
-    <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] border-[0.5px] border-[var(--border-strong)] bg-[var(--track-bg)]">
+    <div className="flex h-1.5 gap-[2px] overflow-hidden rounded-full bg-track">
       {knownSize ? (
         <>
           {groups.map((group, index) => (

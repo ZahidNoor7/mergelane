@@ -1,4 +1,4 @@
-import { THEMES, type ThemeId, type ThemeSeeds } from '@shared/themes'
+import { NETWORK_SWATCHES, THEMES, type ThemeId, type ThemeSeeds } from '@shared/themes'
 
 // Writes every theme's seed colours as CSS custom properties, as the owner's design does at start-up
 // (design-system/mergelane/redesign/prototype.html). Each theme is
@@ -45,15 +45,29 @@ export function seedDeclarations(seeds: ThemeSeeds, dark: boolean): string {
   return out.join('')
 }
 
-/** Every theme, light and dark, as one stylesheet. */
+/** The colours a user can pick for a network, the same in every theme, light and dark. */
+function swatchCss(): string {
+  const declare = (dark: boolean): string =>
+    NETWORK_SWATCHES.map(
+      (swatch) =>
+        `--swatch-${swatch.id}:${dark ? swatch.dark : swatch.light};` +
+        `--swatch-${swatch.id}-onsolid:${dark ? swatch.darkOn : swatch.lightOn};`
+    ).join('')
+  return `:root{${declare(false)}}@media (prefers-color-scheme: dark){:root{${declare(true)}}}`
+}
+
+/** Every theme, light and dark, as one stylesheet, after the pickable network colours. */
 export function themeCss(): string {
-  return THEMES.map((theme) => {
-    const selector = `:root[data-palette="${theme.id}"]`
-    return (
-      `${selector}{${seedDeclarations(theme.light, false)}}` +
-      `@media (prefers-color-scheme: dark){${selector}{${seedDeclarations(theme.dark, true)}}}`
-    )
-  }).join('\n')
+  return [
+    swatchCss(),
+    ...THEMES.map((theme) => {
+      const selector = `:root[data-palette="${theme.id}"]`
+      return (
+        `${selector}{${seedDeclarations(theme.light, false)}}` +
+        `@media (prefers-color-scheme: dark){${selector}{${seedDeclarations(theme.dark, true)}}}`
+      )
+    })
+  ].join('\n')
 }
 
 const STYLE_ID = 'mergelane-themes'

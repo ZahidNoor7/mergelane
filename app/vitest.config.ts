@@ -109,7 +109,10 @@ export const COVERED = [
   'src/renderer/src/utils/downloadActions.ts',
   // M3.10: each network's role for downloads (ADR-0045).
   'src/shared/networkRoles.ts',
-  'src/renderer/src/components/NetworkRoleMenu.tsx'
+  'src/renderer/src/components/NetworkRoleMenu.tsx',
+  // ADR-0046: Remove helper, in the System merge section.
+  'src/renderer/src/components/SystemMergeSection.tsx',
+  'src/renderer/src/hooks/useSystemMerge.ts'
 ]
 
 export default defineConfig({

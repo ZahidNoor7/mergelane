@@ -66,7 +66,7 @@ const pick = (
   return work && `${work.kind}:${work.block.index}`
 }
 
-test.describe('scheduler: taking the next block', () => {
+test.describe('scheduler: taking the next block @smoke', () => {
   test('takes the first waiting block', () => {
     const blocks = [block(0, 'completed'), block(1, 'downloading'), block(2), block(3)]
     expect(pick(state({ blocks }), 9, 'a')).toBe('primary:2')
@@ -146,7 +146,7 @@ test.describe('scheduler: taking the next block', () => {
   })
 })
 
-test.describe('scheduler: racing a slow block', () => {
+test.describe('scheduler: racing a slow block @smoke', () => {
   // Block 0 is 1000 bytes with 200 done, held by stream 0 on network a at `speed`.
   const laggard = (
     speed: number,
@@ -365,7 +365,7 @@ test.describe('scheduler: racing a slow block', () => {
   })
 })
 
-test('no racing while the disk is behind, and racing resumes once it keeps up', () => {
+test('no racing while the disk is behind, and racing resumes once it keeps up @smoke', () => {
   const s = state({
     blocks: [block(0, 'downloading')],
     streams: [stream(0, 'a', 'downloading'), stream(1, 'b', 'pending')],
@@ -375,7 +375,7 @@ test('no racing while the disk is behind, and racing resumes once it keeps up', 
   expect(pick(s, 1, 'b')).toBe('hedge:0')
 })
 
-test.describe('scheduler: splitting what is left', () => {
+test.describe('scheduler: splitting what is left @smoke', () => {
   // Parts of 1000-byte blocks, halved down to 100 bytes a side.
   const SPLIT: SchedulerPolicy = { ...POLICY, minSplitBytes: 100 }
   const part = (

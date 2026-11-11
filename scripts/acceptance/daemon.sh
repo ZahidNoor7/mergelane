@@ -51,8 +51,8 @@ cleanup() {
   [ -n "$VPN_PID" ] && sudo kill "$VPN_PID" 2>/dev/null
   sudo pkill -f "$BIN/mergelane-daemon run" 2>/dev/null
   # Only a LaunchDaemon this script installed is removed, never one it found.
-  [ "$INSTALLED" = 1 ] && sudo "$DAEMON" uninstall >/dev/null 2>&1
-  [ -x "$DAEMON" ] && sudo "$DAEMON" cleanup >/dev/null 2>&1
+  [ "$INSTALLED" = 1 ] && sudo env GOCOVERDIR="$COVER" "$DAEMON" uninstall >/dev/null 2>&1
+  [ -x "$DAEMON" ] && sudo env GOCOVERDIR="$COVER" "$DAEMON" cleanup >/dev/null 2>&1
   sudo rm -rf "$STATE"
   echo "--- daemon log"
   sudo cat "$LOG" 2>/dev/null | tail -60
@@ -161,6 +161,10 @@ if [ ! -O "$BIN" ] || [ -L "$BIN" ]; then
 fi
 (cd "$ROOT/daemon" && go build -cover -o "$DAEMON" ./cmd/mergelane-daemon && go build -o "$BIN/fakevpn" ./cmd/fakevpn) || exit 1
 chmod 755 "$BIN" "$DAEMON" && chmod 777 "$COVER"
+# Every run of the coverage-built daemon writes its counters to $COVER, not only "run": the client
+# commands run as this user see this export; sudo starts with a clean environment, so each sudo'd
+# run (run, install, uninstall, cleanup, and the other user's) passes it on with env.
+export GOCOVERDIR=$COVER
 "$DAEMON" list --include feth10,feth20
 
 BEFORE=$(routes)
@@ -170,7 +174,7 @@ start_daemon && pass "daemon answers on its socket" || { fail "daemon did not st
 wait_links_up && pass "both simulated links probed up" || fail "links not up"
 
 step "ADR-0005: another user is refused"
-if out=$(sudo -u nobody "$DAEMON" status 2>&1); then
+if out=$(sudo -u nobody env GOCOVERDIR="$COVER" "$DAEMON" status 2>&1); then
   fail "user nobody was allowed: $out"
 else
   grep -q NOT_AUTHORIZED <<<"$out" && pass "nobody gets NOT_AUTHORIZED" || fail "unexpected refusal: $out"
@@ -263,7 +267,7 @@ pgrep -fl "^$BIN/mergelane-daemon run" && fail "the daemon survived kill -9"
 if capture_routes | grep -q .; then fail "capture routes survived kill -9"; else pass "capture routes died with the daemon"; fi
 echo "marked routes left before cleanup (removed by the next start, ADR-0007):"
 marked_routes
-sudo "$DAEMON" cleanup
+sudo env GOCOVERDIR="$COVER" "$DAEMON" cleanup
 [ -z "$(marked_routes)" ] && pass "no marked routes after cleanup" || fail "marked routes remain after cleanup"
 if diff <(echo "$BEFORE") <(routes); then pass "routing table back to its original state"; else fail "routing differs after kill -9 and cleanup"; fi
 curl -fsS --max-time 15 -o /dev/null https://api.github.com/ && pass "internet works after kill -9" || fail "no connectivity after kill -9"
@@ -377,7 +381,7 @@ if diff <(echo "$BEFORE") <(routes); then pass "routing table back to its origin
 
 step "ADR-0017: launchd installs, restarts after kill -9, and uninstalls"
 INSTALLED=1
-sudo "$DAEMON" install --uid "$(id -u)" --source "$DAEMON" && pass "installed" || fail "install failed"
+sudo env GOCOVERDIR="$COVER" "$DAEMON" install --uid "$(id -u)" --source "$DAEMON" && pass "installed" || fail "install failed"
 for _ in $(seq 1 50); do "$DAEMON" status >/dev/null 2>&1 && break; sleep 0.1; done
 pid1=$(sudo launchctl print "system/$LABEL" | awk '/^\tpid = /{print $3}')
 "$DAEMON" status && pass "the launchd-run daemon answers (pid $pid1)" || fail "launchd-run daemon not answering"
@@ -389,7 +393,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 [ -n "$pid2" ] && [ "$pid2" != "$pid1" ] && pass "launchd restarted it (pid $pid1 -> $pid2)" || fail "not restarted"
-sudo "$DAEMON" uninstall && pass "uninstalled" || fail "uninstall failed"
+sudo env GOCOVERDIR="$COVER" "$DAEMON" uninstall && pass "uninstalled" || fail "uninstall failed"
 [ ! -e "/Library/LaunchDaemons/$LABEL.plist" ] && [ ! -e "/Library/PrivilegedHelperTools/$LABEL" ] && pass "files removed" || fail "files left behind"
 if diff <(echo "$BEFORE") <(routes); then pass "routing table unchanged after uninstall"; else fail "routing differs after uninstall"; fi
 

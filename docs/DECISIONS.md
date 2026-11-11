@@ -1032,3 +1032,53 @@ until the owner overrides it.
   - Only Mergelane's own downloads follow roles. System merge (the daemon) has no notion of them yet.
   - Real hardware (an iPhone's USB tethering dropping and coming back) is not proven here: the e2e tests use the
     two test networks, rewriting the interface list to drop and restore one.
+
+## ADR-0046: Remove helper: merging off first, then the helper's own uninstall through one password prompt
+
+- Status: Accepted (2026-11-12). Made unattended, following CLAUDE.md; open to the owner's review.
+- Context:
+  - The app installs `mergelane-daemon` as a LaunchDaemon through an administrator password prompt (M2.4,
+    `installCommand.ts`), but had no way to remove it (PROGRESS, Phase 2 follow-ups).
+  - The daemon already has `mergelane-daemon uninstall` (`launchd.Uninstall`). As root it boots `system/<Label>`
+    out and waits until `launchctl print` no longer finds it, runs route cleanup (the work of
+    `mergelane-daemon cleanup`) while the installed binary still exists, then deletes
+    `/Library/LaunchDaemons/<Label>.plist` and `/Library/PrivilegedHelperTools/<Label>`. The log folder stays.
+    Its launchctl calls were checked against launchctl(1) when they were written (the package comment in
+    `daemon/internal/launchd/launchd.go`); this step adds no launchctl call of its own.
+  - Apple's Technical Note TN2065: `do shell script "command" with administrator privileges` "runs the command
+    as the root user", always through /bin/sh, and a command that exits non-zero "throws an AppleScript error
+    with the status as the error number", whose message is what the command printed to standard error.
+    osascript(1): `-e` enters one line of a script. AppleScript's error table: -128 is "User cancelled".
+- Decision:
+  - **Where:** Networks › Other apps › System merge, at the section's foot, only while the helper is installed.
+    That includes a helper that isn't running or is out of date: a stuck helper is exactly the one to remove. A
+    short line says the helper runs system merge and downloads don't need it, next to **Remove helper…**
+    (`secondary`).
+  - **Confirmation:** the app's alert dialog, "Remove Mergelane's helper?": "System merge turns off, and can't
+    be used until you install the helper again. Your Mac asks for your administrator password. Downloads keep
+    working on every network." Buttons: Cancel and **Remove helper** (`destructive`). The design prototype has
+    nothing for this; the dialog follows `RemoveDialog`.
+  - **Order** (main, `main/daemon/removal.ts`):
+    1. If merging is on (or turning on), the helper is asked to turn it off (`disable`), so its routes go first
+       (CLAUDE.md, Crash safety). If it can't be asked, or refuses, removal goes on: the uninstall's bootout
+       stops it (on SIGTERM it turns merging off), and its cleanup removes leftover routes.
+    2. One prompt: `/usr/bin/osascript -e 'do shell script "'<Mergelane.app>/Contents/Resources/mergelane-daemon'
+       uninstall" with administrator privileges'`. The bundled binary's path is single-quoted for the shell and
+       escaped for AppleScript (`uninstallCommand`). The bundled binary is used, as for install: it is the one
+       this app knows, and its uninstall acts on the fixed /Library paths whatever version is installed.
+  - **Result**, kept in the section until the next action (the polls that follow don't clear it):
+    - removed: "Helper removed. Install it again to use system merge." The section then offers Install.
+    - prompt dismissed (-128): "Removal canceled. The helper is still installed." Nothing was removed, so
+      merging that was on is turned back on. If the helper refuses, the note adds why it stayed off.
+    - failed: "Couldn't remove the helper:" and the reason, that being osascript's standard error, with its
+      undocumented "0:42: execution error: … (1)" wrapping removed when it matches. Merging stays off.
+    - A development build has no bundled helper and says "Removing the helper needs the packaged app."
+  - **Test seam:** `MERGELANE_E2E_ADMIN_PROMPT` (`allow`, `cancel` or `fail:<reason>`; ignored by a packaged
+    build, like every test knob). With it, the app records the osascript argv (`testRecord('adminCommands')`)
+    and answers the prompt itself; nothing is run. `MERGELANE_E2E_DAEMON_INSTALLED` is now read on every call,
+    so a test can make the helper disappear after a removal.
+- Consequences:
+  - Removing and then reinstalling costs two password prompts. There is no partial removal to undo.
+  - No test runs the real prompt, bootout or file removal. They need a manual check on the owner's Mac with a
+    packaged build. The helper's own uninstall keeps its Go tests, which record launchctl instead of running it.
+  - Install is unchanged, except that it now runs osascript through the same function.

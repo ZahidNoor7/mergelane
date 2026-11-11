@@ -1,4 +1,5 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type WebTorrent from 'webtorrent'
@@ -29,6 +30,31 @@ export const QUIET: ClientOptions = {
   utp: false
 }
 
+// Every folder made here, until it is removed. A test that times out can be abandoned before its
+// stop() runs; whatever is still listed when the worker exits goes then, so no run leaves its
+// folders behind in the temp directory.
+const scratch = new Set<string>()
+process.once('exit', () => {
+  for (const path of scratch) rmSync(path, { recursive: true, force: true })
+})
+
+/** A new folder of its own in the temp directory, removed by removeScratch() or at exit. */
+export async function scratchFolder(prefix: string): Promise<string> {
+  const path = await mkdtemp(join(tmpdir(), prefix))
+  scratch.add(path)
+  return path
+}
+
+/** Removes folders made by scratchFolder(). */
+export async function removeScratch(paths: string[]): Promise<void> {
+  await Promise.all(
+    paths.map(async (path) => {
+      await rm(path, { recursive: true, force: true, maxRetries: 5 })
+      scratch.delete(path)
+    })
+  )
+}
+
 /** A file to seed: its bytes, named as it appears in the torrent. */
 export function named(data: Buffer, name: string): Buffer {
   return Object.assign(data, { name })
@@ -38,6 +64,14 @@ export class Swarm {
   private clients: WebTorrent[] = []
   private tracker: TrackerServer | null = null
   private announce: string[] = []
+  /** Seeders' and leechers' folders, and .torrent files' folders: removed at stop(). */
+  private folders: string[] = []
+
+  private async folder(prefix: string): Promise<string> {
+    const path = await scratchFolder(prefix)
+    this.folders.push(path)
+    return path
+  }
 
   async start(): Promise<this> {
     const Server = await loadTracker()
@@ -65,7 +99,7 @@ export class Swarm {
     // A folder of its own, as leech() has: left to webtorrent, every seeder shares /tmp/webtorrent,
     // and two tests seeding different files under one name in parallel overwrite each other's —
     // the seeder then serves pieces that fail verification, forever.
-    const path = await mkdtemp(join(tmpdir(), 'mergelane-seed-'))
+    const path = await this.folder('mergelane-seed-')
     return new Promise((resolve) =>
       client.seed(
         files.length === 1 ? files[0] : files,
@@ -79,7 +113,7 @@ export class Swarm {
    * joins the swarm wanting nothing, until its files are selected. */
   async leech(torrent: Torrent, options: { deselect?: boolean } = {}): Promise<Torrent> {
     const client = await this.client()
-    const path = await mkdtemp(join(tmpdir(), 'mergelane-leech-'))
+    const path = await this.folder('mergelane-leech-')
     return client.add(torrent.torrentFile, { path, deselect: options.deselect })
   }
 
@@ -95,12 +129,14 @@ export class Swarm {
       this.clients.splice(0).map((client) => new Promise((done) => client.destroy(done)))
     )
     await new Promise<void>((resolve) => (this.tracker ? this.tracker.close(resolve) : resolve()))
+    // Last, once no client is writing to them.
+    await removeScratch(this.folders.splice(0))
   }
-}
 
-/** `torrent`'s .torrent, written to a file for the app to open. */
-export async function torrentFileOnDisk(torrent: Torrent): Promise<string> {
-  const path = join(await mkdtemp(join(tmpdir(), 'mergelane-torrent-')), `${torrent.name}.torrent`)
-  await writeFile(path, torrent.torrentFile)
-  return path
+  /** `torrent`'s .torrent, written to a file for the app to open; gone at stop(). */
+  async torrentFileOnDisk(torrent: Pick<Torrent, 'name' | 'torrentFile'>): Promise<string> {
+    const path = join(await this.folder('mergelane-torrent-'), `${torrent.name}.torrent`)
+    await writeFile(path, torrent.torrentFile)
+    return path
+  }
 }

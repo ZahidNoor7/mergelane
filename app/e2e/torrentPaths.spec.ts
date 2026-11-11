@@ -22,7 +22,7 @@ const torrentFiles = fc.array(
   { minLength: 1, maxLength: 5 }
 )
 
-test.describe('torrent paths', () => {
+test.describe('torrent paths @smoke', () => {
   for (const platform of ['darwin', 'linux', 'win32'] as const) {
     test(`on ${platform}, a path either stays inside the folder or the torrent is refused`, () => {
       const path = platform === 'win32' ? win32 : posix

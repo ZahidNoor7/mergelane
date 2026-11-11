@@ -5,7 +5,7 @@ import { isProbe } from './origin'
 // N. How many streams a download runs, decided while it runs (see concurrency.ts), against a
 // server that limits it in each of the ways that matter.
 
-test.describe('automatic stream count', () => {
+test.describe('automatic stream count @smoke', () => {
   const peakStreams = (mergelane: { sessions: DownloadState[][] }): number =>
     Math.max(
       ...mergelane.sessions

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import fc from 'fast-check'
 import { bitfieldOf, creditPiece, pickNetwork } from '../src/main/download/torrent/peers'
 
-test.describe('torrent peers across networks', () => {
+test.describe('torrent peers across networks @smoke', () => {
   test('a new peer goes to the network with the fewest, the first on a tie', () => {
     expect(pickNetwork([])).toBeNull()
     expect(

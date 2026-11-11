@@ -7,6 +7,10 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Added
 
+- **Remove helper** (Networks › Other apps): takes system merge's helper off your Mac. After you confirm,
+  system merge turns off first, then your Mac asks for your administrator password once. Mergelane says whether
+  the helper was removed, whether you canceled the password prompt, or why it couldn't be removed. Downloads
+  keep working without the helper.
 - **When to start a download.** New download has a "When" row: **Now** (as before), **Add to queue** (it waits for
   a turn: it starts when a running download finishes, or when you choose Start now), or **At a time** (it starts
   the next time the clock reads that time, today or tomorrow). Until then its row says "Starts at 1:00 AM", and
@@ -19,6 +23,10 @@ All notable changes to Mergelane are recorded here. The format follows
   **Don't use** (never used for downloads). It applies to running downloads too. New download shows a Standby
   network as such and can't pick a Don't use one. "Which network carries what" still wins while it names a
   network.
+
+### Fixed
+
+- Selecting a download no longer nudges the download list up a few pixels.
 
 ## [0.3.0] - 2026-11-12
 

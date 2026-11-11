@@ -593,6 +593,15 @@ export interface SystemMergeSnapshot {
   outages: SystemMergeOutage[]
 }
 
+/** What "Remove helper" came to (main/daemon/removal.ts, docs/DECISIONS.md ADR-0046): `removed`, the
+ * helper is gone; `canceled`, the administrator password prompt was dismissed and nothing was removed;
+ * `failed`, the removal ran and didn't finish. `message` says so in words for the user. */
+export interface SystemMergeRemoval {
+  outcome: 'removed' | 'canceled' | 'failed'
+  message: string
+  snapshot: SystemMergeSnapshot
+}
+
 /** Where the app's own update is (main/updater.ts, docs/DECISIONS.md ADR-0036). */
 export interface UpdateState {
   /** idle: not checked since launch, or a found version was skipped; current: the check found

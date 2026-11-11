@@ -242,8 +242,10 @@ export function DownloadsScreen({
 
   return (
     <div className="flex h-full flex-col bg-background">
+      {/* The toolbar takes the header's place at the header's height (min-h-15: the title and
+          summary lines, their padding and the rule), so selecting never moves the list. */}
       {chosen.length === 0 ? (
-        <div className="window-drag flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule px-4 py-2.5">
+        <div className="window-drag flex min-h-15 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[18px] leading-tight font-[680] tracking-[-0.015em]">
               Downloads
@@ -304,7 +306,7 @@ export function DownloadsScreen({
           role="toolbar"
           aria-label="Selected downloads"
           aria-busy={busy}
-          className="window-drag flex min-h-14 shrink-0 items-center gap-3 border-b border-rule px-4"
+          className="window-drag flex min-h-15 shrink-0 items-center gap-3 border-b border-rule px-4"
         >
           <Tooltip>
             <TooltipTrigger

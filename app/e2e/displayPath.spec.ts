@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { toDisplayPath } from '../src/renderer/src/utils/format'
 
-test("a download under home still shortens when the folder's accents differ", () => {
+test("a download under home still shortens when the folder's accents differ @smoke", () => {
   const home = '/Users/caf\u00e9'
   const path = '/Users/cafe\u0301/Downloads'
   expect(toDisplayPath(path, home)).toBe('~/Downloads')

@@ -24,7 +24,7 @@ const fresh = (): HttpBlockState => ({
 const attributed = (block: HttpBlockState): number =>
   Object.values(block.bytesByInterface).reduce((sum, bytes) => sum + bytes, 0)
 
-test.describe('block progress', () => {
+test.describe('block progress @smoke', () => {
   test('two attempts racing count only the ground the furthest one covers', () => {
     const block = fresh()
     expect(advanceBlock(block, 'a', 300)).toBe(300)
@@ -76,7 +76,7 @@ test.describe('block progress', () => {
   })
 })
 
-test.describe('destination-side staging file', () => {
+test.describe('destination-side staging file @smoke', () => {
   let dir: string
   test.beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'mergelane-staging-'))

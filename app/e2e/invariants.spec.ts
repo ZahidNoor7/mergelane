@@ -31,7 +31,7 @@ const paused = (): HttpDownloadState => ({
   ]
 })
 
-test('event validation retains integrity failures and download context', () => {
+test('event validation retains integrity failures and download context @smoke', () => {
   const valid = paused()
   expect(() =>
     checkEvents([[valid, { ...valid, status: 'downloading' }, { ...valid, status: 'completed' }]])
@@ -51,7 +51,7 @@ test('event validation retains integrity failures and download context', () => {
   )
 })
 
-test('event validation checks long histories without per-block report steps', () => {
+test('event validation checks long histories without per-block report steps @smoke', () => {
   const state = paused()
   state.blocks = Array.from({ length: 256 }, (_, index) => ({
     ...state.blocks[0],

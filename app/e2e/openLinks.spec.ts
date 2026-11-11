@@ -1,9 +1,11 @@
 import type { Locator } from '@playwright/test'
 import { spawn } from 'node:child_process'
+import { writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { electronArgs, expect, PROJECT_ROOT, test, type MergelaneApp } from './fixtures'
 import { seededBytes } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, removeScratch, scratchFolder, Swarm } from './torrentSwarm'
 
 // Links the OS hands Mergelane — a magnet link clicked in a browser, a .torrent opened from the file
 // manager — open New download with it filled in, for the user to look at and start; nothing starts
@@ -11,20 +13,29 @@ import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 const MAGNET = `magnet:?xt=urn:btih:${'cd'.repeat(20)}&dn=handed.over`
 
-/** A .torrent of one small file, on disk. */
+const folders: string[] = []
+test.afterEach(() => removeScratch(folders.splice(0)))
+
+/** A .torrent of one small file, on disk until the test ends. Nobody seeds it. */
 async function aTorrentFile(): Promise<string> {
   const swarm = await new Swarm().start()
+  let torrentFile: Uint8Array
   try {
-    return await torrentFileOnDisk(await swarm.seed([named(seededBytes(1000, 91), 'clip.mov')]))
+    torrentFile = (await swarm.seed([named(seededBytes(1000, 91), 'clip.mov')])).torrentFile
   } finally {
     await swarm.stop()
   }
+  const folder = await scratchFolder('mergelane-torrent-')
+  folders.push(folder)
+  const path = join(folder, 'clip.mov.torrent')
+  await writeFile(path, torrentFile)
+  return path
 }
 
 const linkField = (mergelane: MergelaneApp): Locator =>
   mergelane.page.getByRole('textbox', { name: 'Link' })
 
-test.describe('links handed over by the OS', () => {
+test.describe('links handed over by the OS @smoke', () => {
   test('a .torrent on the command line (Windows, Linux) fills in the link', async ({
     mergelane
   }) => {

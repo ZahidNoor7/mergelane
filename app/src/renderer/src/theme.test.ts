@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { themeNetworkColours } from '@shared/themes'
+import { useNetworkVisuals } from './hooks/useNetworkVisuals'
+import { useAppStore } from './store/useAppStore'
 import type { NetworkInterfaceKind } from '@shared/types'
 import {
   assignNetworkColors,
@@ -102,4 +106,93 @@ describe('resolveNetworkVisual', () => {
 
 it('sizes the title bar for macOS', () => {
   expect(TITLE_BAR_HEIGHT).toBe(32)
+})
+
+describe('an extra network’s colour never looks like a theme’s network colour', () => {
+  const twoEthernets = networks([
+    ['en5', 'ethernet'],
+    ['en6', 'ethernet']
+  ])
+
+  it('skips a swatch that looks like one (Porcelain’s Ethernet is a teal, like the Teal swatch)', () => {
+    const colors = assignNetworkColors(
+      twoEthernets,
+      {},
+      {
+        dark: false,
+        colours: themeNetworkColours('porcelain', false)
+      }
+    )
+    expect(colors.get('en5')).toBe('steel')
+    // Teal is the first free swatch but sits 0.03 from Porcelain's Ethernet; Amber is far.
+    expect(colors.get('en6')).toBe('amber')
+  })
+
+  it('compares in the mode shown', () => {
+    const colors = assignNetworkColors(
+      twoEthernets,
+      {},
+      {
+        dark: true,
+        colours: themeNetworkColours('sage', true)
+      }
+    )
+    // Sage's dark colours are far from Teal.
+    expect(colors.get('en6')).toBe('teal')
+  })
+
+  it('takes the first free swatch when every one looks like something', () => {
+    const colors = assignNetworkColors(
+      twoEthernets,
+      {},
+      {
+        dark: false,
+        colours: ['#1F8A70', '#D97706', '#B5525A', '#6C5AC4', '#5B8A1E', '#0E7D93', '#C4572A']
+      }
+    )
+    expect(colors.get('en6')).toBe('teal')
+  })
+})
+
+describe('useNetworkVisuals', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('assigns colours against the current theme and mode', () => {
+    vi.stubGlobal('matchMedia', () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }))
+    useAppStore.setState({
+      appearanceTheme: 'porcelain',
+      interfaces: [
+        { id: 'en5', kind: 'ethernet' },
+        { id: 'en6', kind: 'ethernet' }
+      ] as unknown as ReturnType<typeof useAppStore.getState>['interfaces'],
+      // Networks a running or finished download used count too, even once disconnected.
+      downloads: {
+        d1: { networks: [{ id: 'en7', kind: 'usb' }] }
+      } as unknown as ReturnType<typeof useAppStore.getState>['downloads'],
+      history: [
+        {
+          networks: [
+            { id: 'en8', kind: 'usb' },
+            { id: 'en5', kind: 'ethernet' }
+          ]
+        }
+      ] as unknown as ReturnType<typeof useAppStore.getState>['history'],
+      networkPreferences: {}
+    })
+    const { result } = renderHook(() => useNetworkVisuals())
+    expect(result.current('en5', 'ethernet', 'Ethernet').solid).toBe('var(--color-ethernet)')
+    expect(result.current('en6', 'ethernet', 'Ethernet 2').colorId).toBe('rose')
+    // The phones: the first takes USB's own colour; the second skips Violet, Lime and Cyan, which
+    // look like Porcelain's Wi-Fi, USB and Ethernet, for Coral.
+    expect(result.current('en7', 'usb', 'iPhone').solid).toBe('var(--color-usb)')
+    expect(result.current('en8', 'usb', 'iPad').colorId).toBe('coral')
+    // A network nobody has seen yet still gets a colour.
+    expect(result.current('en9', 'other', 'Bridge').colorId).toBe('teal')
+  })
 })

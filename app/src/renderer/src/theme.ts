@@ -1,3 +1,5 @@
+import { oklabDistance } from '@shared/colour'
+import { NETWORK_SWATCHES } from '@shared/themes'
 import type { NetworkInterfaceKind, NetworkPreference, NetworkPreferences } from '@shared/types'
 
 interface KindPalette {
@@ -79,7 +81,7 @@ export const NETWORK_COLOR_SWATCHES = [
   swatch('lime', 'Lime'),
   swatch('cyan', 'Cyan'),
   swatch('coral', 'Coral')
-] as const
+] as const satisfies ReadonlyArray<{ id: (typeof NETWORK_SWATCHES)[number]['id'] }>
 
 export type NetworkColorId = (typeof NETWORK_COLOR_SWATCHES)[number]['id']
 
@@ -113,12 +115,21 @@ const KIND_SWATCH: Record<NetworkInterfaceKind, NetworkColorId | undefined> = {
   other: undefined
 }
 
+/** Swatches closer than this (Oklab distance) to one of the theme's network colours look like it. */
+const TOO_CLOSE = 0.1
+
 /** Gives every network exactly one color, distinct from the others while swatches last: a
  * user-picked color always wins, then each network gets its kind's hue if still free, then the
- * first unused swatch — so two USB phones never both render amber. */
+ * first unused swatch — so two USB phones never both render amber.
+ *
+ * A kind's hue is the theme's own colour for it (assets/main.css), not its swatch, so a swatch can
+ * look like another network's theme colour: Porcelain's Ethernet is a teal, and so is the Teal
+ * swatch. Given the theme's network colours in the current mode (`avoid`), a network without a
+ * hue of its own takes the first free swatch that doesn't look like any of them, if one is left. */
 export function assignNetworkColors(
   networks: Map<string, NetworkInterfaceKind>,
-  preferences: NetworkPreferences
+  preferences: NetworkPreferences,
+  avoid?: { dark: boolean; colours: string[] }
 ): Map<string, NetworkColorId> {
   // ponytail: ordered by id, so plugging in a same-kind network can shift an unpinned one's color.
   const ids = [...networks.keys()].sort()
@@ -137,10 +148,17 @@ export function assignNetworkColors(
     const kindColor = KIND_SWATCH[networks.get(id)!]
     if (!colors.has(id) && kindColor && !used.has(kindColor)) take(id, kindColor)
   }
+  const looksDistinct = (id: NetworkColorId): boolean => {
+    if (!avoid) return true
+    const swatch = NETWORK_SWATCHES.find((entry) => entry.id === id)!
+    const hex = avoid.dark ? swatch.dark : swatch.light
+    return avoid.colours.every((colour) => oklabDistance(hex, colour) >= TOO_CLOSE)
+  }
   for (const id of ids) {
     if (colors.has(id)) continue
-    const free = NETWORK_COLOR_SWATCHES.find((swatch) => !used.has(swatch.id))?.id
-    take(id, free ?? KIND_SWATCH[networks.get(id)!] ?? NETWORK_COLOR_SWATCHES[0].id)
+    const free = NETWORK_COLOR_SWATCHES.filter((swatch) => !used.has(swatch.id))
+    const pick = free.find((swatch) => looksDistinct(swatch.id)) ?? free[0]
+    take(id, pick?.id ?? KIND_SWATCH[networks.get(id)!] ?? NETWORK_COLOR_SWATCHES[0].id)
   }
   return colors
 }

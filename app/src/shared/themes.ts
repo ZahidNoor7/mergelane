@@ -335,6 +335,83 @@ export function windowBackground(themeId: unknown, dark: boolean): string {
   return dark ? theme.dark.bg : theme.light.bg
 }
 
+/** Colours a user can pick for a network (renderer theme.ts NETWORK_COLOR_SWATCHES), the same in
+ * every theme. A pick overrides the theme's colour for that network. Each is at least 3:1 on every
+ * theme's grounds, and its glyph colour at least 3:1 on it (theme/contrast.test.ts). The ids are the
+ * ones saved in app-settings.json, so they never change. */
+export const NETWORK_SWATCHES = [
+  {
+    id: 'teal',
+    label: 'Teal',
+    light: '#1F8A70',
+    lightOn: '#FFFFFF',
+    dark: '#4EA89A',
+    darkOn: '#10201D'
+  },
+  {
+    id: 'amber',
+    label: 'Amber',
+    light: '#D97706',
+    lightOn: '#FFFFFF',
+    dark: '#D8A44C',
+    darkOn: '#221806'
+  },
+  {
+    id: 'steel',
+    label: 'Steel',
+    light: '#4F64A5',
+    lightOn: '#FFFFFF',
+    dark: '#7E93BD',
+    darkOn: '#141A26'
+  },
+  {
+    id: 'rose',
+    label: 'Rose',
+    light: '#B5525A',
+    lightOn: '#FFFFFF',
+    dark: '#C97B7B',
+    darkOn: '#210F0F'
+  },
+  {
+    id: 'violet',
+    label: 'Violet',
+    light: '#6C5AC4',
+    lightOn: '#FFFFFF',
+    dark: '#9C8FD6',
+    darkOn: '#17131F'
+  },
+  {
+    id: 'lime',
+    label: 'Lime',
+    light: '#5B8A1E',
+    lightOn: '#FFFFFF',
+    dark: '#A3C66A',
+    darkOn: '#161F0D'
+  },
+  {
+    id: 'cyan',
+    label: 'Cyan',
+    light: '#0E7D93',
+    lightOn: '#FFFFFF',
+    dark: '#6DB8C9',
+    darkOn: '#0D1A1E'
+  },
+  {
+    id: 'coral',
+    label: 'Coral',
+    light: '#C4572A',
+    lightOn: '#FFFFFF',
+    dark: '#D99168',
+    darkOn: '#241209'
+  }
+] as const
+
+/** The theme's own network colours in the mode: Wi-Fi, USB and Ethernet. */
+export function themeNetworkColours(themeId: unknown, dark: boolean): string[] {
+  const seeds = dark ? themeById(themeId).dark : themeById(themeId).light
+  return [seeds.wifi, seeds.usb, seeds.ethernet]
+}
+
 /** A saved light/dark choice, or undefined for anything else. 'system' is Auto: follow the Mac. */
 export function validThemeSource(value: unknown): 'system' | 'light' | 'dark' | undefined {
   return value === 'system' || value === 'light' || value === 'dark' ? value : undefined

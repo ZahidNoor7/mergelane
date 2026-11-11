@@ -2,6 +2,7 @@ import type { DownloadState, FinishedDownload } from '@shared/types'
 import { Activity, ChevronRight, Plus, Search, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SplitBar } from '../components/SplitBar'
 import { DownloadContextMenu } from '../components/DownloadContextMenu'
 import { useDownloadActions, useDownloadActionsState } from '../components/downloadActionsContext'
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
@@ -737,25 +738,15 @@ const DownloadRow = memo(function DownloadRow({
             )}
           </div>
           {segments.length > 0 && (
-            <div
-              className={cn(
-                'flex h-1 overflow-hidden rounded-full bg-muted',
-                // Not moving: the colors stay, faded, so it doesn't read as running.
-                !isFinished(item) &&
-                  (item.status === 'paused' || item.status === 'queued') &&
-                  'opacity-40'
-              )}
-            >
-              {segments.map((segment) => (
-                <div
-                  key={segment.id}
-                  style={{
-                    width: `${Math.min(100, segment.share * 100)}%`,
-                    background: segment.color
-                  }}
-                />
-              ))}
-            </div>
+            <SplitBar
+              segments={segments.map((segment) => ({
+                id: segment.id,
+                share: segment.share,
+                color: segment.color
+              }))}
+              // Not moving: the colours stay, faded, so it doesn't read as running.
+              dim={!isFinished(item) && (item.status === 'paused' || item.status === 'queued')}
+            />
           )}
           <div className={`truncate font-mono text-[11.5px] leading-tight ${tone}`}>{detail}</div>
         </div>

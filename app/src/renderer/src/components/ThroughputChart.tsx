@@ -6,7 +6,7 @@ import { speedTicks } from '../utils/format'
 
 const WIDTH = 560
 const HEIGHT = 130
-const labelClass = 'font-mono text-[9px] leading-none text-muted-foreground tabular-nums'
+const labelClass = 'figures text-[11.5px] leading-none text-ink-3'
 
 interface ThroughputChartProps {
   order: Array<{ interfaceId: string; solid: string; name: string }>
@@ -16,9 +16,10 @@ interface ThroughputChartProps {
   endsAt?: 'now' | 'pause' | 'end'
 }
 
-/** Stacked area chart of recent throughput, split by physical network — the "whole divided
- * by each physical network" readout from design v2, instead of one line per connection. A scale
- * to read it by, a time axis, and on hover every network's speed at that second. */
+/** Stacked area chart of recent throughput, split by network, as in the final design
+ * (design-system/mergelane/redesign/prototype.html, ThroughputChart): solid fills parted by 2px lines
+ * in the ground colour, the merged total in ink, a scale to read it by, a time axis, and every
+ * network's speed at the second pointed at — by the mouse, or by the arrow keys once focused. */
 export function ThroughputChart({
   order,
   historyByInterface,
@@ -54,6 +55,8 @@ export function ThroughputChart({
   interface Layer {
     solid: string
     points: string
+    /** The layer's top edge, where the next one starts: drawn as a separator. */
+    edge: string
   }
   const toPoint = (value: number, i: number): string =>
     `${(firstX + i * xStep).toFixed(1)},${toY(value).toFixed(1)}`
@@ -62,8 +65,9 @@ export function ThroughputChart({
       const series = historyByInterface[entry.interfaceId] ?? []
       const bottom = acc.cumulative
       const top = bottom.map((value, i) => value + (series[i] ?? 0))
-      const points = [...top.map(toPoint), ...bottom.map(toPoint).reverse()].join(' ')
-      return { cumulative: top, layers: [...acc.layers, { solid: entry.solid, points }] }
+      const edge = top.map(toPoint).join(' ')
+      const points = [edge, ...bottom.map(toPoint).reverse()].join(' ')
+      return { cumulative: top, layers: [...acc.layers, { solid: entry.solid, points, edge }] }
     },
     { cumulative: new Array<number>(length).fill(0), layers: [] }
   )
@@ -78,6 +82,22 @@ export function ThroughputChart({
   const readout = sample >= 0 && sample < length ? sample : null
   const slotPercent = (slot: number): string => `${(slot / (SPEED_HISTORY_SECONDS - 1)) * 100}%`
   const secondsAgo = SPEED_HISTORY_SECONDS - 1 - (hovered ?? 0)
+  const last = SPEED_HISTORY_SECONDS - 1
+  // Where the minute ends, and how far back a second is, in words.
+  const endLabel = endsAt === 'now' ? 'Now' : endsAt === 'pause' ? 'Paused' : 'Finished'
+  const before = (seconds: number): string =>
+    endsAt === 'now' ? `${seconds} s ago` : `${seconds} s before the ${endsAt}`
+  const onKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      const step = event.key === 'ArrowLeft' ? -1 : 1
+      setHovered((slot) =>
+        Math.min(last, Math.max(firstSlot, (slot ?? last) + (slot === null ? 0 : step)))
+      )
+    } else if (event.key === 'Escape') {
+      setHovered(null)
+    }
+  }
 
   return (
     // Clear of the heading above: the top label centres on the top gridline, so it rises above it.
@@ -101,7 +121,12 @@ export function ThroughputChart({
       </div>
       <div className="min-w-0 flex-1">
         <div
-          className="relative h-[104px]"
+          tabIndex={0}
+          role="img"
+          aria-label={`Merged throughput over the last minute, split by network. ${endLabel} ${formatSpeed(latestTotal)}, fastest ${formatSpeed(peakTotal)}. Focus and use the left and right arrow keys to read each second.`}
+          onKeyDown={onKeyDown}
+          onBlur={() => setHovered(null)}
+          className="relative h-[104px] rounded-[4px] outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           onPointerMove={(event) => {
             const box = event.currentTarget.getBoundingClientRect()
             const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width))
@@ -113,18 +138,9 @@ export function ThroughputChart({
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
             preserveAspectRatio="none"
             className="block h-full w-full"
-            role="img"
-            aria-label={`Combined throughput over the last minute. Currently ${formatSpeed(latestTotal)}, fastest ${formatSpeed(peakTotal)}.`}
+            aria-hidden
           >
-            {/* Muted ink at low opacity: quiet but seen in either theme, where --border all but
-                vanished against the dark band. */}
-            <g
-              className="text-muted-foreground"
-              stroke="currentColor"
-              strokeOpacity={0.3}
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            >
+            <g stroke="var(--border)" strokeWidth={1} vectorEffect="non-scaling-stroke">
               {ticks.map((tick) => (
                 <line
                   key={tick.value}
@@ -137,60 +153,76 @@ export function ThroughputChart({
               ))}
             </g>
             {layers.map((layer, index) => (
-              <polygon key={index} points={layer.points} fill={layer.solid} fillOpacity={0.62} />
+              <polygon key={index} points={layer.points} fill={layer.solid} />
+            ))}
+            {/* 2px of the ground between stacked layers, so neighbouring colours stay apart. */}
+            {layers.slice(0, -1).map((layer, index) => (
+              <polyline
+                key={index}
+                points={layer.edge}
+                fill="none"
+                stroke="var(--bg)"
+                strokeWidth={2}
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
             ))}
             <polyline
               points={outline}
               fill="none"
               stroke="var(--node-accent)"
-              strokeWidth={2}
-              strokeOpacity={0.85}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
           </svg>
           {readout !== null && hovered !== null && (
             <>
               <div
-                className="pointer-events-none absolute inset-y-0 w-px bg-foreground/40"
+                className="pointer-events-none absolute inset-y-0 w-0 border-l border-dashed border-foreground/50"
                 style={{ left: slotPercent(hovered) }}
               />
               {/* Every network at that second, so the pointer needn't land on a fill; on the side
                   away from the edge it would run off. */}
               <div
-                className="pointer-events-none absolute top-0 z-10 flex min-w-[150px] flex-col gap-1 rounded-md border-[0.5px] border-border bg-popover px-2.5 py-2 font-mono text-[11px] tabular-nums shadow-md"
+                className="pointer-events-none absolute top-1 z-10 flex min-w-[11rem] flex-col gap-1 rounded-[10px] bg-popover px-3 py-2 text-[12px] shadow-[var(--shadow-sheet)]"
                 style={
                   hovered > (SPEED_HISTORY_SECONDS - 1) / 2
                     ? { right: `calc(100% - ${slotPercent(hovered)} + 8px)` }
                     : { left: `calc(${slotPercent(hovered)} + 8px)` }
                 }
               >
-                <span className="text-[10px] text-muted-foreground">
-                  {secondsAgo === 0
-                    ? `${endsAt[0].toUpperCase()}${endsAt.slice(1)}`
-                    : `${secondsAgo}s ${endsAt === 'now' ? 'ago' : `before the ${endsAt}`}`}
+                <span className="text-[11.5px] text-ink-3">
+                  {secondsAgo === 0 ? endLabel : before(secondsAgo)}
                 </span>
                 {order.map((entry) => (
                   <span key={entry.interfaceId} className="flex items-center gap-2">
-                    <span className="size-2 rounded-full" style={{ background: entry.solid }} />
-                    <span className="flex-1 truncate font-sans text-[11.5px]">{entry.name}</span>
-                    {formatSpeed(historyByInterface[entry.interfaceId]?.[readout] ?? 0)}
+                    <span
+                      aria-hidden
+                      className="h-2 w-3.5 shrink-0 rounded-full"
+                      style={{ background: entry.solid }}
+                    />
+                    <span className="flex-1 truncate">{entry.name}</span>
+                    <span className="figures text-[13px] font-[600]">
+                      {formatSpeed(historyByInterface[entry.interfaceId]?.[readout] ?? 0)}
+                    </span>
                   </span>
                 ))}
                 {order.length > 1 && (
-                  <span className="flex items-center gap-2 border-t-[0.5px] border-border pt-1">
-                    <span className="flex-1 font-sans text-[11.5px]">Total</span>
-                    {formatSpeed(totals[readout])}
+                  <span className="flex items-center gap-2 border-t border-rule pt-1">
+                    <span className="flex-1 font-[600]">Merged</span>
+                    <span className="figures text-[13px] font-[650]">
+                      {formatSpeed(totals[readout])}
+                    </span>
                   </span>
                 )}
               </div>
             </>
           )}
         </div>
-        <div className={`mt-1 flex justify-between ${labelClass}`}>
-          <span>
-            {SPEED_HISTORY_SECONDS}s {endsAt === 'now' ? 'ago' : `before the ${endsAt}`}
-          </span>
-          <span>{endsAt}</span>
+        <div className={`mt-1.5 flex justify-between ${labelClass}`}>
+          <span>{before(SPEED_HISTORY_SECONDS)}</span>
+          <span>{endLabel}</span>
         </div>
       </div>
     </div>

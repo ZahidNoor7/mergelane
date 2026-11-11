@@ -55,25 +55,8 @@
   --ink-3: 63%;
   --thumb-mix: 0%;
 
-  /* Network colours a user can pick (theme.ts NETWORK_COLOR_SWATCHES). A pick overrides the theme's
-     colour for that network. Each is at least 3:1 on every theme's grounds, its glyph at least 3:1 on it
-     (theme/contrast.test.ts). */
-  --swatch-teal: #1f8a70;
-  --swatch-teal-onsolid: #ffffff;
-  --swatch-amber: #d97706;
-  --swatch-amber-onsolid: #ffffff;
-  --swatch-steel: #4f64a5;
-  --swatch-steel-onsolid: #ffffff;
-  --swatch-rose: #b5525a;
-  --swatch-rose-onsolid: #ffffff;
-  --swatch-violet: #6c5ac4;
-  --swatch-violet-onsolid: #ffffff;
-  --swatch-lime: #5b8a1e;
-  --swatch-lime-onsolid: #ffffff;
-  --swatch-cyan: #0e7d93;
-  --swatch-cyan-onsolid: #ffffff;
-  --swatch-coral: #c4572a;
-  --swatch-coral-onsolid: #ffffff;
+  /* The colours a user can pick for a network (--swatch-*) are written with the themes, from
+     shared/themes.ts NETWORK_SWATCHES (theme/appearance.ts). */
 
   /* Panels that hold content: 12px. Controls that act are capsules, in the ui/ components. */
   --radius: 12px;
@@ -96,23 +79,6 @@
     --checkbox-shadow: rgb(0 0 0 / 0.4);
     --checkbox-inset-shadow: rgb(0 0 0 / 0.3);
     --thumb-mix: 62%;
-
-    --swatch-teal: #4ea89a;
-    --swatch-teal-onsolid: #10201d;
-    --swatch-amber: #d8a44c;
-    --swatch-amber-onsolid: #221806;
-    --swatch-steel: #7e93bd;
-    --swatch-steel-onsolid: #141a26;
-    --swatch-rose: #c97b7b;
-    --swatch-rose-onsolid: #210f0f;
-    --swatch-violet: #9c8fd6;
-    --swatch-violet-onsolid: #17131f;
-    --swatch-lime: #a3c66a;
-    --swatch-lime-onsolid: #161f0d;
-    --swatch-cyan: #6db8c9;
-    --swatch-cyan-onsolid: #0d1a1e;
-    --swatch-coral: #d99168;
-    --swatch-coral-onsolid: #241209;
   }
 }
 

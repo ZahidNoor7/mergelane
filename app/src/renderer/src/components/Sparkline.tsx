@@ -54,17 +54,17 @@ export function Sparkline({
         role="img"
         aria-label={label}
       >
-        {/* The baseline: a hairline one step off the surface. */}
+        {/* The baseline: a hairline, as in the final design. */}
         <line
           x1={0}
           y1={HEIGHT - 0.5}
           x2={WIDTH}
           y2={HEIGHT - 0.5}
-          stroke="var(--border-strong)"
+          stroke="var(--border)"
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"
         />
-        {area && <polygon points={area} fill={color} fillOpacity={0.14} />}
+        {area && <polygon points={area} fill={color} fillOpacity={0.16} />}
         {values.length > 1 && (
           <polyline
             points={line}
@@ -80,7 +80,7 @@ export function Sparkline({
       {hovered !== null && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 w-px bg-foreground/40"
+          className="pointer-events-none absolute inset-y-0 w-0 border-l border-dashed border-foreground/50"
           style={{ left: `${((first + hovered) / (SPEED_HISTORY_SECONDS - 1)) * 100}%` }}
         />
       )}

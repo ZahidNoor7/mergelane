@@ -72,6 +72,17 @@ Last updated: 2026-11-11
   - Every variant and size name the screens use is kept.
   - The switch knob no longer slides under Reduce Motion.
   - Menu items now visibly highlight: `focus:bg-accent` had no colour in the theme.
+- **M3.1, pull request 4a** (branch `m3.1-visuals`): the chunk map, split bar, speed chart and sparklines in the
+  design's look.
+  - The chunk map (`BlockGrid`) keeps its real per-chunk attribution, virtualisation and "go to active". It draws
+    capsule dashes, reads out below the map (polite live region), and can be read with the arrow keys, Home, End and
+    Escape.
+  - The speed chart has solid fills with 2px separators, the total line in ink, and keyboard reading. Its sentences
+    are new: "Now", "60 s ago", "Merged".
+  - Fix: an extra network's colour now skips swatches within 0.1 (Oklab) of the theme's network colours. Porcelain's
+    Ethernet and the Teal swatch looked alike. The swatches now live in `shared/themes.ts`, and the colour maths in
+    `shared/colour.ts`.
+  - 4b (next) replaces CombineDiagram and the big total with the Confluence.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

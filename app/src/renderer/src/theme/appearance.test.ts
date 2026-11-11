@@ -38,7 +38,10 @@ describe('themeCss', () => {
         `@media (prefers-color-scheme: dark){:root[data-palette="${theme.id}"]{`
       )
     }
-    expect(css.match(/@media/g)).toHaveLength(THEMES.length)
+    // One per theme, and one for the pickable network colours.
+    expect(css.match(/@media/g)).toHaveLength(THEMES.length + 1)
+    expect(css).toContain(':root{--swatch-teal:#1F8A70;--swatch-teal-onsolid:#FFFFFF;')
+    expect(css).toContain('--swatch-coral:#D99168;--swatch-coral-onsolid:#241209;')
   })
 })
 

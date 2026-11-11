@@ -18,6 +18,7 @@ import type { IpcContract } from '../src/shared/ipc-contract'
 import { applyDownloadUpdate } from '../src/shared/downloadUpdate'
 import type {
   DownloadState,
+  DownloadWhen,
   DownloadStatus,
   DownloadUpdate,
   HttpDownloadState,
@@ -95,6 +96,8 @@ interface StartOptions {
   destinationDir?: string
   /** For a torrent: the files to download, by index. */
   selectedFiles?: number[]
+  /** New download's When (ADR-0044): left out, it starts now. */
+  when?: DownloadWhen
 }
 
 interface Tracked {
@@ -268,7 +271,8 @@ export class MergelaneApp {
       supportsRanges: multiChunk,
       interfaceIds: multiChunk ? networks : networks.slice(0, 1),
       etag: probe.etag,
-      lastModified: probe.lastModified
+      lastModified: probe.lastModified,
+      ...(options.when && { when: options.when })
     }
     const id = await this.api.startDownload(
       probe.kind === 'torrent'

@@ -333,28 +333,28 @@ func TestHandleForwardsToTheApp(t *testing.T) {
 	}{
 		{
 			"chrome ping", []string{chromeOrigin}, `{"type":"ping"}`,
-			`{"v":2,"origin":"` + chromeOrigin + `","message":{"type":"ping"}}` + "\n",
+			`{"v":3,"origin":"` + chromeOrigin + `","message":{"type":"ping"}}` + "\n",
 		},
 		{
 			"firefox ping", []string{firefoxPath, firefoxID}, `{"type":"ping"}`,
-			`{"v":2,"origin":"` + firefoxID + `","message":{"type":"ping"}}` + "\n",
+			`{"v":3,"origin":"` + firefoxID + `","message":{"type":"ping"}}` + "\n",
 		},
 		{
 			"no caller", nil, `{"type":"health"}`,
-			`{"v":2,"origin":"","message":{"type":"health"}}` + "\n",
+			`{"v":3,"origin":"","message":{"type":"health"}}` + "\n",
 		},
 		{
 			"add kept byte for byte", []string{chromeOrigin},
 			`{"type":"add","request":{"url":"https://example.com/f?a=1&b=<2>","name":"café ☕","n":1.50,"z":null}}`,
-			`{"v":2,"origin":"` + chromeOrigin + `","message":{"type":"add","request":{"url":"https://example.com/f?a=1&b=<2>","name":"café ☕","n":1.50,"z":null}}}` + "\n",
+			`{"v":3,"origin":"` + chromeOrigin + `","message":{"type":"add","request":{"url":"https://example.com/f?a=1&b=<2>","name":"café ☕","n":1.50,"z":null}}}` + "\n",
 		},
 		{
 			"whitespace removed so it stays one line", []string{chromeOrigin}, "{\n  \"type\": \"confirm\",\n  \"token\": \"t-1\"\n}",
-			`{"v":2,"origin":"` + chromeOrigin + `","message":{"type":"confirm","token":"t-1"}}` + "\n",
+			`{"v":3,"origin":"` + chromeOrigin + `","message":{"type":"confirm","token":"t-1"}}` + "\n",
 		},
 		{
 			"wake with the app running is forwarded without launching", []string{chromeOrigin}, `{"type":"wake"}`,
-			`{"v":2,"origin":"` + chromeOrigin + `","message":{"type":"wake"}}` + "\n",
+			`{"v":3,"origin":"` + chromeOrigin + `","message":{"type":"wake"}}` + "\n",
 		},
 	}
 	for _, tt := range tests {
@@ -506,7 +506,7 @@ func TestHandleWake(t *testing.T) {
 				t.Errorf("launches = %d, sleeps = %d; want %d and %d", launches, clock.sleeps, tt.wantLaunches, tt.wantSleeps)
 			}
 			if tt.want == pong {
-				want := `{"v":2,"origin":"` + chromeOrigin + `","message":` + wake + "}\n"
+				want := `{"v":3,"origin":"` + chromeOrigin + `","message":` + wake + "}\n"
 				if got := app.lines(); len(got) != 1 || got[0] != want {
 					t.Errorf("app received %q, want %q", got, want)
 				}
@@ -717,5 +717,29 @@ func TestRunStopsWhenStdoutFails(t *testing.T) {
 	err := h.Run(context.Background(), bytes.NewReader(stream([]byte(`{}`), []byte(`{}`))), failingWriter{boom})
 	if !errors.Is(err, boom) {
 		t.Errorf("err = %v, want broken pipe", err)
+	}
+}
+
+func TestRequestLineCarriesTheBrowser(t *testing.T) {
+	got := string(requestLine("o", `/Applications/Firefox.app/Contents/MacOS/firefox`, []byte(`{"type":"ping"}`)))
+	want := `{"v":3,"origin":"o","browser":"/Applications/Firefox.app/Contents/MacOS/firefox","message":{"type":"ping"}}` + "\n"
+	if got != want {
+		t.Errorf("requestLine = %q, want %q", got, want)
+	}
+	if got := string(requestLine("o", "", []byte(`{}`))); got != `{"v":3,"origin":"o","message":{}}`+"\n" {
+		t.Errorf("an unknown browser is left out: %q", got)
+	}
+}
+
+func TestParentApp(t *testing.T) {
+	if got := ParentApp(context.Background(), os.Getpid()); !strings.Contains(got, "nmhost") {
+		t.Errorf("ParentApp(own pid) = %q, want the test binary", got)
+	}
+	if got := ParentApp(context.Background(), 0); got != "" {
+		t.Errorf("ParentApp(0) = %q, want empty", got)
+	}
+	// A pid no process has: ps fails, and nothing is guessed.
+	if got := ParentApp(context.Background(), 1<<30); got != "" {
+		t.Errorf("ParentApp(missing) = %q, want empty", got)
 	}
 }

@@ -8,7 +8,7 @@ import {
   type MediaKind,
   type PageMedia
 } from './media'
-import { excluded, loadSettings } from './settings'
+import { excluded, loadAppRules, loadSettings } from './settings'
 
 // Lists the HLS and DASH manifests each tab's page loads (media.ts), for the popup. Only
 // observes: chrome.webRequest without "blocking" needs just the webRequest permission and host
@@ -84,6 +84,8 @@ async function remember(tabId: number, url: string, kind: MediaKind): Promise<vo
   const page = (await api.tabs.get(tabId).catch(() => undefined))?.url
   if (!page || !/^https?:/i.test(page)) return
   if (skipped((await loadSettings()).sites, [url, page])) return
+  // Mergelane's Settings › Browser extensions can turn the video list off.
+  if (!(await loadAppRules()).videoButton) return
   const current = await load(tabId)
   // A list left from the tab's previous page, if its navigation hasn't been seen yet.
   const items = withItem(current && samePage(current.page, page) ? current.items : [], {

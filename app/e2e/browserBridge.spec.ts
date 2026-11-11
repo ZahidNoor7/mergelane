@@ -24,7 +24,7 @@ function ask(line: string): Promise<Record<string, unknown>> {
   })
 }
 const send = (origin: string, message: unknown): Promise<Record<string, unknown>> =>
-  ask(JSON.stringify({ v: 2, origin, message }))
+  ask(JSON.stringify({ v: 3, origin, message }))
 
 test.describe('browser bridge socket @smoke', () => {
   test.describe.configure({ mode: 'serial' })
@@ -41,8 +41,8 @@ test.describe('browser bridge socket @smoke', () => {
   test('only our extensions are let in', async ({ mergelane }) => {
     void mergelane
     await expect.poll(() => send(OURS, { type: 'ping' }).then((r) => r.ok)).toBe(true)
-    expect(await send(OURS, { type: 'ping' })).toMatchObject({ ok: true, app: 'mergelane', api: 2 })
-    expect(await send(FIREFOX_EXTENSION_ID, { type: 'wake' })).toMatchObject({ ok: true, api: 2 })
+    expect(await send(OURS, { type: 'ping' })).toMatchObject({ ok: true, app: 'mergelane', api: 3 })
+    expect(await send(FIREFOX_EXTENSION_ID, { type: 'wake' })).toMatchObject({ ok: true, api: 3 })
     expect(
       await send('chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/', { type: 'ping' })
     ).toEqual({ ok: false, error: 'forbidden' })
@@ -58,7 +58,7 @@ test.describe('browser bridge socket @smoke', () => {
       ok: false,
       error: 'unsupported'
     })
-    expect(await ask(JSON.stringify({ v: 2, origin: OURS, message: 'ping' }))).toEqual({
+    expect(await ask(JSON.stringify({ v: 3, origin: OURS, message: 'ping' }))).toEqual({
       ok: false,
       error: 'bad-message'
     })
@@ -74,7 +74,8 @@ test.describe('browser bridge socket @smoke', () => {
     mergelane,
     serve
   }) => {
-    const origin = await serve({ size: 64 * 1024 })
+    // Over the default minimum of 1 MB (ADR-0039).
+    const origin = await serve({ size: 2 * 1024 * 1024 })
     await expect.poll(() => send(OURS, { type: 'ping' }).then((r) => r.ok)).toBe(true)
     const added = await send(OURS, { type: 'add', request: { url: origin.url() } })
     expect(added).toMatchObject({ ok: true })
@@ -104,5 +105,88 @@ test.describe('browser bridge socket @smoke', () => {
     expect(
       await send(OURS, { type: 'add', request: { url: origin.url(), minBytes: 5000 } })
     ).toEqual({ ok: false, kept: 'smaller than the minimum size' })
+  })
+
+  test('Settings › Browser extensions’ rules apply to every download, and reach the extension', async ({
+    mergelane,
+    serve
+  }) => {
+    const MB = 1024 * 1024
+    await expect.poll(() => send(OURS, { type: 'ping' }).then((r) => r.ok)).toBe(true)
+    // The defaults: over 1 MB, of a picked type or an unknown one.
+    expect((await send(OURS, { type: 'ping' })).rules).toEqual({ capture: true, videoButton: true })
+    const small = await serve({ size: 100_000 })
+    expect(await send(OURS, { type: 'add', request: { url: small.url() } })).toEqual({
+      ok: false,
+      kept: 'smaller than the minimum size'
+    })
+    const pdf = await serve({
+      size: 2 * MB,
+      contentDisposition: 'attachment; filename="report.pdf"'
+    })
+    expect(await send(OURS, { type: 'add', request: { url: pdf.url() } })).toEqual({
+      ok: false,
+      kept: 'a type Mergelane doesn’t take'
+    })
+
+    // Documents ticked and any size: both go.
+    await mergelane.api.updateSettings({
+      captureRules: { capture: true, minSize: 'any', types: ['doc'], videoButton: false }
+    })
+    expect(await send(OURS, { type: 'add', request: { url: pdf.url() } })).toMatchObject({
+      ok: true
+    })
+    expect(await send(OURS, { type: 'add', request: { url: small.url() } })).toMatchObject({
+      ok: true
+    })
+    expect((await send(OURS, { type: 'ping' })).rules).toEqual({
+      capture: true,
+      videoButton: false
+    })
+
+    // Off: everything stays with the browser, magnet links too.
+    await mergelane.api.updateSettings({
+      captureRules: { capture: false, minSize: 'any', types: ['doc'], videoButton: true }
+    })
+    expect(
+      await send(OURS, { type: 'add', request: { url: 'magnet:?xt=urn:btih:' + 'a'.repeat(40) } })
+    ).toEqual({
+      ok: false,
+      kept: 'sending downloads to Mergelane is off'
+    })
+    expect((await send(OURS, { type: 'ping' })).rules).toMatchObject({ capture: false })
+  })
+
+  test('remembers which browser’s extension reached it, and its version', async ({
+    mergelane,
+    dirs
+  }) => {
+    await expect.poll(() => send(OURS, { type: 'ping' }).then((r) => r.ok)).toBe(true)
+    const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    const before = Date.now()
+    const reply = await ask(
+      JSON.stringify({
+        v: 3,
+        origin: OURS,
+        browser: chrome,
+        message: { type: 'ping', extension: '1.0.0' }
+      })
+    )
+    expect(reply).toMatchObject({ ok: true })
+    // An executable that isn't a browser Mergelane knows is ignored.
+    await ask(
+      JSON.stringify({ v: 3, origin: OURS, browser: '/usr/bin/curl', message: { type: 'ping' } })
+    )
+    await expect
+      .poll(async () => {
+        const { readFile } = await import('node:fs/promises')
+        return JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
+          .browserContacts
+      })
+      .toEqual({ chrome: { at: expect.any(Number), extension: '1.0.0' } })
+    const report = await mergelane.api.browsers()
+    const contact = report.browsers.find((each) => each.id === 'chrome')!.contact
+    expect(contact?.extension).toBe('1.0.0')
+    expect(contact!.at).toBeGreaterThanOrEqual(before)
   })
 })

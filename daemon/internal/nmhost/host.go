@@ -32,6 +32,9 @@ const (
 type Options struct {
 	// Origin identifies the calling extension (see Caller). It is forwarded to the app as is.
 	Origin string
+	// Browser is the executable of the browser that started the host (see ParentApp). It is
+	// forwarded to the app, which shows which browsers have connected; empty leaves it out.
+	Browser string
 	// SocketPath is the app's browser socket (see SocketPath). Empty means the app is unreachable.
 	SocketPath string
 	// NoLaunch stops wake from launching the app; wake still waits for the app to appear.
@@ -152,7 +155,7 @@ func (h *Host) Handle(ctx context.Context, msg []byte) []byte {
 	}
 	defer conn.Close()
 
-	reply, err := h.exchange(conn, requestLine(h.opts.Origin, compact))
+	reply, err := h.exchange(conn, requestLine(h.opts.Origin, h.opts.Browser, compact))
 	switch {
 	case err == nil:
 		return reply
@@ -190,13 +193,19 @@ func parseMessage(msg []byte) (typ string, compact []byte, err error) {
 	return typ, buf.Bytes(), nil
 }
 
-// requestLine is the one line the app reads: {"v":2,"origin":<origin>,"message":<msg>} and a
-// newline. msg must be compact JSON (see parseMessage); it is copied byte for byte.
-func requestLine(origin string, msg []byte) []byte {
+// requestLine is the one line the app reads: {"v":3,"origin":<origin>,"browser":<browser>,
+// "message":<msg>} and a newline, "browser" left out when empty. msg must be compact JSON (see
+// parseMessage); it is copied byte for byte.
+func requestLine(origin, browser string, msg []byte) []byte {
 	o, _ := json.Marshal(origin) // cannot fail: invalid UTF-8 becomes U+FFFD
-	line := make([]byte, 0, len(msg)+len(o)+32)
+	b, _ := json.Marshal(browser)
+	line := make([]byte, 0, len(msg)+len(o)+len(b)+48)
 	line = fmt.Appendf(line, `{"v":%d,"origin":`, ProtocolVersion)
 	line = append(line, o...)
+	if browser != "" {
+		line = append(line, `,"browser":`...)
+		line = append(line, b...)
+	}
 	line = append(line, `,"message":`...)
 	line = append(line, msg...)
 	return append(line, "}\n"...)

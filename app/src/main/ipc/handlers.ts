@@ -53,6 +53,7 @@ import {
 } from '../updater'
 import { readAppUsage } from '../appUsage'
 import { revealExtension, scanBrowsers } from '../browsers'
+import { DEFAULT_CAPTURE_RULES, sanitizeCaptureRules } from '../../shared/captureRules'
 import { loginItemState, setOpenAtLogin } from '../loginItem'
 import { applyMenuBarSettings } from '../menuBar'
 
@@ -171,6 +172,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         solidGlass: settings.solidGlass ?? false,
         menuBarSpeed: settings.menuBarSpeed !== false,
         notifyWhenDone: settings.notifyWhenDone !== false,
+        captureRules: sanitizeCaptureRules(settings.captureRules),
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -189,7 +191,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         glassLook: 'clear',
         solidGlass: false,
         menuBarSpeed: true,
-        notifyWhenDone: true
+        notifyWhenDone: true,
+        captureRules: DEFAULT_CAPTURE_RULES
       } satisfies InitialState
     }
   })

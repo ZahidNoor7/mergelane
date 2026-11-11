@@ -16,6 +16,7 @@ import type {
 } from '@shared/types'
 import { create } from 'zustand'
 import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
+import type { CaptureRules } from '@shared/captureRules'
 import type { ThemeId } from '@shared/themes'
 import { fadeTheme } from '../theme/appearance'
 import { appendNetworkEvents, type NetworkEvent } from '../utils/dashboard'
@@ -142,6 +143,9 @@ interface AppStore {
   setMenuBarSpeed: (on: boolean) => void
   notifyWhenDone: boolean
   setNotifyWhenDone: (on: boolean) => void
+  /** Settings › Browser extensions › What the extension does (ADR-0039). */
+  captureRules: CaptureRules
+  setCaptureRules: (patch: Partial<CaptureRules>) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -378,6 +382,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     persist({ menuBarSpeed: menuBarSpeed ? undefined : false })
   },
   notifyWhenDone: initial.notifyWhenDone,
+  captureRules: initial.captureRules,
+  setCaptureRules: (patch) => {
+    const captureRules = { ...get().captureRules, ...patch }
+    set({ captureRules })
+    persist({ captureRules })
+  },
   setNotifyWhenDone: (notifyWhenDone) => {
     set({ notifyWhenDone })
     persist({ notifyWhenDone: notifyWhenDone ? undefined : false })

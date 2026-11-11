@@ -703,3 +703,38 @@ until the owner overrides it.
     (free, but needs a Mozilla account: the owner's decision).
   - Next (M3.4b): which browser connected (the helper reports its parent browser), and the capture rules set once
     in the app for every browser.
+
+## ADR-0039: One set of capture rules in the app, and which browser connected (M3.4b; bridge protocol v3)
+
+- Status: Owner (2026-11-11). The owner chose the design's default rules, plus files of unknown type.
+- Context:
+  - The design's Settings › Browser extensions › "What the extension does" sets the rules for every browser:
+    send downloads or not, a minimum size, the file types, and the video list.
+  - Before this, each browser's extension kept its own settings (send on or off, an optional minimum size,
+    excluded sites), and the app couldn't tell which browser had connected.
+- Decision:
+  - **Rules (`shared/captureRules.ts`, saved as `captureRules`):**
+    - defaults are the design's: over 1 MB; video, archives, disk images and apps;
+    - files of a type Mergelane doesn't know are always taken (`.bin`, no extension);
+    - torrents, news files, magnet links and YouTube links aren't sorted by type;
+    - images aren't offered as a type, so they stay with the browser.
+  - **The app enforces them** in the bridge's `add`. Every download is checked against the rules whatever the
+    extension's version, and a download that doesn't qualify answers `kept`, so the browser keeps it.
+  - **The extension's part:** the reply to `ping` and `wake` carries `rules: { capture, videoButton }`. The
+    extension stores them, greys its icon when sending is off, and lists a page's videos only when allowed. Its
+    own pause switch and excluded sites stay per browser.
+  - **Which browser:**
+    - mergelane-nmhost reads its parent process's executable (`/bin/ps -o comm= -p <ppid>`, no privileges) and
+      sends it as `browser` on each request line. Protocol v3; the field is left out when it can't be read.
+    - The extension sends its version as `extension` on `ping` and `wake`.
+    - The app maps the path to a browser by its app bundle name and saves `browserContacts` (when and which
+      version), at most once an hour per browser unless something changed.
+    - Settings shows "Reached Mergelane 5 min ago, extension 1.0.0", or "Restart Edge to use 1.0.0" when the
+      loaded copy is older than the one Mergelane ships.
+  - The design's row "Show a Download button on video pages" says what the extension really does: "List the
+    videos on a page" (its menu, and the count on its icon).
+- Consequences:
+  - **Fewer files sent by default:** documents, images, audio and files under 1 MB now stay with the browser. All
+    of it can be changed in Settings.
+  - **Upgrading:** an extension built for protocol v2 shows "Update Mergelane" against a v3 app until its browser
+    restarts with the copy Mergelane keeps up to date.

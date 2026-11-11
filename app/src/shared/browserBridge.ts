@@ -6,7 +6,7 @@ import type { BrowserContext } from './types'
 /** The native messaging host's name, as the browsers know it. */
 export const NATIVE_HOST = 'io.github.zahidnoor7.mergelane'
 /** Raised when an older extension or Mergelane couldn't follow a change to the messages. */
-export const BRIDGE_API = 2
+export const BRIDGE_API = 3
 /** The extension waits a little longer than this, and Mergelane adds nothing once it has given up,
  * so a download never ends up in both. */
 export const BRIDGE_DEADLINE_MS = 8000
@@ -32,10 +32,16 @@ export interface BridgeAddRequest {
   fileName?: string
 }
 
-/** What the extension sends, through the host. */
+/** What the extension needs of the capture rules: the app applies the rest to each download. */
+export interface ExtensionRules {
+  capture: boolean
+  videoButton: boolean
+}
+
+/** What the extension sends, through the host. `extension` is its version (api 3). */
 export type BridgeMessage =
-  | { type: 'ping' }
-  | { type: 'wake' }
+  | { type: 'ping'; extension?: string }
+  | { type: 'wake'; extension?: string }
   | { type: 'health' }
   | { type: 'add'; request: BridgeAddRequest }
   | { type: 'confirm'; token: string }
@@ -45,7 +51,14 @@ export type BridgeError = 'unavailable' | 'bad-message' | 'forbidden' | 'unsuppo
 /** What comes back. `token`: Mergelane will take the download once POSTed back as confirm, after
  * the browser's own copy is really gone; unconfirmed, it expires and nothing is shown. */
 export type BridgeReply =
-  | { ok: true; app: 'mergelane'; version: string; api: number }
+  | {
+      ok: true
+      app: 'mergelane'
+      version: string
+      api: number
+      /** The parts of Settings › Browser extensions the extension itself acts on (api 3). */
+      rules?: ExtensionRules
+    }
   | { ok: true; app: 'mergelane'; version: string; ready: boolean }
   | { ok: true; token: string }
   | { ok: true }

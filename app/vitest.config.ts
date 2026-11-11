@@ -78,6 +78,7 @@ export const COVERED = [
   'src/renderer/src/components/OnThisMacSettings.tsx',
   // M3.4a: Settings › Browser extensions.
   'src/shared/browsers.ts',
+  'src/shared/captureRules.ts',
   'src/renderer/src/components/ExtensionSettings.tsx',
   'src/renderer/src/components/settingsParts.tsx',
   'src/renderer/src/hooks/useSettingsShortcut.ts',

@@ -91,8 +91,22 @@ export const BROWSERS: readonly BrowserSpec[] = [
 
 /** A browser as Settings shows it: the spec, whether it is on this Mac, and where the extension
  * folder to load is. */
+/** A browser's extension reaching Mergelane: when, and the extension's version if it said. */
+export interface BrowserContact {
+  at: number
+  extension?: string
+}
+
+/** The browser whose executable started Mergelane's helper (its path, from ps), if it's one we know:
+ * the executable sits inside the browser's app bundle. */
+export function browserOfExecutable(path: string): BrowserId | null {
+  return BROWSERS.find((each) => path.includes(`/${each.app}/`))?.id ?? null
+}
+
 export interface BrowserState extends BrowserSpec {
   found: boolean
+  /** When its extension last reached Mergelane; null if it never has. */
+  contact: BrowserContact | null
   /** The folder to choose in the browser ("Load unpacked"), or for Firefox the folder holding the
    * manifest.json to choose; null when the extension isn't ready for this browser. */
   extensionFolder: string | null
@@ -102,6 +116,8 @@ export interface BrowsersReport {
   browsers: BrowserState[]
   /** Whether any browser's extension has reached Mergelane yet. */
   extensionConnected: boolean
+  /** The extension version this Mergelane ships, to tell an out-of-date one. */
+  extensionVersion: string | null
   /** When the browsers were last looked for. */
   scannedAt: number
 }

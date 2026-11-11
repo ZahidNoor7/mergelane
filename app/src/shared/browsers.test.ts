@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BROWSERS, installSteps } from './browsers'
+import { browserOfExecutable, BROWSERS, installSteps } from './browsers'
 
 describe('the browsers Mergelane knows', () => {
   it('a supported browser has an extension build and a page to load it on; the rest say why not', () => {
@@ -34,5 +34,19 @@ describe('the browsers Mergelane knows', () => {
     )
     expect(installSteps(firefox)).toHaveLength(4)
     expect(installSteps(BROWSERS.find((each) => each.id === 'safari')!)).toEqual([])
+  })
+})
+
+describe('browserOfExecutable', () => {
+  it('names the browser whose app bundle holds the executable', () => {
+    expect(
+      browserOfExecutable('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+    ).toBe('chrome')
+    expect(
+      browserOfExecutable('/Users/a/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge')
+    ).toBe('edge')
+    expect(browserOfExecutable('/Applications/Firefox.app/Contents/MacOS/firefox')).toBe('firefox')
+    expect(browserOfExecutable('/usr/bin/python3')).toBeNull()
+    expect(browserOfExecutable('')).toBeNull()
   })
 })

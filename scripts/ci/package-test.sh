@@ -376,7 +376,7 @@ while [ $SECONDS -lt $deadline ]; do
     tail -n 20 "$WORK/app.log" >&2 || true
     fail "the app exited before it was ready"
   fi
-  body=$(printf '{"v":2,"origin":"","message":{"type":"health"}}\n' | nc -U -w 3 "$BRIDGE_SOCKET" 2>/dev/null || true)
+  body=$(printf '{"v":3,"origin":"","message":{"type":"health"}}\n' | nc -U -w 3 "$BRIDGE_SOCKET" 2>/dev/null || true)
   if grep -q '"app":"mergelane"' <<<"$body" && grep -q '"ready":true' <<<"$body"; then
     health=$body
     break

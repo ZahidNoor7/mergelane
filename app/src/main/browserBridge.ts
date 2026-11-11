@@ -10,6 +10,8 @@ import {
   type BridgeAddRequest,
   type BridgeReply
 } from '../shared/browserBridge'
+import { browserOfExecutable, type BrowserContact, type BrowserId } from '../shared/browsers'
+import { keptBy, sanitizeCaptureRules, type CaptureRules } from '../shared/captureRules'
 import type { BrowserContext, ProbeResult } from '../shared/types'
 import { browserContextFrom, requestHeaders } from './download/browserContext'
 import type { DownloadManager } from './download/downloadManager'
@@ -112,7 +114,7 @@ async function handle(line: string, gone: Promise<void>): Promise<BridgeReply> {
   if (typeof request !== 'object' || request === null || Array.isArray(request)) {
     return { ok: false, error: 'bad-message' }
   }
-  const { v, origin, message } = request as Record<string, unknown>
+  const { v, origin, message, browser } = request as Record<string, unknown>
   if (v !== BRIDGE_API) return { ok: false, error: 'unsupported' }
   if (typeof message !== 'object' || message === null || Array.isArray(message)) {
     return { ok: false, error: 'bad-message' }
@@ -128,9 +130,18 @@ async function handle(line: string, gone: Promise<void>): Promise<BridgeReply> {
 
   switch (body.type) {
     case 'ping':
-    case 'wake':
+    case 'wake': {
       noteExtension()
-      return { ok: true, app: 'mergelane', version: app.getVersion(), api: BRIDGE_API }
+      noteContact(browser, body.extension)
+      const rules = await captureRules()
+      return {
+        ok: true,
+        app: 'mergelane',
+        version: app.getVersion(),
+        api: BRIDGE_API,
+        rules: { capture: rules.capture, videoButton: rules.videoButton }
+      }
+    }
     case 'add': {
       const parsed = addRequestFrom(body.request)
       if (!parsed) return { ok: false, error: 'bad-message' }
@@ -147,6 +158,39 @@ async function handle(line: string, gone: Promise<void>): Promise<BridgeReply> {
     default:
       return { ok: false, error: 'unsupported' }
   }
+}
+
+/** The capture rules as saved (Settings › Browser extensions). */
+async function captureRules(): Promise<CaptureRules> {
+  return sanitizeCaptureRules((await loadSettings()).captureRules)
+}
+
+/** When each browser was last heard from, kept in memory and saved at most once an hour per browser
+ * (or at once for a browser or extension version not seen before): a ping comes often. */
+const CONTACT_SAVE_MS = 60 * 60_000
+const contacts = new Map<BrowserId, BrowserContact>()
+function noteContact(executable: unknown, extension: unknown): void {
+  if (typeof executable !== 'string') return
+  const id = browserOfExecutable(executable)
+  if (!id) return
+  const before = contacts.get(id)
+  const contact: BrowserContact = {
+    at: Date.now(),
+    ...(typeof extension === 'string' ? { extension: extension.slice(0, 32) } : {})
+  }
+  contacts.set(id, contact)
+  if (
+    before &&
+    before.extension === contact.extension &&
+    contact.at - before.at < CONTACT_SAVE_MS
+  ) {
+    return
+  }
+  void loadSettings()
+    .then((settings) =>
+      saveSettings({ browserContacts: { ...settings.browserContacts, [id]: contact } })
+    )
+    .catch(() => {})
 }
 
 function noteExtension(): void {
@@ -215,6 +259,10 @@ async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<Brid
     return { ok: true, token }
   }
 
+  // Settings › Browser extensions (ADR-0039): off keeps everything in the browser.
+  const rules = await captureRules()
+  if (!rules.capture) return keep('sending downloads to Mergelane is off')
+
   // A magnet link has nothing to check here: New download looks it up. So has a YouTube link: yt-dlp
   // can take longer than the extension waits, and it goes without the browser's cookies.
   if (/^magnet:/i.test(request.url) || youtubeLink(request.url)) return hold({ url: request.url })
@@ -236,6 +284,13 @@ async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<Brid
   ) {
     return keep('smaller than the minimum size')
   }
+  // The app's own rules: the minimum size, and the types Mergelane takes.
+  const kept = keptBy(rules, {
+    kind: probe.kind,
+    fileName: probe.kind === 'http' || probe.kind === 'stream' ? probe.suggestedFileName : '',
+    size: probe.kind === 'http' ? probe.totalBytes : null
+  })
+  if (kept) return keep(kept)
   return hold({
     url: request.url,
     probe,

@@ -378,8 +378,28 @@ Last updated: 2026-11-11
     - `e2e/browserExtensions.spec.ts` (2 tests): it builds its own extension copy and uses a test Applications
       folder. The Finder is never opened; the app notes what it would show.
     - `nativeHost.spec` now expects Edge.
-  - **Next, M3.4b:** which browser connected (the helper reports its parent browser), and the capture rules set
-    once in the app and sent to every browser's extension.
+  - Merged (#40).
+- **M3.4b Capture rules and connected browsers** (branch `m3.4-rules`, ADR-0039; bridge protocol v3). The owner
+  chose the design's defaults plus unknown types.
+  - **Helper (Go):** `ParentApp` reads the parent process's executable with `/bin/ps` and sends it as `browser` on
+    each request line. `ProtocolVersion` is 3.
+    - `go test -race`: `internal/nmhost` 98.8%, `cmd/mergelane-nmhost` 91.7%; `go vet` and `staticcheck` clean.
+  - **App:**
+    - `shared/captureRules.ts`: the rules, defaults, sanitising and `keptBy`;
+    - the bridge applies the rules in `add`, answers `ping` and `wake` with `rules`, and records `browserContacts`
+      (saved at most hourly per browser);
+    - `scanBrowsers` reports each browser's contact and the extension version Mergelane ships.
+  - **Extension:** it sends its version, stores `appRules` from the reply, greys its icon when sending is off in
+    Mergelane, and skips the video list when that's off.
+  - **UI:** each browser row says "Reached Mergelane … , extension x", or "Restart … to use y" when out of date.
+    "What the extension does" has sending, minimum size, file types and the video list.
+  - **Docs:** BROWSER-BRIDGE.md documents v3. `package-test.sh`'s health check sends v3.
+  - **Tests:**
+    - Vitest: `captureRules`, `browserOfExecutable`, and the new rows and rules group.
+    - `browserBridge.spec`: the rules on `add` (size, type, off, magnet), the rules in `ping`, and contacts.
+      Its offered file is now 2 MB, over the new default minimum.
+    - `extension.spec`: in real Chromium, the extension stores the app's rules and greys its icon when sending is
+      off.
 - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
     of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
     once. Each passed alone, and the full run passed with `--maxWorkers=3`.

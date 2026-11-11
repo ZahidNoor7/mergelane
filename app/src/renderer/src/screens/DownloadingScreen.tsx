@@ -11,10 +11,8 @@ import { NetworkRow, networkStatusText } from '../components/NetworkRow'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
-import { TorrentBadge } from '../components/TorrentBadge'
+import { KindTags } from '../components/DownloadGlyphs'
 import { TruncatedText } from '../components/TruncatedText'
-import { UsenetBadge } from '../components/UsenetBadge'
-import { StreamBadge } from '../components/StreamBadge'
 import { UsenetServerButton } from '../components/UsenetServerDialog'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -290,9 +288,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 text={download.fileName}
                 className="font-sans text-[15px] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground"
               />
-              {isTorrent && <TorrentBadge />}
-              {download.kind === 'nzb' && <UsenetBadge />}
-              {download.kind === 'stream' && <StreamBadge protocol={download.protocol} />}
+              <KindTags item={download} />
             </div>
             <div className="flex min-w-0 items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>

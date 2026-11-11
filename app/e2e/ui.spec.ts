@@ -151,7 +151,7 @@ test.describe('UI journeys @smoke', () => {
     await mergelane.start(origin.url(), origin.sha256)
     await reached
     const page = mergelane.page
-    await page.getByRole('button', { name: 'Open test.bin', exact: true }).click()
+    await page.getByRole('button', { name: 'test.bin', exact: true }).click()
     // An empty bar is still a progress indicator: its track and accessible value must exist
     // before the server sends the first byte.
     const progress = page.getByRole('table', { name: 'Networks' }).getByRole('progressbar').first()
@@ -284,7 +284,7 @@ test.describe('UI journeys @smoke', () => {
     const { fileName } = await mergelane.waitForStatus('completed')
     await mergelane.relaunch()
     // Listed under Finished; opened, it shows as it did when it finished.
-    await mergelane.page.getByRole('button', { name: `Open ${fileName}` }).click()
+    await mergelane.page.getByRole('button', { name: fileName, exact: true }).click()
     await expect(
       mergelane.page.getByRole('button', { name: /Show in (Finder|folder)/ })
     ).toBeVisible()

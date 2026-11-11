@@ -13,6 +13,7 @@ import type {
   ThemeSource
 } from '@shared/types'
 import { create } from 'zustand'
+import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
 import type { ThemeId } from '@shared/themes'
 import { fadeTheme } from '../theme/appearance'
 import { appendNetworkEvents, type NetworkEvent } from '../utils/dashboard'
@@ -47,8 +48,13 @@ interface AppStore {
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
   view: View
+  /** The list's status tab. */
   downloadFilter: DownloadFilter
   setDownloadFilter: (filter: DownloadFilter) => void
+  /** The list's filters by date added and file type, kept while the window is open. */
+  downloadFilters: DownloadFilters
+  setDownloadFilters: (patch: Partial<DownloadFilters>) => void
+  clearDownloadFilters: () => void
   downloadSchedule: DownloadSchedule | undefined
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
@@ -137,6 +143,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   view: { name: 'list' },
   downloadFilter: 'all',
   setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
+  downloadFilters: NO_FILTERS,
+  setDownloadFilters: (patch) =>
+    set((store) => ({ downloadFilters: { ...store.downloadFilters, ...patch } })),
+  clearDownloadFilters: () => set({ downloadFilters: NO_FILTERS }),
   downloadSchedule: initial.downloadSchedule,
   newDownloadOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,

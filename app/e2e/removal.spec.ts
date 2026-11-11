@@ -171,7 +171,7 @@ test('failed torrent cancellation stays visible across restart and can be retrie
     const failed = await mergelane.waitForTorrentStatus('error')
     expect(failed.error).toMatch(/folder is now a link/)
     expect(failed.resumable).toBe(false)
-    const row = mergelane.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
+    const row = mergelane.page.getByRole('button', { name: paused.fileName, exact: true })
     await expect(row).toBeVisible()
     expect(
       mergelane.sessions
@@ -184,7 +184,7 @@ test('failed torrent cancellation stays visible across restart and can be retrie
 
     await mergelane.relaunch()
     await expect(
-      mergelane.page.getByRole('button', { name: `Open ${paused.fileName}`, exact: true })
+      mergelane.page.getByRole('button', { name: paused.fileName, exact: true })
     ).toBeVisible()
     expect((await mergelane.waitForTorrentStatus('error')).error).toMatch(/folder is now a link/)
     await unlink(paused.destinationPath)
@@ -253,7 +253,7 @@ test('cleanup failure keeps an active HTTP download visible and blocks resume du
       (await mergelane.api.listDownloads()).find((entry) => entry.state.id === id)?.state.status
     ).toBe('paused')
     await expect(
-      mergelane.page.getByRole('button', { name: `Open ${state.fileName}`, exact: true })
+      mergelane.page.getByRole('button', { name: state.fileName, exact: true })
     ).toBeVisible()
     await mergelane.evaluateMain(() => {
       ;((globalThis as Record<string, unknown>).__releaseDiscard as () => void)()

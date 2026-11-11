@@ -25,6 +25,15 @@ All notable changes to Mergelane are recorded here. The format follows
 - The window opens at 1040 × 720 and can be made as narrow as 720 points.
 - The Dashboard button in the download list and the Dashboard's "Downloads" back button are gone: the sidebar or
   the compact bar now moves between them.
+- The download list takes the new design:
+  - a title with what's running, and a search field;
+  - the Confluence of every network above the list;
+  - status tabs with counts (All, In progress, Finished, Needs attention), which replace the status menu;
+  - new rows with a file-type icon, tags for torrents, Usenet and video links, and the progress in plain words.
+  - Queued downloads are now listed as "Waiting".
+- Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
+  file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
+  downloads it would leave, and the filters that are on show as chips you can remove.
 
 ### Fixed
 

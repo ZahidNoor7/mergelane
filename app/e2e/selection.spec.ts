@@ -55,7 +55,7 @@ test('mixed selection applies actions only to eligible downloads and keeps finis
 
   const page = mergelane.page
   const beforeSelection = await page
-    .getByRole('button', { name: 'Open paused.bin', exact: true })
+    .getByRole('button', { name: 'paused.bin', exact: true })
     .boundingBox()
   await page.getByRole('checkbox', { name: 'Select paused.bin', exact: true }).check()
   const toolbar = page.getByRole('toolbar', { name: 'Selected downloads' })
@@ -64,7 +64,7 @@ test('mixed selection applies actions only to eligible downloads and keeps finis
   await expect(toolbar.getByText('3 selected', { exact: true })).toBeVisible()
   await expect(page.locator('[data-selected=true]')).toHaveCount(3)
   const afterSelection = await page
-    .getByRole('button', { name: 'Open paused.bin', exact: true })
+    .getByRole('button', { name: 'paused.bin', exact: true })
     .boundingBox()
   expect(afterSelection?.y).toBe(beforeSelection?.y)
   await expect(page.getByRole('button', { name: 'Resume (1)', exact: true })).toBeVisible()
@@ -93,7 +93,7 @@ test('mixed selection applies actions only to eligible downloads and keeps finis
   await expect(toolbar.getByText('3 selected', { exact: true })).toBeVisible()
   await chooseMore(page, 'Remove 2 from list')
   await page.getByRole('alertdialog').getByRole('button', { name: 'Remove', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Open finished.bin', exact: true })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'finished.bin', exact: true })).toBeHidden()
   expect(existsSync(finished.destinationPath)).toBe(true)
   await expect(toolbar.getByText('1 selected', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Cancel downloads (1)', exact: true }).click()
@@ -147,7 +147,7 @@ test('showing a file that has moved says so in a dialog, not on the page', async
   // checking each file. Move the file only once that listing is in (there are finished ones to
   // clear) and the menu is open, so neither can see it gone first.
   await expect(page.getByRole('button', { name: 'Clear finished list', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: `Open ${complete.fileName}`, exact: true }).click({
+  await page.getByRole('button', { name: complete.fileName, exact: true }).click({
     button: 'right'
   })
   const showIn = page.getByRole('menuitem', { name: /^Show in/ })
@@ -296,10 +296,12 @@ test('search and filter interaction with selection: no crash on empty query filt
 
   // 1. Pick a status filter ('Finished') and type a query matching nothing ('zzz').
   // Verifies bug 1: no white screen / crash occurs when a group has 0 matches.
-  await page.getByRole('button', { name: 'All downloads' }).click()
-  await page.getByRole('menuitemradio', { name: 'Finished' }).click()
+  await page
+    .getByRole('group', { name: 'Show' })
+    .getByRole('button', { name: /^Finished/ })
+    .click()
   await search.fill('zzz')
-  await expect(page.getByText(/No downloads matching/)).toBeVisible()
+  await expect(page.getByText(/No downloads match “zzz”/)).toBeVisible()
 
   // 2. Search for 'alpha': only alpha-doc.bin shows
   await search.fill('alpha')

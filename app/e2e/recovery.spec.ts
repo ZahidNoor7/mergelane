@@ -281,9 +281,11 @@ test.describe('persisted state on disk @smoke', () => {
     expect((await mergelane.api.listHistory()).map((entry) => entry.id)).toEqual([finished.id])
     // And the window shows no row for either.
     await expect(
-      mergelane.page.getByRole('button', { name: `Open ${finished.fileName}` })
+      mergelane.page.getByRole('button', { name: finished.fileName, exact: true })
     ).toBeVisible()
-    await expect(mergelane.page.getByRole('button', { name: 'Open shot.jpg' })).toHaveCount(0)
+    await expect(mergelane.page.getByRole('button', { name: 'shot.jpg', exact: true })).toHaveCount(
+      0
+    )
     await expect(mergelane.page.getByText('clip.mp4')).toHaveCount(0)
     // The paused one is cleared, partial data and all, as any download this version can't
     // restore is.

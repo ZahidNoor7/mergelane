@@ -1,46 +1,31 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronRight, Plus, Search, X } from 'lucide-react'
+import { activeFilterCount, filtersActive, matchesFilters } from '@shared/downloadFilters'
+import { matchesSearch, searchTokens } from '@shared/downloadSearch'
+import { scheduleMessage, scheduleWindow } from '@shared/downloadSchedule'
+import { ListFilter, Plus, Search, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SplitBar } from '../components/SplitBar'
+import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
 import { DownloadContextMenu } from '../components/DownloadContextMenu'
+import { ActiveFilterChips, FILTER_PANEL_ID, FilterPanel } from '../components/DownloadFilters'
+import { FileGlyph, KindTags } from '../components/DownloadGlyphs'
 import { useDownloadActions, useDownloadActionsState } from '../components/downloadActionsContext'
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
-import { MoreActionsMenu } from '../components/MoreActionsMenu'
-import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
-import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
 import { LimitsDialog } from '../components/LimitsDialog'
-import { ScheduleIndicator } from '../components/ScheduleIndicator'
+import { MoreActionsMenu } from '../components/MoreActionsMenu'
 import { networkStatusText } from '../components/NetworkRow'
-import { scheduleMessage, scheduleWindow } from '@shared/downloadSchedule'
-import { matchesSearch, searchTokens } from '@shared/downloadSearch'
 import { NetworksMenu } from '../components/NetworksMenu'
-import { TorrentBadge } from '../components/TorrentBadge'
-import { UsenetBadge } from '../components/UsenetBadge'
-import { StreamBadge } from '../components/StreamBadge'
+import { ScheduleIndicator } from '../components/ScheduleIndicator'
+import { SpeedText } from '../components/SpeedText'
+import { SplitBar } from '../components/SplitBar'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput
-} from '../components/ui/input-group'
+import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { useMergeLanes } from '../hooks/useMergeLanes'
 import { useNetworkVisuals, type ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useAppStore, type DownloadFilter } from '../store/useAppStore'
-import {
-  describeError,
-  fileExtensionBadge,
-  formatBytes,
-  formatEta,
-  formatPercent,
-  formatWhen,
-  isFolder,
-  sourceOf,
-  wantedBytes
-} from '../utils/format'
-import { useFormatSpeed } from '../hooks/useFormatSpeed'
 import {
   availableActions,
   isFinished,
@@ -48,6 +33,23 @@ import {
   splitToolbar,
   type ActionId
 } from '../utils/downloadActions'
+import {
+  describeError,
+  formatBytes,
+  formatEta,
+  formatPercent,
+  formatWhen,
+  sourceOf,
+  wantedBytes
+} from '../utils/format'
+
+// The download list, in the final design's layout (design-system/mergelane/redesign/prototype.html,
+// DownloadsScreen): a toolbar with the title, what's running, search and New download; the
+// Confluence of every network; the status tabs and the filters; then the downloads in groups.
+//
+// Kept from before, restyled (the owner's answer to PHASE-3.md's first question): the selection
+// with its toolbar and keys, the right-click menu, each row's next step, the schedule button and the
+// networks menu (which move to Settings and the Networks screen in M3.1 pull requests 5e and 5d).
 
 type Item = DownloadState | FinishedDownload
 
@@ -56,44 +58,54 @@ interface Group {
   items: Item[]
 }
 
-function filterOf(item: Item): Exclude<DownloadFilter, 'all'> {
+function tabOf(item: Item): Exclude<DownloadFilter, 'all'> {
   if ('unitsWritten' in item || item.status === 'completed') return 'finished'
   return item.status === 'error' ? 'failed' : 'progress'
 }
 
-function groupsOf(downloads: DownloadState[], history: FinishedDownload[]): Group[] {
+const TABS: { value: DownloadFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'progress', label: 'In progress' },
+  { value: 'finished', label: 'Finished' },
+  { value: 'failed', label: 'Needs attention' }
+]
+
+function groupsOf(items: Item[]): Group[] {
   const byStatus = (status: DownloadState['status']): DownloadState[] =>
-    downloads.filter((download) => download.status === status)
+    items.filter((item): item is DownloadState => !isFinished(item) && item.status === status)
   return [
     { label: 'Downloading', items: byStatus('downloading') },
     {
-      label: 'Queued',
+      label: 'Waiting',
       items: byStatus('queued').sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0))
     },
     { label: 'Paused', items: byStatus('paused') },
     { label: 'Needs attention', items: byStatus('error') },
     // Completed but not in history yet: on its way there, so listed with it.
-    { label: 'Finished', items: [...byStatus('completed'), ...history] }
+    {
+      label: 'Finished',
+      items: [...byStatus('completed'), ...items.filter((item) => isFinished(item))]
+    }
   ].filter((group) => group.items.length > 0)
 }
 
-/** "2 downloading · 1 queued", or "all done". */
-function summaryOf(downloads: DownloadState[]): string {
+/** "2 downloading, 1 waiting", "All finished", or "Nothing yet". */
+function summaryOf(downloads: DownloadState[], listed: number): string {
+  if (listed === 0) return 'Nothing yet'
   const count = (status: DownloadState['status']): number =>
     downloads.filter((download) => download.status === status).length
-  const parts = [
-    [count('downloading'), 'downloading'],
-    [count('queued'), 'queued'],
-    [count('paused'), 'paused'],
-    [count('error'), 'need attention']
-  ]
-    .filter(([n]) => (n as number) > 0)
+  const parts = (
+    [
+      [count('downloading'), 'downloading'],
+      [count('queued'), 'waiting'],
+      [count('paused'), 'paused'],
+      [count('error'), 'need attention']
+    ] as const
+  )
+    .filter(([n]) => n > 0)
     .map(([n, label]) => `${n} ${label}`)
-  return parts.length > 0 ? parts.join(' · ') : 'all done'
+  return parts.length > 0 ? parts.join(', ') : 'All finished'
 }
-
-const groupLabelClass =
-  'font-mono text-[10.5px] leading-none font-medium tracking-[0.18em] text-muted-foreground uppercase'
 
 export function DownloadsScreen(): React.JSX.Element {
   const downloadsById = useAppStore((store) => store.downloads)
@@ -102,6 +114,9 @@ export function DownloadsScreen(): React.JSX.Element {
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
+  const filters = useAppStore((store) => store.downloadFilters)
+  const clearFilters = useAppStore((store) => store.clearDownloadFilters)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const { perform, askClearFinished } = useDownloadActions()
   const { busy } = useDownloadActionsState()
@@ -114,6 +129,7 @@ export function DownloadsScreen(): React.JSX.Element {
   const tokens = useMemo(() => searchTokens(searchQuery), [searchQuery])
   const isSearching = tokens.length > 0
   const [now, setNow] = useState(() => Date.now())
+  const { lanes, active, progress } = useMergeLanes()
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 30_000)
@@ -123,25 +139,24 @@ export function DownloadsScreen(): React.JSX.Element {
   const downloads = Object.values(downloadsById)
     .filter((download) => download.status !== 'cancelled')
     .sort((a, b) => a.startedAt - b.startedAt)
-  const allGroups = groupsOf(downloads, history)
-  const allItems = allGroups.flatMap((group) => group.items)
+  const listed: Item[] = [...downloads, ...history]
+  // Date, type and search narrow the list first; the status tabs then count and split what's left.
+  const narrowed = listed.filter(
+    (item) => matchesFilters(item, filters, now) && (!isSearching || matchesSearch(item, tokens))
+  )
   const counts: Record<DownloadFilter, number> = {
-    all: allItems.length,
+    all: narrowed.length,
     progress: 0,
     finished: 0,
     failed: 0
   }
-  for (const item of allItems) counts[filterOf(item)]++
-  const groups = allGroups
-    .map((group) => ({
-      ...group,
-      items: isSearching ? group.items.filter((item) => matchesSearch(item, tokens)) : group.items
-    }))
-    .filter(
-      (group) => group.items.length > 0 && (filter === 'all' || filterOf(group.items[0]) === filter)
-    )
+  for (const item of narrowed) counts[tabOf(item)]++
+  const groups = groupsOf(
+    filter === 'all' ? narrowed : narrowed.filter((item) => tabOf(item) === filter)
+  )
   const items = groups.flatMap((group) => group.items)
-  // Only what's still listed counts: one that finished or went is no longer selected.
+  const anyFilter = filtersActive(filters)
+  // Only what's still shown counts: one that finished, went or was filtered out is no longer selected.
   const chosen = items.filter((item) => selected.has(item.id))
 
   const toggle = useCallback(
@@ -160,6 +175,10 @@ export function DownloadsScreen(): React.JSX.Element {
   const networkVisual = useNetworkVisuals()
   const selectRow = useCallback((id: string, on: boolean) => toggle([id], on), [toggle])
   const openRow = useCallback((id: string) => setView({ name: 'download', id }), [setView])
+  const focusSearch = (): void => {
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }
   // Keys for the selection: Esc clears it, Select all, and Delete takes
   // the selected off the list (with Cmd/Ctrl, moves their files to the Trash), each asking first.
   useEffect(() => {
@@ -180,13 +199,9 @@ export function DownloadsScreen(): React.JSX.Element {
         event.preventDefault()
         if (chosen.length > 0) {
           setSelected(new Set())
-          requestAnimationFrame(() => {
-            searchInputRef.current?.focus()
-            searchInputRef.current?.select()
-          })
+          requestAnimationFrame(focusSearch)
         } else {
-          searchInputRef.current?.focus()
-          searchInputRef.current?.select()
+          focusSearch()
         }
       } else if (command && event.key.toLowerCase() === 'a') {
         event.preventDefault()
@@ -214,89 +229,84 @@ export function DownloadsScreen(): React.JSX.Element {
     setShowSchedule(true)
     setLimitsOpen(true)
   }
+  const showEverything = (): void => {
+    setFilter('all')
+    setSearchQuery('')
+    clearFilters()
+  }
 
   return (
     <div className="flex h-full flex-col bg-background">
       {chosen.length === 0 ? (
-        <div className="window-drag relative flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-3 @min-[640px]:gap-3 @min-[640px]:px-5">
-          <DownloadFilterMenu
-            value={filter}
-            counts={counts}
-            onChange={(next) => {
-              setFilter(next)
-              setSelected(new Set())
-            }}
-          />
-          {/* One group already says it in its header. */}
-          {allGroups.length > 1 && (
-            <div className="hidden font-mono text-[11.5px] leading-none whitespace-nowrap text-muted-foreground @min-[1024px]:block">
-              {summaryOf(downloads)}
-            </div>
-          )}
-          <div className="flex-1" />
-          <div className="relative w-44 shrink-0 @min-[640px]:w-48 @min-[768px]:w-52 @min-[900px]:absolute @min-[900px]:left-1/2 @min-[900px]:-translate-x-1/2 @min-[1024px]:w-60">
-            <InputGroup className="h-7 w-full border-border/70 bg-secondary/30">
-              <InputGroupAddon align="inline-start">
-                <Search className="size-3.5 text-muted-foreground" />
-              </InputGroupAddon>
-              <InputGroupInput
+        <div className="window-drag flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[18px] leading-tight font-[680] tracking-[-0.015em]">
+              Downloads
+            </h1>
+            <p className="truncate text-[12px] leading-snug text-ink-3">
+              {summaryOf(downloads, listed.length)}
+            </p>
+          </div>
+          <div className="flex w-full min-w-0 items-center gap-2 @min-[640px]:w-auto">
+            <label className="relative flex h-8 min-w-0 flex-1 items-center rounded-full bg-sunken shadow-[inset_0_0_0_1px_var(--border)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring @min-[640px]:w-52 @min-[640px]:flex-none">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute left-2.5 size-3.5 text-ink-3"
+              />
+              <input
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') {
                     event.preventDefault()
-                    if (searchQuery) {
-                      setSearchQuery('')
-                    } else {
-                      searchInputRef.current?.blur()
-                    }
+                    if (searchQuery) setSearchQuery('')
+                    else searchInputRef.current?.blur()
                   }
                 }}
-                placeholder="Search downloads"
-                className="h-7 text-xs placeholder:text-muted-foreground/70"
+                placeholder="Search"
                 aria-label="Search downloads"
+                className="h-full w-full min-w-0 rounded-full bg-transparent pr-8 pl-8 text-[13px] outline-none placeholder:text-ink-3"
               />
-              <InputGroupAddon align="inline-end">
-                {searchQuery ? (
-                  <InputGroupButton
-                    size="icon-xs"
-                    onClick={() => {
-                      setSearchQuery('')
-                      searchInputRef.current?.focus()
-                    }}
-                    aria-label="Clear search"
-                  >
-                    <X className="size-3" />
-                  </InputGroupButton>
-                ) : (
-                  <kbd className="hidden font-mono text-[10px] text-muted-foreground/60 select-none @min-[640px]:inline-block">
-                    {isMac ? '⌘F' : 'Ctrl+F'}
-                  </kbd>
-                )}
-              </InputGroupAddon>
-            </InputGroup>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchQuery('')
+                    searchInputRef.current?.focus()
+                  }}
+                  className="absolute right-1.5 grid size-5 place-items-center rounded-full text-ink-3 hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <X aria-hidden className="size-3" />
+                </button>
+              ) : (
+                <kbd className="pointer-events-none absolute right-3 hidden font-mono text-[10.5px] text-ink-3 select-none @min-[640px]:inline">
+                  {isMac ? '⌘F' : 'Ctrl+F'}
+                </kbd>
+              )}
+            </label>
+            <ScheduleIndicator onClick={openSchedule} />
+            <NetworksMenu
+              onOpenLimits={(page) => {
+                setShowSchedule(false)
+                setLimitsPage(page)
+                setLimitsOpen(true)
+              }}
+            />
+            <Button type="button" onClick={() => openNewDownload()}>
+              <Plus data-icon="inline-start" />
+              New download
+            </Button>
           </div>
-          <ScheduleIndicator onClick={openSchedule} />
-          <NetworksMenu
-            onOpenLimits={(page) => {
-              setShowSchedule(false)
-              setLimitsPage(page)
-              setLimitsOpen(true)
-            }}
-          />
-          <Button type="button" onClick={() => openNewDownload()}>
-            <Plus data-icon="inline-start" />
-            New download
-          </Button>
         </div>
       ) : (
         <div
           role="toolbar"
           aria-label="Selected downloads"
           aria-busy={busy}
-          className="window-drag flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
+          className="window-drag flex min-h-14 shrink-0 items-center gap-3 border-b border-rule px-4"
         >
           <Tooltip>
             <TooltipTrigger
@@ -315,7 +325,7 @@ export function DownloadsScreen(): React.JSX.Element {
             />
             <TooltipContent>Deselect all</TooltipContent>
           </Tooltip>
-          <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">
+          <span className="shrink-0 text-[13px] font-[650] whitespace-nowrap">
             {chosen.length} selected
           </span>
           <Button
@@ -347,85 +357,180 @@ export function DownloadsScreen(): React.JSX.Element {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-        {groups.length === 0 &&
-          (isSearching ? (
-            <div role="status" className="flex flex-col items-center gap-2 px-5 py-16 text-center">
-              <Search className="size-8 stroke-[1.5] text-muted-foreground opacity-40" />
-              <p className="text-[16px] font-semibold">
-                No downloads matching &ldquo;{searchQuery.trim()}&rdquo;
-              </p>
-              <Button type="button" variant="secondary" onClick={() => setSearchQuery('')}>
-                Clear search
-              </Button>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {listed.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="flex flex-col gap-4 px-3 pt-4 pb-6">
+            <div className="px-1.5">
+              <Confluence
+                lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}
+                idle={active.running.length === 0 || lanes.length === 0}
+                total={active.totalSpeed}
+                caption={progress}
+              />
             </div>
-          ) : filter === 'all' ? (
-            <EmptyState />
-          ) : (
-            <div role="status" className="flex flex-col items-center gap-2 px-5 py-16 text-center">
-              <p className="text-[16px] font-semibold">
-                {filter === 'progress'
-                  ? 'No downloads in progress'
-                  : filter === 'finished'
-                    ? 'No finished downloads'
-                    : 'No downloads need attention'}
-              </p>
-              <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
-                Show all downloads
-              </Button>
-            </div>
-          ))}
-        {groups.map((group) => {
-          const ids = group.items.map((item) => item.id)
-          const all = ids.every((id) => selected.has(id))
-          const some = !all && ids.some((id) => selected.has(id))
-          return (
-            <section key={group.label} aria-label={group.label}>
-              <div className="flex items-center gap-3 border-b-[0.5px] border-border pt-5 pb-3">
-                <Checkbox
-                  aria-label={
-                    group.label === 'Needs attention'
-                      ? 'Select all downloads needing attention'
-                      : `Select all ${group.label.toLowerCase()} downloads`
-                  }
-                  checked={all}
-                  indeterminate={some}
-                  onCheckedChange={(on) => toggle(ids, on)}
-                />
-                <h2 className={groupLabelClass}>
-                  {group.label}
-                  <span className="ml-2.5 tracking-normal">{group.items.length}</span>
-                </h2>
-                <div className="flex-1" />
-                {group.label === 'Finished' && history.length > 0 && !isSearching && (
-                  <button
-                    type="button"
-                    className="text-[12.5px] text-[var(--text-secondary)] hover:text-foreground"
-                    onClick={askClearFinished}
-                  >
-                    Clear finished list
-                  </button>
-                )}
+            <div className="flex flex-wrap items-center gap-2 px-1.5">
+              <div className="min-w-0 overflow-x-auto [scrollbar-width:none]">
+                <ToggleGroup
+                  aria-label="Show"
+                  value={[filter]}
+                  onValueChange={(values) => {
+                    if (values[0] === undefined) return
+                    setFilter(values[0] as DownloadFilter)
+                    setSelected(new Set())
+                  }}
+                >
+                  {TABS.map((tab) => (
+                    <ToggleGroupItem key={tab.value} value={tab.value}>
+                      {tab.label}
+                      <span className="figures font-[500] text-ink-3">{counts[tab.value]}</span>
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
-              {group.items.map((item) => (
-                <ListedDownload
-                  key={item.id}
-                  item={item}
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 px-3.5"
+                variant={filtersOpen ? 'default' : 'secondary'}
+                aria-expanded={filtersOpen}
+                aria-controls={filtersOpen ? FILTER_PANEL_ID : undefined}
+                onClick={() => setFiltersOpen(!filtersOpen)}
+              >
+                <ListFilter aria-hidden />
+                Filters
+                {anyFilter && (
+                  <>
+                    <span
+                      aria-hidden
+                      className="figures ml-0.5 rounded-full bg-[var(--color-accent-soft)] px-1.5 text-[11.5px] text-[var(--color-accent-ink)]"
+                    >
+                      {activeFilterCount(filters)}
+                    </span>
+                    <span className="sr-only">{`, ${activeFilterCount(filters)} on`}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+            {filtersOpen && (
+              <div className="px-1.5">
+                <FilterPanel
+                  items={listed}
+                  shown={narrowed.length}
                   now={now}
-                  selected={selected.has(item.id)}
-                  // Only a selected row's menu acts on the selection.
-                  chosen={selected.has(item.id) ? chosen : NOT_CHOSEN}
-                  networkVisual={
-                    isFinished(item) || item.status === 'completed' ? undefined : networkVisual
-                  }
-                  onSelect={selectRow}
-                  onOpen={openRow}
-                  onPerform={perform}
+                  onDone={() => setFiltersOpen(false)}
                 />
-              ))}
-            </section>
-          )
-        })}
+              </div>
+            )}
+            {!filtersOpen && anyFilter && (
+              <div className="px-1.5">
+                <ActiveFilterChips />
+              </div>
+            )}
+            {groups.length === 0 ? (
+              <div role="status" className="flex flex-col items-start gap-2 px-2.5 py-6">
+                <p className="text-[14px] font-[620]">
+                  {isSearching
+                    ? `No downloads match “${searchQuery.trim()}”`
+                    : anyFilter && narrowed.length === 0
+                      ? 'No downloads match these filters'
+                      : filter === 'progress'
+                        ? 'Nothing in progress'
+                        : filter === 'finished'
+                          ? 'No finished downloads'
+                          : 'Nothing needs attention'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {isSearching && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setSearchQuery('')}
+                    >
+                      Clear search
+                    </Button>
+                  )}
+                  {anyFilter && (
+                    <Button type="button" size="sm" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={anyFilter ? 'ghost' : 'secondary'}
+                    onClick={showEverything}
+                  >
+                    Show all downloads
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              groups.map((group) => {
+                const ids = group.items.map((item) => item.id)
+                const all = ids.every((id) => selected.has(id))
+                const some = !all && ids.some((id) => selected.has(id))
+                return (
+                  <section key={group.label} aria-label={group.label}>
+                    <div className="flex min-h-7 items-center gap-2.5 px-2.5 pb-1">
+                      <Checkbox
+                        aria-label={
+                          group.label === 'Needs attention'
+                            ? 'Select all downloads needing attention'
+                            : `Select all ${group.label.toLowerCase()} downloads`
+                        }
+                        checked={all}
+                        indeterminate={some}
+                        onCheckedChange={(on) => toggle(ids, on)}
+                      />
+                      <h2 className="flex items-baseline gap-2 text-[12.5px] font-[650] text-ink-2">
+                        {group.label}
+                        <span className="figures font-[500] text-ink-3">{group.items.length}</span>
+                      </h2>
+                      <div className="flex-1" />
+                      {group.label === 'Finished' &&
+                        history.length > 0 &&
+                        !isSearching &&
+                        !anyFilter && (
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="ghost"
+                            onClick={askClearFinished}
+                          >
+                            Clear finished list
+                          </Button>
+                        )}
+                    </div>
+                    <ul className="flex flex-col gap-0.5">
+                      {group.items.map((item) => (
+                        <li key={item.id}>
+                          <ListedDownload
+                            item={item}
+                            now={now}
+                            selected={selected.has(item.id)}
+                            // Only a selected row's menu acts on the selection.
+                            chosen={selected.has(item.id) ? chosen : NOT_CHOSEN}
+                            networkVisual={
+                              isFinished(item) || item.status === 'completed'
+                                ? undefined
+                                : networkVisual
+                            }
+                            onSelect={selectRow}
+                            onOpen={openRow}
+                            onPerform={perform}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              })
+            )}
+          </div>
+        )}
       </div>
 
       <LimitsDialog
@@ -449,20 +554,27 @@ function EmptyState(): React.JSX.Element {
   )
   const loadInterfaces = useAppStore((store) => store.loadInterfaces)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
+  const { lanes } = useMergeLanes()
 
   return (
-    <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
-      <div className="w-full max-w-[460px]">
-        <Confluence lanes={PLACEHOLDER_LANES} idle />
-      </div>
+    <div className="flex flex-col gap-6 px-4 py-8">
+      <Confluence
+        lanes={
+          lanes.length > 0
+            ? lanes.map((lane) => ({ ...lane, speed: 0, on: false }))
+            : PLACEHOLDER_LANES
+        }
+        idle
+        label="Merged speed"
+      />
       {noNetworks ? (
-        <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">No networks connected</div>
-          <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+        <div className="flex max-w-[46ch] flex-col items-start gap-2">
+          <h2 className="text-[17px] font-[680] tracking-[-0.01em]">No networks connected</h2>
+          <p className="text-[13px] leading-[1.6] text-ink-2">
             Mergelane needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
             connect your phone using USB tethering.
-          </div>
-          <div className="mt-1 flex gap-2">
+          </p>
+          <div className="mt-2 flex gap-2">
             <Button type="button" variant="secondary" onClick={() => loadInterfaces()}>
               Scan again
             </Button>
@@ -474,21 +586,20 @@ function EmptyState(): React.JSX.Element {
               Network settings
             </Button>
           </div>
-        </>
+        </div>
       ) : (
-        <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">No downloads yet</div>
-          <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+        <div className="flex max-w-[46ch] flex-col items-start gap-2">
+          <h2 className="text-[17px] font-[680] tracking-[-0.01em]">No downloads yet</h2>
+          <p className="text-[13px] leading-[1.6] text-ink-2">
             Paste a link ({PASTE_SHORTCUT}) or drop a .torrent or .nzb anywhere in this window.
-          </div>
-          <div className="mt-1 flex gap-2">
-            <Button type="button" onClick={() => openNewDownload()}>
-              <Plus data-icon="inline-start" />
-              New download
-              <span className="ml-1 font-mono text-[11px] opacity-70">{NEW_SHORTCUT}</span>
-            </Button>
-          </div>
-        </>
+            Mergelane splits each download across every network you switch on.
+          </p>
+          <Button type="button" className="mt-2" onClick={() => openNewDownload()}>
+            <Plus data-icon="inline-start" />
+            New download
+            <span className="ml-1 font-mono text-[11px] opacity-75">{NEW_SHORTCUT}</span>
+          </Button>
+        </div>
       )}
     </div>
   )
@@ -508,6 +619,49 @@ const ListedDownload = memo(function ListedDownload({
     </DownloadContextMenu>
   )
 })
+
+/** The row's line under its bar, in parts: what it's doing, how much, and when. */
+function rowMeta(item: Item, now: number, waiting: string): { parts: string[]; error?: boolean } {
+  const wanted = wantedBytes(item)
+  const percent = formatPercent(item.bytesDownloaded, wanted)
+  if (isFinished(item) || item.status === 'completed') {
+    return {
+      parts: [
+        formatBytes(wanted || item.bytesDownloaded),
+        // A torrent's tag already says where it came from.
+        item.kind === 'http' ? sourceOf(item.url) : '',
+        isFinished(item) && item.missing
+          ? 'Moved or deleted'
+          : formatWhen(item.completedAt ?? now, now)
+      ].filter(Boolean)
+    }
+  }
+  const sizes =
+    wanted > 0
+      ? `${formatBytes(item.bytesDownloaded)} of ${formatBytes(wanted)}`
+      : formatBytes(item.bytesDownloaded)
+  switch (item.status) {
+    case 'downloading':
+      return {
+        parts: [
+          item.kind === 'stream' && item.muxing ? 'Joining video and audio…' : '',
+          wanted > 0 ? `${percent}%` : '',
+          sizes,
+          item.timeLeftSeconds !== undefined
+            ? `${formatEta(item.timeLeftSeconds)} left`
+            : item.speedBytesPerSec === 0
+              ? 'Starting'
+              : ''
+        ].filter(Boolean)
+      }
+    case 'queued':
+      return { parts: [waiting, sizes] }
+    case 'paused':
+      return { parts: [wanted > 0 ? `Paused at ${percent}%` : 'Paused', sizes] }
+    default:
+      return { parts: [describeError(item.error ?? 'Something went wrong')], error: true }
+  }
+}
 
 const DownloadRow = memo(function DownloadRow({
   item,
@@ -532,51 +686,13 @@ const DownloadRow = memo(function DownloadRow({
   const schedule = useAppStore((store) => store.downloadSchedule)
   const [working, setWorking] = useState(false)
   const finished = isFinished(item) || item.status === 'completed'
-  const badge = isFolder(item) ? 'DIR' : fileExtensionBadge(item.fileName)
   const wanted = wantedBytes(item)
-  const percent = formatPercent(item.bytesDownloaded, wanted)
+  const waiting =
+    schedule?.enabled && !scheduleWindow(schedule, now).allowed
+      ? (scheduleMessage(schedule, now) ?? 'Waiting for a turn')
+      : 'Waiting for a turn'
+  const meta = rowMeta(item, now, waiting)
 
-  let detail: string
-  let tone = 'text-muted-foreground'
-  if (isFinished(item) || item.status === 'completed') {
-    detail = [
-      formatBytes(wanted || item.bytesDownloaded),
-      // A torrent's badge already says where it came from.
-      item.kind === 'http' && sourceOf(item.url),
-      isFinished(item) && item.missing
-        ? 'moved or deleted'
-        : formatWhen(item.completedAt ?? now, now)
-    ]
-      .filter(Boolean)
-      .join(' · ')
-  } else {
-    const download = item
-    const sizes =
-      wanted > 0
-        ? `${formatBytes(download.bytesDownloaded)} of ${formatBytes(wanted)}`
-        : formatBytes(download.bytesDownloaded)
-    switch (download.status) {
-      case 'downloading':
-        detail = [
-          download.kind === 'stream' && download.muxing && 'Joining video and audio…',
-          wanted > 0 && `${percent}%`,
-          sizes,
-          download.timeLeftSeconds !== undefined && formatEta(download.timeLeftSeconds)
-        ]
-          .filter(Boolean)
-          .join(' · ')
-        break
-      case 'queued':
-        detail = `${schedule?.enabled && !scheduleWindow(schedule, now).allowed ? (scheduleMessage(schedule, now) ?? 'Waiting for a turn') : 'Waiting for a turn'} · ${sizes}`
-        break
-      case 'paused':
-        detail = wanted > 0 ? `Paused at ${percent}% · ${sizes}` : `Paused · ${sizes}`
-        break
-      default:
-        detail = describeError(download.error ?? 'Something went wrong')
-        tone = 'text-[var(--color-danger)]'
-    }
-  }
   // Its next step, if it has one: the first thing its menu offers.
   const actionId = rowAction(item)
   const action = actionId ? ACTION_META[actionId] : null
@@ -604,9 +720,9 @@ const DownloadRow = memo(function DownloadRow({
   // Which networks it's on, at a glance, when it isn't on all of them. One on every network says
   // nothing new, so it shows none.
   const dots =
-    !finished &&
     networkVisual &&
     !isFinished(item) &&
+    !finished &&
     item.networks.some((network) => !network.enabled)
       ? item.networks.map((network) => {
           const visual = networkVisual(network.id, network.kind, network.label)
@@ -626,141 +742,128 @@ const DownloadRow = memo(function DownloadRow({
           }
         })
       : null
-  const speed =
-    !finished && !isFinished(item) && item.status === 'downloading'
-      ? formatSpeed(item.speedBytesPerSec)
-      : null
+  const running = !isFinished(item) && item.status === 'downloading'
 
   return (
     <div
       data-selected={selected || undefined}
       className={cn(
-        'group/download-row my-0.5 -mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors',
-        selected
-          ? 'bg-primary/10 hover:bg-primary/15 focus-within:bg-primary/15'
-          : 'hover:bg-secondary focus-within:bg-secondary'
+        'group/download-row relative flex items-center gap-3 rounded-[12px] px-2.5 py-2.5 transition-colors duration-100',
+        selected ? 'bg-selected' : 'hover:bg-hover active:bg-selected'
       )}
     >
       <Checkbox
         aria-label={`Select ${item.fileName}`}
         checked={selected}
         onCheckedChange={(on) => onSelect(item.id, on)}
+        className="relative z-10"
       />
-      <button
-        type="button"
-        onClick={() => onOpen(item.id)}
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
-          {badge}
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-sans text-[14px] leading-tight font-medium">
-              {item.fileName}
-            </span>
-            {item.kind === 'torrent' && <TorrentBadge />}
-            {item.kind === 'nzb' && <UsenetBadge />}
-            {item.kind === 'stream' && <StreamBadge protocol={item.protocol} />}
-            {(dots || speed) && (
-              <div className="ml-auto flex shrink-0 items-center gap-2.5 pl-2">
-                {dots && (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          role="img"
-                          aria-label={dots.map((dot) => `${dot.name} ${dot.state}`).join(', ')}
-                          className="flex items-center gap-1 rounded-full border border-border px-1.5 py-1"
-                        >
-                          {dots.map((dot) => (
-                            <span
-                              key={dot.id}
-                              className={cn(
-                                'size-1.5 rounded-full',
-                                !dot.on && 'bg-muted-foreground/30'
-                              )}
-                              style={dot.on ? { background: dot.color } : undefined}
-                            />
-                          ))}
-                        </span>
-                      }
-                    />
-                    <TooltipContent>
-                      <div className="grid grid-cols-[auto_auto_auto] items-center gap-x-2 gap-y-1">
-                        {dots.map((dot) => (
-                          <Fragment key={dot.id}>
-                            <span
-                              className={cn(
-                                'size-2 rounded-full',
-                                !dot.on && 'border border-current opacity-60'
-                              )}
-                              style={dot.on ? { background: dot.color } : undefined}
-                            />
-                            <span>{dot.name}</span>
-                            <span className="pl-3 text-right font-mono tabular-nums opacity-80">
-                              {dot.state}
-                            </span>
-                          </Fragment>
-                        ))}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {speed && (
-                  <span className="font-mono text-[12.5px] font-medium tabular-nums">{speed}</span>
-                )}
-              </div>
-            )}
-          </div>
-          {segments.length > 0 && (
-            <SplitBar
-              segments={segments.map((segment) => ({
-                id: segment.id,
-                share: segment.share,
-                color: segment.color
-              }))}
-              // Not moving: the colours stay, faded, so it doesn't read as running.
-              dim={!isFinished(item) && (item.status === 'paused' || item.status === 'queued')}
-            />
+      <FileGlyph item={item} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* The whole row opens the download: this button's area covers it (after:inset-0). */}
+          <button
+            type="button"
+            onClick={() => onOpen(item.id)}
+            className="min-w-0 truncate text-left text-[13.5px] leading-tight font-[580] outline-none after:absolute after:inset-0 after:rounded-[12px] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
+          >
+            {item.fileName}
+          </button>
+          <span className="hidden shrink-0 items-center gap-1.5 @min-[448px]:flex">
+            <KindTags item={item} />
+          </span>
+          {dots && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    role="img"
+                    aria-label={dots.map((dot) => `${dot.name} ${dot.state}`).join(', ')}
+                    className="relative z-10 ml-auto flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 shadow-[inset_0_0_0_1px_var(--border)]"
+                  >
+                    {dots.map((dot) => (
+                      <span
+                        key={dot.id}
+                        className={cn('size-1.5 rounded-full', !dot.on && 'bg-[var(--track-bg)]')}
+                        style={dot.on ? { background: dot.color } : undefined}
+                      />
+                    ))}
+                  </span>
+                }
+              />
+              <TooltipContent>
+                <div className="grid grid-cols-[auto_auto_auto] items-center gap-x-2 gap-y-1">
+                  {dots.map((dot) => (
+                    <Fragment key={dot.id}>
+                      <span
+                        className={cn(
+                          'size-2 rounded-full',
+                          !dot.on && 'border border-current opacity-60'
+                        )}
+                        style={dot.on ? { background: dot.color } : undefined}
+                      />
+                      <span>{dot.name}</span>
+                      <span className="figures pl-3 text-right opacity-80">{dot.state}</span>
+                    </Fragment>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
           )}
-          <div className={`truncate font-mono text-[11.5px] leading-tight ${tone}`}>{detail}</div>
         </div>
-      </button>
-      {action && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`${action.label} ${item.fileName}`}
-                aria-busy={working}
-                disabled={working}
-                onClick={() => {
-                  setWorking(true)
-                  void onPerform(actionId!, [item]).finally(() => setWorking(false))
-                }}
-                className="text-muted-foreground group-hover/download-row:text-foreground"
-              >
-                <action.icon />
-              </Button>
-            }
+        {segments.length > 0 && (
+          <SplitBar
+            segments={segments}
+            // Not moving: the colours stay, faded, so it doesn't read as running.
+            dim={!isFinished(item) && (item.status === 'paused' || item.status === 'queued')}
           />
-          <TooltipContent>
-            {working && action.working ? action.working : action.label}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      <button
-        type="button"
-        aria-label={`Open ${item.fileName}`}
-        onClick={() => onOpen(item.id)}
-        className="rounded-md p-1 text-muted-foreground transition-colors group-hover/download-row:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        <ChevronRight className="size-4" />
-      </button>
+        )}
+        <p
+          className={cn(
+            'flex min-w-0 gap-x-3 overflow-hidden text-[12px] leading-tight whitespace-nowrap',
+            meta.error ? 'text-destructive' : 'text-ink-2'
+          )}
+        >
+          {meta.parts.map((part, index) => (
+            <span key={index} className={cn(index > 0 && 'truncate')}>
+              {part}
+            </span>
+          ))}
+        </p>
+      </div>
+      <div className="relative z-10 flex shrink-0 items-center gap-1">
+        {running && (
+          <SpeedText
+            bytesPerSecond={item.speedBytesPerSec}
+            className="hidden min-w-[5.5rem] text-right text-[17px] font-[650] @min-[384px]:inline"
+          />
+        )}
+        {action && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`${action.label} ${item.fileName}`}
+                  aria-busy={working}
+                  disabled={working}
+                  onClick={() => {
+                    setWorking(true)
+                    void onPerform(actionId!, [item]).finally(() => setWorking(false))
+                  }}
+                >
+                  <action.icon />
+                </Button>
+              }
+            />
+            <TooltipContent>
+              {working && action.working ? action.working : action.label}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
     </div>
   )
 })

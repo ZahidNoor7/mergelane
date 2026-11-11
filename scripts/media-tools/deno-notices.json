@@ -1,0 +1,1037 @@
+{
+  "$comment": "Inputs of deno-notices.mjs, which writes licenses/deno/THIRD-PARTY-NOTICES.txt: the notices of the third-party code built into the Deno program Mergelane ships (ADR-0029). Every URL is pinned to a commit or checked against a SHA-256. Deno's release publishes no such list (checked 2026-11-11: the v2.9.8 release assets, the repository at the tag, and `deno --help`). The V8 components are rusty_v8's submodules at the commit the v8 crate in Deno's Cargo.lock was published from (its .cargo_vcs_info.json), minus the ones used only to build (build, buildtools, tools/clang, tools/win, third_party/jinja2, third_party/markupsafe, third_party/rust, V8's third_party/colorama). docs/MEDIA-TOOLS.md says how to update this file. crateFallbacks: for each crate whose package has no licence file of its own (122 of 1048 on 2026-11-11), the licence files of its repository at the commit in its .cargo_vcs_info.json (in the crate's own folder, else the repository's top level), found with GitHub's contents API; for the swc crates, whose recorded commits are not in swc's repository, swc's LICENSE at a pinned commit. spdxTexts: for the crates left (no repository or commit, or no licence file there), the standard texts of the licences they declare, from SPDX's license-list-data v3.29.0.",
+  "deno": {
+    "version": "2.9.8",
+    "commit": "fe7ed012d92c642fd8e5607ac5a45d517538b5c5",
+    "sourceUrl": "https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz",
+    "sourceSha256": "b57d0281c1647effc735f242ba52bc409747fc6ed6ad4946e76f062c67e113eb",
+    "sourceRoot": "deno",
+    "licenseFiles": [
+      "cli/tsc/dts/node/LICENSE",
+      "cli/tsc/dts/node/undici/LICENSE",
+      "ext/webgpu/LICENSE.md"
+    ],
+    "headerScan": ["cli/js", "cli/tsc", "ext", "runtime"]
+  },
+  "crateUrl": "https://static.crates.io/crates/{name}/{name}-{version}.crate",
+  "crateFallbacks": {
+    "Inflector@0.11.4": [
+      {
+        "path": "whatisinternet/inflector LICENSE.md",
+        "url": "https://raw.githubusercontent.com/whatisinternet/inflector/a4a95eac75043f4bffb127c7c8ec886b5b106053/LICENSE.md"
+      }
+    ],
+    "alloc-stdlib@0.2.2": [
+      {
+        "path": "dropbox/rust-alloc-no-stdlib LICENSE",
+        "url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE"
+      }
+    ],
+    "anes@0.1.6": [
+      {
+        "path": "zrzka/anes-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/zrzka/anes-rs/378ac7461ecac29fde9e10df7b08359d1315a9ad/LICENSE-APACHE"
+      },
+      {
+        "path": "zrzka/anes-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/zrzka/anes-rs/378ac7461ecac29fde9e10df7b08359d1315a9ad/LICENSE-MIT"
+      }
+    ],
+    "asn1-rs-derive@0.4.0": [
+      {
+        "path": "rusticata/asn1-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/rusticata/asn1-rs/28257314e48d1ad4e62b8159c939518e17caf826/LICENSE-APACHE"
+      },
+      {
+        "path": "rusticata/asn1-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/rusticata/asn1-rs/28257314e48d1ad4e62b8159c939518e17caf826/LICENSE-MIT"
+      }
+    ],
+    "asn1-rs-impl@0.1.0": [
+      {
+        "path": "rusticata/asn1-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/rusticata/asn1-rs/78620ca0954d44ddc57d0280d0072dfbd8566de4/LICENSE-APACHE"
+      },
+      {
+        "path": "rusticata/asn1-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/rusticata/asn1-rs/78620ca0954d44ddc57d0280d0072dfbd8566de4/LICENSE-MIT"
+      }
+    ],
+    "ast_node@5.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "backhand@0.25.1": [
+      {
+        "path": "wcampbell0x2a/backhand LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/wcampbell0x2a/backhand/4ac463be1071219b46fc0184ce452704ea705ba0/LICENSE-APACHE"
+      },
+      {
+        "path": "wcampbell0x2a/backhand LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/wcampbell0x2a/backhand/4ac463be1071219b46fc0184ce452704ea705ba0/LICENSE-MIT"
+      }
+    ],
+    "base64-simd@0.8.0": [
+      {
+        "path": "Nugine/simd LICENSE",
+        "url": "https://raw.githubusercontent.com/Nugine/simd/d74c030d9dc4f3cae02146d1f497ff62726ef09a/LICENSE"
+      }
+    ],
+    "better_scoped_tls@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "block2@0.6.2": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md"
+      }
+    ],
+    "bytes-str@0.2.7": [
+      {
+        "path": "dudykr/ddbase LICENSE",
+        "url": "https://raw.githubusercontent.com/dudykr/ddbase/9155da62e3b85a2d1c495167876754b98295bee6/LICENSE"
+      }
+    ],
+    "capacity_builder_macros@0.3.0": [
+      {
+        "path": "dsherret/capacity_builder LICENSE",
+        "url": "https://raw.githubusercontent.com/dsherret/capacity_builder/61370ade72f9ed5e3f40fb261f92057c3486ed83/LICENSE"
+      }
+    ],
+    "clipboard-win@5.3.0": [
+      {
+        "path": "DoumanAsh/clipboard-win LICENSE",
+        "url": "https://raw.githubusercontent.com/DoumanAsh/clipboard-win/0af605873edf7f8064f54e73536f27dee5a56416/LICENSE"
+      }
+    ],
+    "cranelift-bitset@0.117.2": [
+      {
+        "path": "bytecodealliance/wasmtime LICENSE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/398694a59e24d37acde915086a9be308ec51f626/LICENSE"
+      }
+    ],
+    "cranelift-isle@0.117.2": [
+      {
+        "path": "bytecodealliance/wasmtime LICENSE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/398694a59e24d37acde915086a9be308ec51f626/LICENSE"
+      }
+    ],
+    "deno-tower-lsp-macros@0.12.0": [
+      {
+        "path": "ebkalderon/tower-lsp LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/ebkalderon/tower-lsp/812d56f0dcd9df6ff80e85a5e83e0cc0dcf6cc49/LICENSE-APACHE"
+      },
+      {
+        "path": "ebkalderon/tower-lsp LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/ebkalderon/tower-lsp/812d56f0dcd9df6ff80e85a5e83e0cc0dcf6cc49/LICENSE-MIT"
+      }
+    ],
+    "deno_error_macro@0.7.1": [
+      {
+        "path": "denoland/deno_error LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/deno_error/e806d735069caacf511b9a781ef2990a3651256f/LICENSE"
+      }
+    ],
+    "denokv_proto@0.14.0": [
+      {
+        "path": "denoland/denokv LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/denokv/9fe65cc138ff56ca5bfe7a1bf8c53e832246f9d5/LICENSE"
+      }
+    ],
+    "denokv_remote@0.14.0": [
+      {
+        "path": "denoland/denokv LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/denokv/9fe65cc138ff56ca5bfe7a1bf8c53e832246f9d5/LICENSE"
+      }
+    ],
+    "denokv_sqlite@0.14.0": [
+      {
+        "path": "denoland/denokv LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/denokv/9fe65cc138ff56ca5bfe7a1bf8c53e832246f9d5/LICENSE"
+      }
+    ],
+    "dispatch2@0.3.1": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md"
+      }
+    ],
+    "dprint-swc-ext@0.26.0": [
+      {
+        "path": "dprint/dprint-swc-ext LICENSE",
+        "url": "https://raw.githubusercontent.com/dprint/dprint-swc-ext/c4c2cb80beb0e37f466f8e0b9f89d508bea719c2/LICENSE"
+      }
+    ],
+    "error-code@3.2.0": [
+      {
+        "path": "DoumanAsh/error-code LICENSE",
+        "url": "https://raw.githubusercontent.com/DoumanAsh/error-code/d3d734587b06a1259fe8d2d7cafcd436e801975a/LICENSE"
+      }
+    ],
+    "from_variant@3.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "gl_generator@0.14.0": [
+      {
+        "path": "brendanzab/gl-rs LICENSE",
+        "url": "https://raw.githubusercontent.com/brendanzab/gl-rs/ea503e8d5fb6d73c6030e6191ce738cd3bf3433e/LICENSE"
+      }
+    ],
+    "gpu-descriptor-types@0.2.0": [
+      {
+        "path": "zakarumych/gpu-descriptor COPYING",
+        "url": "https://raw.githubusercontent.com/zakarumych/gpu-descriptor/9f2fb9546591322e7b77ee1e79385e01effd85e4/COPYING"
+      }
+    ],
+    "gpu-descriptor@0.3.2": [
+      {
+        "path": "zakarumych/gpu-descriptor COPYING",
+        "url": "https://raw.githubusercontent.com/zakarumych/gpu-descriptor/bb28b4e55b742e0ea3e7a0968e7ee6287ba0e06a/COPYING"
+      }
+    ],
+    "http-body@1.0.0": [
+      {
+        "path": "hyperium/http-body LICENSE",
+        "url": "https://raw.githubusercontent.com/hyperium/http-body/2474edda2035ea4c6bb22f79417d7964479b2a10/LICENSE"
+      }
+    ],
+    "import_map@0.25.0": [
+      {
+        "path": "denoland/import_map LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/import_map/4696fcc03310ea0e7d3adf46810310fd9203403d/LICENSE"
+      }
+    ],
+    "khronos_api@3.1.0": [
+      {
+        "path": "brendanzab/gl-rs LICENSE",
+        "url": "https://raw.githubusercontent.com/brendanzab/gl-rs/f150967b1c44ae888e6676f93f639ebc82771bdc/LICENSE"
+      }
+    ],
+    "laufey@0.7.0": [
+      {
+        "path": "littledivy/laufey LICENSE",
+        "url": "https://raw.githubusercontent.com/littledivy/laufey/1fe87874288e8359fa3de04d18cc14f56957b000/LICENSE"
+      },
+      {
+        "path": "littledivy/laufey LICENSE.cef",
+        "url": "https://raw.githubusercontent.com/littledivy/laufey/1fe87874288e8359fa3de04d18cc14f56957b000/LICENSE.cef"
+      }
+    ],
+    "lax-core@0.3.0": [
+      {
+        "path": "bartlomieju/lax LICENSE",
+        "url": "https://raw.githubusercontent.com/bartlomieju/lax/5d6edeaa63943b5c7bc08f1d1425dfa068f45e40/LICENSE"
+      }
+    ],
+    "lcms2-sys@4.0.5": [
+      {
+        "path": "kornelski/rust-lcms2-sys LICENSE",
+        "url": "https://raw.githubusercontent.com/kornelski/rust-lcms2-sys/b8e9c3efcf266b88600318fb519c073b9ebb61b7/LICENSE"
+      }
+    ],
+    "libffi-sys@4.1.0": [
+      {
+        "path": "libffi-rs/libffi-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/libffi-rs/libffi-rs/7b1471ad430dd899046280f79066fc2d9b0fac90/LICENSE-APACHE"
+      },
+      {
+        "path": "libffi-rs/libffi-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/libffi-rs/libffi-rs/7b1471ad430dd899046280f79066fc2d9b0fac90/LICENSE-MIT"
+      }
+    ],
+    "libffi@5.1.0": [
+      {
+        "path": "libffi-rs/libffi-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/libffi-rs/libffi-rs/7b1471ad430dd899046280f79066fc2d9b0fac90/LICENSE-APACHE"
+      },
+      {
+        "path": "libffi-rs/libffi-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/libffi-rs/libffi-rs/7b1471ad430dd899046280f79066fc2d9b0fac90/LICENSE-MIT"
+      }
+    ],
+    "ndk-sys@0.6.0+11769913": [
+      {
+        "path": "rust-mobile/ndk LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/rust-mobile/ndk/49bbbba16c58ff63cb8a0ad0eca5a9fb7ecaec25/LICENSE-APACHE"
+      },
+      {
+        "path": "rust-mobile/ndk LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/rust-mobile/ndk/49bbbba16c58ff63cb8a0ad0eca5a9fb7ecaec25/LICENSE-MIT"
+      }
+    ],
+    "objc2-core-foundation@0.3.2": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md"
+      }
+    ],
+    "objc2-encode@4.1.0": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md"
+      }
+    ],
+    "objc2-foundation@0.3.2": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md"
+      }
+    ],
+    "objc2-metal@0.3.2": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md"
+      }
+    ],
+    "objc2-quartz-core@0.3.2": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md"
+      }
+    ],
+    "objc2@0.6.4": [
+      {
+        "path": "madsmtm/objc2 LICENSE.md",
+        "url": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md"
+      }
+    ],
+    "opentelemetry-http@0.32.0": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/ec289cb3c6f8260951699c51df968560943c1451/LICENSE"
+      }
+    ],
+    "opentelemetry-otlp@0.32.0": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/ec289cb3c6f8260951699c51df968560943c1451/LICENSE"
+      }
+    ],
+    "opentelemetry-proto@0.32.0": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/ec289cb3c6f8260951699c51df968560943c1451/LICENSE"
+      }
+    ],
+    "opentelemetry-semantic-conventions@0.32.1": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/74cb6f3a4129bf11fa3191f28d38c518c4ec4ae6/LICENSE"
+      }
+    ],
+    "opentelemetry@0.32.0": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/ec289cb3c6f8260951699c51df968560943c1451/LICENSE"
+      }
+    ],
+    "opentelemetry_sdk@0.32.1": [
+      {
+        "path": "open-telemetry/opentelemetry-rust LICENSE",
+        "url": "https://raw.githubusercontent.com/open-telemetry/opentelemetry-rust/284a37d93b3856e1975c2807ba3af1421ebd9b52/LICENSE"
+      }
+    ],
+    "par-core@2.0.0": [
+      {
+        "path": "dudykr/ddbase crates/par-core/LICENSE",
+        "url": "https://raw.githubusercontent.com/dudykr/ddbase/d46ef439d30d2b64eb87d4e197929548b51b21be/crates/par-core/LICENSE"
+      }
+    ],
+    "phf_macros@0.11.2": [
+      {
+        "path": "rust-phf/rust-phf phf_macros/LICENSE",
+        "url": "https://raw.githubusercontent.com/rust-phf/rust-phf/c9c35fd8ba3f1bc228388b0cef6e3814a02a72c0/phf_macros/LICENSE"
+      }
+    ],
+    "pretty_yaml@0.5.0": [
+      {
+        "path": "g-plane/pretty_yaml LICENSE",
+        "url": "https://raw.githubusercontent.com/g-plane/pretty_yaml/5dfb6c22ba91a738b681d614202e264259e877f0/LICENSE"
+      }
+    ],
+    "profiling@1.0.15": [
+      {
+        "path": "aclysma/profiling LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/aclysma/profiling/2f000e192aa804e043021fd851ce1f077f73f76a/LICENSE-APACHE"
+      },
+      {
+        "path": "aclysma/profiling LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/aclysma/profiling/2f000e192aa804e043021fd851ce1f077f73f76a/LICENSE-MIT"
+      }
+    ],
+    "relative-path@1.9.2": [
+      {
+        "path": "udoprog/relative-path LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/udoprog/relative-path/802227a5ffdbb1a2e87735602c91aa8d81eafe5d/LICENSE-APACHE"
+      },
+      {
+        "path": "udoprog/relative-path LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/udoprog/relative-path/802227a5ffdbb1a2e87735602c91aa8d81eafe5d/LICENSE-MIT"
+      }
+    ],
+    "rustyline-derive@0.11.1": [
+      {
+        "path": "kkawakam/rustyline LICENSE",
+        "url": "https://raw.githubusercontent.com/kkawakam/rustyline/227d82c27c5c5fa1862fa3b9e3a619bf9bdeef9b/LICENSE"
+      }
+    ],
+    "spirv@0.4.0+sdk-1.4.341.0": [
+      {
+        "path": "gfx-rs/rspirv LICENSE",
+        "url": "https://raw.githubusercontent.com/gfx-rs/rspirv/8afc3d0ac8e158128cd1410bb2e4b4c26ab11bb4/LICENSE"
+      }
+    ],
+    "string_enum@1.0.2": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_allocator@4.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_atoms@9.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_common@17.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_config@3.1.2": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_config_macro@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_ast@18.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_codegen@20.0.2": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_codegen_macros@2.0.2": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_lexer@26.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_loader@17.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_parser@27.0.7": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_base@30.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_classes@30.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_macros@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_proposal@30.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_react@33.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_transforms_typescript@33.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_utils@24.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ecma_visit@18.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_eq_ignore_macros@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_macros_common@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_ts_fast_strip@36.0.0": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "swc_visit@2.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "testing_macros@1.0.1": [
+      {
+        "path": "swc-project/swc LICENSE (at 0bd2b2e94a02: the commit the crate names is not in the repository)",
+        "url": "https://raw.githubusercontent.com/swc-project/swc/0bd2b2e94a020234753ff262c7f283169cc0dc1a/LICENSE"
+      }
+    ],
+    "tonic-prost@0.14.6": [
+      {
+        "path": "hyperium/tonic LICENSE",
+        "url": "https://raw.githubusercontent.com/hyperium/tonic/6cb6056b5a748bc5a29bd48f4602dbc4e552bb7d/LICENSE"
+      }
+    ],
+    "v8@150.4.0": [
+      {
+        "path": "denoland/rusty_v8 LICENSE",
+        "url": "https://raw.githubusercontent.com/denoland/rusty_v8/5c15a6995c9bb4bacd3e341b59fff32c909c80bf/LICENSE"
+      }
+    ],
+    "vsimd@0.8.0": [
+      {
+        "path": "Nugine/simd LICENSE",
+        "url": "https://raw.githubusercontent.com/Nugine/simd/d74c030d9dc4f3cae02146d1f497ff62726ef09a/LICENSE"
+      }
+    ],
+    "vte_generate_state_changes@0.1.1": [
+      {
+        "path": "jwilm/vte LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/jwilm/vte/1712405055f5d97f6dc7b6156885c940982ec20d/LICENSE-APACHE"
+      },
+      {
+        "path": "jwilm/vte LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/jwilm/vte/1712405055f5d97f6dc7b6156885c940982ec20d/LICENSE-MIT"
+      }
+    ],
+    "wasip2@1.0.2+wasi-0.2.9": [
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-MIT"
+      }
+    ],
+    "wasip3@0.4.0+wasi-0.3.0-rc-2026-01-06": [
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasi-rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/06ce201370fcde0d1b0d47cac8ecb1b0b312c9f9/LICENSE-MIT"
+      }
+    ],
+    "wasite@0.1.0": [
+      {
+        "path": "ardaku/wasite LICENSE_APACHE_2_0.txt",
+        "url": "https://raw.githubusercontent.com/ardaku/wasite/0c72934ad329ab4670eb017581640c2d6eceb289/LICENSE_APACHE_2_0.txt"
+      },
+      {
+        "path": "ardaku/wasite LICENSE_BOOST_1_0.txt",
+        "url": "https://raw.githubusercontent.com/ardaku/wasite/0c72934ad329ab4670eb017581640c2d6eceb289/LICENSE_BOOST_1_0.txt"
+      },
+      {
+        "path": "ardaku/wasite LICENSE_MIT.txt",
+        "url": "https://raw.githubusercontent.com/ardaku/wasite/0c72934ad329ab4670eb017581640c2d6eceb289/LICENSE_MIT.txt"
+      }
+    ],
+    "wasm-encoder@0.244.0": [
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-MIT"
+      }
+    ],
+    "wasm-metadata@0.244.0": [
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-MIT"
+      }
+    ],
+    "wasmparser@0.244.0": [
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-MIT"
+      }
+    ],
+    "web-transport-proto@0.2.7": [
+      {
+        "path": "kixelated/web-transport LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/kixelated/web-transport/b5be3f7274ff9885e5361c229d05f515ed09af4e/LICENSE-APACHE"
+      },
+      {
+        "path": "kixelated/web-transport LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/kixelated/web-transport/b5be3f7274ff9885e5361c229d05f515ed09af4e/LICENSE-MIT"
+      }
+    ],
+    "wit-bindgen-rt@0.39.0": [
+      {
+        "path": "bytecodealliance/wit-bindgen LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wit-bindgen LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wit-bindgen LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-MIT"
+      }
+    ],
+    "wit-component@0.244.0": [
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-MIT"
+      }
+    ],
+    "wit-parser@0.244.0": [
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-APACHE"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "bytecodealliance/wasm-tools LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d4e317f22c3bace76cb3205003bcc34b4929037d/LICENSE-MIT"
+      }
+    ],
+    "yaml_parser@0.2.1": [
+      {
+        "path": "g-plane/pretty_yaml LICENSE",
+        "url": "https://raw.githubusercontent.com/g-plane/pretty_yaml/3decc5c7ab2632c36f58c359fd9c4174140a6fec/LICENSE"
+      }
+    ],
+    "yasna@0.5.2": [
+      {
+        "path": "qnighy/yasna.rs LICENSE-APACHE",
+        "url": "https://raw.githubusercontent.com/qnighy/yasna.rs/b7e65f9a4c317494cce2d18ea02b3d6eaaea7985/LICENSE-APACHE"
+      },
+      {
+        "path": "qnighy/yasna.rs LICENSE-MIT",
+        "url": "https://raw.githubusercontent.com/qnighy/yasna.rs/b7e65f9a4c317494cce2d18ea02b3d6eaaea7985/LICENSE-MIT"
+      }
+    ],
+    "zune-jpeg@0.4.13": [
+      {
+        "path": "etemesi254/zune-image LICENSE-ZLIB",
+        "url": "https://raw.githubusercontent.com/etemesi254/zune-image/d45a0a0380530e164ac9a58d62ea330c95d74daf/LICENSE-ZLIB"
+      },
+      {
+        "path": "etemesi254/zune-image LICENSE.md",
+        "url": "https://raw.githubusercontent.com/etemesi254/zune-image/d45a0a0380530e164ac9a58d62ea330c95d74daf/LICENSE.md"
+      }
+    ]
+  },
+  "spdxTexts": {
+    "Apache-2.0": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/Apache-2.0.txt"
+    },
+    "CC0-1.0": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/CC0-1.0.txt"
+    },
+    "LGPL-2.1-or-later": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/LGPL-2.1-or-later.txt"
+    },
+    "LLVM-exception": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/LLVM-exception.txt"
+    },
+    "MIT": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+    },
+    "Zlib": {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/Zlib.txt"
+    }
+  },
+  "components": [
+    {
+      "name": "rusty_v8 (the v8 crate) 150.4.0",
+      "license": "MIT",
+      "repository": "https://github.com/denoland/rusty_v8",
+      "commit": "5c15a6995c9bb4bacd3e341b59fff32c909c80bf",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/rusty_v8/5c15a6995c9bb4bacd3e341b59fff32c909c80bf/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "V8",
+      "license": "BSD-3-Clause, with the third-party code under the licences below",
+      "repository": "https://github.com/denoland/v8",
+      "commit": "ac1e23989121713ca642f6650b34deff7b686896",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/LICENSE"
+        },
+        {
+          "path": "LICENSE.fdlibm",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/LICENSE.fdlibm"
+        },
+        {
+          "path": "LICENSE.strongtalk",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/LICENSE.strongtalk"
+        },
+        {
+          "path": "LICENSE.v8",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/LICENSE.v8"
+        },
+        {
+          "path": "third_party/fp16/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/fp16/LICENSE"
+        },
+        {
+          "path": "third_party/glibc/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/glibc/LICENSE"
+        },
+        {
+          "path": "third_party/highway/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/highway/LICENSE"
+        },
+        {
+          "path": "third_party/inspector_protocol/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/inspector_protocol/LICENSE"
+        },
+        {
+          "path": "third_party/jsoncpp/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/jsoncpp/LICENSE"
+        },
+        {
+          "path": "third_party/rapidhash-v8/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/rapidhash-v8/LICENSE"
+        },
+        {
+          "path": "third_party/re2/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/re2/LICENSE"
+        },
+        {
+          "path": "third_party/siphash/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/siphash/LICENSE"
+        },
+        {
+          "path": "third_party/utf8-decoder/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/utf8-decoder/LICENSE"
+        },
+        {
+          "path": "third_party/valgrind/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/valgrind/LICENSE"
+        },
+        {
+          "path": "third_party/vtune/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/vtune/LICENSE"
+        },
+        {
+          "path": "third_party/wasm-api/LICENSE",
+          "url": "https://raw.githubusercontent.com/denoland/v8/ac1e23989121713ca642f6650b34deff7b686896/third_party/wasm-api/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "ICU",
+      "license": "Unicode-3.0 (with the ICU and third-party terms in the file)",
+      "repository": "https://chromium.googlesource.com/chromium/deps/icu",
+      "commit": "ee5f27adc28bd3f15b2c293f726d14d2e336cbd5",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://chromium.googlesource.com/chromium/deps/icu/+/ee5f27adc28bd3f15b2c293f726d14d2e336cbd5/LICENSE?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "Abseil",
+      "license": "Apache-2.0",
+      "repository": "https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp",
+      "commit": "d16e32215c3ab90ba57c2e904a5344d85c7353e4",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp/+/d16e32215c3ab90ba57c2e904a5344d85c7353e4/LICENSE?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "FP16",
+      "license": "MIT",
+      "repository": "https://github.com/Maratyszcza/FP16",
+      "commit": "3d2de1816307bac63c16a297e8c4dc501b4076df",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://raw.githubusercontent.com/Maratyszcza/FP16/3d2de1816307bac63c16a297e8c4dc501b4076df/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "libc++ (LLVM)",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxx",
+      "commit": "5abc7f839700f0f17338434e1c1c6a8c87c00c11",
+      "files": [
+        {
+          "path": "LICENSE.TXT",
+          "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxx/+/5abc7f839700f0f17338434e1c1c6a8c87c00c11/LICENSE.TXT?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "libc++abi (LLVM)",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxxabi",
+      "commit": "8f11bb1d4438d0239d0dfc1bd9456a9f31629dda",
+      "files": [
+        {
+          "path": "LICENSE.TXT",
+          "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxxabi/+/8f11bb1d4438d0239d0dfc1bd9456a9f31629dda/LICENSE.TXT?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "libunwind (LLVM)",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libunwind",
+      "commit": "d6c7a21e978f0adaa43accaad53bc64f0b64f6ec",
+      "files": [
+        {
+          "path": "LICENSE.TXT",
+          "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libunwind/+/d6c7a21e978f0adaa43accaad53bc64f0b64f6ec/LICENSE.TXT?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "LLVM libc",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libc",
+      "commit": "9309c117ebae84dd2f9df1ef99de4782162527d5",
+      "files": [
+        {
+          "path": "LICENSE.TXT",
+          "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libc/+/9309c117ebae84dd2f9df1ef99de4782162527d5/LICENSE.TXT?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "fast_float",
+      "license": "Apache-2.0 OR BSL-1.0 OR MIT",
+      "repository": "https://chromium.googlesource.com/external/github.com/fastfloat/fast_float",
+      "commit": "05087a303dad9c98768b33c829d398223a649bc6",
+      "files": [
+        {
+          "path": "LICENSE-APACHE",
+          "url": "https://chromium.googlesource.com/external/github.com/fastfloat/fast_float/+/05087a303dad9c98768b33c829d398223a649bc6/LICENSE-APACHE?format=TEXT",
+          "encoding": "base64"
+        },
+        {
+          "path": "LICENSE-BOOST",
+          "url": "https://chromium.googlesource.com/external/github.com/fastfloat/fast_float/+/05087a303dad9c98768b33c829d398223a649bc6/LICENSE-BOOST?format=TEXT",
+          "encoding": "base64"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "url": "https://chromium.googlesource.com/external/github.com/fastfloat/fast_float/+/05087a303dad9c98768b33c829d398223a649bc6/LICENSE-MIT?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "simdutf",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://chromium.googlesource.com/chromium/src/third_party/simdutf",
+      "commit": "f7356eed293f8208c40b3c1b344a50bd70971983",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://chromium.googlesource.com/chromium/src/third_party/simdutf/+/f7356eed293f8208c40b3c1b344a50bd70971983/LICENSE?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "Highway",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "repository": "https://chromium.googlesource.com/external/github.com/google/highway",
+      "commit": "2607d3b5b0113992fe84d3848859eae13b3b52c1",
+      "files": [
+        {
+          "path": "LICENSE",
+          "url": "https://chromium.googlesource.com/external/github.com/google/highway/+/2607d3b5b0113992fe84d3848859eae13b3b52c1/LICENSE?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "Dragonbox",
+      "license": "Apache-2.0 WITH LLVM-exception OR BSL-1.0",
+      "repository": "https://chromium.googlesource.com/external/github.com/jk-jeon/dragonbox",
+      "commit": "beeeef91cf6fef89a4d4ba5e95d47ca64ccb3a44",
+      "files": [
+        {
+          "path": "LICENSE-Apache2-LLVM",
+          "url": "https://chromium.googlesource.com/external/github.com/jk-jeon/dragonbox/+/beeeef91cf6fef89a4d4ba5e95d47ca64ccb3a44/LICENSE-Apache2-LLVM?format=TEXT",
+          "encoding": "base64"
+        },
+        {
+          "path": "LICENSE-Boost",
+          "url": "https://chromium.googlesource.com/external/github.com/jk-jeon/dragonbox/+/beeeef91cf6fef89a4d4ba5e95d47ca64ccb3a44/LICENSE-Boost?format=TEXT",
+          "encoding": "base64"
+        }
+      ]
+    },
+    {
+      "name": "PartitionAlloc",
+      "license": "BSD-3-Clause (Chromium's licence: its repository at this commit has no licence file of its own, and its files refer to Chromium's LICENSE)",
+      "repository": "https://chromium.googlesource.com/chromium/src/base/allocator/partition_allocator",
+      "commit": "ff3b8b885b8374cbd3902642d94dc737bda93d5d",
+      "files": [
+        {
+          "path": "LICENSE (chromium/src at 152.0.7977.130)",
+          "url": "https://raw.githubusercontent.com/chromium/chromium/2c592105bbcd9490a9894df48d0fe59b2c512651/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "TypeScript 6.0.3 (Deno's cli/tsc/00_typescript.js and the lib.*.d.ts files)",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/microsoft/TypeScript",
+      "commit": "050880ce59e30b356b686bd3144efe24f875ebc8",
+      "files": [
+        {
+          "path": "LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/microsoft/TypeScript/050880ce59e30b356b686bd3144efe24f875ebc8/LICENSE.txt"
+        },
+        {
+          "path": "ThirdPartyNoticeText.txt",
+          "url": "https://raw.githubusercontent.com/microsoft/TypeScript/050880ce59e30b356b686bd3144efe24f875ebc8/ThirdPartyNoticeText.txt"
+        }
+      ]
+    },
+    {
+      "name": "Node.js 26.5.1 (the code Deno's ext/node ports from Node.js; Deno reports this version)",
+      "license": "MIT",
+      "repository": "https://github.com/nodejs/node",
+      "commit": "9e6bf8dbdeb890cbb09385b065f1c352128cd439",
+      "files": [
+        {
+          "path": "LICENSE (Node.js's own part, up to its list of external libraries)",
+          "url": "https://raw.githubusercontent.com/nodejs/node/9e6bf8dbdeb890cbb09385b065f1c352128cd439/LICENSE",
+          "until": "The externally maintained libraries used by Node.js are:"
+        }
+      ]
+    }
+  ]
+}

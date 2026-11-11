@@ -1,7 +1,109 @@
 # Releasing Mergelane
 
-How to cut a release. One GitHub Actions workflow (`.github/workflows/release.yml`) builds the app, tests it, and
-creates a **draft** release on GitHub. Nothing is public until you read the draft and press Publish.
+How to cut a release. Nothing is public until you read the **draft** release on GitHub and press Publish.
+
+There are two ways to build one, with the same steps:
+
+- **On this Mac** (the way for now: CI is paused, ADR-0020): `scripts/release/local-release.mjs`, below in
+  "Releasing from this Mac". `scripts/ci/local.sh` runs CI's other checks here ("Checking a build on this Mac").
+- **On GitHub:** the `.github/workflows/release.yml` workflow, described in the rest of this guide.
+
+## Releasing from this Mac
+
+`scripts/release/local-release.mjs` does what `release.yml` does, in the same order, and stops before uploading
+anything unless you say `--upload`. It never publishes: with `--upload` it creates a **draft**, and you publish it by
+hand on GitHub, as in steps 5 and 6 below. Every command's output also goes to `local-ci-logs/release-<version>-<time>.log`.
+
+You need: this Mac (Apple silicon, macOS 27), Node.js, Go, the Xcode command line tools, `app/node_modules` installed,
+and `gh` signed in to an account that can push to the repository (`gh auth status`). The FFmpeg build and the packaging
+test take about 10 minutes in all.
+
+1. Bump the version and update the changelog (steps 1 and 2 below), commit, and get the commit onto `main` on GitHub.
+2. Check out `main`, with nothing uncommitted, at the same commit as GitHub's `main`.
+3. Build and check everything, without uploading:
+
+   ```sh
+   node scripts/release/local-release.mjs --version 1.2.3
+   ```
+
+   It:
+   1. runs the release-notes script's tests;
+   2. checks that `1.2.3` is `app/package.json`'s version and has its `CHANGELOG.md` section, that you are on `main`
+      at the same commit as `origin/main` (after `git fetch`), that nothing is uncommitted, and that neither the tag
+      `v1.2.3` (here or on GitHub) nor a release for it (even a draft) exists yet;
+   3. builds both helpers stamped with the version, fetches yt-dlp and Deno and builds FFmpeg, and builds the DMG and
+      the zip into a fresh `app/dist`;
+   4. audits the Electron fuses, runs the packaging test in its local mode (below), and checks the app in the zip;
+   5. collects the bundled programs' sources into `app/dist/sources`, writes `app/dist/SHA256SUMS` and
+      `app/dist/release-notes.md`;
+   6. lists what it would upload, with sizes and SHA-256s, and the exact `gh` command.
+4. If you're happy, run it again with `--upload`. It repeats every check and step, then runs
+   `gh release create v1.2.3 --draft --target <commit> ...` with the DMG, the zip, `SHA256SUMS` and the sources.
+5. Review the draft and publish it by hand (steps 5 and 6 below).
+
+**A dry run on any branch.** `--skip-branch-checks` skips the two branch checks (on `main` at `origin/main`, nothing
+uncommitted), and `--changelog <file>` reads another changelog (for example one with a section for a version that
+`CHANGELOG.md` doesn't have yet). Both exist only to try the build before a release; they are refused together with
+`--upload`, and the output says DRY RUN. A build made that way must not be released.
+
+The tests (no build, no upload): `node --test --experimental-test-coverage
+--test-coverage-include='scripts/release/local-release.mjs' scripts/release/local-release.test.mjs`. They also fail when
+`release.yml` gains a step this script has no counterpart for.
+
+## Checking a build on this Mac
+
+`scripts/ci/local.sh` runs every job of `.github/workflows/ci.yml` that needs no root: `repo-checks`, `app-checks`,
+`app-e2e-smoke`, `package`, `daemon` and `extension-e2e`. It reads the commands from `ci.yml` itself, so a step added
+there runs here too; a step it can't run here (one that needs root, an action it doesn't know, a `${{ }}` expression)
+stops it until `scripts/ci/local.mjs` has a rule for it, with the reason. The jobs that need root (`netsim`,
+`daemon-acceptance`, `app-acceptance`) are run by `scripts/ci/local-root.sh`.
+
+```sh
+scripts/ci/local.sh                  # every job that needs no root, one after another
+scripts/ci/local.sh --job daemon     # one job (repeat --job, or separate names with commas)
+scripts/ci/local.sh --keep-going     # run the rest after a job fails
+scripts/ci/local.sh --list           # the jobs and steps, and why some are left out
+```
+
+What differs from CI, and why:
+
+- `npm ci` is never run: `app/node_modules` is already installed, and may be shared with another checkout.
+- Homebrew's FFmpeg (`/opt/homebrew/bin/ffmpeg`, or `--fixture-ffmpeg <path>`) replaces `brew install ffmpeg`.
+- The daemon job's two loopback aliases need root, so the 7 tests that need them skip themselves.
+- Every step runs with `CI=true`, without `ELECTRON_RUN_AS_NODE` (set in some shells, it would start Electron as plain
+  Node), and with `MERGELANE_PACKAGE_TEST_LOCAL=1` (below). `go test` runs with `GOFLAGS=-v -count=1`, so its tests
+  can be counted and are never answered from Go's test cache.
+- `~/Downloads` is guarded: its entries are listed before and after each job, and anything new fails the run.
+- The `daemon/mergelane-daemon` binary that the daemon job builds as a check is removed afterwards; `app/dist` (the
+  package job's DMG and zip) is kept, ignored by git.
+
+Each run writes `local-ci-logs/<time>/`: a log per job, the scripts it ran (`steps/`), and `summary.txt`, the table it
+prints at the end (each job's result, time, test counts and line coverage).
+
+### The packaging test's local mode
+
+`scripts/ci/package-test.sh --local` (or `MERGELANE_PACKAGE_TEST_LOCAL=1`) is how this Mac runs the packaging test
+without reaching your own Mergelane:
+
+- **No quarantine flag, ever**, so macOS never shows its "could not verify" dialog. The Gatekeeper assessment, which
+  needs the flag, is skipped, and the output says so. A DMG that already carries the flag (a downloaded one) is refused.
+  Everything else is checked as in CI: every Mach-O file's signature, the metadata, the licences, the helpers and tools.
+- **Its own home and data folders.** The app is started directly with `HOME` and `CFFIXED_USER_HOME` pointing at an
+  empty test folder and `--user-data-dir` at another. Electron takes its home folder (where it registers the browsers'
+  native messaging hosts) and its Library, Downloads and log folders from macOS's home folder, which follows
+  `CFFIXED_USER_HOME` (Chromium's `NSHomeDirectory()`; Apple's CoreFoundation reads that variable first); setting only
+  `HOME` was tried and is not enough. `--user-data-dir` gives the copy its own settings and its own single-instance
+  lock, so it never hands over to a Mergelane you have running. `--use-mock-keychain` keeps Chromium's cookie key out of
+  your login keychain.
+- **It quits by process ID**, never by bundle ID, which could quit your Mergelane.
+- **It proves it.** Before and after, it records every file under `~/Library/Application Support/Mergelane` and the
+  Chrome, Chrome for Testing, Chromium and Firefox `NativeMessagingHosts` folders (with SHA-256s and modification
+  times), Mergelane's caches, logs, preferences and saved state, its keychain item (attributes only, never the secret)
+  and which app opens `mergelane:` and `magnet:` links, and fails if anything changed. If your Mergelane is running and
+  writes its own files during the test, the test fails and says so: quit it and run again.
+- The app registers itself for `mergelane:` links by bundle ID on every start. That leaves your settings as they were
+  only when they already name Mergelane, so if they don't (Mergelane never opened on this Mac), the launch is skipped
+  with a message. The temporary copy's LaunchServices record is removed after the launch.
 
 ## What the workflow does
 
@@ -150,7 +252,7 @@ you've already checked an identical build.
   then needs those secrets passed to the build step.
 - **No automatic updates.** The app doesn't download updates itself (ADR-0010). Users download the new DMG.
 
-## Testing the notes script
+## Testing the scripts
 
 ```sh
 node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' \
@@ -160,3 +262,9 @@ node --test --experimental-test-coverage --test-coverage-include='scripts/media-
 ```
 
 To preview the checks on your own machine: `node scripts/release/notes.mjs --version 1.2.3 --check`.
+
+```sh
+node --test --experimental-test-coverage --test-coverage-include='scripts/release/local-release.mjs' \
+  scripts/release/local-release.test.mjs
+node --test --experimental-test-coverage --test-coverage-include='scripts/ci/local.mjs' scripts/ci/local.test.mjs
+```

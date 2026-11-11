@@ -151,6 +151,12 @@ MIT-licensed code.
   `d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba`), shipped as `Contents/Resources/deno`. yt-dlp
   runs it to solve YouTube's player challenges; Mergelane never runs it otherwise.
 - Licence: MIT. Text: `licenses/deno/LICENSE.md`.
+- Built into it: code by others, under their own licences: V8 and the C and C++ libraries compiled into it (ICU,
+  Abseil, LLVM's libc++, libc++abi, libunwind and libc, fast_float, simdutf, Highway, Dragonbox, FP16, PartitionAlloc),
+  TypeScript 6.0.3, code ported from Node.js 26.5.1, and the Rust crates in Deno's `Cargo.lock`. Their notices and
+  licence texts are in `licenses/deno/THIRD-PARTY-NOTICES.txt`, next to Deno's licence in the app bundle. Deno
+  publishes no such list, so Mergelane generates it from pinned official sources with
+  `scripts/media-tools/deno-notices.mjs` (`docs/MEDIA-TOOLS.md`, "Deno's bundled components").
 
 ```text
 MIT License
@@ -175,6 +181,4 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-- The program includes V8 (BSD-3-Clause), TypeScript (Apache-2.0) and Rust libraries under their own permissive
-  licences; their notices are not yet collected here (see `docs/MEDIA-TOOLS.md`, open questions).
 - Source: https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz.

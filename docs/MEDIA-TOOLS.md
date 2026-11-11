@@ -196,9 +196,57 @@ This is a summary for planning, not legal advice.
   the notice ships with the program, which the fetch script and the packaging config do.
 - Being MIT, it needs no source offer (ADR-0027), so `tools.json` gives no `sourceSha256` for it and the release
   doesn't attach its source.
-- The program also contains V8 (BSD-3-Clause), TypeScript (Apache-2.0) and many Rust libraries under their own
-  permissive licences. Deno's release publishes no list of them, and they are not collected here yet (see the open
-  questions).
+- The program also contains code by others under their own licences: V8 and the C and C++ libraries built into it,
+  TypeScript, code ported from Node.js, and Rust libraries. Their notices are in
+  `licenses/deno/THIRD-PARTY-NOTICES.txt`, which ships next to Deno's licence (see "Deno's bundled components" below).
+
+### Deno's bundled components
+
+Deno's release publishes no list of the third-party code inside the program. Checked on 2026-11-11: the `v2.9.8`
+release has only the programs, their checksums, `deno_src.tar.gz` and `lib.deno.d.ts`; the repository at the tag has no
+combined notices file (only `LICENSE.md`, `cli/tsc/dts/node/LICENSE`, `cli/tsc/dts/node/undici/LICENSE` and
+`ext/webgpu/LICENSE.md`); and `deno --help` lists no command that prints notices.
+
+So `scripts/media-tools/deno-notices.mjs` builds the list from official sources, all pinned in
+`scripts/media-tools/deno-notices.json`, into `scripts/media-tools/licenses/deno/THIRD-PARTY-NOTICES.txt` (committed,
+about 2.1 MB). `tools.json` lists it among Deno's `licenseFiles`, so the fetch copies it into the app, and the packaging
+test checks it is there. The same inputs always give the same file. What it covers:
+
+1. **Rust crates.** Deno's source release (`deno_src.tar.gz`, pinned by its SHA-256) gives `Cargo.lock`: 1,048 packages
+   from crates.io and Deno's own 82 workspace crates. Each crates.io package is downloaded from crates.io and checked
+   against the SHA-256 in `Cargo.lock`, and its licence, notice and copying files are taken as published: its own, and
+   those of code it bundles (for example zlib inside `libz-sys`), outside tests, examples and docs.
+   - 926 crates publish their own licence text.
+   - 97 don't: their texts come from their repository, at the commit `.cargo_vcs_info.json` says the crate was
+     published from (for the swc crates, whose recorded commits are not in swc's repository, swc's `LICENSE` at a
+     pinned commit). They are pinned as `crateFallbacks`.
+   - 25 have neither a licence file nor one in their repository (or name no repository or commit): the standard text
+     of each licence they declare is given, from SPDX's license-list-data v3.29.0 (`spdxTexts`), and they are marked
+     "standard text". Their own copyright lines are therefore not in the file.
+   - `Cargo.lock` lists the crates of every platform and of Deno's tests and tools, so the list is longer than what the
+     macOS program contains.
+2. **V8 and what is built into it.** The `v8` crate (rusty_v8 150.4.0) excludes every licence file from its package,
+   so they come from rusty_v8's repository at the commit the crate was published from, and from its submodules at the
+   commits pinned there: V8 (with `LICENSE.fdlibm`, `LICENSE.strongtalk`, `LICENSE.v8` and V8's own `third_party`
+   licences), ICU, Abseil, FP16, LLVM's libc++, libc++abi, libunwind and libc, fast_float, simdutf, Highway, Dragonbox
+   and PartitionAlloc (which has no licence file of its own; Chromium's `LICENSE` is given). Submodules used only to
+   build (Chromium's build files, clang, jinja2, markupsafe, Chromium's Rust crates, the Windows tools) are left out.
+3. **JavaScript and TypeScript in Deno.** TypeScript 6.0.3 (`LICENSE.txt` and `ThirdPartyNoticeText.txt` at its tag),
+   Node.js's own licence at 26.5.1 (the version Deno's Node.js layer reports; the part before its list of external
+   libraries), the licence files inside Deno's source, and the copyright notices in the comments of the 640 JavaScript
+   and TypeScript files under `cli/js`, `cli/tsc`, `ext` and `runtime` (31 distinct notices).
+
+What it does not cover: macOS's own libraries (linked, not included); and code whose authors gave no licence file or
+notice in any of these sources. The 25 "standard text" crates are covered by their licence's text but without their
+authors' copyright lines.
+
+To regenerate it (about 250 MB of crates are downloaded; `--cache` keeps them between runs, outside the repository):
+
+```sh
+node scripts/media-tools/deno-notices.mjs --cache ~/some-scratch-folder/deno-crates
+node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' \
+  scripts/media-tools/deno-notices.test.mjs
+```
 
 ### What this means for Mergelane
 
@@ -295,7 +343,17 @@ Do this in a scratch folder, never in the repository.
   `tools.json`, update `version`, `url`, `sha256`, `binarySha256`, `sourceUrl`, `checksumSource` and
   `binaryChecksumSource`. Replace `licenses/deno/LICENSE.md` with the file from the new tag. yt-dlp 2026.10.26 needs
   Deno 2.3.0 or later (`MIN_SUPPORTED_VERSION` in `yt_dlp/utils/_jsruntime.py`); check that again when either
-  changes.
+  changes. Then update `deno-notices.json` and regenerate the notices:
+  1. `deno`: the version, the tag's commit (`gh api repos/denoland/deno/git/ref/tags/vX.Y.Z`), and the SHA-256 of the
+     release's `deno_src.tar.gz` (GitHub lists it as the asset's `digest`).
+  2. The V8 components: find the `v8` crate's version in the new `Cargo.lock`, read the commit in its
+     `.cargo_vcs_info.json` (or rusty_v8's tag), and take each submodule's commit from rusty_v8 at that commit
+     (`gh api 'repos/denoland/rusty_v8/contents/<path>?ref=<commit>'`). List each one's top-level licence files, and
+     update the URLs. TypeScript's version is in `cli/tsc/00_typescript.js` (`var version`), Node.js's in
+     `ext/node/lib.rs` (`NODE_VERSION`).
+  3. Run the generator. Its summary lists any crate without a licence text: pin that crate's repository files at the
+     commit in its `.cargo_vcs_info.json` (`crateFallbacks`), or add the standard text of its licence (`spdxTexts`).
+  4. Read the diff of `THIRD-PARTY-NOTICES.txt`, and run its tests.
 
 Afterwards, run the tests, update the versions and checksums in `THIRD-PARTY-NOTICES.md`, and delete the scratch
 folder. CI caches `app/resources/bin` by the hash of `tools.json`, the licence texts, `build-ffmpeg.sh` and
@@ -333,5 +391,8 @@ folder) or `MERGELANE_DENO_PATH` point (development and tests only).
    ffprobe disabled. Close this question?
 3. **GPG check for yt-dlp:** also verify yt-dlp's GPG signature on `SHA2-256SUMS` when updating? GPG is now available
    on this Mac (`/opt/homebrew/bin/gpg`); yt-dlp's public key would need to be pinned like FFmpeg's.
-4. **Deno's bundled components:** collect the licence notices of what is built into Deno (V8, TypeScript and its Rust
-   libraries) into `licenses/deno/` before the first public release (ADR-0029)?
+4. ~~**Deno's bundled components**~~: done (2026-11-11). `licenses/deno/THIRD-PARTY-NOTICES.txt`, generated by
+   `scripts/media-tools/deno-notices.mjs`; see "Deno's bundled components" above for what it covers and what it
+   doesn't. Remaining choice: 25 crates are covered by the standard text of their licence, without their authors'
+   copyright lines, because neither their package nor their repository has a licence file. Accept that, or ask those
+   projects (several are Deno's own: `deno_core_icudata`, `deno_native_certs`, `deno_tunnel`, `rustls-tokio-stream`)?

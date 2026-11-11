@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -83,6 +84,23 @@ func parseRunFlags(args []string) (runConfig, error) {
 		allowedUID: *allowedUID,
 		socketPath: *socketPath,
 	}, nil
+}
+
+// splitProbeTargets sorts -probe-targets by address family: a bracketed IPv6 literal
+// ("[2001:db8::10]:80") is an IPv6 probe target, anything else (an IPv4 address or a host name)
+// stays an IPv4 one, as before. A family left empty keeps its default targets (SetProbeTargets).
+// Before this, an IPv6 target was dialled over tcp4 and failed every IPv4 probe.
+func splitProbeTargets(targets []string) (v4, v6 []string) {
+	for _, t := range targets {
+		if host, _, err := net.SplitHostPort(t); err == nil {
+			if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+				v6 = append(v6, t)
+				continue
+			}
+		}
+		v4 = append(v4, t)
+	}
+	return v4, v6
 }
 
 // runEngine is the scheduler as run drives it (engine.Scheduler).
@@ -206,7 +224,9 @@ func runDaemon(c runConfig, d runDeps) error {
 	if err := state.Prepare(c.stateDir); err != nil {
 		return err
 	}
-	engine.SetProbeTargets(engine.Fam4, c.probes)
+	probes4, probes6 := splitProbeTargets(c.probes)
+	engine.SetProbeTargets(engine.Fam4, probes4)
+	engine.SetProbeTargets(engine.Fam6, probes6)
 
 	// Start clean, and say so if the last run didn't get to (ADR-0007). A run that died while merging
 	// was on leaves marked routes behind, or at least never marked its exit clean while the user

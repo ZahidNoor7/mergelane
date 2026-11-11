@@ -124,7 +124,8 @@ func (c *engineFlags) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.auto, "auto-weight", true, "weight links by measured throughput (off when -weight is given)")
 	fs.StringVar(&c.ipv6, "ipv6", "auto", "auto: IPv6 only if every link has it; on: always; off: never")
 	fs.IntVar(&c.mtu, "mtu", tun.DefaultMTU, "MTU of the utun (1280-65535)")
-	fs.StringVar(&c.probes, "probe-targets", "", "comma-separated host:port reachability targets (default 1.1.1.1:443,8.8.8.8:443)")
+	fs.StringVar(&c.probes, "probe-targets", "", "comma-separated host:port reachability targets; bracketed IPv6 ones ([::1]:443) replace the IPv6 targets "+
+		"(default 1.1.1.1:443,8.8.8.8:443 and [2606:4700:4700::1111]:443,[2001:4860:4860::8888]:443)")
 	fs.StringVar(&c.logFile, "log", "", "write output to this file")
 	fs.StringVar(&c.stateDir, "state-dir", state.DefaultDir(), "state directory (control socket)")
 	fs.StringVar(&c.pprof, "pprof", "", "serve Go's profiler on this loopback address")

@@ -39,6 +39,10 @@ jobs:
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/fetch.mjs' --test-coverage-lines=90 scripts/media-tools/fetch.test.mjs
       - name: Test the media-tools sources script
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/sources.mjs' --test-coverage-lines=90 scripts/media-tools/sources.test.mjs
+      - name: Test the local release script
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/local-release.mjs' --test-coverage-lines=90 scripts/release/local-release.test.mjs
+      - name: Test the Deno notices generator
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' --test-coverage-lines=90 scripts/media-tools/deno-notices.test.mjs
 
   app-checks:
     runs-on: xcode-27
@@ -237,7 +241,7 @@ jobs:
       - name: App downloads on a 20 and a 50 Mbit/s link
         run: >-
           bash scripts/netsim/with-netsim.sh "1:20:10:0 2:50:10:0" --
-          bash -c 'cd app && npx playwright test --grep @netsim --reporter=list'
+          bash -c 'cd app && npx playwright test --grep @netsim --reporter=list --workers=1'
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

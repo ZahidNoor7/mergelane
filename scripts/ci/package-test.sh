@@ -6,10 +6,35 @@
 #   metadata -> check Gatekeeper's verdict is "unnotarised" (Open Anyway), not "damaged" ->
 #   remove quarantine (the README's install step) -> open -> ask the bridge socket's health until ready -> quit.
 #
-# usage: scripts/ci/package-test.sh <Mergelane-x.y.z-arm64.dmg> [expected-version]
+# Local mode (--local, or MERGELANE_PACKAGE_TEST_LOCAL=1) is for the owner's Mac, where CI's way of
+# testing would reach the owner's own Mergelane (docs/RELEASING.md, "Checking a build on this Mac"):
+#   - no quarantine flag is ever set, so macOS never shows its "could not verify" dialog, and the
+#     Gatekeeper assessment that needs the flag is skipped (both are said in the output). A DMG that
+#     already carries the flag is refused.
+#   - the app is started directly, not with `open`, with its own home and data folders:
+#     CFFIXED_USER_HOME and HOME point at an empty folder (Electron's home, Library, Downloads and
+#     log paths follow CoreFoundation's home, which honours CFFIXED_USER_HOME), and --user-data-dir
+#     gives it its own userData, so its single-instance lock can't reach a running Mergelane.
+#     --use-mock-keychain keeps Chromium's cookie key out of the login keychain.
+#   - it quits by its process ID, never by bundle ID (which could quit the owner's Mergelane).
+#   - before and after, it records the owner's Mergelane folders, the browsers' native messaging
+#     host folders, Mergelane's keychain item and its link handlers, and fails if anything changed.
+#     The temporary copy's LaunchServices registration is removed again after the launch.
+# Everything else (signatures of every Mach-O file, metadata, licences, helpers, tools) is the same.
+#
+# usage: scripts/ci/package-test.sh [--local] <Mergelane-x.y.z-arm64.dmg> [expected-version]
 set -euo pipefail
 
-DMG=${1:?usage: package-test.sh <dmg> [expected-version]}
+LOCAL=${MERGELANE_PACKAGE_TEST_LOCAL:-0}
+if [ "${1:-}" = "--local" ]; then
+  LOCAL=1
+  shift
+fi
+[ "$LOCAL" = 0 ] || [ "$LOCAL" = 1 ] || {
+  echo "package-test: MERGELANE_PACKAGE_TEST_LOCAL must be 0 or 1" >&2
+  exit 2
+}
+DMG=${1:?usage: package-test.sh [--local] <dmg> [expected-version]}
 EXPECTED_VERSION=${2:-}
 BUNDLE_ID=io.github.zahidnoor7.mergelane
 # The browser bridge's socket (docs/BROWSER-BRIDGE.md); its health message reports readiness.
@@ -19,10 +44,14 @@ READY_TIMEOUT_S=${READY_TIMEOUT_S:-90}
 WORK=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/mergelane-package-test.XXXXXX")
 APP="$WORK/Applications/Mergelane.app"
 MNT=""
+APP_PID=""
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 cleanup() {
+  if [ -n "$APP_PID" ]; then kill -KILL "$APP_PID" 2>/dev/null || true; fi
   pkill -f "$APP/Contents/MacOS/" 2>/dev/null || true
   if [ -n "$MNT" ]; then hdiutil detach -quiet "$MNT" 2>/dev/null || true; fi
+  if [ "$LOCAL" = 1 ] && [ -d "$APP" ]; then unregister_copy || true; fi
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -32,6 +61,105 @@ fail() {
   echo "package-test: FAIL: $*" >&2
   exit 1
 }
+skipped() { echo "SKIPPED (local mode): $*"; }
+
+# --- Local mode: what the launch must leave alone -------------------------------------------------
+
+# The owner's Mergelane data and everything else that is per user and per app: if one of these
+# changes during the test, the test touched the owner's Mergelane.
+WATCHED=(
+  "$HOME/Library/Application Support/Mergelane"
+  "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+  "$HOME/Library/Application Support/Google/ChromeForTesting/NativeMessagingHosts"
+  "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
+  "$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
+  "$HOME/Library/Caches/Mergelane"
+  "$HOME/Library/Caches/$BUNDLE_ID"
+  "$HOME/Library/Logs/Mergelane"
+  "$HOME/Library/Preferences/$BUNDLE_ID.plist"
+  "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState"
+  "$HOME/Library/HTTPStorages/$BUNDLE_ID"
+  "$HOME/Library/WebKit/$BUNDLE_ID"
+)
+
+# LaunchServices, read-only: which app opens mergelane: and magnet: links, the handlers saved in the
+# user's LaunchServices preferences, and every copy of Mergelane LaunchServices knows about.
+launch_services() {
+  osascript -l JavaScript - "$HOME" "$BUNDLE_ID" <<'JXA'
+ObjC.import('AppKit')
+function run(argv) {
+  const [home, bundleId] = argv
+  const ws = $.NSWorkspace.sharedWorkspace
+  const opener = (scheme) => {
+    const url = ws.URLForApplicationToOpenURL($.NSURL.URLWithString(scheme + '://x'))
+    return url.isNil() ? null : url.path.js
+  }
+  const prefs = $.NSDictionary.dictionaryWithContentsOfFile(
+    home + '/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')
+  const saved = {}
+  const handlers = prefs.isNil() ? null : prefs.objectForKey('LSHandlers')
+  if (handlers && !handlers.isNil()) {
+    for (let i = 0; i < handlers.count; i++) {
+      const entry = ObjC.deepUnwrap(handlers.objectAtIndex(i))
+      if (entry.LSHandlerURLScheme === 'mergelane' || entry.LSHandlerURLScheme === 'magnet') {
+        saved[entry.LSHandlerURLScheme] = entry.LSHandlerRoleAll ?? null
+      }
+    }
+  }
+  const copies = []
+  const apps = ws.URLsForApplicationsWithBundleIdentifier(bundleId)
+  for (let i = 0; i < apps.count; i++) copies.push(apps.objectAtIndex(i).path.js)
+  copies.sort()
+  return JSON.stringify({ opens: { mergelane: opener('mergelane'), magnet: opener('magnet') }, saved, copies })
+}
+JXA
+}
+
+# One line per file, folder or link under every watched path (type, size, modification time with
+# nanoseconds, SHA-256), Mergelane's keychain item (attributes only: never its secret) and
+# LaunchServices' state.
+snapshot() {
+  local path entry
+  for path in "${WATCHED[@]}"; do
+    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+      printf 'absent\t%s\n' "$path"
+      continue
+    fi
+    while IFS= read -r -d '' entry; do
+      if [ -L "$entry" ]; then
+        printf 'link\t%s\t%s\n' "$(readlink "$entry")" "$entry"
+      elif [ -d "$entry" ]; then
+        printf 'dir\t%s\t%s\n' "$(stat -f '%Fm' "$entry")" "$entry"
+      elif [ -f "$entry" ]; then
+        printf 'file\t%s\t%s\t%s\t%s\n' "$(stat -f '%z' "$entry")" "$(stat -f '%Fm' "$entry")" \
+          "$(shasum -a 256 <"$entry" | cut -d' ' -f1)" "$entry"
+      else
+        printf '%s\t%s\t%s\n' "$(stat -f '%HT' "$entry")" "$(stat -f '%Fm' "$entry")" "$entry"
+      fi
+    done < <(find "$path" -print0 | sort -z)
+  done
+  local item
+  item=$(security find-generic-password -s "Mergelane Safe Storage" 2>/dev/null | grep -E '"(cdat|mdat|svce|acct)"' || true)
+  printf 'keychain\t%s\n' "${item:-no "Mergelane Safe Storage" item}" | tr '\n' ' '
+  echo
+  printf 'launchservices\t%s\n' "$(launch_services)"
+}
+
+# Removes the temporary copy's LaunchServices record, which launching it may have added.
+unregister_copy() {
+  local real
+  real=$(cd "$APP" && pwd -P)
+  if launch_services | grep -qF "\"$real\""; then
+    "$LSREGISTER" -u "$real" && echo "removed the temporary copy's LaunchServices record ($real)"
+  fi
+}
+
+if [ "$LOCAL" = 1 ]; then
+  echo "package-test: local mode (docs/RELEASING.md): no quarantine flag, and an isolated launch"
+  if xattr -p com.apple.quarantine "$DMG" >/dev/null 2>&1; then
+    fail "$DMG carries a quarantine flag; local mode only tests DMGs built on this Mac (opening a quarantined one can bring up macOS's dialog)"
+  fi
+fi
 
 step "Mount the DMG"
 MNT=$(hdiutil attach -nobrowse -readonly -noautoopen "$DMG" | awk -F'\t' '/\/Volumes\//{print $NF}')
@@ -44,9 +172,17 @@ ditto "$MNT/Mergelane.app" "$APP"
 hdiutil detach -quiet "$MNT"
 MNT=""
 
-step "Mark it quarantined, as a browser download would"
-xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;$(uuidgen)" "$APP"
-xattr -p com.apple.quarantine "$APP"
+if [ "$LOCAL" = 1 ]; then
+  step "Quarantine"
+  skipped "the quarantine flag is never set on this Mac, so macOS's 'could not verify' dialog can't appear"
+  flagged=$(find "$APP" -xattrname com.apple.quarantine -print | head -n 5)
+  [ -z "$flagged" ] || fail "the copied app carries a quarantine flag although the DMG doesn't: $flagged"
+  echo "no file in the copied app carries a quarantine flag"
+else
+  step "Mark it quarantined, as a browser download would"
+  xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;$(uuidgen)" "$APP"
+  xattr -p com.apple.quarantine "$APP"
+fi
 
 step "Signatures: the bundle verifies and every Mach-O file inside is signed"
 codesign --verify --deep --strict --verbose=2 "$APP"
@@ -87,19 +223,25 @@ for bin in "$HELPER" "$NMHOST"; do
   [ "$(lipo -archs "$bin")" = "arm64" ] || fail "the bundled ${bin##*/} is not arm64-only"
 done
 
-step "Gatekeeper: rejected as unnotarised (so Open Anyway is offered), not as damaged"
-VERDICT=$(spctl --assess --type execute -vv "$APP" 2>&1 || true)
-echo "$VERDICT"
-grep -q ': rejected' <<<"$VERDICT" || fail "expected Gatekeeper to reject an unnotarised app"
-if grep -qiE 'damaged|invalid signature|sealed resource' <<<"$VERDICT"; then
-  fail "Gatekeeper reports the app as damaged, which offers no Open Anyway"
-fi
-if command -v syspolicy_check >/dev/null; then
-  syspolicy_check distribution "$APP" 2>&1 | grep -E '^[A-Z][A-Za-z ]+$|Severity' || true
-fi
+if [ "$LOCAL" = 1 ]; then
+  step "Gatekeeper"
+  skipped "spctl's assessment and syspolicy_check describe a quarantined download, and nothing here is quarantined"
+  step "Install step from the README (local mode: nothing to remove), then check the bundled programs"
+else
+  step "Gatekeeper: rejected as unnotarised (so Open Anyway is offered), not as damaged"
+  VERDICT=$(spctl --assess --type execute -vv "$APP" 2>&1 || true)
+  echo "$VERDICT"
+  grep -q ': rejected' <<<"$VERDICT" || fail "expected Gatekeeper to reject an unnotarised app"
+  if grep -qiE 'damaged|invalid signature|sealed resource' <<<"$VERDICT"; then
+    fail "Gatekeeper reports the app as damaged, which offers no Open Anyway"
+  fi
+  if command -v syspolicy_check >/dev/null; then
+    syspolicy_check distribution "$APP" 2>&1 | grep -E '^[A-Z][A-Za-z ]+$|Severity' || true
+  fi
 
-step "Install step from the README: remove quarantine, then open the app"
-xattr -dr com.apple.quarantine "$APP"
+  step "Install step from the README: remove quarantine, then open the app"
+  xattr -dr com.apple.quarantine "$APP"
+fi
 # Inside a still-quarantined bundle macOS kills the helper (seen on macOS 27), so it is checked only
 # after the documented approval, which is also when the app can run it to install it.
 helper_version=$("$HELPER" version) || fail "the bundled helper does not run after approval"
@@ -159,12 +301,52 @@ deno_sum=$(printf 'console.log(1 + 2)' |
   fail "the bundled deno cannot run JavaScript"
 [ "$deno_sum" = "3" ] || fail "the bundled deno printed '$deno_sum' for 1 + 2"
 [ -s "$APP/Contents/Resources/licenses/deno/LICENSE.md" ] || fail "licenses/deno/LICENSE.md is missing from the bundle"
-open -n "$APP"
+[ -s "$APP/Contents/Resources/licenses/deno/THIRD-PARTY-NOTICES.txt" ] ||
+  fail "licenses/deno/THIRD-PARTY-NOTICES.txt (what is built into Deno) is missing from the bundle"
+if [ "$LOCAL" = 1 ]; then
+  step "Local mode: record what the launch must leave alone"
+  FAKE_HOME="$WORK/h"
+  USER_DATA="$WORK/u"
+  BRIDGE_SOCKET="$USER_DATA/browser.sock"
+  # macOS caps a socket path at 104 bytes, the terminating zero included.
+  [ "${#BRIDGE_SOCKET}" -lt 104 ] || fail "the socket path $BRIDGE_SOCKET is too long for macOS; set TMPDIR shorter"
+  mkdir -p "$FAKE_HOME"
+  BEFORE="$WORK/before.txt"
+  snapshot >"$BEFORE"
+  echo "recorded $(wc -l <"$BEFORE" | tr -d ' ') entries"
+  grep -E '^(absent|keychain|launchservices)' "$BEFORE" | sed "s|$HOME|~|g"
+  # The app tells macOS it opens mergelane: links (setAsDefaultProtocolClient, by bundle ID). That
+  # only leaves the owner's preferences as they were when they already name Mergelane.
+  saved_handler=$(sed -n 's/^launchservices\t//p' "$BEFORE" |
+    plutil -extract saved.mergelane raw -o - - 2>/dev/null || true)
+  if [ "$saved_handler" != "$BUNDLE_ID" ]; then
+    skipped "launch: macOS doesn't have Mergelane saved as the handler of mergelane: links yet, and launching would save it; install and open Mergelane once, then run this again"
+    echo
+    echo "package-test: PASS without the launch ($DMG)"
+    exit 0
+  fi
+  if pgrep -f "^/Applications/Mergelane.app/Contents/MacOS/Mergelane" >/dev/null; then
+    echo "/Applications/Mergelane.app is running; the test copy has its own data folder, so its single-instance lock can't hand over to it"
+  fi
+
+  step "Open the copy directly, with its own home and data folders"
+  env -u ELECTRON_RUN_AS_NODE HOME="$FAKE_HOME" CFFIXED_USER_HOME="$FAKE_HOME" \
+    "$APP/Contents/MacOS/Mergelane" --user-data-dir="$USER_DATA" --use-mock-keychain \
+    >"$WORK/app.log" 2>&1 &
+  APP_PID=$!
+  echo "started pid $APP_PID"
+else
+  open -n "$APP"
+fi
 
 step "Wait for the bridge socket's health message to report ready (up to ${READY_TIMEOUT_S}s)"
 deadline=$((SECONDS + READY_TIMEOUT_S))
 health=""
 while [ $SECONDS -lt $deadline ]; do
+  if [ -n "$APP_PID" ] && ! kill -0 "$APP_PID" 2>/dev/null; then
+    tail -n 20 "$WORK/app.log" >&2 || true
+    fail "the app exited before it was ready"
+  fi
   body=$(printf '{"v":2,"origin":"","message":{"type":"health"}}\n' | nc -U -w 3 "$BRIDGE_SOCKET" 2>/dev/null || true)
   if grep -q '"app":"mergelane"' <<<"$body" && grep -q '"ready":true' <<<"$body"; then
     health=$body
@@ -178,13 +360,41 @@ echo "ready: $health"
 grep -q "\"version\":\"$VERSION\"" <<<"$health" || fail "the running app reports a different version"
 
 step "Quit"
-osascript -e "with timeout of 20 seconds" -e "tell application id \"$BUNDLE_ID\" to quit" -e "end timeout" ||
-  pkill -f "$APP/Contents/MacOS/" || true
-for _ in $(seq 1 20); do
+if [ "$LOCAL" = 1 ]; then
+  # By its process ID: "tell application id" could pick the owner's Mergelane. Electron quits
+  # cleanly on SIGTERM.
+  kill -TERM "$APP_PID"
+else
+  osascript -e "with timeout of 20 seconds" -e "tell application id \"$BUNDLE_ID\" to quit" -e "end timeout" ||
+    pkill -f "$APP/Contents/MacOS/" || true
+fi
+for _ in $(seq 1 40); do
   pgrep -f "$APP/Contents/MacOS/Mergelane" >/dev/null || break
   sleep 0.5
 done
 if pgrep -f "$APP/Contents/MacOS/Mergelane" >/dev/null; then fail "the app did not quit"; fi
+APP_PID=""
+
+if [ "$LOCAL" = 1 ]; then
+  step "Local mode: the owner's Mergelane was left alone"
+  unregister_copy
+  echo "what the copy wrote, all inside the test folder:"
+  (cd "$WORK" && find h u -maxdepth 3 | sort | head -n 40)
+  for browser in "Google/Chrome" "Google/ChromeForTesting" "Chromium" "Mozilla"; do
+    [ ! -e "$FAKE_HOME/Library/Application Support/$browser" ] ||
+      fail "the copy found a $browser folder in its own home, which should be empty"
+  done
+  AFTER="$WORK/after.txt"
+  snapshot >"$AFTER"
+  if ! diff -u "$BEFORE" "$AFTER" >"$WORK/changes.diff"; then
+    sed "s|$HOME|~|g" "$WORK/changes.diff" >&2
+    if pgrep -f "^/Applications/Mergelane.app/Contents/MacOS/Mergelane" >/dev/null; then
+      echo "(/Applications/Mergelane.app is running and may have written these itself: quit it and run again to tell)" >&2
+    fi
+    fail "something of the owner's Mergelane changed during the test (above)"
+  fi
+  echo "unchanged: $(grep -c . "$AFTER") entries (files with their SHA-256 and times, the keychain item, LaunchServices)"
+fi
 
 echo
 echo "package-test: PASS ($DMG)"

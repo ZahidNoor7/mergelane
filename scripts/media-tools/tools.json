@@ -53,7 +53,8 @@
       "license": "MIT",
       "licenseUrl": "https://github.com/denoland/deno/blob/v2.9.8/LICENSE.md",
       "licenseFiles": [
-        "licenses/deno/LICENSE.md"
+        "licenses/deno/LICENSE.md",
+        "licenses/deno/THIRD-PARTY-NOTICES.txt"
       ],
       "sourceUrl": "https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz",
       "checksumSource": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip.sha256sum",

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { mergeTrackers, normalizeTrackerUrl, parseTrackerList } from '../src/shared/torrentTrackers'
 
-test.describe('torrent tracker helpers', () => {
+test.describe('torrent tracker helpers @smoke', () => {
   test('normalizeTrackerUrl accepts valid tracker URLs and cleans them', () => {
     expect(normalizeTrackerUrl('udp://tracker.opentrackr.org:1337/announce')).toBe(
       'udp://tracker.opentrackr.org:1337/announce'

@@ -6,6 +6,7 @@ import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { app, Notification, powerSaveBlocker, safeStorage, shell } from 'electron'
 import { scheduleWindow } from '../../shared/downloadSchedule'
+import { nextStartCheck, parseWhen } from '../../shared/startAt'
 import { IpcChannels } from '../../shared/ipc-channels'
 import { taskbarProgress, type TaskbarDownload } from '../../shared/taskbarProgress'
 import {
@@ -445,6 +446,8 @@ export class DownloadManager {
   private scheduleLoaded = false
   private downloadSchedule?: DownloadSchedule
   private scheduleTimer?: NodeJS.Timeout
+  /** Watches the clock while a download added "At a time" waits for it (ADR-0044). */
+  private startTimer?: NodeJS.Timeout
   /** Each network's addresses as last seen, by id: what tells a network that has changed. */
   private seenAddresses = new Map<string, string[]>()
   private networkPreferences: NetworkPreferences = {}
@@ -528,6 +531,7 @@ export class DownloadManager {
     this.limitsChanged()
     await Promise.all(enrollmentChanged.map((runtime) => this.persistNow(runtime)))
     this.armScheduleTimer()
+    this.armStartTimer()
 
     // If proxy settings changed, wake and reconnect the affected streams
     const changedProxies = new Set<string>()
@@ -640,10 +644,18 @@ export class DownloadManager {
 
   /** Starts queued downloads, first queued first, while fewer than downloadsAtOnce run. Called
    * whenever one might have room: a run ended, a queued one went, the count went up. */
-  private pump(): void {
+  private pump(releaseHeld = false): void {
     if (this.suspending || !this.scheduleAllowsDownloads()) return
+    // One added to the queue gets its turn only when a run ends (`releaseHeld`), never just
+    // because there was room when it was added; one added at a time waits for that time.
     const queued = [...this.runtimes.values()]
-      .filter((runtime) => runtime.state.status === 'queued' && !runtime.scheduleStopping)
+      .filter(
+        (runtime) =>
+          runtime.state.status === 'queued' &&
+          !runtime.scheduleStopping &&
+          runtime.state.startAt === undefined &&
+          (releaseHeld || !runtime.state.held)
+      )
       .sort((a, b) => (a.state.queuedAt ?? 0) - (b.state.queuedAt ?? 0))
     for (const runtime of queued) {
       if (this.runningCount() >= this.downloadsAtOnce) return
@@ -665,6 +677,51 @@ export class DownloadManager {
     runtime.state.queuedAt = front
       ? Math.min(Date.now(), ...places) - 1
       : Math.max(Date.now(), ...places.map((place) => place + 1))
+  }
+
+  /** Looks at the clock while a download waits for its start time, at least once a second, as
+   * the schedule's timer does: a timer set for hours ahead would be late after a sleep or a
+   * clock change. */
+  private armStartTimer(): void {
+    clearTimeout(this.startTimer)
+    this.startTimer = undefined
+    if (this.suspending) return
+    const delay = nextStartCheck(
+      [...this.runtimes.values()].flatMap((runtime) =>
+        runtime.state.status === 'queued' && runtime.state.startAt !== undefined
+          ? [runtime.state.startAt]
+          : []
+      )
+    )
+    if (delay === undefined) return
+    this.startTimer = setTimeout(() => {
+      this.startDue()
+      this.armStartTimer()
+    }, delay)
+    this.startTimer.unref()
+  }
+
+  /** Start times that have come: each goes to the front of the queue, earliest first, and
+   * starts as soon as there's room and the schedule allows. */
+  private startDue(): void {
+    const now = Date.now()
+    const due = [...this.runtimes.values()]
+      .filter(
+        (runtime) =>
+          runtime.state.status === 'queued' &&
+          runtime.state.startAt !== undefined &&
+          runtime.state.startAt <= now
+      )
+      // Each goes in front of the last, so the earliest is put there last.
+      .sort((a, b) => b.state.startAt! - a.state.startAt!)
+    if (due.length === 0) return
+    for (const runtime of due) {
+      runtime.state.startAt = undefined
+      this.enqueue(runtime, true)
+      this.pushUpdate(runtime)
+      void this.persistNow(runtime)
+    }
+    this.pump()
   }
 
   private downloadsRoot(): string {
@@ -1151,6 +1208,16 @@ export class DownloadManager {
       state.status = 'queued'
       state.queuedAt = persisted.state.queuedAt ?? state.startedAt
     }
+    // Added to the queue or for later, it still waits (ADR-0044). A start time that passed
+    // while Mergelane was closed is due now, and the download says it started late.
+    if (state.status === 'paused' && (state.held || state.startAt !== undefined)) {
+      state.status = 'queued'
+      state.queuedAt = persisted.state.queuedAt ?? state.startedAt
+      if (state.startAt !== undefined && state.startAt <= Date.now()) {
+        state.missedStartAt = state.startAt
+        state.startAt = undefined
+      }
+    }
 
     runtime.publicationPath = persisted.publicationPath
     runtime.publicationIdentity = persisted.publicationIdentity
@@ -1207,6 +1274,9 @@ export class DownloadManager {
       requestPayload = { ...requestPayload, browser }
     }
 
+    // Checked first, so a start time that can't be used doesn't leave a download half made.
+    const when = parseWhen(requestPayload.when)
+    delete requestPayload.when
     const available = await this.networks.refresh()
     const selected = available.filter((iface) => requestPayload.interfaceIds.includes(iface.id))
     if (selected.length === 0) {
@@ -1320,13 +1390,18 @@ export class DownloadManager {
       )
     }
     // Decided only now: other starts may have taken the room while this one was set up.
-    const room = this.runningCount() < this.downloadsAtOnce && this.scheduleAllowsDownloads()
+    // Added to the queue or for later, it waits (ADR-0044); now, it starts if there's room.
+    const room =
+      !when && this.runningCount() < this.downloadsAtOnce && this.scheduleAllowsDownloads()
     if (!room) this.enqueue(runtime, false)
+    if (when?.kind === 'queue') runtime.state.held = true
+    if (when?.kind === 'at') runtime.state.startAt = when.at
     runtime.state.scheduled = this.downloadSchedule?.enabled || undefined
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
     this.pushUpdate(runtime)
     if (room) this.begin(runtime)
+    if (when?.kind === 'at') this.armStartTimer()
 
     return id
   }
@@ -1480,7 +1555,8 @@ export class DownloadManager {
 
   /** Runs the download, and once the run ends makes room for the next one queued. */
   private launch(runtime: DownloadRuntime): void {
-    runtime.runPromise = this.run(runtime).finally(() => this.pump())
+    // A run that ends makes room: that is the turn a download added to the queue waits for.
+    runtime.runPromise = this.run(runtime).finally(() => this.pump(true))
   }
 
   async pause(id: string, forSchedule = false): Promise<void> {
@@ -1493,6 +1569,9 @@ export class DownloadManager {
       runtime.state.scheduled = undefined
       runtime.state.status = 'paused'
       runtime.state.queuedAt = undefined
+      // Paused, it no longer waits for a turn or a time: Resume starts it as any other.
+      runtime.state.held = undefined
+      runtime.state.startAt = undefined
       runtime.state.pausedAt ??= Date.now()
       this.pausedInSession.add(id)
       this.pushUpdate(runtime)
@@ -1661,6 +1740,17 @@ export class DownloadManager {
     const runtime = this.runtimes.get(id)
     if (!runtime || runtime.cancelPromise) return
     const { status, resumable } = runtime.state
+    // Start now, for one added to the queue or for later: it goes next, and starts if there's
+    // room and the schedule allows, as a download resumed by name does.
+    if (status === 'queued' && (runtime.state.held || runtime.state.startAt !== undefined)) {
+      runtime.state.held = undefined
+      runtime.state.startAt = undefined
+      this.enqueue(runtime, true)
+      this.pushUpdate(runtime)
+      void this.persistNow(runtime)
+      this.pump()
+      return
+    }
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
 
     void this.resumeAfterVerifying(runtime, false)
@@ -1719,6 +1809,8 @@ export class DownloadManager {
     const { networks } = runtime.state
     runtime.state.status = 'downloading'
     runtime.state.queuedAt = undefined
+    runtime.state.held = undefined
+    runtime.state.startAt = undefined
     runtime.state.error = undefined
     runtime.state.resumable = undefined
     runtime.pausedForNoNetwork = undefined
@@ -2160,6 +2252,7 @@ export class DownloadManager {
     await this.initialization
     this.suspending = true
     clearTimeout(this.scheduleTimer)
+    clearTimeout(this.startTimer)
     await Promise.all(
       [...this.runtimes.values()].map(async (runtime) => {
         if (runtime.state.status === 'downloading')

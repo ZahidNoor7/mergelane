@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DEFAULT_DOWNLOAD_SCHEDULE } from '../src/shared/downloadSchedule'
 import { BLOCK, expect, test, type MergelaneApp } from './fixtures'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 import { seededBytes, sha256 } from './origin'
 
 const schedule = { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true }
@@ -105,7 +105,7 @@ test('the cutoff stops torrent peers and uploads; reopening finishes the same fi
     await mergelane.api.updateSettings({ downloadSchedule: schedule, speedLimit: 128 * 1024 })
     const data = seededBytes(2 * 1024 * 1024, 32)
     const torrent = await swarm.seed([named(data, 'scheduled.bin')], { pieceLength: 64 * 1024 })
-    const id = await mergelane.start(await torrentFileOnDisk(torrent), sha256(data))
+    const id = await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data))
     await mergelane.waitUntil((state) => state.bytesDownloaded > 0)
     await clock(mergelane, at(1, 7))
     await expect.poll(async () => (await mergelane.byId(id))?.status).toBe('queued')

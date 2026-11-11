@@ -24,7 +24,7 @@ function inProgress(): HttpBlockState[] {
   return blocks
 }
 
-test.describe('saved progress', () => {
+test.describe('saved progress @smoke', () => {
   test('what is saved comes back: progress, attribution, and which blocks are done', () => {
     const restored = restoreBlocks(plan, saveBlocks(inProgress()))!
     expect(restored.map((block) => [block.status, block.bytesDownloaded])).toEqual([

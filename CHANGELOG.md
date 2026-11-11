@@ -11,6 +11,16 @@ All notable changes to Mergelane are recorded here. The format follows
   system merge turns off first, then your Mac asks for your administrator password once. Mergelane says whether
   the helper was removed, whether you canceled the password prompt, or why it couldn't be removed. Downloads
   keep working without the helper.
+- **When to start a download.** New download has a "When" row: **Now** (as before), **Add to queue** (it waits for
+  a turn: it starts when a running download finishes, or when you choose Start now), or **At a time** (it starts
+  the next time the clock reads that time, today or tomorrow). Until then its row says "Starts at 1:00 AM", and
+  Start now starts it early. Both survive quitting Mergelane. A time that passed while Mergelane was closed starts
+  at the next launch, and the download says it started late. The download schedule still wins: a time outside its
+  hours waits for them, and New download says so.
+
+### Fixed
+
+- Selecting a download no longer nudges the download list up a few pixels.
 
 ## [0.3.0] - 2026-11-12
 

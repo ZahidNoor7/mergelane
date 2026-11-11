@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { BLOCK, expect, interfacesEnv, NETWORKS, test, treeSha } from './fixtures'
 import { seededBytes } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 
 // G. A handful of journeys through the real UI, to prove the screens are wired to the main
 // process. Download correctness is covered far more thoroughly by the API-level specs; these
@@ -64,7 +64,7 @@ test.describe('a torrent through the UI', () => {
 
       const link = await mergelane.newDownload()
       await page.getByRole('button', { name: 'Change' }).click()
-      await link.fill(await torrentFileOnDisk(torrent))
+      await link.fill(await swarm.torrentFileOnDisk(torrent))
       await page.getByRole('checkbox', { name: /b\.bin/ }).click()
       await mergelane.expectNextDownload(
         treeSha(

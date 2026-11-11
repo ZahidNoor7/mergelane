@@ -28,7 +28,7 @@ const network = (
   ...over
 })
 
-test.describe('stream count', () => {
+test.describe('stream count @smoke', () => {
   test('doubles once every stream is receiving, up to the limit', () => {
     const controller = new ConcurrencyController(MAX)
     const counts: number[] = []
@@ -352,7 +352,7 @@ test.describe('stream count', () => {
   })
 })
 
-test.describe('disk watch', () => {
+test.describe('disk watch @smoke', () => {
   test('reads the download as a whole, by the clock', () => {
     const watch = new DiskWatch()
     watch.landed(0)

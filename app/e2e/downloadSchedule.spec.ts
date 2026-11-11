@@ -11,7 +11,7 @@ const schedule: DownloadSchedule = { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true
 const at = (day: number, hour: number, minute = 0): number =>
   new Date(2026, 9, day, hour, minute).getTime()
 
-test('the start is inclusive and the stop is exclusive', () => {
+test('the start is inclusive and the stop is exclusive @smoke', () => {
   expect(scheduleWindow(schedule, at(10, 0)).allowed).toBe(true)
   expect(scheduleWindow(schedule, at(10, 6, 59)).allowed).toBe(true)
   expect(scheduleWindow(schedule, at(10, 7)).allowed).toBe(false)
@@ -20,7 +20,7 @@ test('the start is inclusive and the stop is exclusive', () => {
   expect(scheduleWindow({ ...schedule, enabled: false }, at(10, 12)).allowed).toBe(true)
 })
 
-test('overnight windows belong to their starting weekday', () => {
+test('overnight windows belong to their starting weekday @smoke', () => {
   const friday = { ...schedule, startMinute: 22 * 60, days: [5] }
   expect(scheduleWindow(friday, at(9, 22)).allowed).toBe(true)
   expect(scheduleWindow(friday, at(10, 6)).allowed).toBe(true)
@@ -28,7 +28,7 @@ test('overnight windows belong to their starting weekday', () => {
   expect(scheduleWindow(friday, at(10, 22)).nextStart).toBe(at(16, 22))
 })
 
-test('the final overnight window finishes, then expiration keeps downloads blocked', () => {
+test('the final overnight window finishes, then expiration keeps downloads blocked @smoke', () => {
   const final = { ...schedule, startMinute: 22 * 60, endDate: '2026-10-09' }
   expect(scheduleWindow(final, at(10, 6)).allowed).toBe(true)
   expect(scheduleWindow(final, at(10, 7))).toEqual({
@@ -39,7 +39,7 @@ test('the final overnight window finishes, then expiration keeps downloads block
   expect(scheduleWindow(final, at(11, 22)).allowed).toBe(false)
 })
 
-test('invalid schedules fail closed', () => {
+test('invalid schedules fail closed @smoke', () => {
   for (const patch of [
     { days: [] },
     { days: [7] },
@@ -57,7 +57,7 @@ test('invalid schedules fail closed', () => {
   }
 })
 
-test('local wall-clock windows survive daylight saving changes', () => {
+test('local wall-clock windows survive daylight saving changes @smoke', () => {
   const previous = process.env.TZ
   process.env.TZ = 'America/New_York'
   try {
@@ -76,7 +76,7 @@ test('local wall-clock windows survive daylight saving changes', () => {
   }
 })
 
-test('a window starting or ending in the hour clocks skip uses the moment they jump', () => {
+test('a window starting or ending in the hour clocks skip uses the moment they jump @smoke', () => {
   const previous = process.env.TZ
   process.env.TZ = 'America/New_York'
   try {

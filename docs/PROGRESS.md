@@ -153,6 +153,8 @@ Last updated: 2026-11-11
     or timing, and all passed once space was back. The leaked e2e temp folders (`mergelane-seed-*` and others,
     121 of them, 140 MB) were not deleted: the permission check refused a sweep of the temp folder. The owner
     can delete them, or allow it.
+    *Resolved:* the owner deleted them (558 by then), and the torrent tests no longer leave them (branch
+    `test-cleanup`).
 - **M3.1, pull request 5c** (branch `m3.1-sheet`): New download as the design's sheet.
   - `ui/dialog.tsx` gains a `sheet` variant: hung 60px from the top, 600px wide, sliding down 16px as it fades
     in (320ms, the design's curve) and back up as it goes, using Base UI's `data-starting-style` and
@@ -506,6 +508,65 @@ Last updated: 2026-11-11
   - **To test the in-app update:** 0.2.0 must be installed, and 0.3.0 must be published. A draft is invisible to
     the update check, which uses GitHub's API without a token. 0.2.0 itself is still a draft.
 
+- **M3.9 New download's When** (branch `m3.9-when`, ADR-0044, decided unattended for the owner's review). Built the
+  design's "When: Now / Add to queue / At a time", which M3.1 pull request 5c left out.
+  - **Engine** (`downloadManager.ts`): `StartDownloadRequest.when` (`{ kind: 'queue' }` or `{ kind: 'at', at }`),
+    checked by `shared/startAt.ts parseWhen`. Add to queue makes the download `queued` with `held`: `pump` passes
+    over it until a run ends (`launch`'s `pump(true)`) or Start now. At a time saves `startAt`; a timer looks at the
+    clock at least once a second while one waits and moves a due one to the front of the queue. Both are saved in
+    the manifest and come back waiting after a relaunch; a time missed while Mergelane was closed starts at launch
+    with `missedStartAt`. `resumeDownload` on a planned download is Start now; pausing one clears its plan.
+  - **UI:** the sheet's When row (segmented control, time field, the hint under Add to queue, a warning when the
+    schedule holds the time), the button ("Add to queue", "Start at 1:00 AM"). Rows: "Starts at …",
+    "Started late". Details: when a queued one's turn comes, or why it started late. A new `start` action ("Start
+    now") on rows, menus, the toolbar and the details header.
+  - **Tests:**
+    - Vitest: `shared/startAt` (14, fake clock) and `utils/downloadActions` (8) are new and in `COVERED`; new tests
+      in `NewDownloadDialog` (4), `DownloadsScreen` (1) and the Inspector (3). Lines: `startAt` and
+      `downloadActions` 100%, `NewDownloadDialog` 99.1%, `DownloadsScreen` 98.9%, `InspectorProgress` 98.4%. Full
+      run 341 passed.
+    - `e2e/downloadWhen.spec.ts` (3, `@smoke`): Add to queue doesn't start with room to spare until Start now, and
+      gets its turn when a running download ends; At a time from the sheet sets the next 2-hours-ahead time, and
+      one 4 s ahead waits, then starts on its own; a far time can't be used. After a relaunch the queued and
+      later ones still wait, and one whose time passed while closed starts with "Started late" and the details
+      note. With `scheduleQueue`, `ui` and `concurrency`: 48 passed.
+  - **Not built:** the Dashboard's waiting list still says "Waiting for a turn" for a download with a start time; a
+    date field (the engine already takes up to 7 days ahead).
+- **Test clean-up** (branch `test-cleanup`): three test fixes, no change users see apart from one 4 px jump.
+  - **Torrent tests no longer leave folders in the temp folder.** `torrentSwarm.ts` made a folder for every seeder
+    (`mergelane-seed-*`), every leecher (`mergelane-leech-*`) and every `.torrent` file (`mergelane-torrent-*`), and
+    never removed them; 558 had piled up. A swarm now removes its folders at `stop()`, which every spec calls in a
+    `finally` or `afterEach`, so a failing test cleans up too. A test that times out before `stop()` is cleaned up
+    when its worker exits. `torrentProbe.spec.ts` seeded into webtorrent's shared `/tmp/webtorrent` (6 files a run)
+    and left one `.torrent` folder; it now uses folders of its own and removes them after each test. The app itself
+    leaves nothing: its magnet lookup deletes its store (`destroyStore: true`).
+    - Proof: `torrentProbe`, `torrent`, `limits`, `openLinks`, `removal`, `selection`, `scheduleQueue` and `ui` run
+      one at a time: 0 such folders before and after each, and no `/tmp/webtorrent`. A throwaway spec that failed on
+      purpose, and one that timed out without calling `stop()`, left nothing either. Before the fix, one
+      `torrentProbe` run left 1 folder and 6 files.
+  - **23 more spec files run in CI's smoke job** (`@smoke`). Of the 25 files without a tag, each was run three
+    times in a row, alone; 23 passed every time in under 60 s and are now tagged.
+    - Two of them failed every time, and are fixed:
+      - `selection.spec.ts`: selecting a download moved the list up 4 px. The selection toolbar (56 px) is shorter
+        than the header it replaces (60 px: title, summary, padding and rule). An app bug since the M3.1 list
+        redesign; nothing ran the test. Both are now 60 px (`min-h-15`), and the test passes.
+      - `clipboardOffer.spec.ts`: the test that uses the real clipboard put its HTML back as `text/html`, which
+        adds a `<meta charset='utf-8'>` each time. So it failed whenever the clipboard held HTML, and grew the
+        owner's clipboard by 22 bytes per run. It now writes the raw pasteboard HTML back (checked: the clipboard
+        is byte-for-byte the same after three runs). The owner's clipboard was put back as it was.
+    - Left untagged: `chaos.spec.ts` (already tagged `@chaos`; random sequences, so a red run may not be the PR's
+      fault; no CI job runs `@chaos` yet, so a nightly job is worth adding) and `sparseFile.spec.ts` (Windows only:
+      it always skips on macOS; an upstream leftover).
+    - The smoke suite grows from 480 to 686 tests (`--list`). The slowest added files: `torrent` 41–45 s,
+      `hedge` 43 s, `limits` 38 s, `streams` 14–16 s, `torrentProbe` 9 s (4 workers, on the owner's Mac).
+  - **Helper acceptance coverage:** `scripts/acceptance/daemon.sh` passed `GOCOVERDIR` only to `run`. It is now
+    exported for the commands run as the user, and passed through `sudo` (which clears the environment) to
+    `install`, `uninstall`, `cleanup` and the other user's `status`. Checked with `bash -n`, ShellCheck 0.11 and
+    `local-root.test.sh` (32 passed); **not run end to end** (it needs root). A coverage-built daemon run locally
+    showed that an unwritable `GOCOVERDIR` only prints an error and keeps the exit code, so coverage can't fail a
+    check. The launchd-run copy that `install` starts still writes none (launchd starts it, and it is killed with
+    `kill -9`).
+
 - **Remove helper** (branch `remove-helper`, ADR-0046; resolves the Phase 2 follow-up "no Remove helper button").
   - **UI:** Networks › Other apps › System merge ends with "Remove helper…" while the helper is installed, and a
     confirmation that says merging turns off, the Mac asks for the password, and downloads keep working. The
@@ -662,6 +723,7 @@ Last updated: 2026-11-11
   - ~~The app has no "Remove helper" button: Phase 3 candidate.~~ Resolved: Remove helper (ADR-0046, branch
     `remove-helper`).
   - `scripts/acceptance/daemon.sh` sets `GOCOVERDIR` only for `run`, so `install`/`uninstall` show 0% coverage.
+    *Fixed in branch `test-cleanup`* (every daemon run now writes coverage); unproven until CI or `local-root.sh` runs it.
 
 **Test isolation fix** (branch `fix-e2e-browser-downloads`): the extension e2e test that clicks a download in
 Chromium put the browser's temporary file in the owner's real `~/Downloads` on every run (it came and went, so

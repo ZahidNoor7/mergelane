@@ -21,7 +21,7 @@ const splittable = fc.record({
   networkCount: fc.integer({ min: 1, max: 6 })
 })
 
-test.describe('download plan', () => {
+test.describe('download plan @smoke', () => {
   test('blocks tile the file exactly, within the size limits', () => {
     fc.assert(
       fc.property(splittable, (request) => {

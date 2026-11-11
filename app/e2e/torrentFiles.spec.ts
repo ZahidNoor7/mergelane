@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import fc from 'fast-check'
 import { chosenFiles, wantedPieces } from '../src/main/download/torrent/files'
 
-test.describe('choosing a torrent’s files', () => {
+test.describe('choosing a torrent’s files @smoke', () => {
   test('a piece is wanted exactly when a byte of a chosen file is in it', () => {
     fc.assert(
       fc.property(

@@ -163,13 +163,15 @@ const input: DiagnosticsInput = {
     updateLastChecked: NOW,
     downloadSchedule: { enabled: true, startMinute: 60, endMinute: 120, days: [1, 2] },
     captureRules: { capture: true, minSize: '1mb', types: ['video'], videoButton: false },
-    routing: { down: 'en0', fallback: false },
+    routing: { down: 'en0', up: 'en7', fallback: false },
+    uploadLimit: 50_000,
     browserContacts: { chrome: { at: NOW, extension: '0.3.0' } },
     networkPreferences: {
       en7: {
         customName: 'My secret hotspot',
         colorId: 'blue',
         dataLimit: 5,
+        uploadLimit: 20_000,
         proxy: {
           enabled: true,
           type: 'socks5',
@@ -286,13 +288,15 @@ describe('the bundle', () => {
       themeSource: 'dark',
       speedUnit: 'bits',
       destination: 'a folder in the home folder',
-      routing: { down: 'en0', fallback: false },
+      routing: { down: 'en0', up: 'en7', fallback: false },
+      uploadLimit: 50_000,
       browsers: { chrome: { extension: '0.3.0' } },
       networks: {
         en7: {
           renamed: true,
           colorId: 'blue',
           dataLimit: 5,
+          uploadLimit: 20_000,
           proxy: { enabled: true, type: 'socks5', signIn: true }
         }
       }

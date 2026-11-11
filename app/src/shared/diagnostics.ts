@@ -203,6 +203,7 @@ export function summarizeSettings(
     speedUnit: settings.speedUnit,
     downloadsAtOnce: settings.downloadsAtOnce,
     speedLimit: settings.speedLimit,
+    uploadLimit: settings.uploadLimit,
     slowMode: settings.slowMode,
     slowModeSpeed: settings.slowModeSpeed,
     menuBarSpeed: settings.menuBarSpeed,
@@ -223,6 +224,7 @@ export function summarizeSettings(
     captureRules: settings.captureRules && sanitizeCaptureRules(settings.captureRules),
     routing: settings.routing && {
       down: settings.routing.down,
+      up: settings.routing.up,
       fallback: settings.routing.fallback
     },
     browserExtensionUsed: settings.browserExtensionUsed,
@@ -240,6 +242,7 @@ export function summarizeSettings(
           colorId: preference.colorId,
           off: preference.off,
           speedLimit: preference.speedLimit,
+          uploadLimit: preference.uploadLimit,
           dataLimit: preference.dataLimit,
           dataLimitPeriod: preference.dataLimitPeriod,
           proxy: preference.proxy && {

@@ -235,7 +235,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('startDownload', async (_event, request, linkId) => {
     const browser = linkId === undefined ? undefined : pendingLink(linkId)?.browser
     const id = await manager.start(
-      browser && request.kind === 'http' ? { ...request, browser } : request
+      browser && (request.kind === 'http' || request.kind === 'stream')
+        ? { ...request, browser }
+        : request
     )
     if (linkId !== undefined) releaseLink(linkId)
     return id

@@ -1,4 +1,5 @@
 import { describeError, linkRefused } from '@shared/errors'
+import { streamQualityLabel } from '@shared/streamQuality'
 import type {
   DownloadNetwork,
   DownloadState,
@@ -6,6 +7,7 @@ import type {
   HttpDownloadNetwork,
   HttpDownloadState,
   SpeedUnit,
+  StreamVariant,
   TorrentDownloadNetwork,
   TorrentDownloadState
 } from '@shared/types'
@@ -236,7 +238,7 @@ export interface TorrentNetworkGroup extends TorrentDownloadNetwork {
 export type NetworkGroup = HttpNetworkGroup | TorrentNetworkGroup
 
 export function groupByNetwork(download: DownloadState): NetworkGroup[] {
-  if (download.kind === 'http' || download.kind === 'nzb') {
+  if (download.kind === 'http' || download.kind === 'nzb' || download.kind === 'stream') {
     return download.networks.map((network) => ({
       ...network,
       streams: download.streams.filter((stream) => stream.interfaceId === network.id)
@@ -305,4 +307,26 @@ export { describeError }
  * just repeat the same 416 forever. */
 export function linkExpired(download: DownloadState): boolean {
   return download.kind === 'http' && download.status === 'error' && linkRefused(download.error)
+}
+
+/** A stream's qualities as its picker lists them, best first: "1080p", "720p"… Two of one height
+ * are told apart by their bit rates ("720p · 3 Mbps"). */
+export function streamQualityOptions(
+  variants: readonly StreamVariant[]
+): { id: string; label: string }[] {
+  const names = variants.map((variant) => streamQualityLabel(variant))
+  return variants.map((variant, index) => {
+    const shared = names.filter((name) => name === names[index]).length > 1
+    const rate = streamQualityLabel({ bandwidth: variant.bandwidth })
+    return {
+      id: variant.id,
+      label: shared && rate !== names[index] ? `${names[index]} · ${rate}` : names[index]
+    }
+  })
+}
+
+/** "12 of 40 segments", for a stream download's progress. */
+export function describeSegments(blocks: readonly { status: string }[]): string {
+  const done = blocks.filter((block) => block.status === 'completed').length
+  return `${done} of ${blocks.length} ${blocks.length === 1 ? 'segment' : 'segments'}`
 }

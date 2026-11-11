@@ -2,6 +2,7 @@ import type {
   DownloadUnitState,
   HttpBlockState,
   NzbSegmentState,
+  StreamSegmentState,
   TorrentPieceState
 } from '../../shared/types'
 import { planBlocks, planPieces } from './plan'
@@ -146,4 +147,52 @@ export function restoreSegments(
     }
   }
   return planned
+}
+
+/**
+ * A stream download's segments, from the sizes saved for them (`lengths`: one per segment, null
+ * for one whose size isn't known yet) and the progress saved. A segment only ever counts whole: one
+ * that was coming in when the download stopped starts over. Undefined when the sizes don't fit
+ * the download saved.
+ */
+export function restoreStreamSegments(
+  state: { totalBlocks: number },
+  saved: SavedBlocks,
+  lengths: unknown
+): StreamSegmentState[] | undefined {
+  if (!Array.isArray(lengths) || lengths.length !== state.totalBlocks) return undefined
+  if (!lengths.every((length) => length === null || isCount(length))) return undefined
+  const segments = (lengths as (number | null)[]).map((length, index): StreamSegmentState => ({
+    kind: 'stream',
+    index,
+    rangeStart: 0,
+    rangeEnd: length === null ? null : length - 1,
+    status: 'pending',
+    bytesDownloaded: 0,
+    bytesByInterface: {}
+  }))
+  const columns =
+    typeof saved.progress === 'object' && saved.progress !== null
+      ? Object.entries(saved.progress)
+      : []
+  for (const [networkId, column] of columns) {
+    if (!Array.isArray(column) || column.length !== segments.length || !column.every(isCount)) {
+      continue
+    }
+    column.forEach((bytes, index) => {
+      if (bytes === 0) return
+      segments[index].bytesByInterface[networkId] = bytes
+      segments[index].bytesDownloaded += bytes
+    })
+  }
+  for (const segment of segments) {
+    const length = segment.rangeEnd === null ? null : segment.rangeEnd - segment.rangeStart + 1
+    if (length !== null && segment.bytesDownloaded === length) {
+      segment.status = 'completed'
+    } else {
+      segment.bytesDownloaded = 0
+      segment.bytesByInterface = {}
+    }
+  }
+  return segments
 }

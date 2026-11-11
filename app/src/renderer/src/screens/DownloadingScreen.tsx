@@ -13,6 +13,7 @@ import { TorrentFiles } from '../components/TorrentFiles'
 import { TorrentBadge } from '../components/TorrentBadge'
 import { TruncatedText } from '../components/TruncatedText'
 import { UsenetBadge } from '../components/UsenetBadge'
+import { StreamBadge } from '../components/StreamBadge'
 import { UsenetServerButton } from '../components/UsenetServerDialog'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -24,6 +25,7 @@ import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS } from '../theme'
 import {
   describeError,
   describeFileCount,
+  describeSegments,
   dirnameOf,
   fileExtensionBadge,
   formatBytes,
@@ -342,6 +344,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               />
               {isTorrent && <TorrentBadge />}
               {download.kind === 'nzb' && <UsenetBadge />}
+              {download.kind === 'stream' && <StreamBadge protocol={download.protocol} />}
             </div>
             <div className="flex min-w-0 items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>
@@ -359,6 +362,24 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                   <Dot />
                   <span>
                     {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
+                  </span>
+                </>
+              )}
+              {download.kind === 'stream' && (
+                <>
+                  {download.quality && (
+                    <>
+                      <Dot />
+                      <span>{download.quality}</span>
+                    </>
+                  )}
+                  <Dot />
+                  {/* Once every segment is in, FFmpeg joins the tracks: worth saying, as nothing
+                      moves while it does. */}
+                  <span role="status">
+                    {download.muxing
+                      ? 'Joining video and audio…'
+                      : describeSegments(download.blocks)}
                   </span>
                 </>
               )}

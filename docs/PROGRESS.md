@@ -55,6 +55,29 @@ Last updated: 2026-11-10
     the toolchain (ADR-0014).
   - Publishing the extension needs a Chrome Web Store developer account, which has a one-time fee: owner decision.
 
+**M2.2 video: in progress** (branch `m2.2-media`).
+- **Done:**
+  - YouTube options review (`docs/YOUTUBE-REVIEW.md`), waiting for the owner's choice;
+  - HLS module: 56 tests, 98–100% coverage;
+  - DASH module: 49 tests, 100% coverage;
+  - yt-dlp and FFmpeg fetch with pinned checksums (ADR-0022, `docs/MEDIA-TOOLS.md`): 29 tests, 98.6% coverage.
+- **Also done:**
+  - HLS and DASH links download for real: a quality picker, segments over the selected networks, pause and resume
+    (also across a relaunch), then muxed by FFmpeg;
+  - the extension lists the videos a page loads (ADR-0023; YouTube hosts excluded for now);
+  - a manual release workflow (`docs/RELEASING.md`).
+- **Local test result:** full smoke suite, 360 passed.
+- **Incident, resolved:** an early version of a stream UI test saved 12 test videos into the owner's
+  `~/Downloads`. They were deleted by name, the test now uses its own folder, and the folder was checked
+  afterwards.
+- **Also done:**
+  - FFmpeg muxing: 35 tests, 100% line coverage;
+  - the daemon's `run` made testable (M2.0): 92.5% coverage.
+- **Owner questions:**
+  - which YouTube approach (it also decides whether to ship Deno);
+  - whether the FFmpeg build source is acceptable;
+  - whether to attach GPL sources to releases.
+
 **Owner choices for Phase 2:**
 - CI stays paused (ADR-0020).
 - YouTube: review first, no YouTube code until the owner picks an approach.
@@ -86,9 +109,8 @@ CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
   Phase 2 questions.
 - When CI is back on: prove criteria 1, 2 and the app part of 6 with
   `gh workflow run ci.yml --ref m1.4-system-merge`.
-- **Daemon `run` coverage:** unit tests cover all of `cmd/mergelane-daemon` except `run`. The root acceptance
-  run measured 38.7% of that package (only clean exits write counters). Raising it means splitting `run`'s
-  wiring from its privileged steps.
+- **Daemon `run` coverage:** done in Phase 2, M2.0. `run` was split into testable parts; package coverage went
+  from 63.6% to 92.5%, and `run` itself is at 100%.
 
 ### Blockers and open questions
 

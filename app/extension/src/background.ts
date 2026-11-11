@@ -1,5 +1,7 @@
 import { api } from './api'
 import type { BridgeAddRequest } from '../../src/shared/browserBridge'
+import type { HandOver, MediaRequest } from './media'
+import { mediaOf, styleBadge, watchMedia } from './mediaWatch'
 import { browserContext, confirm, reach, send, storeOf, wake, type Reach } from './mergelane'
 import { excluded, loadSettings } from './settings'
 
@@ -85,29 +87,49 @@ if (determining) {
 }
 
 /** Sent whatever the settings say, and Mergelane is started if needed: the user asked for it. */
+async function handOver(request: BridgeAddRequest): Promise<HandOver> {
+  let sent = await send(request)
+  if (sent === 'closed' && (await wake())) sent = await send(request)
+  // No browser copy to cancel first.
+  const shown = typeof sent !== 'string' && (await confirm(sent))
+  await showState(shown ? 'ok' : undefined)
+  return shown ? 'sent' : sent === 'closed' ? 'closed' : 'kept'
+}
+
 async function sendLink(
   info: chrome.contextMenus.OnClickData,
   tab?: chrome.tabs.Tab
 ): Promise<void> {
   const url = info.linkUrl
   if (!url) return
-  const request: BridgeAddRequest = /^magnet:/i.test(url)
-    ? { url }
-    : {
-        url,
-        browser: await browserContext([url], tab && storeOf(tab), info.pageUrl),
-        pageUrl: info.pageUrl
-      }
-  let sent = await send(request)
-  if (sent === 'closed' && (await wake())) sent = await send(request)
-  // No browser copy to cancel first.
-  const shown = typeof sent !== 'string' && (await confirm(sent))
-  await showState(shown ? 'ok' : undefined)
+  await handOver(
+    /^magnet:/i.test(url)
+      ? { url }
+      : {
+          url,
+          browser: await browserContext([url], tab && storeOf(tab), info.pageUrl),
+          pageUrl: info.pageUrl
+        }
+  )
+}
+
+/** A stream the tab's page loaded, clicked in the popup. Only one on the tab's list is sent. */
+async function sendMedia(tabId: number, url: string): Promise<HandOver> {
+  const tab = await api.tabs.get(tabId).catch(() => undefined)
+  const listed = (await mediaOf(tabId))?.items.some((item) => item.url === url)
+  if (!tab?.url || !listed) return 'kept'
+  // The page asked for the manifest with its own cookies and as its referrer, as for a download.
+  return handOver({
+    url,
+    browser: await browserContext([url], storeOf(tab), tab.url),
+    pageUrl: tab.url
+  })
 }
 
 // Run on install and on every browser start: menus and alarms don't always survive a restart.
 function setUp(): void {
   createMenu()
+  styleBadge()
   void api.alarms.create(CHECK_ALARM, { periodInMinutes: 0.5 })
   void showState()
 }
@@ -131,13 +153,30 @@ api.contextMenus.onClicked.addListener((info, tab) => {
 api.tabs.onCreated.addListener((tab) => {
   if (tab.id !== undefined) openedAt.set(tab.id, Date.now())
 })
-api.storage.onChanged.addListener(() => void showState())
+// Settings only: the session area holds the pages' stream lists (mediaWatch.ts).
+api.storage.onChanged.addListener((_changes, area) => {
+  if (area !== 'session') void showState()
+})
+watchMedia()
 
-api.runtime.onMessage.addListener((message) => {
-  const { wakeMergelane, checkMergelane } = message as {
+api.runtime.onMessage.addListener((message, sender, reply) => {
+  if (sender.id !== api.runtime.id) return
+  const { wakeMergelane, checkMergelane, ...media } = message as {
     wakeMergelane?: boolean
     checkMergelane?: boolean
-  }
+  } & { [field in keyof MediaRequest]?: unknown }
   if (checkMergelane) void showState()
   if (wakeMergelane) void wake().then((woke) => showState(woke ? 'ok' : 'closed'))
+  // Answered later: Chrome keeps `reply` only when the listener returns true, and that works in
+  // Firefox too (Chrome's messaging docs; MDN runtime.onMessage).
+  if (typeof media.mediaOf === 'number') {
+    void mediaOf(media.mediaOf).then(reply)
+    return true
+  }
+  const { tabId, url } = (media.sendMedia ?? {}) as { tabId?: unknown; url?: unknown }
+  if (typeof tabId === 'number' && typeof url === 'string') {
+    void sendMedia(tabId, url).then(reply)
+    return true
+  }
+  return undefined
 })

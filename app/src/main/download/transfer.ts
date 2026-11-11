@@ -7,8 +7,11 @@ import type {
   NzbDownloadState,
   NzbSegmentState,
   ProxyConfig,
+  StreamDownloadState,
+  StreamSegmentState,
   StartHttpDownloadRequest,
   StartNzbDownloadRequest,
+  StartStreamDownloadRequest,
   StartTelegramDownloadRequest,
   StartTorrentDownloadRequest,
   TelegramDownloadState,
@@ -19,11 +22,13 @@ import type { NetworkMonitor } from '../network/interfaces'
 import type { Limits } from '../network/limits'
 import type { DownloadFile } from './downloadFile'
 import type { NzbDestination } from './nzb/nzbDestination'
+import type { StreamDestination } from './stream/streamDestination'
 import type { TorrentDestination } from './torrent/torrentDestination'
 
 /**
  * How a download's bytes get fetched: HTTP streams (see httpTransfer.ts), torrent peers
- * (torrent/torrentTransfer.ts) or connections to a news server (nzb/nzbTransfer.ts). The manager runs
+ * (torrent/torrentTransfer.ts), connections to a news server (nzb/nzbTransfer.ts) or an HLS or
+ * DASH video's segment requests (stream/streamTransfer.ts). The manager runs
  * everything a download does whatever fetches it — its networks, pause and resume, saving it,
  * telling the window — and hands the fetching to its transfer.
  */
@@ -92,8 +97,21 @@ export interface NzbTransferTarget extends TransferTargetBase {
   meters: Meters
 }
 
+export interface StreamTransferTarget extends TransferTargetBase {
+  file: StreamDestination
+  state: StreamDownloadState
+  requestPayload: StartStreamDownloadRequest
+  blocks: StreamSegmentState[]
+  /** What each segment request, and each network, has received (see updateSpeeds). */
+  meters: Meters
+}
+
 export type TransferTarget =
-  HttpTransferTarget | TorrentTransferTarget | TelegramTransferTarget | NzbTransferTarget
+  | HttpTransferTarget
+  | TorrentTransferTarget
+  | TelegramTransferTarget
+  | NzbTransferTarget
+  | StreamTransferTarget
 
 /** What a transfer asks of the manager. */
 export interface TransferHost {
@@ -266,7 +284,7 @@ export function clearSpeeds(state: DownloadState): void {
   state.speedBytesPerSec = 0
   state.timeLeftSeconds = undefined
   const connections =
-    state.kind === 'http' || state.kind === 'nzb'
+    state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream'
       ? state.streams
       : state.kind === 'telegram'
         ? state.readers

@@ -43,6 +43,97 @@
         gap: 10px;
         border-bottom: 0.5px solid var(--border);
       }
+      #media {
+        padding: 12px 14px 6px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      #media h2 {
+        margin: 0 0 4px;
+      }
+      #media-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        /* About four and a half rows, so a longer list shows that it scrolls. */
+        max-height: 236px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      #media-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+      }
+      #media-list li + li {
+        border-top: 0.5px solid var(--border);
+      }
+      #media-list .grow {
+        gap: 1px;
+      }
+      .kind {
+        flex-shrink: 0;
+        min-width: 40px;
+        height: 20px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0.5px solid var(--strong);
+        border-radius: 5px;
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.02em;
+        color: var(--text2);
+      }
+      .media-host,
+      .media-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .media-host {
+        font: 500 12.5px var(--mono);
+      }
+      .media-path {
+        font: 11.5px var(--mono);
+      }
+      .media-send {
+        flex-shrink: 0;
+        /* Download, Sending… and Sent all fit, so the row never shifts. */
+        min-width: 88px;
+        transition: transform 0.1s ease-out;
+      }
+      /* Answers the press itself, not its release. */
+      .media-send:active:not([aria-disabled='true']) {
+        transform: scale(0.97);
+      }
+      .media-send[aria-disabled='true'] {
+        cursor: default;
+      }
+      .media-send[aria-busy='true'] {
+        color: var(--text2);
+      }
+      .media-send.sent {
+        border-color: transparent;
+        background: transparent;
+        color: var(--on);
+      }
+      #media-status {
+        margin: 0;
+        font-size: 12px;
+      }
+      #media-status:not(:empty) {
+        margin: 2px 0 6px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .media-send {
+          transition: none;
+        }
+        .media-send:active:not([aria-disabled='true']) {
+          transform: none;
+          opacity: 0.75;
+        }
+      }
       footer {
         display: flex;
         align-items: center;
@@ -67,7 +158,8 @@
     </header>
 
     <div class="notice" id="access" hidden>
-      Mergelane needs access to websites to send your sign-in with each download.
+      Mergelane needs access to websites to send your sign-in with each download and to find videos
+      on pages.
       <button type="button" class="primary" id="grant">Allow access</button>
     </div>
 
@@ -81,6 +173,12 @@
         >
       </div>
     </div>
+
+    <section id="media" aria-labelledby="media-title" hidden>
+      <h2 class="title" id="media-title">Videos on this page</h2>
+      <ul id="media-list"></ul>
+      <p class="muted" id="media-status" role="status" aria-atomic="true"></p>
+    </section>
 
     <label class="row" for="capture">
       <span class="grow">

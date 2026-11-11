@@ -1,10 +1,12 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 
 const root = dirname(fileURLToPath(import.meta.url))
-const out = join(root, 'dist')
+// `node extension/build.mjs <dir>` builds somewhere else: e2e specs running side by side each
+// load their own copy, so one spec's rebuild never deletes the extension another's browser runs.
+const out = process.argv[2] ? resolve(process.argv[2]) : join(root, 'dist')
 const scripts = join(out, 'scripts')
 
 await rm(out, { recursive: true, force: true })

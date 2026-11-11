@@ -32,7 +32,10 @@ import {
   type StartDownloadRequest,
   type StartHttpDownloadRequest,
   type StartNzbDownloadRequest,
+  type StartStreamDownloadRequest,
   type StartTelegramDownloadRequest,
+  type StreamDownloadState,
+  type StreamSegmentState,
   type StartTorrentDownloadRequest,
   type TelegramDownloadNetwork,
   type TelegramDownloadState,
@@ -48,22 +51,23 @@ import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
 import type { TelegramServiceApi } from '../telegram/service'
 import { addToHistory, findInHistory, removeFromHistory } from './history'
-import { testKnobs } from '../testKnobs'
+import { testKnobs, testStreamsPerNetwork } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
 import { normalizeEtag } from './fileVersion'
-import { ensureDirectory, pathExists, reserveDestinationPath } from './paths'
+import { ensureDirectory, pathExists, reserveDestinationPath, reserveStagingFolder } from './paths'
 import { planBlocks, planDownload, planPieces } from './plan'
 import {
   restoreBlocks,
   restorePieces,
   restoreSegments,
+  restoreStreamSegments,
   saveBlocks,
   type SavedBlocks
 } from './savedProgress'
 import { chosenFiles, finishedFiles, wantedPieces } from './torrent/files'
 import { probeUrl } from './probe'
-import { browserContextFrom } from './browserContext'
+import { browserContextFrom, requestHeaders } from './browserContext'
 import { describeTorrent, probedTorrentFile } from './torrent/metadata'
 import { TorrentDestination } from './torrent/torrentDestination'
 import { TorrentTransfer } from './torrent/torrentTransfer'
@@ -78,6 +82,17 @@ import {
 } from './nzb/nzbFile'
 import { NzbTransfer } from './nzb/nzbTransfer'
 import { loadUsenetServer, USENET_OFF, usenetEnabled } from './nzb/usenetServer'
+import { StreamDestination } from './stream/streamDestination'
+import {
+  planStreamBlocks,
+  planTracks,
+  resolveStream,
+  streamContainer,
+  streamFileName,
+  trackShape
+} from './stream/streamPlan'
+import { StreamTransfer } from './stream/streamTransfer'
+import { resolveToolPath } from '../media/mux'
 import {
   clearSpeeds,
   delay,
@@ -90,6 +105,7 @@ import {
   type TransferHost,
   type HttpTransferTarget,
   type NzbTransferTarget,
+  type StreamTransferTarget,
   type TelegramTransferTarget,
   type TorrentTransferTarget
 } from './transfer'
@@ -156,8 +172,17 @@ interface NzbDownloadRuntime extends RuntimeFields, NzbTransferTarget {
   transfer: NzbTransfer
 }
 
+interface StreamDownloadRuntime extends RuntimeFields, StreamTransferTarget {
+  kind: 'stream'
+  transfer: StreamTransfer
+}
+
 type DownloadRuntime =
-  HttpDownloadRuntime | TorrentDownloadRuntime | TelegramDownloadRuntime | NzbDownloadRuntime
+  | HttpDownloadRuntime
+  | TorrentDownloadRuntime
+  | TelegramDownloadRuntime
+  | NzbDownloadRuntime
+  | StreamDownloadRuntime
 
 interface PersistedDownloadBase {
   savedAt: number
@@ -175,12 +200,16 @@ type PersistedState =
   | Omit<TorrentDownloadState, 'pieces' | 'peers'>
   | Omit<TelegramDownloadState, 'blocks' | 'readers'>
   | Omit<NzbDownloadState, 'blocks' | 'streams'>
+  | Omit<StreamDownloadState, 'blocks' | 'streams'>
 
 type PersistedDownload = PersistedDownloadBase & {
   version: 7
   state: PersistedState
   /** An NZB download's articles the server didn't have, by index (see NzbSegmentStatus). */
   missing?: number[]
+  /** A stream download's segment sizes, by index: null for one not yet in whose size wasn't
+   * known (see StreamSegmentState). Its plan can't be worked out again without the server. */
+  segmentLengths?: (number | null)[]
 } & SavedBlocks
 
 /** Cookies are never written in the clear. Without a keychain (Linux falls back to a fixed key)
@@ -213,7 +242,7 @@ function unsealBrowser(sealed: string): BrowserContext | undefined {
 function savedRequest(
   runtime: DownloadRuntime
 ): Pick<PersistedDownloadBase, 'requestPayload' | 'browser'> {
-  if (runtime.kind !== 'http' || !runtime.requestPayload.browser) {
+  if ((runtime.kind !== 'http' && runtime.kind !== 'stream') || !runtime.requestPayload.browser) {
     return { requestPayload: runtime.requestPayload }
   }
   const { browser, ...requestPayload } = runtime.requestPayload
@@ -222,6 +251,10 @@ function savedRequest(
     browser: runtime.state.status === 'completed' ? undefined : sealBrowser(browser)
   }
 }
+
+/** Segment requests each network runs at once for a stream download, per track: segments are
+ * small, so a few keep a network busy where one would wait on every request's round trip. */
+const STREAM_REQUESTS_PER_NETWORK = 3
 
 const UI_UPDATE_MS = 200
 /** How often a running download takes stock (see run). */
@@ -804,6 +837,57 @@ export class DownloadManager {
     return runtime
   }
 
+  private newStreamRuntime(
+    state: StreamDownloadState,
+    requestPayload: StartStreamDownloadRequest,
+    blocks: StreamSegmentState[],
+    stagingPath: string
+  ): StreamDownloadRuntime {
+    // Its segments sit in files of their own: every one fits in what it has downloaded so far.
+    const file = new StreamDestination(stagingPath, () =>
+      Math.max(
+        state.totalBytes,
+        blocks.reduce((sum, block) => sum + block.bytesDownloaded, 0)
+      )
+    )
+    const target: StreamTransferTarget = {
+      state,
+      requestPayload,
+      stop: new AbortController(),
+      file,
+      blocks,
+      meters: new Meters()
+    }
+    const host: TransferHost = {
+      networks: this.networks,
+      limits: this.limits,
+      downloadsOn: (networkId) => this.httpDownloadsOn(networkId),
+      reconcile: () => this.reconcile(runtime),
+      failDownload: (message, discard) => this.failDownload(runtime, message, discard),
+      failNetwork: (network, message) => this.failNetwork(runtime, network, message),
+      scheduleUpdate: () => this.scheduleUpdate(runtime),
+      getProxyForInterface: (networkId) => this.networkPreferences[networkId]?.proxy
+    }
+    const runtime: StreamDownloadRuntime = Object.assign(target, this.runtimeFields(), {
+      kind: 'stream' as const,
+      transfer: new StreamTransfer(target, host, {
+        // FFmpeg ships beside the app; a development build and the tests point at another copy
+        // with MERGELANE_FFMPEG_PATH (see resolveToolPath).
+        ffmpeg: () =>
+          resolveToolPath('ffmpeg', {
+            isPackaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            appRoot: app.getAppPath()
+          }),
+        timeoutMs: testKnobs.stallTimeoutMs,
+        connectTimeoutMs: testKnobs.connectTimeoutMs,
+        streamsPerNetwork: testStreamsPerNetwork() ?? STREAM_REQUESTS_PER_NETWORK,
+        retryDelayMs: testKnobs.retryBaseDelayMs
+      })
+    })
+    return runtime
+  }
+
   private async restorePersistedDownloads(): Promise<void> {
     let entries: string[]
     try {
@@ -896,6 +980,11 @@ export class DownloadManager {
         unitsWritten: blocks.filter((block) => block.status === 'completed').length,
         downloadedFiles: state.nzbFiles.map((file) => file.name)
       }
+    } else if (runtime.kind === 'stream') {
+      const { blocks: omittedBlocks, streams: omittedStreams, ...state } = runtime.state
+      void omittedBlocks
+      void omittedStreams
+      entry = { ...state, muxing: undefined, unitsWritten: state.totalBlocks }
     } else {
       const { pieces, peers: omittedPeers, ...state } = runtime.state
       void omittedPeers
@@ -948,7 +1037,8 @@ export class DownloadManager {
     persisted: PersistedDownload
   ): Promise<DownloadRuntime | null> {
     const requestPayload: StartDownloadRequest =
-      persisted.requestPayload.kind === 'http' && typeof persisted.browser === 'string'
+      (persisted.requestPayload.kind === 'http' || persisted.requestPayload.kind === 'stream') &&
+      typeof persisted.browser === 'string'
         ? { ...persisted.requestPayload, browser: unsealBrowser(persisted.browser) }
         : persisted.requestPayload
     const saved: SavedBlocks = { progress: persisted.progress, complete: persisted.complete }
@@ -1020,6 +1110,12 @@ export class DownloadManager {
         blocks,
         nzb
       )
+    } else if (persisted.state.kind === 'stream' && requestPayload.kind === 'stream') {
+      const old = persisted.state
+      const blocks = restoreStreamSegments(old, saved, persisted.segmentLengths)
+      if (!blocks) return null
+      state = { ...old, streams: [], blocks, muxing: undefined }
+      runtime = this.newStreamRuntime(state, requestPayload, blocks, persisted.partialPath)
     } else if (persisted.state.kind === 'http' && requestPayload.kind === 'http') {
       const old = persisted.state
       const blocks = restoreBlocks(old, saved)
@@ -1145,6 +1241,10 @@ export class DownloadManager {
           const { blocks, ...state } = runtime.state
           return structuredClone({ seq: runtime.sentUpdates, state, blocks })
         }
+        if (runtime.kind === 'stream') {
+          const { blocks, ...state } = runtime.state
+          return structuredClone({ seq: runtime.sentUpdates, state, blocks })
+        }
         const { pieces, ...state } = runtime.state
         return structuredClone({ seq: runtime.sentUpdates, state, pieces })
       })
@@ -1152,7 +1252,10 @@ export class DownloadManager {
 
   async start(requestPayload: StartDownloadRequest): Promise<string> {
     await this.initialization
-    if (requestPayload.kind === 'http' && requestPayload.browser !== undefined) {
+    if (
+      (requestPayload.kind === 'http' || requestPayload.kind === 'stream') &&
+      requestPayload.browser !== undefined
+    ) {
       const browser = browserContextFrom(requestPayload.browser)
       if (!browser) throw new Error('The browser’s details for this download couldn’t be read.')
       requestPayload = { ...requestPayload, browser }
@@ -1253,6 +1356,8 @@ export class DownloadManager {
       )
     } else if (requestPayload.kind === 'nzb') {
       runtime = await this.startNzb(id, requestPayload, available, selected)
+    } else if (requestPayload.kind === 'stream') {
+      runtime = await this.startStream(id, requestPayload, available, selected)
     } else {
       const target = new URL(requestPayload.url)
       const usable = compatibleInterfaces(
@@ -1379,6 +1484,65 @@ export class DownloadManager {
     return this.newNzbRuntime(state, requestPayload, file, blocks, nzb)
   }
 
+  /** A stream download, set up to start: its manifest read for the quality picked, its segments
+   * planned, and its name claimed with the container its codecs call for (see
+   * reserveStagingFolder). What the stream refuses (live, protected, too many segments) is said
+   * here, before anything is downloaded. */
+  private async startStream(
+    id: string,
+    requestPayload: StartStreamDownloadRequest,
+    available: NetworkInterfaceInfo[],
+    selected: NetworkInterfaceInfo[]
+  ): Promise<StreamDownloadRuntime> {
+    const target = new URL(requestPayload.url)
+    const usable = compatibleInterfaces(
+      selected,
+      await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
+    )
+    if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
+    const resolved = await resolveStream(
+      requestPayload.url,
+      requestPayload.protocol,
+      requestPayload.variantId,
+      {
+        headers: requestHeaders(target, requestPayload.browser),
+        signal: AbortSignal.timeout(testKnobs.stallTimeoutMs)
+      }
+    )
+    const tracks = planTracks(resolved.tracks)
+    const blocks = planStreamBlocks(tracks)
+    const destinationPath = await reserveStagingFolder(
+      requestPayload.destinationDir,
+      streamFileName(requestPayload.suggestedFileName, streamContainer(resolved))
+    )
+    const state: StreamDownloadState = {
+      id,
+      kind: 'stream',
+      protocol: requestPayload.protocol,
+      ...(resolved.quality !== undefined && { quality: resolved.quality }),
+      url: requestPayload.url,
+      fileName: basename(destinationPath),
+      destinationPath,
+      totalBytes: 0,
+      bytesDownloaded: 0,
+      speedBytesPerSec: 0,
+      status: 'downloading',
+      networks: available.map((iface) => newHttpNetwork(iface, usable.includes(iface))),
+      streams: [],
+      peakStreams: 0,
+      blocks,
+      totalBlocks: blocks.length,
+      trackSegments: trackShape(tracks),
+      codecs: resolved.codecs,
+      ...(resolved.durationSeconds !== undefined && { durationSeconds: resolved.durationSeconds }),
+      startedAt: Date.now(),
+      ...(requestPayload.browser && {
+        fromBrowser: requestPayload.browser.name ?? 'your browser'
+      })
+    }
+    return this.newStreamRuntime(state, requestPayload, blocks, `${destinationPath}.mergelane`)
+  }
+
   /** Runs the download, and once the run ends makes room for the next one queued. */
   private launch(runtime: DownloadRuntime): void {
     runtime.runPromise = this.run(runtime).finally(() => this.pump())
@@ -1413,7 +1577,7 @@ export class DownloadManager {
     }
     runtime.state.pausedAt = Date.now()
     clearSpeeds(runtime.state)
-    if (runtime.kind === 'http' || runtime.kind === 'nzb') {
+    if (runtime.kind === 'http' || runtime.kind === 'nzb' || runtime.kind === 'stream') {
       for (const stream of runtime.state.streams) {
         if (stream.status !== 'completed') {
           stream.status = 'paused'
@@ -1660,7 +1824,7 @@ export class DownloadManager {
       }
       if (unit.kind === 'torrent') unit.provisionalBytes = 0
     }
-    if (runtime.kind === 'http' || runtime.kind === 'nzb') {
+    if (runtime.kind === 'http' || runtime.kind === 'nzb' || runtime.kind === 'stream') {
       for (const stream of runtime.state.streams) {
         if (stream.status !== 'completed') {
           stream.status = 'pending'
@@ -1970,7 +2134,7 @@ export class DownloadManager {
       await runtime.file.discard()
       await this.removePersistedDownload(runtime, false)
       runtime.state.status = 'cancelled'
-      if (runtime.kind === 'http' || runtime.kind === 'nzb') {
+      if (runtime.kind === 'http' || runtime.kind === 'nzb' || runtime.kind === 'stream') {
         for (const stream of runtime.state.streams) stream.status = 'cancelled'
       }
       if (runtime.kind === 'telegram') {
@@ -2272,7 +2436,7 @@ export class DownloadManager {
     // Until the monitor has looked, nothing is known to be gone.
     const known = present !== null
     if (known) {
-      if (state.kind === 'http' || state.kind === 'nzb') {
+      if (state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream') {
         state.networks = state.networks.filter(
           (network) =>
             network.enabled ||
@@ -2300,7 +2464,7 @@ export class DownloadManager {
       }
       for (const iface of present) {
         if (!state.networks.some((network) => network.id === iface.id)) {
-          if (state.kind === 'http' || state.kind === 'nzb') {
+          if (state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream') {
             state.networks.push(newHttpNetwork(iface, false))
           } else if (state.kind === 'telegram') {
             state.networks.push(newTelegramNetwork(iface, false))
@@ -2441,6 +2605,12 @@ export class DownloadManager {
       void omittedBlocks
       return structuredClone({ seq: ++runtime.sentUpdates, state, blocks: changed })
     }
+    if (runtime.kind === 'stream') {
+      const changed = this.changedUnits(runtime, runtime.blocks)
+      const { blocks: omittedBlocks, ...state } = runtime.state
+      void omittedBlocks
+      return structuredClone({ seq: ++runtime.sentUpdates, state, blocks: changed })
+    }
     const changed = this.changedUnits(runtime, runtime.pieces)
     const { pieces: omittedPieces, ...state } = runtime.state
     void omittedPieces
@@ -2506,6 +2676,7 @@ export class DownloadManager {
         const temporaryPath = `${path}.tmp`
         let state: PersistedState
         let missing: number[] | undefined
+        let segmentLengths: (number | null)[] | undefined
         if (runtime.kind === 'http') {
           const { blocks: omittedBlocks, streams: omittedStreams, ...rest } = runtime.state
           void omittedBlocks
@@ -2521,6 +2692,13 @@ export class DownloadManager {
           void omittedStreams
           state = rest
           missing = blocks.filter((block) => block.status === 'missing').map((block) => block.index)
+        } else if (runtime.kind === 'stream') {
+          const { blocks, streams: omittedStreams, ...rest } = runtime.state
+          void omittedStreams
+          state = rest
+          segmentLengths = blocks.map((block) =>
+            block.rangeEnd === null ? null : block.rangeEnd - block.rangeStart + 1
+          )
         } else {
           const { pieces: omittedPieces, peers: omittedPeers, ...rest } = runtime.state
           void omittedPieces
@@ -2533,6 +2711,7 @@ export class DownloadManager {
           state: structuredClone(state),
           ...saveBlocks(unitsOf(runtime)),
           ...(missing?.length && { missing }),
+          ...(segmentLengths && { segmentLengths }),
           partialPath: runtime.file.path,
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,

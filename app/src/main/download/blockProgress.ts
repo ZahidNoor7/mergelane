@@ -1,7 +1,8 @@
-import type { HttpBlockState, NzbSegmentState } from '../../shared/types'
+import type { HttpBlockState, NzbSegmentState, StreamSegmentState } from '../../shared/types'
 
-/** A block whose bytes are secured from its first one on: an HTTP block, or an NZB's article. */
-type Block = HttpBlockState | NzbSegmentState
+/** A block whose bytes are secured from its first one on: an HTTP block, an NZB's article, or a
+ * stream's segment. */
+type Block = HttpBlockState | NzbSegmentState | StreamSegmentState
 
 // A block's `bytesDownloaded` is its frontier: how much of it, from its first byte, is secured.
 // Near the end of a download two attempts can race for one block, so the frontier is the furthest

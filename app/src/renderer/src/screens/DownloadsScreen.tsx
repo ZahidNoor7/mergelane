@@ -16,6 +16,7 @@ import { matchesSearch, searchTokens } from '@shared/downloadSearch'
 import { NetworksMenu } from '../components/NetworksMenu'
 import { TorrentBadge } from '../components/TorrentBadge'
 import { UsenetBadge } from '../components/UsenetBadge'
+import { StreamBadge } from '../components/StreamBadge'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import {
@@ -584,6 +585,7 @@ const DownloadRow = memo(function DownloadRow({
     switch (download.status) {
       case 'downloading':
         detail = [
+          download.kind === 'stream' && download.muxing && 'Joining video and audio…',
           wanted > 0 && `${percent}%`,
           sizes,
           download.timeLeftSeconds !== undefined && formatEta(download.timeLeftSeconds)
@@ -686,6 +688,7 @@ const DownloadRow = memo(function DownloadRow({
             </span>
             {item.kind === 'torrent' && <TorrentBadge />}
             {item.kind === 'nzb' && <UsenetBadge />}
+            {item.kind === 'stream' && <StreamBadge protocol={item.protocol} />}
             {(dots || speed) && (
               <div className="ml-auto flex shrink-0 items-center gap-2.5 pl-2">
                 {dots && (

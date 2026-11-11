@@ -9,7 +9,9 @@ import { expect, PROJECT_ROOT, test } from './fixtures'
 
 // The whole browser path (docs/BROWSER-BRIDGE.md): Chromium with the real extension, the real
 // mergelane-nmhost (built here from daemon/), and the real app. Needs Go; tagged @extension.
-const dir = mkdtempSync('/tmp/mlext-')
+// Named, not created, at load time: Playwright also loads this file just to list tests, and a folder
+// made here would be left behind by that load. Short, for macOS's 104-byte socket paths.
+const dir = `/tmp/mlext-${process.pid}`
 const SOCKET = join(dir, 's')
 const HOST_BINARY = join(dir, 'mergelane-nmhost')
 const EXTENSION = join(PROJECT_ROOT, 'extension', 'dist', 'chrome')
@@ -21,6 +23,7 @@ let browser: BrowserContext
 let worker: Worker
 
 test.beforeAll(async () => {
+  mkdirSync(dir, { recursive: true })
   execFileSync('go', ['build', '-o', HOST_BINARY, './cmd/mergelane-nmhost'], {
     cwd: join(PROJECT_ROOT, '..', 'daemon'),
     stdio: 'inherit'

@@ -64,3 +64,14 @@ The app accepts only its own extensions' callers:
 
 This is defence in depth. Any program running as the same user could launch the host or connect to the socket
 itself (ADR-0021).
+
+## Videos on the page (extension only)
+
+The extension also lists the HLS and DASH manifests a tab loads, and hands one over with the same `add` message.
+See ADR-0023.
+
+- **Detection:** it only observes `webRequest.onHeadersReceived` (the `webRequest` permission). It never blocks or
+  changes a request and never reads a body.
+- **Storage:** lists are kept per tab in `storage.session` and cleared on navigation and when the tab closes.
+- **Popup messages:** `{mediaOf}` and `{sendMedia}`. These stay inside the extension.
+- **Not listed:** YouTube hosts, pending the owner's decision (`docs/YOUTUBE-REVIEW.md`).

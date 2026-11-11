@@ -49,7 +49,38 @@ export interface NzbProbeResult extends ProbeResultBase {
   nzb: NzbInfo
 }
 
-export type ProbeResult = HttpProbeResult | TorrentProbeResult | NzbProbeResult
+/** An HLS or DASH video: a manifest of segments, joined into one file with FFmpeg once they are
+ * in (see main/download/stream/). Its size isn't known until it downloads. */
+export interface StreamProbeResult extends ProbeResultBase {
+  kind: 'stream'
+  stream: StreamInfo
+}
+
+export type StreamProtocol = 'hls' | 'dash'
+
+/** One quality of a stream, for New download's picker. */
+export interface StreamVariant {
+  /** What StartStreamDownloadRequest.variantId takes: an HLS variant's id, or a DASH video
+   * representation's. */
+  id: string
+  /** Bits per second, as the manifest declares it. */
+  bandwidth: number
+  width?: number
+  height?: number
+  frameRate?: number
+  /** RFC 6381 codec strings, as the manifest names them. */
+  codecs?: string[]
+}
+
+export interface StreamInfo {
+  protocol: StreamProtocol
+  /** Best first. Empty when the link offers one quality only (an HLS media playlist). */
+  variants: StreamVariant[]
+  /** Its length in seconds, when the manifest says. */
+  durationSeconds?: number
+}
+
+export type ProbeResult = HttpProbeResult | TorrentProbeResult | NzbProbeResult | StreamProbeResult
 
 /** How the check of a magnet link is going, while it's still going: `noPeersYet` once its first
  * search came back empty and it's looking a little longer. */
@@ -189,7 +220,16 @@ export interface NzbSegmentState extends WorkUnitState {
   status: NzbSegmentStatus
 }
 
-export type DownloadUnitState = HttpBlockState | TorrentPieceState | NzbSegmentState
+/** One request of a stream download: its video or audio track's initialization section, or one of
+ * its segments. Its size is known from the start only for a byte range of a file; any other is
+ * open-ended (`rangeEnd` null) until it is in. A segment only ever counts whole. */
+export interface StreamSegmentState extends WorkUnitState {
+  kind: 'stream'
+  status: HttpBlockStatus
+}
+
+export type DownloadUnitState =
+  HttpBlockState | TorrentPieceState | NzbSegmentState | StreamSegmentState
 
 /** What a Saved Messages attachment is, as the media browser groups it. */
 export type TelegramMediaType =
@@ -421,8 +461,38 @@ export interface NzbDownloadState extends DownloadStateBase {
   server: string
 }
 
+/** An HLS or DASH video: its segments fetched over every network in use, then joined into one
+ * file with FFmpeg. Its streams are the segment requests in flight, its blocks the segments, the
+ * video track's first. `totalBytes` is an estimate until every segment is in. */
+export interface StreamDownloadState extends DownloadStateBase {
+  kind: 'stream'
+  protocol: StreamProtocol
+  /** The quality being downloaded, e.g. "1080p"; unset when the link offers one only. */
+  quality?: string
+  networks: HttpDownloadNetwork[]
+  streams: HttpStreamState[]
+  peakStreams: number
+  blocks: StreamSegmentState[]
+  totalBlocks: number
+  /** How many of the blocks each track has, the main (video) track's first, then any separate
+   * audio track's. */
+  trackSegments: number[]
+  /** RFC 6381 codecs of what is downloaded, as the manifest declares them: what decides MP4 or
+   * MKV, kept so the tracks can be joined without asking the server again. */
+  codecs: string[]
+  /** Its length in seconds, when the manifest says. */
+  durationSeconds?: number
+  /** Every segment is in, and FFmpeg is joining the tracks into the file. */
+  muxing?: boolean
+  fromBrowser?: string
+}
+
 export type DownloadState =
-  HttpDownloadState | TorrentDownloadState | TelegramDownloadState | NzbDownloadState
+  | HttpDownloadState
+  | TorrentDownloadState
+  | TelegramDownloadState
+  | NzbDownloadState
+  | StreamDownloadState
 
 /** A finished download as history keeps it: its state without the work units and connections,
  * which only a running download needs. */
@@ -431,6 +501,7 @@ export type FinishedDownload = (
   | Omit<TorrentDownloadState, 'pieces' | 'peers'>
   | Omit<TelegramDownloadState, 'blocks' | 'readers'>
   | Omit<NzbDownloadState, 'blocks' | 'streams'>
+  | Omit<StreamDownloadState, 'blocks' | 'streams'>
 ) & {
   /** The blocks or pieces it was written in (a torrent's: those its chosen files needed; an
    * NZB's: its articles that came in). */
@@ -470,8 +541,18 @@ export interface NzbDownloadUpdate {
   blocks: NzbSegmentState[]
 }
 
+export interface StreamDownloadUpdate {
+  seq: number
+  state: Omit<StreamDownloadState, 'blocks'>
+  blocks: StreamSegmentState[]
+}
+
 export type DownloadUpdate =
-  HttpDownloadUpdate | TorrentDownloadUpdate | TelegramDownloadUpdate | NzbDownloadUpdate
+  | HttpDownloadUpdate
+  | TorrentDownloadUpdate
+  | TelegramDownloadUpdate
+  | NzbDownloadUpdate
+  | StreamDownloadUpdate
 
 /** User customization for one physical network, keyed by NetworkInterfaceInfo.id — lets a
  * cryptic OS device name (e.g. "feth0") get a real label, and a color distinct from its
@@ -676,11 +757,20 @@ export interface StartNzbDownloadRequest extends StartDownloadRequestBase {
   nzbHash: string
 }
 
+export interface StartStreamDownloadRequest extends StartDownloadRequestBase {
+  kind: 'stream'
+  protocol: StreamProtocol
+  /** The quality picked, a StreamVariant's id; left out: the best. */
+  variantId?: string
+  browser?: BrowserContext
+}
+
 export type StartDownloadRequest =
   | StartHttpDownloadRequest
   | StartTorrentDownloadRequest
   | StartTelegramDownloadRequest
   | StartNzbDownloadRequest
+  | StartStreamDownloadRequest
 
 /** The news server NZB downloads come from, as the window sees it: never its password. */
 export interface UsenetServer {

@@ -1,0 +1,214 @@
+name: release
+
+# Builds, tests and drafts a GitHub release of Mergelane (Phase 2, M2.5). docs/RELEASING.md is the
+# owner's guide.
+#
+# Manual only. CI is paused (docs/DECISIONS.md ADR-0020), so nothing here runs on a push, a pull
+# request or a tag. The owner starts it from the Actions tab ("release" › "Run workflow") or with
+#   gh workflow run release.yml --ref main -f version=X.Y.Z
+# reviews the draft release it creates, and publishes it by hand. It must run from main.
+#
+# What ships: an ad-hoc-signed arm64 DMG and zip (no Apple Developer ID yet, ADR-0003), and a
+# SHA256SUMS file. Nothing is uploaded unless the REA fuse audit (ADR-0016) and the packaging test
+# (ADR-0013) both pass first.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, like 1.2.3, without the "v". Must equal app/package.json's.
+        required: true
+        type: string
+      draft:
+        description: Create the release as a draft, to review before publishing
+        required: false
+        type: boolean
+        default: true
+
+# The token gets no permissions by default; the job below asks only for what it needs.
+permissions: {}
+
+# One release at a time. A release that is already uploading is never cancelled halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # macOS 27 on Apple silicon, like every CI job (ADR-0004).
+    runs-on: xcode-27
+    # ci.yml's package job takes up to 30 minutes; this adds the zip check, the notes and the upload.
+    timeout-minutes: 45
+    # GitHub's docs: "contents: write allows the action to create a release". Only this job gets it,
+    # and nothing else is granted.
+    permissions:
+      contents: write
+    defaults:
+      run:
+        # bash with -e and -o pipefail: a failure anywhere in a pipeline fails the step.
+        shell: bash
+        working-directory: app
+    env:
+      # The inputs reach the scripts only as environment variables, never pasted into a script's
+      # text, which is GitHub's advice against script injection. The first check below also refuses
+      # anything that is not a plain version number.
+      VERSION: ${{ inputs.version }}
+      DRAFT: ${{ inputs.draft }}
+      TAG: v${{ inputs.version }}
+    steps:
+      # The whole history and every tag (fetch-depth: 0), so the checks can see whether the tag
+      # already exists. persist-credentials: false keeps the token out of .git/config, so the build
+      # steps (npm install scripts, electron-builder) can't pick it up from there. Of the run steps,
+      # only the two that call the GitHub API get the token (as GH_TOKEN).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Node 22, as in ci.yml. Set up before the checks, because the first check is a Node script.
+      # No dependency cache: a release installs everything fresh, so nothing saved by an earlier run
+      # can reach it. (package-manager-cache is setup-node's automatic cache; it is turned off.)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      # The release-notes script's own tests, with the 90% line-coverage floor. They also check that
+      # README.md still has the honest-limits section and that tools.json has a source link for
+      # every GPL program, which the notes copy.
+      - name: Test the release-notes script
+        working-directory: .
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' --test-coverage-lines=90 scripts/release/notes.test.mjs
+
+      # Fail in seconds, not after a 30-minute build.
+      - name: Check the version, the changelog, the branch and the tag
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 1. The version looks like 1.2.3, equals app/package.json's version, and CHANGELOG.md has a
+          #    "## [1.2.3]" section with text in it (that text opens the release notes).
+          node ../scripts/release/notes.mjs --version "$VERSION" --check
+
+          # 2. Releases come from the default branch. Its commits are the reviewed ones, and GitHub's
+          #    REST docs say a release whose commit adds or changes workflow files relative to the
+          #    default branch needs a token allowed to change workflows, which GITHUB_TOKEN is not.
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Run the release from $DEFAULT_BRANCH, not $GITHUB_REF (docs/RELEASING.md)."
+            exit 1
+          fi
+
+          # 3. If the tag already exists, it must point at the commit being built. Otherwise GitHub
+          #    would attach the release to the old tag ("target_commitish: unused if the Git tag
+          #    already exists") while the files come from this commit.
+          if tag_commit=$(git rev-parse -q --verify "refs/tags/$TAG^{commit}"); then
+            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+              echo "::error::Tag $TAG already points at $tag_commit, not at $GITHUB_SHA. Bump the version, or delete the tag if it was a mistake."
+              exit 1
+            fi
+            echo "Tag $TAG already exists at this commit; the release will use it."
+          fi
+
+          # 4. No release for this tag exists yet, draft or published, so a second run can't add a
+          #    second release of the same version. The REST API lists drafts to tokens with push
+          #    access, which contents: write gives.
+          existing=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')
+          if grep -Fxq "$TAG" <<<"$existing"; then
+            echo "::error::A release for $TAG already exists. Delete that draft first, or bump the version."
+            exit 1
+          fi
+          echo "Releasing $TAG from $GITHUB_SHA."
+
+      # Go from daemon/go.mod, as in ci.yml, without the module cache (same reason as Node's).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache: false
+
+      # The app's packages from the lockfile, exactly as ci.yml's package job installs them
+      # (postinstall applies the patches and downloads Electron).
+      - run: npm ci
+
+      # The two Go programs electron-builder copies into Contents/Resources (electron-builder.yml).
+      # -X main.version stamps the release version; package-test.sh checks that both report it.
+      - name: Build the helpers that ship inside the app
+        working-directory: daemon
+        run: |
+          go build -trimpath -ldflags "-X main.version=$VERSION" -o bin/mergelane-daemon ./cmd/mergelane-daemon
+          go build -trimpath -ldflags "-X main.version=$VERSION" -o bin/mergelane-nmhost ./cmd/mergelane-nmhost
+
+      # yt-dlp and FFmpeg are GPL programs fetched at build time and never committed (CLAUDE.md).
+      # The script checks each download against its pinned SHA-256 before anything becomes
+      # executable, and copies the licence texts next to them (docs/MEDIA-TOOLS.md).
+      - name: Fetch yt-dlp and FFmpeg (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+        run: node ../scripts/media-tools/fetch.mjs
+
+      # Same command as ci.yml. electron-builder.yml asks for identity '-' (ad-hoc signing, ADR-0003)
+      # and notarize: false, so no signing secrets exist or are needed. CSC_FOR_PULL_REQUEST is not
+      # set: it matters only on pull requests, and this is not one. --publish never: the build
+      # uploads nothing itself; the last step does, after every check has passed.
+      - name: Build the arm64 DMG and zip (ad-hoc signed)
+        run: npx electron-vite build && npx electron-builder --mac --publish never
+
+      # Reads the Electron fuse bytes with REA and fails if any differs from electron-builder.yml
+      # (ADR-0016), e.g. if RunAsNode were left on.
+      - name: Audit Electron fuses with REA
+        run: node ../scripts/ci/audit-fuses.mjs dist/mac-arm64/Mergelane.app
+
+      # Installs the DMG the way a user does: mount, copy, quarantine, verify every signature,
+      # check Gatekeeper offers Open Anyway (not "damaged"), remove quarantine as the install steps
+      # say, launch, and wait for the ready state (ADR-0013). Also checks the version everywhere.
+      - name: Install from the DMG and reach the ready state
+        run: bash ../scripts/ci/package-test.sh "dist/Mergelane-$VERSION-arm64.dmg" "$VERSION"
+
+      # The packaging test covers the DMG. The zip is uploaded too, so check that its app also
+      # verifies and carries the release version.
+      - name: Check the app in the zip
+        run: |
+          unzipped="$RUNNER_TEMP/zip-check"
+          rm -rf "$unzipped"
+          mkdir -p "$unzipped"
+          ditto -x -k "dist/Mergelane-$VERSION-arm64-mac.zip" "$unzipped"
+          codesign --verify --deep --strict --verbose=2 "$unzipped/Mergelane.app"
+          zip_version=$(plutil -extract CFBundleShortVersionString raw "$unzipped/Mergelane.app/Contents/Info.plist")
+          if [ "$zip_version" != "$VERSION" ]; then
+            echo "::error::The app in the zip says version $zip_version, expected $VERSION."
+            exit 1
+          fi
+          rm -rf "$unzipped"
+
+      # SHA256SUMS lists bare file names (it runs inside dist), so users can check a download with
+      # `shasum -a 256` and the notes can show the same values. It is uploaded with the release.
+      - name: Compute the checksums
+        working-directory: app/dist
+        run: shasum -a 256 "Mergelane-$VERSION-arm64.dmg" "Mergelane-$VERSION-arm64-mac.zip" | tee SHA256SUMS
+
+      # CHANGELOG.md's section for the version, the requirements and install steps (CLAUDE.md: they
+      # must be on the release page), README.md's honest limits, the checksums, and the source links
+      # the GPL asks for (scripts/media-tools/tools.json). Shown in the run's summary as well, so
+      # they can be read before opening the draft.
+      - name: Write the release notes
+        run: |
+          node ../scripts/release/notes.mjs --version "$VERSION" --checksums dist/SHA256SUMS --out "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Creates the release for tag v<version> and uploads the DMG, the zip and SHA256SUMS.
+      # --target is the commit just built and tested: if the tag doesn't exist yet, it is created
+      # there, not at the newest commit of the default branch (gh's manual). --draft (the default)
+      # keeps the release unpublished until the owner reviews and publishes it. A version with a
+      # pre-release part (1.2.3-beta.1) is marked as a pre-release; GitHub's REST docs: "Drafts and
+      # prereleases cannot be set as latest."
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set --
+          if [ "$DRAFT" = "true" ]; then set -- "$@" --draft; fi
+          if [[ "$VERSION" == *-* ]]; then set -- "$@" --prerelease; fi
+          gh release create "$TAG" "$@" \
+            --target "$GITHUB_SHA" \
+            --title "Mergelane $VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            "dist/Mergelane-$VERSION-arm64.dmg" \
+            "dist/Mergelane-$VERSION-arm64-mac.zip" \
+            dist/SHA256SUMS

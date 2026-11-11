@@ -239,7 +239,7 @@ export function CompleteScreen({
         </div>
         <div className="mt-auto pt-3 font-mono text-[11px] leading-[1.4] text-muted-foreground">
           {[
-            `written in ${totalChunkCount} ${isTorrent ? 'pieces' : download.kind === 'nzb' ? 'articles' : 'chunks'}`,
+            `written in ${totalChunkCount} ${isTorrent ? 'pieces' : download.kind === 'nzb' ? 'articles' : download.kind === 'stream' ? 'segments' : 'chunks'}`,
             // What its peers got from it while it downloaded.
             isTorrent && `uploaded ${formatBytes(download.bytesUploaded ?? 0)}`,
             `${totalRetries} ${totalRetries === 1 ? 'retry' : 'retries'}`

@@ -1,0 +1,18 @@
+{
+  "tools": [
+    {
+      "name": "yt-dlp",
+      "version": "2026.10.26",
+      "license": "GPL-3.0-or-later for this bundled executable",
+      "sourceUrl": "https://example.org/yt-dlp/yt-dlp.tar.gz",
+      "sourceSha256": "21f942d258d25cc4e60b4982a25c423460f0bebb835f38e6dfd1fcb140087f95"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "9.0.2",
+      "license": "GPL-3.0-or-later",
+      "sourceUrl": "https://example.org/ffmpeg/ffmpeg-9.0.2.tar.xz",
+      "buildScriptUrl": "https://example.org/ffmpeg/build-script"
+    }
+  ]
+}

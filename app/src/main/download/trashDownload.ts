@@ -9,7 +9,11 @@ export async function trashDownload(
   download: DownloadState | FinishedDownload,
   ownedFiles?: readonly string[]
 ): Promise<void> {
-  if (download.kind === 'http' || (download.kind === 'torrent' && !download.folder)) {
+  if (
+    download.kind === 'http' ||
+    download.kind === 'stream' ||
+    (download.kind === 'torrent' && !download.folder)
+  ) {
     await shell.trashItem(download.destinationPath)
     return
   }

@@ -498,6 +498,14 @@ Last updated: 2026-11-11
       the same speed) that runs past it. Each new test failed on unchanged `main` code, and the data limit test
       failed without the `uploadOnly` check. Stable over 3 repeats. `limits` and `torrent` specs: 33 passed.
 
+- **0.3.0 release, pull request** (branch `release-0.3.0`): version 0.3.0, and its CHANGELOG section rewritten for
+  users from the M3.2–M3.7 entries (one contradiction removed: an Added line still said uploads don't count toward
+  data limits). `notes.mjs --check` passes.
+  - **Next, after the merge:** `local-release.mjs --version 0.3.0` on `main`, then the same with `--upload`, which
+    makes the draft.
+  - **To test the in-app update:** 0.2.0 must be installed, and 0.3.0 must be published. A draft is invisible to
+    the update check, which uses GitHub's API without a token. 0.2.0 itself is still a draft.
+
 ### Phase 2 (started 2026-11-10, owner-approved)
 
 **M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.

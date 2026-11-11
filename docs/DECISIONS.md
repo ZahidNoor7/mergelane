@@ -911,3 +911,55 @@ until the owner overrides it.
     action, so it is outside this setting.
   - Tests never change the owner's clipboard for longer than one test. The e2e suite swaps main's `readText` for a
     stand-in, and the one real-clipboard test saves every format first and puts it back.
+
+## ADR-0044: New download's "When": Now, Add to queue, At a time (M3.9)
+
+- Status: Accepted (2026-11-12), decided unattended for the owner's review. The choices below follow the final
+  design (`design-system/mergelane/redesign/prototype.html`, `NewDownloadSheet`) and CLAUDE.md.
+- Context:
+  - The design's New download sheet has a "When" row: Now, Add to queue, or At a time with a time field. The
+    button follows it ("Download", "Add to queue", "Start at 01:00"). A waiting row says "Waiting for a turn", one
+    with a time "Starts at 01:00", and both offer "Start now".
+  - Until now a download started at once if "Downloads at once" and the schedule allowed, and otherwise waited in
+    the queue (`queued`, shown as Waiting). A queued download not enrolled in the schedule came back paused after
+    a relaunch. There was no start time for a single download (PROGRESS, M3.1 pull request 5c).
+  - In the design's prototype a download added to the queue starts as soon as there's room. In Mergelane, "Now"
+    already waits for room, so that reading would make Add to queue the same as Now.
+- Decision:
+  - **Now:** unchanged. It starts if there's room and the schedule allows, and otherwise waits in the queue.
+  - **Add to queue:** the download is made (its file name reserved, as before) but not started, even with room.
+    It is `queued` with `held: true` and waits for a turn. The turn comes when a running download's run ends
+    (finished, failed, paused or stopped), which makes room, or when the user chooses **Start now**. It keeps its
+    place in queue order, behind downloads already waiting. Raising "Downloads at once" or the schedule's window
+    opening does not start it: those aren't a turn. With nothing else running, it waits until the user starts it.
+    The sheet says so under the row: "It waits for a turn: it starts when a running download finishes, or when
+    you start it."
+  - **At a time:** the design's time field (`<input type="time">`, 01:00 first, as in the design). The start time
+    is the next time the Mac's clock reads it, in its time zone: today if still to come, otherwise tomorrow. It is
+    sent and saved as an absolute time (`startAt`, ms since the epoch), and the main process takes any time up to
+    7 days ahead (`shared/startAt.ts parseWhen`). Anything else is refused before a download is made. The sheet
+    shows only a time, as the design does. The button and the row name the day when it isn't today ("Start
+    tomorrow at 1:00 AM", "Starts tomorrow at 1:00 AM"). Times are shown in the Mac's format, as the schedule's
+    are.
+  - **When the time comes:** main looks at the clock at least once a second while any download waits for a time,
+    as the schedule's timer does, so a sleep or a clock change can't make it late. A download that is due goes to
+    the front of the queue and starts as soon as there is room. "Downloads at once" still applies.
+  - **With the schedule:** the schedule wins. A start time outside its hours makes the download wait for the
+    hours to begin, as any queued download does. The sheet warns when the time picked is outside them: "That's
+    outside your download schedule, so it starts tomorrow at 2:00 AM, when the schedule allows." Once the
+    schedule has ended, it says the download waits until the schedule is turned off.
+  - **Across relaunches:** `held` and `startAt` are saved in the download's manifest. A download added to the
+    queue or for later comes back waiting, not paused like other queued ones. A start time that passed while
+    Mergelane was closed is due at the next launch: it starts then and keeps `missedStartAt`. Its row says
+    "Started late", and its details say "Planned to start at 1:00 AM, while Mergelane was closed. It started when
+    Mergelane opened." There is no system notification: "Notify me when a download finishes" is about finishing.
+  - **Start now and Pause:** a new action, `start` ("Start now": the row's button, and first in menus and on the
+    toolbar), for a download added to the queue or for later. It goes through `resumeDownload`: the download loses
+    its hold or time and goes to the front of the queue, starting if there's room. Pause makes it an ordinary
+    paused download, and Resume then starts it as any other.
+- Consequences:
+  - No new IPC channel: `StartDownloadRequest` gains an optional `when`, and `resumeDownload` also starts a planned
+    download. A request without `when` gets Now.
+  - The Dashboard's list of downloads still says "Waiting for a turn" for one with a start time. Its rows aren't
+    built from the list's code, so that is left for a later change.
+  - A date field could be added later without changing the engine, which already takes up to 7 days ahead.

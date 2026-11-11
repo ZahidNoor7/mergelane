@@ -326,6 +326,15 @@ interface DownloadStateBase {
   scheduled?: boolean
   /** While queued: its place in the queue, lowest first. */
   queuedAt?: number
+  /** Added with New download's "Add to queue": it waits for a turn, which comes when a running
+   * download ends and makes room, or when the user starts it (ADR-0044). */
+  held?: boolean
+  /** Added with "At a time": when it starts, in ms since the epoch; unset once it is due
+   * (ADR-0044). */
+  startAt?: number
+  /** It was planned for this time, but Mergelane wasn't open then, so it started when Mergelane
+   * next opened. */
+  missedStartAt?: number
   pausedAt?: number
   totalPausedMs?: number
   completedAt?: number
@@ -722,7 +731,13 @@ interface StartDownloadRequestBase {
   interfaceIds: string[]
   etag: string | null
   lastModified: string | null
+  /** When it starts (New download's "When"); left out: now, as the queue and schedule allow. */
+  when?: DownloadWhen
 }
+
+/** New download's "When" (ADR-0044): put in the queue to wait for a turn, or started at a time
+ * (ms since the epoch). */
+export type DownloadWhen = { kind: 'queue' } | { kind: 'at'; at: number }
 
 export interface StartHttpDownloadRequest extends StartDownloadRequestBase {
   kind: 'http'

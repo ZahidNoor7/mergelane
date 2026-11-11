@@ -340,7 +340,9 @@ test.describe('routing uploads @smoke', () => {
       routing: { down: 'all', up: 'b', fallback: true }
     })
 
-    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
     await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
     wantAll()
     const done = await mergelane.waitForTorrentStatus('completed', 60_000)

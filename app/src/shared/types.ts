@@ -553,13 +553,20 @@ export interface SystemMergeSnapshot {
 /** Where the app's own update is (main/updater.ts, docs/DECISIONS.md ADR-0036). */
 export interface UpdateState {
   /** idle: not checked since launch, or a found version was skipped; current: the check found
-   * nothing newer; available: `latest` is newer; error: the check failed (`error` says why). */
-  status: 'idle' | 'checking' | 'available' | 'current' | 'error'
+   * nothing newer; available: `latest` is newer; downloading, then verifying (its SHA-256), then
+   * ready: `latest`'s disk image is downloaded and checked, waiting to be opened; error: a check or
+   * a download failed (`error` says why). */
+  status:
+    'idle' | 'checking' | 'available' | 'current' | 'downloading' | 'verifying' | 'ready' | 'error'
   /** This app's version. */
   version: string
   channel: UpdateChannel
   /** Check once a day while the app runs. */
   autoCheck: boolean
+  /** With automatic checks, download a found update by itself (installing still waits). */
+  backgroundDownload: boolean
+  /** Bytes of the disk image downloaded so far, while downloading. */
+  progress: { received: number; total: number } | null
   /** When GitHub last answered a check; null if it never has. */
   lastChecked: number | null
   /** The newer release, while status is 'available'. */
@@ -593,6 +600,8 @@ export interface AppSettings {
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
   updateChannel?: UpdateChannel
+  /** Only ever saved as true: downloading found updates by themselves is off unless turned on. */
+  updateBackgroundDownload?: boolean
   /** A version the user chose to skip. */
   updateSkipped?: string
   /** When GitHub last answered an update check, in milliseconds since the epoch. */

@@ -80,11 +80,18 @@ export interface IpcContract {
   /** Asks GitHub now; resolves with the state the check ended in. */
   checkForUpdates: { args: []; result: UpdateState }
   setUpdatePreferences: {
-    args: [preferences: { autoCheck?: boolean; channel?: UpdateChannel }]
+    args: [
+      preferences: { autoCheck?: boolean; backgroundDownload?: boolean; channel?: UpdateChannel }
+    ]
     result: void
   }
   /** Not this version: only a newer one is offered after. */
   skipUpdate: { args: [version: string]; result: void }
+  /** Downloads the found update's disk image and checks its SHA-256. */
+  downloadUpdate: { args: []; result: void }
+  cancelUpdateDownload: { args: []; result: void }
+  /** Opens the checked disk image and quits Mergelane. */
+  installUpdate: { args: []; result: void }
   /** The found release's page on GitHub, in the browser. */
   openReleasePage: { args: []; result: void }
   /** Oldest first: every link not yet started or dismissed. */

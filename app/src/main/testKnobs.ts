@@ -50,6 +50,9 @@ export const testKnobs = {
   releasesUrl: env['MERGELANE_E2E_RELEASES_URL'],
   /** The version the update check compares releases with, instead of the app's. */
   updateAppVersion: env['MERGELANE_E2E_UPDATE_VERSION'],
+  /** A file an update's disk image path is written to instead of opening it and quitting, so a
+   * test run never opens anything on the Mac (e2e/updates.spec.ts). */
+  updateOpenLog: env['MERGELANE_E2E_UPDATE_OPEN_LOG'],
   /** How long after launch the daily update check first looks whether a check is due. */
   updateFirstCheckMs: positiveNumber('MERGELANE_E2E_UPDATE_FIRST_CHECK_MS', 10_000),
   /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */

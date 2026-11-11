@@ -68,8 +68,14 @@ const mergelaneApi = {
     invoke('removeDownload', downloadId, options),
   updateState: () => invoke('updateState'),
   checkForUpdates: () => invoke('checkForUpdates'),
-  setUpdatePreferences: (preferences: { autoCheck?: boolean; channel?: UpdateChannel }) =>
-    invoke('setUpdatePreferences', preferences),
+  setUpdatePreferences: (preferences: {
+    autoCheck?: boolean
+    backgroundDownload?: boolean
+    channel?: UpdateChannel
+  }) => invoke('setUpdatePreferences', preferences),
+  downloadUpdate: () => invoke('downloadUpdate'),
+  cancelUpdateDownload: () => invoke('cancelUpdateDownload'),
+  installUpdate: () => invoke('installUpdate'),
   skipUpdate: (version: string) => invoke('skipUpdate', version),
   openReleasePage: () => invoke('openReleasePage'),
   pendingLinks: () => invoke('pendingLinks'),

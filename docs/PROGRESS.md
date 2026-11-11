@@ -302,8 +302,28 @@ Last updated: 2026-11-11
         asks GitHub.
       - Smoke and extension: 469 passed, 1 skipped.
     - The README's privacy note now says that the app checks GitHub once a day, and that this can be turned off.
-  - **M3.2b, next:** download the DMG with progress, check it against the release's `SHA256SUMS`, open it and quit;
-    with a "Download updates in the background" option and Cancel.
+  - Merged (#37).
+  - **M3.2b** (branch `m3.2-updates-download`): download, check, open.
+    - `main/updateDownload.ts` reads the release's `SHA256SUMS` and streams the DMG with `net.fetch` into
+      `<userData>/updates/<name>.part`, hashing as it goes. It checks the size and the SHA-256, then renames the
+      file. A failure or a cancel removes the part.
+    - `main/updater.ts` adds 'downloading', 'verifying' and 'ready', Cancel, "Quit and install"
+      (`shell.openPath`, then `app.quit()`) and the background download.
+      - A check never runs over a download.
+      - A new channel or a skip stops the download.
+      - Old images are cleared at launch.
+      - Saved: `updateBackgroundDownload`.
+    - `shared/releases.ts` gains `parseChecksums`, and `downloadableUrl`: https, or plain http on loopback, for
+      tests.
+    - **UI:** the design's downloading (bar, Cancel), checking and ready states, "Try again" after a failed
+      download, the background switch, and "is ready to install. Install…" in the sidebar. A release without a
+      DMG or `SHA256SUMS` still offers "Get it from GitHub".
+    - **Tests:**
+      - Vitest: 213 passed, 100% of lines in each changed renderer or shared file.
+      - `e2e/updateDownload.spec.ts` (4 tests): download, check and install; a checksum mismatch, then Try again;
+        Cancel mid-download; the background download, and clearing an old image at launch.
+      - Smoke and extension: 473 passed, 1 skipped.
+      - A test run writes the path it would open instead of opening a disk image or quitting.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

@@ -29,6 +29,8 @@ const state = (fields: Partial<UpdateState> = {}): UpdateState => ({
   version: '0.2.0',
   channel: 'stable',
   autoCheck: true,
+  backgroundDownload: false,
+  progress: null,
   lastChecked: null,
   latest: null,
   skipped: null,
@@ -40,7 +42,10 @@ const api = {
   checkForUpdates: vi.fn(() => Promise.resolve(state())),
   setUpdatePreferences: vi.fn(() => Promise.resolve()),
   skipUpdate: vi.fn(() => Promise.resolve()),
-  openReleasePage: vi.fn(() => Promise.resolve())
+  openReleasePage: vi.fn(() => Promise.resolve()),
+  downloadUpdate: vi.fn(() => Promise.resolve()),
+  cancelUpdateDownload: vi.fn(() => Promise.resolve()),
+  installUpdate: vi.fn(() => Promise.resolve())
 }
 
 const initial = useAppStore.getState()
@@ -122,7 +127,7 @@ describe('Settings › Updates', () => {
     expect(card().textContent).toBe('Couldn’t check for updates')
   })
 
-  it('a found update: its date, size and what’s new, to get from GitHub or skip', async () => {
+  it('a found update: its date, size and what’s new, to download or skip', async () => {
     const user = userEvent.setup({ advanceTimers: () => {} })
     show(state({ status: 'available', latest: RELEASE }))
     const status = card()
@@ -142,10 +147,95 @@ describe('Settings › Updates', () => {
         .getAllByRole('listitem')
         .map((item) => item.textContent)
     ).toEqual(['Settings › Updates', 'A sidebar notice'])
-    await user.click(within(status).getByRole('button', { name: 'Get it from GitHub' }))
-    expect(api.openReleasePage).toHaveBeenCalledOnce()
+    // No new check while an update waits to be taken or skipped.
+    expect(
+      (screen.getByRole('button', { name: 'Check for updates' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    await user.click(within(status).getByRole('button', { name: 'Download and install' }))
+    expect(api.downloadUpdate).toHaveBeenCalledOnce()
     await user.click(within(status).getByRole('button', { name: 'Skip this version' }))
     expect(api.skipUpdate).toHaveBeenCalledWith('0.3.0')
+  })
+
+  it('a release without a disk image or checksums to check is opened on GitHub instead', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    show(state({ status: 'available', latest: { ...RELEASE, checksumsUrl: null } }))
+    expect(within(card()).queryByRole('button', { name: 'Download and install' })).toBeNull()
+    await user.click(within(card()).getByRole('button', { name: 'Get it from GitHub' }))
+    expect(api.openReleasePage).toHaveBeenCalledOnce()
+  })
+
+  it('downloading: how far, with a bar, and Cancel', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    show(
+      state({
+        status: 'downloading',
+        latest: RELEASE,
+        progress: { received: 100_000_000, total: 238_836_052 }
+      })
+    )
+    expect(within(card()).getByText('Downloading 0.3.0…')).toBeTruthy()
+    expect(
+      within(card()).getByText(`${formatBytes(100_000_000)} of ${formatBytes(238_836_052)}`)
+    ).toBeTruthy()
+    const bar = screen.getByRole('progressbar', { name: 'Downloading 0.3.0' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('42')
+    // The notes stay while it downloads; no check meanwhile.
+    expect(screen.getByText('What’s new in 0.3.0')).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Check for updates' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(api.cancelUpdateDownload).toHaveBeenCalledOnce()
+    cleanup()
+    // Before the first bytes, from the release's size.
+    show(state({ status: 'downloading', latest: RELEASE }))
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0')
+    expect(within(card()).getByText(`0 B of ${formatBytes(238_836_052)}`)).toBeTruthy()
+  })
+
+  it('checking the download, then ready: Quit and install', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    show(state({ status: 'verifying', latest: RELEASE }))
+    expect(card().textContent).toMatch(
+      /^Checking the download…Comparing it with the SHA-256 published with the release\./
+    )
+    cleanup()
+    show(state({ status: 'ready', latest: RELEASE }))
+    expect(within(card()).getByText('0.3.0 is ready to install')).toBeTruthy()
+    expect(within(card()).getByText(/drag Mergelane to Applications/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Quit and install' }))
+    expect(api.installUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('a failed download says why, and can be tried again or skipped', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    show(
+      state({
+        status: 'error',
+        latest: RELEASE,
+        error: 'The download stopped before the end. Try again.'
+      })
+    )
+    expect(within(card()).getByText('Couldn’t download 0.3.0')).toBeTruthy()
+    expect(within(card()).getByText('The download stopped before the end. Try again.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(api.downloadUpdate).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Skip this version' })).toBeTruthy()
+  })
+
+  it('downloads in the background only with automatic checks on', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    show(state())
+    await user.click(screen.getByRole('switch', { name: 'Download updates in the background' }))
+    expect(api.setUpdatePreferences).toHaveBeenCalledWith({ backgroundDownload: true })
+    cleanup()
+    show(state({ autoCheck: false, backgroundDownload: true }))
+    const background = screen.getByRole('switch', { name: 'Download updates in the background' })
+    expect(background.getAttribute('aria-checked')).toBe('true')
+    expect(
+      background.hasAttribute('data-disabled') || (background as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 
   it('a found update without a date, size or notes says only what it has', () => {
@@ -204,6 +294,25 @@ describe('the sidebar’s update notice', () => {
     await user.click(screen.getByRole('button', { name: 'See what’s new' }))
     expect(useAppStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'updates' })
     expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('says when one is ready to install, and nothing while it downloads', async () => {
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    useAppStore.setState({ update: state({ status: 'ready', latest: RELEASE }) })
+    render(<UpdateNotice />)
+    expect(screen.getByRole('status').textContent).toBe(
+      'Mergelane 0.3.0 is ready to install.Install…'
+    )
+    await user.click(screen.getByRole('button', { name: 'Install…' }))
+    expect(useAppStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'updates' })
+    cleanup()
+    useAppStore.setState({
+      screen: 'downloads',
+      update: state({ status: 'downloading', latest: RELEASE })
+    })
+    render(<UpdateNotice />)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(hasUpdate(useAppStore.getState().update)).toBe(true)
   })
 
   it('says nothing without an update', () => {

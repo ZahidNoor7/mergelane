@@ -5,7 +5,9 @@ import {
   CircleAlert,
   CircleCheck,
   Clock,
+  Download,
   ExternalLink,
+  LogOut,
   RefreshCw,
   ShieldCheck,
   Sparkles
@@ -20,8 +22,10 @@ import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
 // Settings › Updates, from the final design (design-system/mergelane/redesign/prototype.html,
-// UpdateSettings), checked against GitHub's releases (docs/DECISIONS.md ADR-0036). Until M3.2b
-// downloads and checks the disk image itself, a found update opens its page on GitHub.
+// UpdateSettings), checked against GitHub's releases (docs/DECISIONS.md ADR-0036). A found update's
+// disk image is downloaded and checked against its published SHA-256, then opened as Mergelane quits:
+// the design's "Restart and update", for an app that can't replace itself while it is ad-hoc signed.
+// A release without a disk image to check is opened on GitHub instead.
 
 const CHANNELS: { value: UpdateChannel; label: string }[] = [
   { value: 'stable', label: 'Stable' },
@@ -65,6 +69,27 @@ function describe(update: UpdateState): { title: string; body: string; accent: b
         accent: true
       }
     }
+    case 'downloading': {
+      const received = update.progress?.received ?? 0
+      const total = update.progress?.total ?? latest?.dmg?.size ?? 0
+      return {
+        title: `Downloading ${latest?.version}…`,
+        body: `${formatBytes(received)} of ${formatBytes(total)}`,
+        accent: true
+      }
+    }
+    case 'verifying':
+      return {
+        title: 'Checking the download…',
+        body: 'Comparing it with the SHA-256 published with the release.',
+        accent: true
+      }
+    case 'ready':
+      return {
+        title: `${latest?.version} is ready to install`,
+        body: 'Mergelane quits and opens the disk image: drag Mergelane to Applications to replace this version. Running downloads pause and pick up where they left off.',
+        accent: true
+      }
     case 'current':
       return {
         title: 'Mergelane is up to date',
@@ -72,7 +97,11 @@ function describe(update: UpdateState): { title: string; body: string; accent: b
         accent: false
       }
     case 'error':
-      return { title: 'Couldn’t check for updates', body: error ?? '', accent: false }
+      return {
+        title: latest ? `Couldn’t download ${latest.version}` : 'Couldn’t check for updates',
+        body: error ?? '',
+        accent: false
+      }
     default:
       return {
         title: lastChecked === null ? 'Not checked yet' : lastCheckedTitle(lastChecked),
@@ -89,20 +118,33 @@ function describe(update: UpdateState): { title: string; body: string; accent: b
 export function UpdateSettings(): React.JSX.Element {
   const update = useAppStore((store) => store.update)
   const autoId = useId()
+  const backgroundId = useId()
   if (!update) return <p className="px-1 text-[12.5px] text-ink-3">Reading the update settings…</p>
 
-  const { status, latest, channel, autoCheck, version } = update
+  const { status, latest, channel, autoCheck, backgroundDownload, version, progress } = update
   const { title, body, accent } = describe(update)
   const checking = status === 'checking'
+  const busy = checking || status === 'downloading' || status === 'verifying'
+  // As the design: no new check while an update waits to be taken or skipped.
+  const canCheck = !busy && status !== 'available' && status !== 'ready'
+  const percent =
+    progress && progress.total > 0 ? Math.round((progress.received / progress.total) * 100) : 0
+  const showNotes =
+    latest !== null &&
+    (status === 'available' ||
+      status === 'downloading' ||
+      status === 'verifying' ||
+      status === 'ready')
+  const canDownload = latest?.dmg != null && latest.checksumsUrl !== null
   const StatusIcon =
     status === 'current'
       ? CircleCheck
       : status === 'error'
         ? CircleAlert
-        : accent
-          ? Sparkles
-          : checking
-            ? RefreshCw
+        : busy
+          ? RefreshCw
+          : accent
+            ? Sparkles
             : Clock
 
   return (
@@ -134,7 +176,7 @@ export function UpdateSettings(): React.JSX.Element {
           <Button
             variant="secondary"
             size="sm"
-            disabled={checking}
+            disabled={!canCheck}
             onClick={() => void window.mergelane.checkForUpdates()}
           >
             <RefreshCw aria-hidden className={cn(checking && 'motion-safe:animate-spin')} />
@@ -157,56 +199,99 @@ export function UpdateSettings(): React.JSX.Element {
               className={cn(
                 'mt-0.5 size-4 shrink-0',
                 accent ? 'text-[var(--color-accent-ink)]' : 'text-ink-2',
-                checking && 'motion-safe:animate-spin'
+                busy && 'motion-safe:animate-spin'
               )}
             />
             <div className="flex min-w-0 flex-col gap-0.5">
               <p className="text-[13.5px] font-[640]">{title}</p>
-              {body && <p className="text-[12.5px] leading-[1.5] text-ink-2">{body}</p>}
+              {body && (
+                <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">{body}</p>
+              )}
             </div>
           </div>
-          {status === 'available' && latest && (
-            <>
-              {(latest.notes.summary || latest.notes.items.length > 0) && (
-                <div className="flex flex-col gap-1 border-t border-rule pt-2.5">
-                  <p className="text-[12.5px] font-[620]">What’s new in {latest.version}</p>
-                  {latest.notes.summary && (
-                    <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">
-                      {latest.notes.summary}
-                    </p>
-                  )}
-                  {latest.notes.items.length > 0 && (
-                    <ul className="flex flex-col gap-1">
-                      {latest.notes.items.map((item) => (
-                        <li
-                          key={item}
-                          className="flex gap-2 text-[12.5px] leading-[1.5] text-ink-2"
-                        >
-                          <span
-                            aria-hidden
-                            className="mt-[0.55em] size-1 shrink-0 rounded-full bg-[var(--text-tertiary)]"
-                          />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+          {status === 'downloading' && latest && (
+            <div
+              role="progressbar"
+              aria-label={`Downloading ${latest.version}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-track"
+            >
+              <span
+                className="block h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-150"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          )}
+          {showNotes && latest && (latest.notes.summary || latest.notes.items.length > 0) && (
+            <div className="flex flex-col gap-1 border-t border-rule pt-2.5">
+              <p className="text-[12.5px] font-[620]">What’s new in {latest.version}</p>
+              {latest.notes.summary && (
+                <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">
+                  {latest.notes.summary}
+                </p>
               )}
-              <div className="flex flex-wrap items-center gap-2">
+              {latest.notes.items.length > 0 && (
+                <ul className="flex flex-col gap-1">
+                  {latest.notes.items.map((item) => (
+                    <li key={item} className="flex gap-2 text-[12.5px] leading-[1.5] text-ink-2">
+                      <span
+                        aria-hidden
+                        className="mt-[0.55em] size-1 shrink-0 rounded-full bg-[var(--text-tertiary)]"
+                      />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {latest && (status === 'available' || status === 'error') && (
+            <div className="flex flex-wrap items-center gap-2">
+              {!canDownload ? (
                 <Button size="sm" onClick={() => void window.mergelane.openReleasePage()}>
                   <ExternalLink aria-hidden />
                   Get it from GitHub
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void window.mergelane.skipUpdate(latest.version)}
-                >
-                  Skip this version
+              ) : status === 'error' ? (
+                <Button size="sm" onClick={() => void window.mergelane.downloadUpdate()}>
+                  <RefreshCw aria-hidden />
+                  Try again
                 </Button>
-              </div>
-            </>
+              ) : (
+                <Button size="sm" onClick={() => void window.mergelane.downloadUpdate()}>
+                  <Download aria-hidden />
+                  Download and install
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void window.mergelane.skipUpdate(latest.version)}
+              >
+                Skip this version
+              </Button>
+            </div>
+          )}
+          {status === 'downloading' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void window.mergelane.cancelUpdateDownload()}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+          {status === 'ready' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => void window.mergelane.installUpdate()}>
+                <LogOut aria-hidden />
+                Quit and install
+              </Button>
+            </div>
           )}
         </div>
       </section>
@@ -221,6 +306,20 @@ export function UpdateSettings(): React.JSX.Element {
             id={autoId}
             checked={autoCheck}
             onCheckedChange={(on) => void window.mergelane.setUpdatePreferences({ autoCheck: on })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Download updates in the background"
+          hint="Only the download happens by itself. Installing always waits for you."
+          htmlFor={backgroundId}
+        >
+          <Switch
+            id={backgroundId}
+            checked={backgroundDownload}
+            disabled={!autoCheck}
+            onCheckedChange={(on) =>
+              void window.mergelane.setUpdatePreferences({ backgroundDownload: on })
+            }
           />
         </SettingRow>
         <SettingRow
@@ -252,9 +351,10 @@ export function UpdateSettings(): React.JSX.Element {
       <aside className="flex gap-3 rounded-[14px] bg-sunken p-4 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
         <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-2" />
         <p className="max-w-[64ch] text-[12.5px] leading-[1.6] text-ink-2">
-          Updates come from Mergelane’s GitHub releases. Mergelane isn’t signed by Apple yet, so the
-          first time a new version opens, macOS may ask you to confirm in System Settings › Privacy
-          &amp; Security.
+          Updates come from Mergelane’s GitHub releases, and each one is checked against the SHA-256
+          published with it before it opens. Mergelane isn’t signed by Apple yet, so the first time
+          a new version opens, macOS may ask you to confirm in System Settings › Privacy &amp;
+          Security.
         </p>
       </aside>
     </>

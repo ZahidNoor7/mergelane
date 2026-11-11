@@ -42,7 +42,10 @@ import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
 import { applyWindowMaterial, setSolidGlass, setWindowTheme } from '../windowBackground'
 import {
+  cancelUpdateDownload,
   checkForUpdates,
+  downloadUpdate,
+  installUpdate,
   openReleasePage,
   setUpdatePreferences,
   skipUpdate,
@@ -316,6 +319,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('setUpdatePreferences', (_event, preferences) => setUpdatePreferences(preferences))
   handle('skipUpdate', (_event, version) => skipUpdate(version))
   handle('openReleasePage', () => openReleasePage())
+  handle('downloadUpdate', () => downloadUpdate())
+  handle('cancelUpdateDownload', () => cancelUpdateDownload())
+  handle('installUpdate', () => installUpdate())
 
   return manager
 }

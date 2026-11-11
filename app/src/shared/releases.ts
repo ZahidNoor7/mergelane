@@ -28,7 +28,7 @@ export interface Release {
   /** The release's page on GitHub. */
   pageUrl: string
   notes: ReleaseNotes
-  /** The Apple silicon disk image, which M3.2b downloads; null when the release has none. */
+  /** The Apple silicon disk image, which the update downloads; null when the release has none. */
   dmg: { name: string; size: number; url: string } | null
   /** The release's SHA256SUMS, which the download is checked against; null when it has none. */
   checksumsUrl: string | null
@@ -139,6 +139,30 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const httpsUrl = (value: unknown): value is string =>
   typeof value === 'string' && /^https:\/\/[^\s]+$/.test(value)
 
+/** A file Mergelane may download: https anywhere, plain http only from this Mac (loopback), which
+ * only the tests serve (scripts/media-tools/fetch.mjs has the same rule). */
+export function downloadableUrl(value: unknown): value is string {
+  if (httpsUrl(value)) return true
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+/** SHA256SUMS as `shasum -a 256` writes it ("<hash>  <name>", or "<hash> *<name>" for binary
+ * mode): each file's hash by name, in lowercase. Lines that aren't one are skipped. */
+export function parseChecksums(text: string): Map<string, string> {
+  const sums = new Map<string, string>()
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^([0-9a-fA-F]{64}) [ *](.+)$/.exec(line.trim())
+    if (match) sums.set(match[2], match[1].toLowerCase())
+  }
+  return sums
+}
+
 /** One release from GitHub's answer, or null when it is a draft or isn't a usable release. */
 export function releaseFromGitHub(raw: unknown): Release | null {
   if (!isRecord(raw) || raw.draft !== false || typeof raw.tag_name !== 'string') return null
@@ -147,7 +171,7 @@ export function releaseFromGitHub(raw: unknown): Release | null {
   const version = raw.tag_name.trim().replace(/^v/, '')
   const assets = Array.isArray(raw.assets) ? raw.assets.filter(isRecord) : []
   const asset = (name: string): Record<string, unknown> | undefined =>
-    assets.find((each) => each.name === name && httpsUrl(each.browser_download_url))
+    assets.find((each) => each.name === name && downloadableUrl(each.browser_download_url))
   const dmg = asset(`Mergelane-${version}-arm64.dmg`)
   const sums = asset('SHA256SUMS')
   const published = typeof raw.published_at === 'string' ? Date.parse(raw.published_at) : NaN

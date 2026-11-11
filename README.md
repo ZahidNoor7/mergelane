@@ -33,7 +33,8 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
     internet. It opens a connection to Cloudflare's and Google's public addresses (1.1.1.1 and 8.8.8.8, or their
     IPv6 equivalents) and closes it without sending any data.
   - Once a day, the app asks GitHub's public Releases API whether a newer Mergelane is out. GitHub sees your IP
-    address and the app's version, nothing else. You can turn this off in Settings › Updates.
+    address and the app's version, nothing else. You can turn this off in Settings › Updates. A new version is
+    downloaded from GitHub only when you ask, or by itself if you turn on "Download updates in the background".
 
 The app says the same on its Dashboard, under **About combined speed**, next to the speeds it describes.
 

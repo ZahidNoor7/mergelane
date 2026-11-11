@@ -497,6 +497,23 @@ export function parsePlaywright(text) {
   }
 }
 
+/** Counts from Vitest's summary line ("Tests  1 failed | 11 passed | 2 skipped (14)"). Its per-file
+ * coverage is not read: the text table leaves out some fully covered files, and the 90% floor is
+ * enforced by Vitest's own thresholds, which fail the run (vitest.config.ts). */
+export function parseVitest(text) {
+  const line = /^\s*Tests\s+(.+)\(\d+\)\s*$/m.exec(text)
+  if (!line) return { counts: null, coverage: [] }
+  const count = (word) => Number(new RegExp(`(\\d+) ${word}`).exec(line[1])?.[1] ?? 0)
+  return {
+    counts: {
+      passed: count('passed'),
+      failed: count('failed'),
+      skipped: count('skipped') + count('todo')
+    },
+    coverage: []
+  }
+}
+
 /** Counts from `go test -v` (top-level tests and subtests) and the packages' coverage. */
 export function parseGoTest(text) {
   const packagesOk = (text.match(/^ok\s+\S+/gm) ?? []).length
@@ -526,6 +543,7 @@ export function parserFor(command) {
   if (/\bnode --test\b/.test(command)) return parseNodeTest
   if (/check-repo\.test\.sh/.test(command)) return parseShellTests
   if (/\bplaywright test\b|\btest:e2e/.test(command)) return parsePlaywright
+  if (/\bvitest\b|\btest:unit/.test(command)) return parseVitest
   if (/\bgo test\b/.test(command)) return parseGoTest
   if (/\bgo tool cover\b/.test(command)) return parseGoCoverTotal
   return null

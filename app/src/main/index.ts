@@ -17,7 +17,14 @@ import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBrid
 import { registerNativeHost } from './nativeHost'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
-import { currentWindowBackground, setWindowTheme } from './windowBackground'
+import {
+  applyWindowMaterial,
+  CLEAR,
+  currentWindowBackground,
+  glassWindow,
+  setSolidGlass,
+  setWindowTheme
+} from './windowBackground'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
 import { MIN_WINDOW, openingSize } from '../shared/windowSize'
@@ -121,7 +128,8 @@ function createWindow(): void {
     title: 'Mergelane',
     // The theme's ground in the current mode, so a live window resize (which briefly exposes the
     // raw window background) and the first frame don't flash another colour.
-    backgroundColor: currentWindowBackground(),
+    backgroundColor: glassWindow() ? CLEAR : currentWindowBackground(),
+    ...(glassWindow() ? { vibrancy: 'under-window' as const } : {}),
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // No title bar: the renderer's sidebar (or compact bar) holds macOS's window buttons at its top
     // left, on a strip the window is dragged by (components/WindowChrome.tsx). Windows and Linux
@@ -225,7 +233,9 @@ app.whenReady().then(async () => {
   // Applied before the window is created so the initial background/icon already match —
   // the saved preference otherwise only takes effect on the next 'updated' event.
   nativeTheme.themeSource = await loadThemeSource()
-  setWindowTheme((await loadSettings()).appearanceTheme)
+  const saved = await loadSettings()
+  setWindowTheme(saved.appearanceTheme)
+  setSolidGlass(saved.solidGlass === true)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -251,7 +261,7 @@ app.whenReady().then(async () => {
   if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
-    mainWindow?.setBackgroundColor(currentWindowBackground())
+    applyWindowMaterial(mainWindow)
     if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 

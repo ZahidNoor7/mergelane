@@ -221,6 +221,26 @@ Last updated: 2026-11-11
   - A real-app e2e check (`dashboard.spec`) caught the `ps` reading counting itself as a video tool; it and the
     crash reporter are left out by name.
   - **Unit tests:** `UsagePanel` and `shared/appUsage` are in `COVERED`.
+- **M3.1, pull request 7** (branch `m3.1-glass`): Liquid Glass. **The last M3.1 pull request; 0.2.0 is next.**
+  - **Window:** the theme puts the window in macOS's material: vibrancy `under-window` with a clear background,
+    faded in and out over 200 ms (`main/windowBackground.ts`; `BrowserWindow.setVibrancy(type | null,
+    { animationDuration })` in Electron 44.4.4's own type definitions). Off for other themes, Reduce
+    transparency in Settings, and the Mac's Reduce Transparency (`nativeTheme.prefersReducedTransparency`).
+  - **Page:** `main.css` scopes the design's layers to `[data-palette="liquid"]`: a clear page, the window, the
+    sidebar and the content pane (rounded, inset 8px), and the cards, each a translucent fill with rim light.
+    There is no CSS backdrop filter, because the system already blurs the desktop. Tinted thickens every layer;
+    `data-solid`, `prefers-reduced-transparency` and `prefers-contrast: more` make them solid.
+  - **Settings › Appearance › Liquid Glass:** Look (Clear, Tinted) and Reduce transparency (on and fixed when
+    the Mac has it on). Saved as `glassLook` and `solidGlass`.
+  - **Cost, with the CPU panel:** in the e2e app, Mergelane's own CPU settled under 1% with and without glass,
+    idle and downloading; first samples after a switch spike in both. The blur itself is drawn by macOS's
+    WindowServer, which the panel doesn't count. The owner should glance at WindowServer in Activity Monitor
+    with the theme on.
+  - **Not verified by tests:** how the material looks, because page screenshots don't include it. Whether
+    `nativeTheme`'s `updated` event fires when Reduce Transparency changes isn't documented, so a change made
+    while the app runs may need the theme reselected.
+  - **e2e:** `glass.spec` reads the real window's background (cleared for the material, the theme's when
+    solid), the saved settings, and a restart.
 - **Flaky test, `browserBridge.spec`, seen twice now** (5a and 6a): "a download is offered, confirmed, and opens
   New download filled in". The Link field held the link with `erge` appended (`…/test.binerge`). With the
   extension test's lost last character (below), two flakes change the Link field's text. No test sends OS

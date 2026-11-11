@@ -317,3 +317,105 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Liquid Glass (M3.1 pull request 7), from the final design (prototype.html, the Liquid Glass block),
+   scoped to its theme. macOS draws the material behind the window (Electron's vibrancy,
+   main/windowBackground.ts), so the page itself is clear and each layer is a translucent fill with
+   light on its rim: the window, then the sidebar and the content pane, then the cards. No CSS
+   backdrop filter: the system already blurs the desktop, and a filter here would only blur the page.
+   Tinted makes every layer thicker. Reduce Transparency (the Mac's or Settings', data-solid) and
+   Increase Contrast make them solid; main.css's reduced-motion rule stops every transition. */
+:root[data-palette='liquid'] {
+  --g-window: rgb(255 255 255 / 0.12);
+  --g-side: rgb(255 255 255 / 0.28);
+  --g-pane: rgb(255 255 255 / 0.42);
+  --g-card: rgb(255 255 255 / 0.5);
+  --g-solid-1: #f7f8fb;
+  --g-solid-2: #ffffff;
+  --g-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.8), inset 0 -1px 1px rgb(255 255 255 / 0.3),
+    inset 0 0 20px -6px rgb(255 255 255 / 0.5), 0 1px 2px rgb(20 24 50 / 0.06),
+    0 8px 26px -10px rgb(20 24 50 / 0.24);
+  --card-sh:
+    inset 0 1px 1px rgb(255 255 255 / 0.75), inset 0 0 16px -8px rgb(255 255 255 / 0.55),
+    0 1px 1px rgb(20 24 50 / 0.04), 0 4px 18px -8px rgb(20 24 50 / 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette='liquid'] {
+    --g-window: rgb(8 10 18 / 0.34);
+    --g-side: rgb(14 16 26 / 0.42);
+    --g-pane: rgb(10 12 20 / 0.5);
+    --g-card: rgb(255 255 255 / 0.045);
+    --g-solid-1: #0f121b;
+    --g-solid-2: #1a1e29;
+    --g-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.14), inset 0 0 20px -8px rgb(255 255 255 / 0.1),
+      0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -10px rgb(0 0 0 / 0.65);
+    --card-sh:
+      inset 0 1px 1px rgb(255 255 255 / 0.08), 0 1px 1px rgb(0 0 0 / 0.3),
+      0 6px 20px -8px rgb(0 0 0 / 0.5);
+  }
+}
+/* Tinted: every layer thicker. */
+:root[data-palette='liquid'][data-glass='tinted'] {
+  --g-window: rgb(250 251 255 / 0.42);
+  --g-side: rgb(250 251 255 / 0.72);
+  --g-pane: rgb(250 251 255 / 0.78);
+  --g-card: rgb(255 255 255 / 0.66);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette='liquid'][data-glass='tinted'] {
+    --g-window: rgb(28 30 38 / 0.5);
+    --g-side: rgb(28 30 38 / 0.76);
+    --g-pane: rgb(28 30 38 / 0.82);
+    --g-card: rgb(255 255 255 / 0.07);
+  }
+}
+/* Solid: Reduce Transparency, from the Mac or from Settings, and Increase Contrast. */
+:root[data-palette='liquid'][data-solid] {
+  --g-window: var(--g-solid-1);
+  --g-side: var(--g-solid-1);
+  --g-pane: var(--g-solid-1);
+  --g-card: var(--g-solid-2);
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-palette='liquid'] {
+    --g-window: var(--g-solid-1);
+    --g-side: var(--g-solid-1);
+    --g-pane: var(--g-solid-1);
+    --g-card: var(--g-solid-2);
+  }
+}
+:root[data-palette='liquid'] body {
+  background: transparent;
+}
+:root[data-palette='liquid'] .ml-window {
+  background-color: var(--g-window);
+}
+:root[data-palette='liquid'] .ml-surface {
+  background-color: var(--g-side);
+  box-shadow: var(--g-shadow);
+}
+:root[data-palette='liquid'] .ml-compactbar {
+  margin: 8px 8px 0;
+  border-bottom-color: transparent;
+  border-radius: 18px;
+}
+:root[data-palette='liquid'] .ml-content {
+  margin: 8px;
+  overflow: clip;
+  border-radius: 18px;
+  background-color: var(--g-pane);
+  box-shadow: var(--g-shadow);
+}
+:root[data-palette='liquid'] .ml-content.ml-content-side {
+  margin-left: 0;
+}
+:root[data-palette='liquid'] .ml-content .bg-card {
+  background-color: var(--g-card);
+  box-shadow: var(--card-sh);
+}
+/* Each screen paints its own ground; inside the glass pane it is clear, so the pane shows. */
+:root[data-palette='liquid'] .ml-content .bg-background {
+  background-color: transparent;
+}

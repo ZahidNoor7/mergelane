@@ -40,7 +40,7 @@ import { pendingLink, pendingLinks, releaseLink } from '../openLinks'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
-import { currentWindowBackground, setWindowTheme } from '../windowBackground'
+import { applyWindowMaterial, setSolidGlass, setWindowTheme } from '../windowBackground'
 import { showUpdateMenu, updateState } from '../updater'
 import { readAppUsage } from '../appUsage'
 
@@ -114,9 +114,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     // or dark (nativeTheme, which also drives prefers-color-scheme), and the theme's window ground.
     const source = validThemeSource(patch?.themeSource)
     if (source) nativeTheme.themeSource = source
-    if (isThemeId(patch?.appearanceTheme)) {
-      setWindowTheme(patch.appearanceTheme)
-      getWindow()?.setBackgroundColor(currentWindowBackground())
+    if (isThemeId(patch?.appearanceTheme)) setWindowTheme(patch.appearanceTheme)
+    if (patch && 'solidGlass' in patch) setSolidGlass(patch.solidGlass === true)
+    if (isThemeId(patch?.appearanceTheme) || (patch && 'solidGlass' in patch)) {
+      applyWindowMaterial(getWindow())
     }
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
@@ -152,6 +153,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         speedUnit: settings.speedUnit ?? 'bytes',
+        glassLook: settings.glassLook ?? 'clear',
+        solidGlass: settings.solidGlass ?? false,
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -166,7 +169,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
         slowMode: false,
         slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
-        speedUnit: 'bytes'
+        speedUnit: 'bytes',
+        glassLook: 'clear',
+        solidGlass: false
       } satisfies InitialState
     }
   })

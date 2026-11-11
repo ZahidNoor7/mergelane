@@ -8,6 +8,7 @@ import { useElementWidth } from './hooks/useElementWidth'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { useSettingsShortcut } from './hooks/useSettingsShortcut'
+import { useGlassAttributes } from './hooks/useGlassAttributes'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
 import { NetworksScreen } from './screens/NetworksScreen'
@@ -35,6 +36,7 @@ function App(): React.JSX.Element {
   useOpenedLinks()
   useNewDownloadShortcuts()
   useSettingsShortcut()
+  useGlassAttributes()
   useNetworkEvents()
   // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until
   // the first measurement, the sidebar (the window opens wider than that). The screens size their
@@ -45,9 +47,11 @@ function App(): React.JSX.Element {
   return (
     <TooltipProvider>
       <DownloadActionsProvider>
-        <div ref={windowRef} className="flex h-full bg-window text-foreground">
+        <div ref={windowRef} className="ml-window flex h-full bg-window text-foreground">
           {sidebar && <Sidebar />}
-          <div className="flex min-w-0 flex-1 flex-col bg-background">
+          <div
+            className={`ml-content flex min-w-0 flex-1 flex-col bg-background ${sidebar ? 'ml-content-side' : ''}`}
+          >
             {!sidebar && <CompactBar />}
             <main className="@container min-h-0 flex-1">
               <CurrentScreen />

@@ -5,6 +5,7 @@ import type {
   DownloadState,
   DownloadUpdate,
   FinishedDownload,
+  GlassLook,
   NetworkInterfaceInfo,
   NetworkPreference,
   NetworkPreferences,
@@ -127,6 +128,11 @@ interface AppStore {
   setSlowMode: (on: boolean) => void
   setSlowModeSpeed: (bytesPerSec: number) => void
   setSpeedUnit: (unit: SpeedUnit) => void
+  /** The Liquid Glass theme's look, and whether it's drawn solid (Settings › Appearance). */
+  glassLook: GlassLook
+  setGlassLook: (look: GlassLook) => void
+  solidGlass: boolean
+  setSolidGlass: (solid: boolean) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -341,6 +347,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setSpeedUnit: (speedUnit) => {
     set({ speedUnit })
     persist({ speedUnit })
+  },
+
+  glassLook: initial.glassLook,
+  setGlassLook: (glassLook) => {
+    set({ glassLook })
+    persist({ glassLook })
+  },
+  solidGlass: initial.solidGlass,
+  setSolidGlass: (solidGlass) => {
+    set({ solidGlass })
+    // Only ever saved as true: off clears it.
+    persist({ solidGlass: solidGlass || undefined })
   },
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),

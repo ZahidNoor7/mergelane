@@ -72,7 +72,9 @@ export const COVERED = [
   'src/renderer/src/components/DashboardToday.tsx',
   // M3.1 pull request 6b: Mergelane on this Mac.
   'src/renderer/src/components/UsagePanel.tsx',
-  'src/shared/appUsage.ts'
+  'src/shared/appUsage.ts',
+  // M3.1 pull request 7: Liquid Glass.
+  'src/renderer/src/hooks/useGlassAttributes.ts'
 ]
 
 export default defineConfig({

@@ -3,6 +3,7 @@ import { act, cleanup, render, renderHook, screen, waitFor, within } from '@test
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../components/ui/tooltip'
+import { useGlassAttributes } from '../hooks/useGlassAttributes'
 import { useSettingsShortcut } from '../hooks/useSettingsShortcut'
 import { useAppStore } from '../store/useAppStore'
 import { SettingsScreen } from './SettingsScreen'
@@ -215,5 +216,55 @@ describe('Settings, narrow, and ⌘,', () => {
     expect(useAppStore.getState().screen).toBe('downloads')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }))
     expect(useAppStore.getState().screen).toBe('settings')
+  })
+})
+
+describe('Settings, Liquid Glass', () => {
+  it('shows the glass look and Reduce transparency for the Liquid Glass theme only', async () => {
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'porcelain' })
+    show()
+    expect(screen.queryByRole('region', { name: 'Liquid Glass' })).toBeNull()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: /^Liquid Glass/ }))
+    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
+    expect(within(glass).getByText('Clear lets more of the desktop show through.')).toBeTruthy()
+    await user.click(within(glass).getByRole('button', { name: 'Tinted' }))
+    expect(useAppStore.getState().glassLook).toBe('tinted')
+    expect(
+      within(glass).getByText('Tinted makes the glass thicker, for more contrast.')
+    ).toBeTruthy()
+    // Pressing the look already chosen keeps it.
+    await user.click(within(glass).getByRole('button', { name: 'Tinted' }))
+    expect(useAppStore.getState().glassLook).toBe('tinted')
+    await user.click(within(glass).getByRole('switch', { name: 'Reduce transparency' }))
+    expect(useAppStore.getState().solidGlass).toBe(true)
+    expect(window.mergelane.updateSettings).toHaveBeenCalledWith({ solidGlass: true })
+    await user.click(within(glass).getByRole('switch', { name: 'Reduce transparency' }))
+    expect(window.mergelane.updateSettings).toHaveBeenCalledWith({ solidGlass: undefined })
+  })
+
+  it('when the Mac reduces transparency, the switch is on and can’t be turned off', () => {
+    dark = true // the stubbed media query answers true to every query here
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
+    show()
+    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
+    const solid = within(glass).getByRole('switch', { name: 'Reduce transparency' })
+    expect(solid.getAttribute('aria-checked')).toBe('true')
+    expect(solid.getAttribute('data-disabled')).not.toBeNull()
+    expect(within(glass).getByText(/Already on in your Mac’s Accessibility settings/)).toBeTruthy()
+  })
+
+  it('marks the page for the glass look and solid glass', () => {
+    const { rerender } = renderHook(() => useGlassAttributes())
+    const root = document.documentElement
+    expect(root.hasAttribute('data-glass')).toBe(false)
+    act(() => useAppStore.setState({ glassLook: 'tinted', solidGlass: true }))
+    rerender()
+    expect(root.getAttribute('data-glass')).toBe('tinted')
+    expect(root.hasAttribute('data-solid')).toBe(true)
+    act(() => useAppStore.setState({ glassLook: 'clear', solidGlass: false }))
+    rerender()
+    expect(root.hasAttribute('data-glass')).toBe(false)
+    expect(root.hasAttribute('data-solid')).toBe(false)
   })
 })

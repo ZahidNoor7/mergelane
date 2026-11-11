@@ -102,6 +102,31 @@ func TestParseRunFlagsRejectsBadValues(t *testing.T) {
 	}
 }
 
+func TestSplitProbeTargetsByFamily(t *testing.T) {
+	cases := []struct {
+		in     []string
+		v4, v6 []string
+	}{
+		{nil, nil, nil},
+		{[]string{"198.51.100.10:80", "1.1.1.1:443"}, []string{"198.51.100.10:80", "1.1.1.1:443"}, nil},
+		{[]string{"[2001:db8::10]:80"}, nil, []string{"[2001:db8::10]:80"}},
+		{
+			[]string{"198.51.100.10:80", "[2001:db8:198:51:100::10]:80", "example.com:443", "[::ffff:1.2.3.4]:80"},
+			// a host name and an IPv4-mapped literal stay IPv4, as every target did before
+			[]string{"198.51.100.10:80", "example.com:443", "[::ffff:1.2.3.4]:80"},
+			[]string{"[2001:db8:198:51:100::10]:80"},
+		},
+		// malformed entries keep the old behaviour: an IPv4 target whose probe fails
+		{[]string{"2001:db8::10", "no-port"}, []string{"2001:db8::10", "no-port"}, nil},
+	}
+	for _, tc := range cases {
+		v4, v6 := splitProbeTargets(tc.in)
+		if !slices.Equal(v4, tc.v4) || !slices.Equal(v6, tc.v6) {
+			t.Errorf("splitProbeTargets(%q) = %q, %q; want %q, %q", tc.in, v4, v6, tc.v4, tc.v6)
+		}
+	}
+}
+
 // events records, in order, what the fakes were asked to do.
 type events struct {
 	mu   sync.Mutex

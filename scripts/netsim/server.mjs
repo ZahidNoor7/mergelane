@@ -1,10 +1,12 @@
 // Test server for the simulated network (scripts/netsim/netsim.sh). One HTTP listener per link on
 // 10.77.99.1:808N; pf redirects 198.51.100.10:80 arriving over link N there, so the port says which
-// link a request came through. A control listener on 127.0.0.1 reports per-link counters.
+// link a request came through. A control listener on 127.0.0.1 reports per-link counters. With an
+// IPv6 address (netsim's [2001:db8:77:99::1], where pf redirects [2001:db8:198:51:100::10]:80), each
+// link also gets a listener there on the same port, counted with the link's IPv4 traffic.
 //
-// usage: node server.mjs <link ids, e.g. 1,2> [control port, default 8090]
+// usage: node server.mjs <link ids, e.g. 1,2> [control port, default 8090] [IPv6 address]
 //
-// Paths on 198.51.100.10:
+// Paths on 198.51.100.10 and [2001:db8:198:51:100::10]:
 //   /file/<MiB>         deterministic content with Range support and a strong ETag
 //   /norange/<MiB>      the same bytes, but ignores Range (always 200, no Accept-Ranges)
 //   /whoami             the client address and link, as JSON
@@ -128,8 +130,9 @@ export function handleControl(req, res, counters) {
   }
 }
 
-/** Starts one file listener per link (port 808N on host) and the control listener. */
-export async function start(ids, controlPort, host = LOCAL_SERVER_IP) {
+/** Starts one file listener per link (port 808N on host, and on host6 if given) and the control
+ * listener. */
+export async function start(ids, controlPort, host = LOCAL_SERVER_IP, host6 = '') {
   const counters = createCounters(ids)
   const listen = (server, port, address) =>
     new Promise((resolve, reject) => {
@@ -138,8 +141,10 @@ export async function start(ids, controlPort, host = LOCAL_SERVER_IP) {
     })
   const servers = []
   for (const id of ids) {
-    const server = createServer((req, res) => handleFile(req, res, { id, counters, ranges: true }))
-    servers.push(await listen(server, 8080 + Number(id), host))
+    for (const address of host6 ? [host, host6] : [host]) {
+      const server = createServer((req, res) => handleFile(req, res, { id, counters, ranges: true }))
+      servers.push(await listen(server, 8080 + Number(id), address))
+    }
   }
   const control = createServer((req, res) => handleControl(req, res, counters))
   servers.push(await listen(control, controlPort, '127.0.0.1'))
@@ -149,13 +154,15 @@ export async function start(ids, controlPort, host = LOCAL_SERVER_IP) {
 export async function main(argv, host = LOCAL_SERVER_IP) {
   const ids = (argv[0] ?? '').split(',').filter(Boolean)
   const controlPort = Number(argv[1] ?? 8090)
-  if (ids.length === 0 || ids.some((id) => !/^[1-8]$/.test(id))) {
-    console.error('usage: node server.mjs <link ids, e.g. 1,2> [control port]')
+  const host6 = argv[2] ?? ''
+  if (ids.length === 0 || ids.some((id) => !/^[1-8]$/.test(id)) || (host6 && !host6.includes(':'))) {
+    console.error('usage: node server.mjs <link ids, e.g. 1,2> [control port] [IPv6 address]')
     process.exitCode = 2
     return null
   }
-  const started = await start(ids, controlPort, host)
-  console.log(`netsim server: links ${ids.join(',')} on ${host}:808N, control 127.0.0.1:${started.control.address().port}`)
+  const started = await start(ids, controlPort, host, host6)
+  const where = host6 ? `${host} and [${host6}]` : host
+  console.log(`netsim server: links ${ids.join(',')} on ${where}:808N, control 127.0.0.1:${started.control.address().port}`)
   return started
 }
 

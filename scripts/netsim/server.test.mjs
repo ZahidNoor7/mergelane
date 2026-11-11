@@ -142,3 +142,40 @@ test('main starts one listener per link plus control, and rejects bad ids', asyn
   }
   assert.match(errors[0], /^usage:/)
 })
+
+test('with an IPv6 address, each link also listens there and counts into the same link', async () => {
+  // netsim's own IPv6 address exists only while it is up; ::1 stands in for it here.
+  const started = await main(['6', '0', '::1'], '127.0.0.1')
+  try {
+    const [v4, v6, control] = started.servers
+    assert.equal(v4.address().port, 8086)
+    assert.deepEqual([v6.address().address, v6.address().port], ['::1', 8086])
+    const who = await new Promise((resolve, reject) => {
+      const req = request({ host: '::1', family: 6, port: 8086, path: '/whoami' }, (res) => {
+        const chunks = []
+        res.on('data', (c) => chunks.push(c))
+        res.on('end', () => resolve(JSON.parse(Buffer.concat(chunks).toString())))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    assert.deepEqual(who, { client: '::1', link: '6' })
+    await get(v4, '/whoami')
+    const stats = JSON.parse((await get(control, '/stats')).body.toString())
+    assert.equal(stats.links['6'].requests, 2)
+    assert.deepEqual(stats.links['6'].clients, ['::1', '127.0.0.1'])
+  } finally {
+    for (const server of started.servers) server.close()
+  }
+})
+
+test('main rejects an IPv6 argument that is not an address', async () => {
+  const { error } = console
+  console.error = () => {}
+  try {
+    assert.equal(await main(['1', '0', 'localhost'], '127.0.0.1'), null)
+  } finally {
+    console.error = error
+    process.exitCode = 0
+  }
+})

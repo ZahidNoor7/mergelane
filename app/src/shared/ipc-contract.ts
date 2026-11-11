@@ -1,4 +1,5 @@
 import type { AppUsage } from './appUsage'
+import type { UpdateChannel } from './releases'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -17,7 +18,7 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, magnetCheckStatus, historyChanged,
- * linkReceived and updateStateChanged) — one source of truth for
+ * linkReceived, updateStateChanged and showUpdates) — one source of truth for
  * both mergelaneApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -76,8 +77,16 @@ export interface IpcContract {
    * `trashFile`: then it goes to the Trash. */
   removeDownload: { args: [id: string, options?: { trashFile?: boolean }]; result: void }
   updateState: { args: []; result: UpdateState }
-  /** The update menu, as a native menu at the pointer. */
-  showUpdateMenu: { args: []; result: void }
+  /** Asks GitHub now; resolves with the state the check ended in. */
+  checkForUpdates: { args: []; result: UpdateState }
+  setUpdatePreferences: {
+    args: [preferences: { autoCheck?: boolean; channel?: UpdateChannel }]
+    result: void
+  }
+  /** Not this version: only a newer one is offered after. */
+  skipUpdate: { args: [version: string]; result: void }
+  /** The found release's page on GitHub, in the browser. */
+  openReleasePage: { args: []; result: void }
   /** Oldest first: every link not yet started or dismissed. */
   pendingLinks: { args: []; result: PendingLink[] }
   /** Resumes the failed download a link was matched to, from that link (see relinkDownload). */

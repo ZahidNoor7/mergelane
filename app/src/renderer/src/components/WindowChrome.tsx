@@ -11,6 +11,7 @@ import {
 import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
+import { hasUpdate } from '../hooks/useUpdates'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore, type Screen } from '../store/useAppStore'
 import { networkSummaries } from '../utils/dashboard'
@@ -21,7 +22,7 @@ import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { UpdateIndicator } from './UpdateIndicator'
+import { UpdateNotice } from './UpdateNotice'
 
 // The window's frame in the final design (design-system/mergelane/redesign/prototype.html, Sidebar and
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
@@ -104,6 +105,7 @@ export function Sidebar(): React.JSX.Element {
   const [place, setPlace] = usePlace()
   const settings = place === 'settings'
   const openSettings = useAppStore((store) => store.openSettings)
+  const updateOut = useAppStore((store) => hasUpdate(store.update))
   const lanes = useNetworkLanes()
   const inProgress = useAppStore(
     (store) =>
@@ -185,6 +187,7 @@ export function Sidebar(): React.JSX.Element {
         </section>
 
         <div className="mt-auto flex flex-col gap-3 pt-4">
+          <UpdateNotice />
           {schedule && <p className="px-1.5 text-[12px] leading-snug text-ink-2">{schedule}</p>}
           {free !== null && (
             <p className="flex items-center gap-1.5 px-1.5 text-[12px] text-ink-3">
@@ -195,20 +198,26 @@ export function Sidebar(): React.JSX.Element {
           <div className="px-1.5">
             <SlowModeSwitch withLabel />
           </div>
-          {/* Settings, as the design's sidebar ends; the update button beside it until M3.2 gives
-              Settings its Updates section and the design's update notice. */}
-          <div className="-mx-1 flex items-center gap-1.5 border-t border-rule pt-2">
+          {/* Settings, as the design's sidebar ends: to Updates, with a dot, when one is out. */}
+          <div className="-mx-1 border-t border-rule pt-2">
             <button
               type="button"
               aria-current={settings ? 'page' : undefined}
-              onClick={() => openSettings()}
+              onClick={() => openSettings(updateOut ? 'updates' : undefined)}
               className={NAV_ITEM}
             >
               <Settings aria-hidden className="size-4" />
               <span className="flex-1 text-left">Settings</span>
-              <kbd className="font-mono text-[11px] font-normal text-ink-3">⌘,</kbd>
+              {updateOut ? (
+                <span
+                  role="img"
+                  aria-label="Update available"
+                  className="size-2 rounded-full bg-primary"
+                />
+              ) : (
+                <kbd className="font-mono text-[11px] font-normal text-ink-3">⌘,</kbd>
+              )}
             </button>
-            <UpdateIndicator />
           </div>
         </div>
       </div>
@@ -221,6 +230,7 @@ export function CompactBar(): React.JSX.Element {
   const [place, setPlace] = usePlace()
   const settings = place === 'settings'
   const openSettings = useAppStore((store) => store.openSettings)
+  const updateOut = useAppStore((store) => hasUpdate(store.update))
   const lanes = useNetworkLanes()
   const merged = lanes.reduce((sum, lane) => sum + (lane.out ? 0 : lane.speed), 0)
   return (
@@ -242,9 +252,9 @@ export function CompactBar(): React.JSX.Element {
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Settings"
+            aria-label={updateOut ? 'Settings, update available' : 'Settings'}
             aria-current={settings ? 'page' : undefined}
-            onClick={() => openSettings()}
+            onClick={() => openSettings(updateOut ? 'updates' : undefined)}
           >
             <Settings />
           </Button>

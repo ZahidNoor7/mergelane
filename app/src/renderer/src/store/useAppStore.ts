@@ -11,7 +11,8 @@ import type {
   NetworkPreferences,
   PendingLink,
   SpeedUnit,
-  ThemeSource
+  ThemeSource,
+  UpdateState
 } from '@shared/types'
 import { create } from 'zustand'
 import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
@@ -26,8 +27,8 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** The window's places (the sidebar's): the downloads, the dashboard, the networks or settings. */
 export type Screen = 'downloads' | 'dashboard' | 'networks' | 'settings'
 
-/** Settings' sections. Updates and Browser extensions come with M3.2 and M3.4. */
-export type SettingsSection = 'general' | 'appearance' | 'downloads'
+/** Settings' sections. Browser extensions comes with M3.4. */
+export type SettingsSection = 'general' | 'appearance' | 'downloads' | 'updates'
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -55,6 +56,9 @@ interface AppStore {
   screen: Screen
   /** The section Settings shows. */
   settingsSection: SettingsSection
+  /** Mergelane's own update, as main/updater.ts reports it; null until it first answers. */
+  update: UpdateState | null
+  setUpdate: (update: UpdateState) => void
   /** Goes to Settings, at a section when one is given. */
   openSettings: (section?: SettingsSection) => void
   /** The download whose details show: beside the list in a wide window, or in its place in a
@@ -166,6 +170,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   history: [],
   screen: 'downloads',
   settingsSection: 'general',
+  update: null,
+  setUpdate: (update) => set({ update }),
   openSettings: (section) =>
     set((store) => ({
       screen: 'settings',

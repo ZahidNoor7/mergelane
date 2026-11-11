@@ -99,6 +99,8 @@ The design's Settings › Updates: version, "Check for updates", release notes, 
 - **Installing** needs a decision first (ADR). The design downloads the DMG, checks its SHA-256, swaps the app and
   restarts. With ad-hoc signing that is not proven safe (ADR-0010), and macOS may ask to confirm again. The safer
   first step: download and check the file, then open it for the user.
+- **Decided (owner, 2026-11-11, ADR-0036):** download, verify, then open the DMG. Split into M3.2a (check, Settings ›
+  Updates, the sidebar notice) and M3.2b (download, SHA-256 check, open the DMG, background download).
 
 ### M3.3 Menu bar, login item, notifications
 

@@ -1,5 +1,10 @@
 import { scheduleMessage } from '@shared/downloadSchedule'
-import type { DownloadSchedule, DownloadState, NetworkInterfaceInfo } from '@shared/types'
+import type {
+  DownloadSchedule,
+  DownloadState,
+  NetworkInterfaceInfo,
+  UpdateState
+} from '@shared/types'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,6 +56,18 @@ function download(
   } as unknown as DownloadState
 }
 
+/** A found update, as main/updater.ts reports it. */
+const AVAILABLE = {
+  status: 'available',
+  version: '0.2.0',
+  channel: 'stable',
+  autoCheck: true,
+  lastChecked: 1,
+  latest: { version: '0.3.0', notes: { summary: null, items: [] } },
+  skipped: null,
+  error: null
+} as unknown as UpdateState
+
 const initial = useAppStore.getState()
 const freeSpace = vi.fn((dir: string) => Promise.resolve(dir ? 512 * 1024 * 1024 * 1024 : 0))
 const updateSettings = vi.fn(() => Promise.resolve())
@@ -65,10 +82,7 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     freeSpace,
-    updateSettings,
-    onUpdateState: vi.fn(() => () => {}),
-    updateState: vi.fn(() => Promise.resolve({ status: 'idle', autoUpdate: true })),
-    showUpdateMenu: vi.fn(() => Promise.resolve())
+    updateSettings
   } as unknown as typeof window.mergelane
   useAppStore.setState({
     screen: 'downloads',
@@ -190,6 +204,17 @@ describe('Sidebar', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Networks' }))
     expect(useAppStore.getState().screen).toBe('networks')
   })
+
+  it('with an update out: the notice, and a dot that takes Settings to Updates', async () => {
+    useAppStore.setState({ update: AVAILABLE })
+    renderIn(<Sidebar />)
+    expect(screen.getByText('is available.')).toBeTruthy()
+    const settings = screen.getByRole('button', { name: /^Settings/ })
+    expect(within(settings).getByRole('img', { name: 'Update available' })).toBeTruthy()
+    expect(within(settings).queryByText('⌘,')).toBeNull()
+    await userEvent.setup().click(settings)
+    expect(useAppStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'updates' })
+  })
 })
 
 describe('CompactBar', () => {
@@ -220,5 +245,14 @@ describe('CompactBar', () => {
     await userEvent.setup().click(settings)
     expect(useAppStore.getState().screen).toBe('settings')
     expect(settings.getAttribute('aria-current')).toBe('page')
+  })
+
+  it('names an update in the Settings button, which then opens Updates', async () => {
+    useAppStore.setState({ update: AVAILABLE })
+    renderIn(<CompactBar />)
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Settings, update available' }))
+    expect(useAppStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'updates' })
   })
 })

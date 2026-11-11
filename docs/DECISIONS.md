@@ -110,7 +110,7 @@ until the owner overrides it.
 
 ## ADR-0010: Auto-update off in Phase 1
 
-- Status: Proposed (2026-11-10)
+- Status: Superseded by ADR-0036 (2026-11-11). Proposed 2026-11-10.
 - Context: Auto-install of updates on macOS validates code signatures, and ad-hoc signatures differ between
   builds. This is not verified yet, so it is not relied upon.
 - Decision: Disable electron-updater's download and install in Phase 1. A check-only GitHub Releases API call
@@ -591,3 +591,37 @@ until the owner overrides it.
     for this pull request.
   - Every part is measured the same way, so the totals add up as Activity Monitor would show them.
   - `ps` %CPU is a short decaying average, so a short burst shows a little later than in the app's own figure.
+
+## ADR-0036: Updates are checked on GitHub, downloaded, verified, and opened for the user (replaces ADR-0010)
+
+- Status: Owner (2026-11-11), for M3.2. The owner chose "download, verify, open the DMG" over an in-app swap and
+  over check-only.
+- Context:
+  - The design's Settings › Updates downloads the DMG, checks its SHA-256, swaps the app and restarts.
+  - Mergelane is ad-hoc signed (ADR-0003). Whether macOS accepts an app that replaced itself is unproven
+    (ADR-0010), and a failed swap could leave a broken app.
+  - CLAUDE.md allows update checks only against the public GitHub Releases API.
+- Decision:
+  - **Check.** The main process asks `GET /repos/ZahidNoor7/mergelane/releases` (Electron's `net.fetch`, which uses
+    Chromium's network stack and the Mac's proxy settings). The request sends no token, the `Accept:
+    application/vnd.github+json` header, `X-GitHub-Api-Version: 2026-03-10`, and a `User-Agent` of
+    `Mergelane/<version>`.
+    - Sources: docs.github.com, "REST API endpoints for releases", "API versions" and "Rate limits", read on
+      2026-11-11.
+    - Drafts are never listed without push access. The Stable channel skips prereleases; Beta takes them too. The
+      newest version by semantic versioning wins, if it is newer than the running app and wasn't skipped.
+  - **When.** On request, and once a day while the app runs, if automatic checks are on (the default). Requests
+    without a token get 60 an hour per IP address, so a daily check never comes close. A 403 or 429 is shown as
+    "try again later".
+  - **Install (M3.2b).**
+    1. Download the release's `Mergelane-<version>-arm64.dmg`, with progress.
+    2. Check its SHA-256 against the release's own `SHA256SUMS`. GitHub's asset `digest` may be null, so it is
+       not relied on.
+    3. Open the DMG with `shell.openPath` and quit, so the user drags the new version over the old one.
+    - Mergelane never replaces its own bundle, and it never needs an administrator password.
+  - `electron-updater` is removed. electron-builder's `publish` block stays, because the release script reads the
+    repository from it.
+- Consequences:
+  - An update takes one drag, and macOS may ask for "Open Anyway" once per new version.
+  - A future Developer ID build can switch to an in-app install without changing how updates are checked.
+  - The check sends GitHub the Mac's IP address and the `User-Agent`, and nothing else.

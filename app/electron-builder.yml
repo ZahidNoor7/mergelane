@@ -105,8 +105,8 @@ electronFuses:
   enableNodeCliInspectArguments: false
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
-# Where a future update check looks (docs/DECISIONS.md ADR-0010). Builds never publish themselves
-# (--publish never).
+# The repository releases go to: scripts/release/local-release.mjs reads it. Builds never publish
+# themselves (--publish never), and the app's update check doesn't use it (ADR-0036).
 publish:
   provider: github
   owner: ZahidNoor7

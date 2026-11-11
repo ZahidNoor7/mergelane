@@ -267,7 +267,7 @@ app.whenReady().then(async () => {
 
   createWindow()
   if (testKnobs.hideWindow) app.dock?.hide()
-  startUpdater(() => mainWindow, (await loadSettings()).autoUpdate !== false)
+  startUpdater(() => mainWindow, await loadSettings())
 
   app.on('activate', function () {
     if (mainWindow && !mainWindow.isDestroyed()) {

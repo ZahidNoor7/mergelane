@@ -284,6 +284,26 @@ Last updated: 2026-11-11
     - A 404, a refused URL or a checksum mismatch is not tried again.
     - `downloadWithRetries` and `isTransient` are in `fetch.mjs`. Tests use a local server that cuts the first
       connection or answers 503 first. Line coverage: `fetch.mjs` 99.3%, `sources.mjs` 97.6%.
+- **M3.2 Updates.** The owner chose "download, verify, open the DMG" (ADR-0036, which replaces ADR-0010). Split in two:
+  - **M3.2a** (branch `m3.2-updates-check`): the check, Settings › Updates and the sidebar notice.
+    - `shared/releases.ts`: semantic-version order, the release for each channel (Stable leaves prereleases out;
+      drafts never show), and "What's new" read from the release notes.
+    - `main/updater.ts` asks `GET /repos/ZahidNoor7/mergelane/releases` with `net.fetch`. It checks on request,
+      from the app menu's "Check for Updates…", and once a day. A 403 or 429 means "try again in an hour".
+    - Saved: `updateAutoCheck`, `updateChannel`, `updateSkipped`, `updateLastChecked`.
+    - `electron-updater` is removed. The `publish` block stays for the release script.
+    - **UI:** Settings › Updates (version card, status, What's new, "Get it from GitHub", "Skip this version",
+      automatic checks, channel) and the sidebar notice with a dot on Settings, as the design draws them.
+      "Get it from GitHub" stands in for "Download and install" until M3.2b.
+    - **Tests:**
+      - Vitest: 205 passed, 100% of lines in every new or changed file.
+      - `e2e/updates.spec.ts` (3 tests) runs against a local server answering as GitHub does. It checks the request
+        headers, the channels, skip, the saved choices, the errors and the automatic first check. A test run never
+        asks GitHub.
+      - Smoke and extension: 469 passed, 1 skipped.
+    - The README's privacy note now says that the app checks GitHub once a day, and that this can be turned off.
+  - **M3.2b, next:** download the DMG with progress, check it against the release's `SHA256SUMS`, open it and quit;
+    with a "Download updates in the background" option and Cancel.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

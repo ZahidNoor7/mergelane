@@ -41,7 +41,13 @@ import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
 import { applyWindowMaterial, setSolidGlass, setWindowTheme } from '../windowBackground'
-import { showUpdateMenu, updateState } from '../updater'
+import {
+  checkForUpdates,
+  openReleasePage,
+  setUpdatePreferences,
+  skipUpdate,
+  updateState
+} from '../updater'
 import { readAppUsage } from '../appUsage'
 
 async function openNetworkSettings(): Promise<void> {
@@ -306,7 +312,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   )
 
   handle('updateState', () => updateState())
-  handle('showUpdateMenu', () => showUpdateMenu())
+  handle('checkForUpdates', () => checkForUpdates())
+  handle('setUpdatePreferences', (_event, preferences) => setUpdatePreferences(preferences))
+  handle('skipUpdate', (_event, version) => skipUpdate(version))
+  handle('openReleasePage', () => openReleasePage())
 
   return manager
 }

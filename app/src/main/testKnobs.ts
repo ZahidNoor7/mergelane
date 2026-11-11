@@ -45,6 +45,13 @@ export const testKnobs = {
   /** How long a magnet link only the DHT can help keeps looking once its first search finds no
    * one (Deluge's magnet prefetch also waits 30 s). */
   magnetGraceMs: positiveNumber('MERGELANE_E2E_MAGNET_GRACE_MS', 30_000),
+  /** Where the update check reads releases from instead of GitHub (e2e/updates.spec.ts). Without
+   * it, a test run never checks for updates on its own. */
+  releasesUrl: env['MERGELANE_E2E_RELEASES_URL'],
+  /** The version the update check compares releases with, instead of the app's. */
+  updateAppVersion: env['MERGELANE_E2E_UPDATE_VERSION'],
+  /** How long after launch the daily update check first looks whether a check is due. */
+  updateFirstCheckMs: positiveNumber('MERGELANE_E2E_UPDATE_FIRST_CHECK_MS', 10_000),
   /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */
   torrentDht: env['MERGELANE_E2E_DHT'] !== '0',
   /** `MERGELANE_E2E_DHT_BOOTSTRAP=127.0.0.1:9` starts the DHT from these nodes instead of the

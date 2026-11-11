@@ -5,6 +5,14 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
+  what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off. For now, a
+  found update opens its page on GitHub; downloading it in the app comes next.
+- A notice in the sidebar, and a dot on Settings, when a new version is out. The app menu has "Check for
+  Updates…".
+
 ## [0.2.0] - 2026-11-11
 
 A new look for the whole app: seven themes, a sidebar, download details beside the list, a Networks screen and a

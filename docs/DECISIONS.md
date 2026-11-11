@@ -761,3 +761,43 @@ until the owner overrides it.
 - Consequences:
   - Routing applies at once to running downloads (`limitsChanged` re-reconciles them).
   - A download's details show "Not used: downloads go over another network" on the set-aside networks.
+
+## ADR-0041: Routing torrent uploads to one network, and upload speed limits (M3.5b)
+
+- Status: Accepted (2026-11-11), from the final design's RoutingPanel ("Uploads use") and its per-direction limits.
+- Context:
+  - Only torrents upload. Each peer is on one network (dialled over it, or reached on its address), and before this
+    every network uploaded to its own peers. Nothing limited uploads: `Limits` only metered received bytes.
+  - webtorrent's documented upload control is `uploadLimit` / `throttleUpload()`, for a whole client, on every
+    network at once (webtorrent docs/api.md). Mergelane runs one client per download, so it can give neither one
+    total for all downloads nor a limit per network.
+- Decision:
+  - **The setting:** `routing.up: 'all' | <network id>` beside `down`; the one `fallback` switch covers both, as the
+    design draws it. Saved settings without `up` read as `'all'` (`shared/routing.ts`, `sanitizeRouting`).
+    `routeFor(routing, 'up', connected)` is the same rule as downloads: the pin while it's connected; when it isn't,
+    `null` (as before) with fallback on, and nothing (uploads wait) with it off.
+  - **'all':** unchanged. A torrent uploads over the networks it downloads over.
+  - **Pinned:** only peers on the chosen network are uploaded to. Peers on other networks are kept choked (BEP 3)
+    and still downloaded from. Pinned to a network downloads don't use (routed, or switched off for that download),
+    its peers are dialled anyway, for uploading only: never asked for pieces, and told we're not interested. Twins
+    (the per-network second connection to a peer) are dialled on it too, so a peer found on one network can be
+    downloaded from there and uploaded to on the other. A network at its data limit carries nothing, as before.
+  - **How webtorrent is told (`torrent/wireGate.ts`), without a new patch:** on our own torrent and wires only,
+    wrap `Torrent._updateWire` (no requests to a peer we don't download from), `_updateWireInterest` (uninterested
+    in it), `_rechoke` (rank only peers we may upload to, so the others take no upload slot), `Wire.unchoke` (no
+    unchoke for them) and `Wire.piece` (hold each block for the upload limits). These are internal to webtorrent
+    3.0.21 and bittorrent-protocol 5.0.9, read from their source (neither README documents them); both are
+    pinned. Patching webtorrent again would also have meant changing the shared `node_modules` to test it.
+  - **Upload limits:** `AppSettings.uploadLimit` (total) and `NetworkPreference.uploadLimit` (per network), token
+    buckets beside the download ones in `Limits` (`takeUpload`). A block waits until both allow it; a peer choked
+    meanwhile gets it rejected (BEP 6), not sent. Slow mode stays download-only. Protocol messages other than blocks
+    aren't metered (a few bytes each).
+  - **Data limits** still count received bytes only, as the dialog says ("Uploads and other apps don't count").
+- Consequences:
+  - A peer that dialled in over another network is not uploaded to while uploads are pinned: webtorrent doesn't
+    send its listen port (BEP 10 `p`), so there's no address to twin it on. Peers Mergelane dials out to are.
+  - Tracker announces still go out over the Mac's default route, as before; they aren't routed.
+  - A running torrent follows a change at once (`limitsChanged` re-reconciles it): newly barred peers are choked,
+    newly allowed ones offered a slot, and the next rechoke (every 10 s) settles the slots.
+  - A routed network's status now reads "Not used for downloads: they go over another network", as it may still
+    upload.

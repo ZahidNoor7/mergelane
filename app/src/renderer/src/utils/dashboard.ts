@@ -161,61 +161,13 @@ export function networkSummaries(
   ]
 }
 
-/** A network that came or went while Mergelane was open. */
-export interface NetworkEvent {
-  id: string
-  /** The system's name for it, kept: once it's gone, the network list no longer has it. */
-  osName: string
-  kind: NetworkInterfaceKind
-  change: 'dropped' | 'recovered' | 'joined'
-  at: number
-  /** For one that came back: how long it was gone. */
-  downForMs?: number
-  /** How many networks were left after the change. */
-  left: number
-}
-
-/** The most kept: older ones drop off the front. */
-export const NETWORK_EVENTS_KEPT = 20
-
-/** `log` with the changes from one network list to the next, newest last. One that comes back
- * after a drop the log still holds is a recovery; otherwise it's new. */
-export function appendNetworkEvents(
-  log: NetworkEvent[],
-  previous: NetworkInterfaceInfo[],
-  next: NetworkInterfaceInfo[],
-  at: number
-): NetworkEvent[] {
-  const before = new Set(previous.map((iface) => iface.id))
-  const after = new Set(next.map((iface) => iface.id))
-  const events: NetworkEvent[] = []
-  for (const iface of previous) {
-    if (after.has(iface.id)) continue
-    events.push({
-      id: iface.id,
-      osName: iface.displayName,
-      kind: iface.kind,
-      change: 'dropped',
-      at,
-      left: next.length
-    })
-  }
-  for (const iface of next) {
-    if (before.has(iface.id)) continue
-    const drop = log.findLast((event) => event.id === iface.id)
-    const recovered = drop?.change === 'dropped'
-    events.push({
-      id: iface.id,
-      osName: iface.displayName,
-      kind: iface.kind,
-      change: recovered ? 'recovered' : 'joined',
-      at,
-      ...(recovered ? { downForMs: at - drop.at } : {}),
-      left: next.length
-    })
-  }
-  return events.length === 0 ? log : [...log, ...events].slice(-NETWORK_EVENTS_KEPT)
-}
+// The network log lives in shared/ (the main process keeps it across restarts); re-exported for
+// the dashboard's callers and e2e/dashboardModel.spec.ts.
+export {
+  appendNetworkEvents,
+  NETWORK_EVENTS_KEPT,
+  type NetworkEvent
+} from '@shared/networkActivity'
 
 /** "14s", "3 min", "2 h": how long a network was gone, rounded the way people say it. */
 export function formatDowntime(ms: number): string {

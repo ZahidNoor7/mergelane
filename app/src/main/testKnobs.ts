@@ -22,6 +22,8 @@ export const testKnobs = {
   nativeHostHome: env['MERGELANE_E2E_NMHOST_HOME'],
   /** A fake mergelane-daemon's socket, instead of the real one (e2e/systemMerge.spec.ts). */
   daemonSocket: env['MERGELANE_E2E_DAEMON_SOCKET'],
+  /** The helper's log a diagnostics bundle reads, instead of /Library/Logs/Mergelane/daemon.log. */
+  helperLog: env['MERGELANE_E2E_HELPER_LOG'],
   /** Whether the helper counts as installed: '1' or '0'; unset checks /Library. */
   daemonInstalled: env['MERGELANE_E2E_DAEMON_INSTALLED'],
   /** The app version to compare with the helper's, so a development build (whose helper says

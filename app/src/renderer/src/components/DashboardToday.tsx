@@ -1,3 +1,4 @@
+import { DROPOUT_WINDOW_MS, dropoutsSince, fastestToday } from '@shared/networkActivity'
 import { useEffect, useState } from 'react'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -6,13 +7,15 @@ import { todayTotals } from '../utils/dashboard'
 import { formatBytes } from '../utils/format'
 
 // The Dashboard's "Today", from the final design (prototype.html, DashboardScreen): what Mergelane
-// downloaded today, split by the network that brought it, the fastest a download ran, and how
-// many networks dropped since the app opened.
+// downloaded today, split by the network that brought it, the fastest merged speed of the day, and
+// how many networks dropped in the last 24 hours. The dropouts and the fastest speed are kept by
+// the main process across restarts (ADR-0042), as finished downloads are.
 
 export function DashboardToday(): React.JSX.Element {
   const downloads = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const events = useAppStore((store) => store.networkEvents)
+  const fastestMerged = useAppStore((store) => store.fastestMerged)
   const networkVisual = useNetworkVisuals()
   const formatSpeed = useFormatSpeed()
   // Today moves on at midnight.
@@ -22,12 +25,13 @@ export function DashboardToday(): React.JSX.Element {
     return () => clearInterval(timer)
   }, [])
   const today = todayTotals(Object.values(downloads), history, now)
-  const dropped = events.filter((event) => event.change === 'dropped')
-  const allBack = dropped.every((event) =>
-    events.some(
-      (later) => later.id === event.id && later.change === 'recovered' && later.at > event.at
-    )
-  )
+  // Merged over every running download, and never below what one download held on its own.
+  const merged = fastestToday(fastestMerged, now)
+  const fastest =
+    merged === undefined && today.fastest === undefined
+      ? undefined
+      : Math.max(merged ?? 0, today.fastest ?? 0)
+  const dropouts = dropoutsSince(events, now - DROPOUT_WINDOW_MS)
 
   return (
     <section aria-labelledby="dashboard-today" className="flex flex-col gap-3">
@@ -87,16 +91,16 @@ export function DashboardToday(): React.JSX.Element {
       )}
       <dl className="grid grid-cols-2 gap-4 pt-1">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-[12px] text-ink-3">Fastest download</dt>
+          <dt className="text-[12px] text-ink-3">Fastest merged speed</dt>
           <dd className="figures truncate text-[17px] leading-tight font-[640]">
-            {today.fastest === undefined ? '—' : formatSpeed(today.fastest)}
+            {fastest === undefined ? '—' : formatSpeed(fastest)}
           </dd>
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <dt className="text-[12px] text-ink-3">Network dropouts</dt>
           <dd className="figures truncate text-[17px] leading-tight font-[640]">
-            {dropped.length}
-            {dropped.length > 0 && allBack ? ', all back' : ''}
+            {dropouts.count}
+            {dropouts.count > 0 && dropouts.allBack ? ', all back' : ''}
           </dd>
         </div>
       </dl>

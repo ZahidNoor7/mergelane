@@ -113,7 +113,9 @@ describe('DashboardToday', () => {
       screen.getByRole('list', { name: 'Downloaded today, by network' })
     ).getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual(['en03.0 MB75%', 'en71.0 MB25%'])
-    expect(screen.getByText('Fastest download').nextElementSibling!.textContent).toBe('2.0 MB/s')
+    expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe(
+      '2.0 MB/s'
+    )
     expect(screen.getByText('Network dropouts').nextElementSibling!.textContent).toBe('1, all back')
   })
 
@@ -122,7 +124,7 @@ describe('DashboardToday', () => {
     render(<DashboardToday />)
     expect(screen.getByText('0 B')).toBeTruthy()
     expect(screen.queryByRole('list')).toBeNull()
-    expect(screen.getByText('Fastest download').nextElementSibling!.textContent).toBe('—')
+    expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe('—')
     expect(screen.getByText('Network dropouts').nextElementSibling!.textContent).toBe('0')
     cleanup()
     useAppStore.setState({
@@ -132,5 +134,56 @@ describe('DashboardToday', () => {
     })
     render(<DashboardToday />)
     expect(screen.getByText('Network dropouts').nextElementSibling!.textContent).toBe('1')
+  })
+
+  it('the fastest merged speed of today, kept across restarts, beats one download’s own', () => {
+    useAppStore.setState({
+      downloads: { a: item({ networks: [net('en0', MB)], peakSpeedBytesPerSec: 2 * MB }) },
+      history: [],
+      networkEvents: [],
+      fastestMerged: { day: '2026-11-11', bytesPerSec: 7 * MB }
+    })
+    render(<DashboardToday />)
+    expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe(
+      '7.0 MB/s'
+    )
+    cleanup()
+    // Yesterday's fastest doesn't count today; with no download today there's none at all.
+    useAppStore.setState({
+      downloads: {},
+      fastestMerged: { day: '2026-11-10', bytesPerSec: 9 * MB }
+    })
+    render(<DashboardToday />)
+    expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe('—')
+  })
+
+  it('counts the dropouts of the last 24 hours, the saved ones from before a restart too', () => {
+    useAppStore.setState({
+      downloads: {},
+      history: [],
+      networkEvents: [
+        // Two days ago: not counted.
+        {
+          id: 'en0',
+          osName: 'Wi-Fi',
+          kind: 'wifi',
+          change: 'dropped',
+          at: NOW - 48 * 3600e3,
+          left: 0
+        },
+        { id: 'en7', osName: 'en7', kind: 'usb', change: 'dropped', at: NOW - 5 * 3600e3, left: 1 },
+        {
+          id: 'en7',
+          osName: 'en7',
+          kind: 'usb',
+          change: 'recovered',
+          at: NOW - 3600e3,
+          whileClosed: true,
+          left: 2
+        }
+      ]
+    })
+    render(<DashboardToday />)
+    expect(screen.getByText('Network dropouts').nextElementSibling!.textContent).toBe('1, all back')
   })
 })

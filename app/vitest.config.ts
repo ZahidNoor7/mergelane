@@ -91,7 +91,12 @@ export const COVERED = [
   'src/renderer/src/components/UsagePanel.tsx',
   'src/shared/appUsage.ts',
   // M3.1 pull request 7: Liquid Glass.
-  'src/renderer/src/hooks/useGlassAttributes.ts'
+  'src/renderer/src/hooks/useGlassAttributes.ts',
+  // M3.7: diagnostics, and Today and the dropouts kept across restarts.
+  'src/shared/networkActivity.ts',
+  'src/shared/diagnostics.ts',
+  'src/renderer/src/components/DiagnosticsSettings.tsx',
+  'src/renderer/src/hooks/useNetworks.ts'
 ]
 
 export default defineConfig({

@@ -66,6 +66,12 @@ Last updated: 2026-11-11
   - The menu-bar template icons (`resources/trayTemplate.png` and `@2x`, 144 dpi as Electron's Tray docs ask) wait
     for M3.3.
   - The extension's icons are unchanged until M3.4.
+- **M3.1, pull request 3** (branch `m3.1-controls`): the basic controls in the design's look.
+  - Button, Switch, Toggle (segmented and chips), ToggleGroup, Badge (tag), Input, Textarea, Checkbox, InputGroup and
+    Alert; the popover, menus and dialogs (sheet shadow, design hover, scrim).
+  - Every variant and size name the screens use is kept.
+  - The switch knob no longer slides under Reduce Motion.
+  - Menu items now visibly highlight: `focus:bg-accent` had no colour in the theme.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

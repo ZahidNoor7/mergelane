@@ -30,10 +30,12 @@ import {
   DEFAULT_MANIFEST,
   DEFAULT_OUT_DIR,
   download,
+  downloadWithRetries,
   extract,
   fetchAll,
   fetchTool,
   INSTALL_KINDS,
+  isTransient,
   loadManifest,
   main,
   REQUIRED_FIELDS,
@@ -287,6 +289,12 @@ before(async () => {
     '/no-location': (res) => res.writeHead(302).end(),
     '/offsite': (res) => res.writeHead(307, { location: 'http://example.invalid/tool' }).end(),
     '/hang': () => {},
+    // Fail the first time, as ffmpeg.org sometimes does: the connection is cut, or a server error.
+    '/flaky-reset': (res) =>
+      hits['/flaky-reset'] === 1 ? res.socket.destroy() : res.end(bodies.arm64),
+    '/flaky-503': (res) =>
+      hits['/flaky-503'] === 1 ? res.writeHead(503).end('busy') : res.end(bodies.arm64),
+    '/always-503': (res) => res.writeHead(503).end('busy'),
     '/stall': (res) => {
       res.writeHead(200)
       res.write(bodies.arm64.subarray(0, 16))
@@ -648,6 +656,70 @@ describe('download', () => {
       /no data from .* for 0.15s/
     )
     await assert.rejects(download(`${base}/stall`, join(freshOut(), 'f'), { timeoutMs: 150 }))
+  })
+})
+
+describe('downloadWithRetries', () => {
+  test('a cut connection or a server error is tried again, and the file is complete', async () => {
+    for (const path of ['/flaky-reset', '/flaky-503']) {
+      const lines = []
+      const dest = join(freshOut(), 'file')
+      const result = await downloadWithRetries(`${base}${path}`, dest, {
+        pauseMs: 0,
+        log: (line) => lines.push(line)
+      })
+      assert.equal(result.sha256, hashOf(bodies.arm64))
+      assert.equal(await sha256File(dest), hashOf(bodies.arm64))
+      assert.equal(hits[path], 2)
+      assert.equal(lines.length, 1)
+      assert.match(lines[0], new RegExp(`${path}: .*; trying again in 0s \\(attempt 2 of 3\\)$`))
+    }
+  })
+
+  test('gives up after the last try, waiting longer each time, and leaves no partial file', async () => {
+    const waits = []
+    const dir = freshOut()
+    const before = hits['/always-503'] ?? 0
+    await assert.rejects(
+      downloadWithRetries(`${base}/always-503`, join(dir, 'file'), {
+        sleep: async (ms) => waits.push(ms)
+      }),
+      /HTTP 503 from/
+    )
+    assert.equal(hits['/always-503'] - before, 3)
+    assert.deepEqual(waits, [5_000, 10_000])
+    assert.deepEqual(readdirSync(dir), [])
+  })
+
+  test('a silent server is tried again; a missing file and a refused URL are not', async () => {
+    const hangs = hits['/hang'] ?? 0
+    await assert.rejects(
+      downloadWithRetries(`${base}/hang`, join(freshOut(), 'f'), {
+        attempts: 2,
+        pauseMs: 0,
+        timeoutMs: 150
+      }),
+      /no data from .* for 0.15s/
+    )
+    assert.equal(hits['/hang'] - hangs, 2)
+    const missing = hits['/missing'] ?? 0
+    await assert.rejects(downloadWithRetries(`${base}/missing`, join(freshOut(), 'f')), /HTTP 404/)
+    assert.equal(hits['/missing'] - missing, 1)
+    await assert.rejects(
+      downloadWithRetries('http://10.0.0.1/x', join(freshOut(), 'f')),
+      /only https URLs are allowed/
+    )
+  })
+
+  test('isTransient: network failures, 5xx and 429 are; client errors and others are not', () => {
+    for (const code of ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ERR_STREAM_PREMATURE_CLOSE']) {
+      assert.equal(isTransient(Object.assign(new Error('x'), { code })), true, code)
+    }
+    for (const statusCode of [500, 503, 429]) assert.equal(isTransient({ statusCode }), true)
+    for (const statusCode of [404, 403, 400]) assert.equal(isTransient({ statusCode }), false)
+    assert.equal(isTransient(Object.assign(new Error('x'), { code: 'ENOENT' })), false)
+    assert.equal(isTransient(new Error('more than 10 redirects')), false)
+    assert.equal(isTransient(undefined), false)
   })
 })
 

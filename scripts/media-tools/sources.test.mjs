@@ -34,8 +34,15 @@ before(async () => {
   manifestDir = join(root, 'manifest')
   mkdirSync(manifestDir)
   writeFileSync(join(manifestDir, 'build-tiny.sh'), '#!/bin/sh\necho build\n')
+  let flakyHits = 0
   server = createServer((request, response) => {
-    const body = { '/lgpl.tar.xz': LGPL_SOURCE, '/gpl.tar.gz': GPL_SOURCE }[request.url]
+    // Cut the first try off, as ffmpeg.org sometimes does; serve the source on the next.
+    if (request.url === '/flaky.tar.xz' && ++flakyHits === 1) return request.socket.destroy()
+    const body = {
+      '/lgpl.tar.xz': LGPL_SOURCE,
+      '/flaky.tar.xz': LGPL_SOURCE,
+      '/gpl.tar.gz': GPL_SOURCE
+    }[request.url]
     response.writeHead(body ? 200 : 404, body ? { 'content-length': body.length } : {})
     response.end(body)
   })
@@ -189,6 +196,20 @@ describe('collectSources', () => {
       /ffmpeg: source SHA-256 is [0-9a-f]{64}, expected/
     )
     assert.deepEqual(readdirSync(outDir), [])
+  })
+
+  test('a cut connection is tried again, and the source still arrives whole', async () => {
+    const outDir = join(root, 'out-flaky')
+    const lines = []
+    await collectSources(manifest([{ sourceUrl: `${base}/flaky.tar.xz` }]), {
+      outDir,
+      manifestDir,
+      log: (line) => lines.push(line),
+      pauseMs: 0
+    })
+    assert.deepEqual(readFileSync(join(outDir, 'ffmpeg-9.0.2-source.tar.xz')), LGPL_SOURCE)
+    assert.ok(lines.some((line) => /flaky\.tar\.xz: .*trying again in 0s \(attempt 2 of 3\)/.test(line)))
+    assert.equal(readdirSync(outDir).some((name) => name.endsWith('.part')), false)
   })
 
   test('a missing file fails and leaves no partial file', async () => {

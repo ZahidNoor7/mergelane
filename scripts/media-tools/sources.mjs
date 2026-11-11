@@ -11,13 +11,14 @@
 //   - a tool with a buildScript (a path next to the manifest) has it copied as
 //     <name>-<version>-<script name>, so the exact build recipe travels with the source.
 // Tools under other licences (Deno: MIT) need no source and are skipped.
+// A dropped or stalled connection, or a server error, is tried again twice, after 5 and 10 seconds.
 // Any failure exits 1 and leaves no partial file behind. Node.js built-ins only.
 import { copyFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { download, urlProblem } from './fetch.mjs'
+import { downloadWithRetries, urlProblem } from './fetch.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const DEFAULT_MANIFEST = join(HERE, 'tools.json')
@@ -81,7 +82,8 @@ export function sourceProblems(manifest) {
 
 /**
  * Downloads and checks every pinned source archive into outDir, and copies build scripts.
- * Returns the paths written, in manifest order. `network` passes options through to download().
+ * Returns the paths written, in manifest order. `network` passes options through to
+ * downloadWithRetries() (attempts, pauses) and download().
  */
 export async function collectSources(manifest, { outDir, manifestDir, log = () => {}, ...network }) {
   const problems = sourceProblems(manifest)
@@ -98,7 +100,7 @@ export async function collectSources(manifest, { outDir, manifestDir, log = () =
     const part = `${file}.part`
     await rm(part, { force: true })
     try {
-      const { sha256 } = await download(tool.sourceUrl, part, network)
+      const { sha256 } = await downloadWithRetries(tool.sourceUrl, part, { log, ...network })
       if (sha256 !== tool.sourceSha256) {
         throw new Error(
           `${tool.name}: source SHA-256 is ${sha256}, expected ${tool.sourceSha256} (${tool.sourceUrl})`

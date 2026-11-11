@@ -277,8 +277,13 @@ Last updated: 2026-11-11
     (a 60-second stall, then `ECONNRESET`). The third run created the draft.
   - The draft has six files. GitHub's digests match `app/dist/SHA256SUMS`: DMG `44ba38b3…`, zip `8e55b0d8…`.
   - **Next:** the owner installs the DMG from the draft, then publishes it (`docs/RELEASING.md`, steps 5 and 6).
-  - **Follow-up:** `scripts/media-tools/sources.mjs` tries each download once. A retry with a pause would ride out
-    an unreliable ffmpeg.org.
+  - **Follow-up, done (branch `sources-retry`):** downloads now try again on failure.
+    - Each pinned download (the tools, FFmpeg's source for the build, and the sources for the release) is tried
+      again after 5 seconds, then 10, when a connection is reset, refused or stalls, or the server answers 5xx
+      or 429: three tries in all.
+    - A 404, a refused URL or a checksum mismatch is not tried again.
+    - `downloadWithRetries` and `isTransient` are in `fetch.mjs`. Tests use a local server that cuts the first
+      connection or answers 503 first. Line coverage: `fetch.mjs` 99.3%, `sources.mjs` 97.6%.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

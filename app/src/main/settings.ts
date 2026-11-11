@@ -14,6 +14,7 @@ import { readJson, updateJson } from './jsonFile'
 import { BROWSERS } from '../shared/browsers'
 import { sanitizeCaptureRules } from '../shared/captureRules'
 import { parseVersion } from '../shared/releases'
+import { sanitizeRole } from '../shared/networkRoles'
 import { sanitizeRouting } from '../shared/routing'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
@@ -79,6 +80,7 @@ function sanitizeNetworkPreferences(parsed: unknown): NetworkPreferences {
     const proxy = sanitizeProxyConfig(value.proxy)
     if (proxy) preference.proxy = proxy
     if (value.off === true) preference.off = true
+    preference.role = sanitizeRole(value.role)
     preference.speedLimit = byteCount(value.speedLimit)
     preference.uploadLimit = byteCount(value.uploadLimit)
     preference.dataLimit = byteCount(value.dataLimit)

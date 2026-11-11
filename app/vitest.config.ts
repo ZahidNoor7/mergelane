@@ -107,6 +107,9 @@ export const COVERED = [
   // M3.9: New download's When (ADR-0044).
   'src/shared/startAt.ts',
   'src/renderer/src/utils/downloadActions.ts',
+  // M3.10: each network's role for downloads (ADR-0045).
+  'src/shared/networkRoles.ts',
+  'src/renderer/src/components/NetworkRoleMenu.tsx',
   // ADR-0046: Remove helper, in the System merge section.
   'src/renderer/src/components/SystemMergeSection.tsx',
   'src/renderer/src/hooks/useSystemMerge.ts'

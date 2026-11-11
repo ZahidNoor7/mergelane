@@ -964,6 +964,75 @@ until the owner overrides it.
     built from the list's code, so that is left for a later change.
   - A date field could be added later without changing the engine, which already takes up to 7 days ahead.
 
+## ADR-0045: Each network's role for downloads: Use, Standby, Don't use (M3.10)
+
+- Status: Accepted (2026-11-12). The roles are the owner's choice (2026-11-11); the details below were decided
+  unattended for the owner's review, following CLAUDE.md (Phase 3, "link priorities and cost rules") and the
+  final design (`design-system/mergelane/redesign/prototype.html`), which has no priority, standby or metered
+  setting of its own.
+- Context:
+  - The owner chose a role per network for Mergelane's own downloads: **Use** (normal), **Standby** (used only
+    while no Use network is connected, for example an iPhone's data plan kept as a backup; once a Use network is
+    back, running downloads move back to it) and **Don't use** (never used for downloads).
+  - Until now the only per-network choice was `NetworkPreference.off`: the networks New download left out last
+    time, so the next one starts without them too ("remember the last pick", like the folder). The Networks
+    screen's switch "Use … for new downloads" set the same flag. It never touched running downloads.
+  - Routing (ADR-0040, ADR-0041) already sets networks aside for every download, the running ones included, with
+    the status `routed` while keeping each download's own choice (`enabled`).
+- Decision:
+  - **Saved as** `NetworkPreference.role`: `'standby'` or `'never'`, left out for Use, so existing settings mean
+    Use and nothing has to be migrated. `shared/networkRoles.ts sanitizeRole` keeps only those two values (main's
+    settings sanitizer uses it), and `roleOf` reads a preference as `'use'` unless it says otherwise.
+  - **`off` keeps its meaning and is not a role.** It stays "left out of new downloads", set by New download's
+    remembered pick. It isn't turned into Don't use, because a network unticked once in New download would then
+    silently stop carrying the running downloads too. Picking any role on the Networks screen clears `off`, so
+    "Use" there puts a left-out network back into New download's pick, as the old switch did.
+  - **Roles apply to every download, the running ones included,** in `DownloadManager.reconcile` through the pure
+    `shared/networkRoles.ts networkStatuses`. A download's own choice (`enabled`) is kept, as routing keeps it, for
+    when the role changes back. Two new network statuses, which every transfer kind already follows (only `on` and
+    `unreachable` carry anything):
+    - `standby`: a Standby network held back. It is held back while one of **that download's** Use networks is
+      trying to carry it: on, or connected but not getting through yet (`unreachable`, which keeps trying). A Use
+      network that the download has off, that is gone, at its data limit, or `failed` does not count, so the
+      Standby network takes over then. Per download rather than "any Use network on the Mac": a download whose
+      only Use network is switched off in it, or failed, would otherwise wait for nothing. `unreachable` still
+      counts as connected, as the owner's words say: a server that is down would otherwise spend the backup's
+      data for nothing. A Standby network is checked for being gone or at its limit first, and one that had failed
+      is tried afresh when it takes over.
+    - `unused`: a Don't use network the download has on. Never used, connected or not. One the download has off
+      stays `off`.
+  - **Routing wins over roles.** While "Downloads use" names a network (connected, or waiting for it with fallback
+    off), roles don't apply: that pin is the more specific choice, and RoutingPanel's text already says every
+    download goes over it. With fallback on and the pinned network gone, roles apply again. Torrent uploads
+    routed to a network (ADR-0041) go out over it whatever its role: `uploadOnly` takes `standby` and `unused`
+    networks as it takes `routed` and `off` ones. Without upload routing, a torrent uploads only over the networks
+    it downloads over, so a held-back Standby network uploads nothing. Data limits still stop a network
+    altogether.
+  - **A file that can't be split** (one network) is given a Use network before a Standby one, in main
+    (`byRole`) and in New download.
+  - **Networks screen:** the line's "Use for new downloads" switch becomes a pop-up button showing the role
+    ("Use", "Standby", "Don't use"), the Mac's control for a choice of a few in a list row, where a three-part
+    segmented control would not fit the line at the window's narrowest. Its menu says what each role does, which
+    is the hint ("Used only when no network set to Use is connected, like a phone's data plan kept as a
+    backup."). The line's status says "Standby: used only when no network set to Use is connected", "Standby,
+    carrying downloads" or "Connected, not used for downloads"; a Don't use network's tile is dimmed. The header
+    counts standby networks apart: "New downloads use 1 of them, 1 more on standby."
+  - **New download:** a Don't use network is shown unticked and can't be picked (as one at its data limit),
+    tagged "Don't use", with the hover note "Set to Don't use on Networks"; it is never sent and its `off` is not
+    touched. A Standby network is ticked by default (it must be on in the download to stand in), tagged
+    "Standby", with the hint as its hover note. Every network set to Don't use says so: "Every network is set to
+    Don't use. Change one on Networks."
+  - **A download's details** say "Standby: used only when no network set to Use is connected" or "Not used: set
+    to Don't use on Networks" for a network held back by its role.
+- Consequences:
+  - A download started while a network was Don't use doesn't have it on. Switching the role to Use later doesn't
+    add it to that download: switch it on in the download's details. One that had it on gets it back at once.
+  - With routing and roles both set, the routing pin decides until it is back on All networks or its network is
+    gone with fallback on.
+  - Only Mergelane's own downloads follow roles. System merge (the daemon) has no notion of them yet.
+  - Real hardware (an iPhone's USB tethering dropping and coming back) is not proven here: the e2e tests use the
+    two test networks, rewriting the interface list to drop and restore one.
+
 ## ADR-0046: Remove helper: merging off first, then the helper's own uninstall through one password prompt
 
 - Status: Accepted (2026-11-12). Made unattended, following CLAUDE.md; open to the owner's review.

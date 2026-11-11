@@ -58,3 +58,8 @@ All notable changes to Mergelane are recorded here. The format follows
 - The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.
 
 - Automatic updates are off until updates can be checked through the GitHub Releases API (ADR-0010).
+
+### Removed
+
+- The Telegram download source from Plexo. It needed the user's own Telegram API keys and a sign-in. Telegram
+  downloads saved by an older build are dropped; finished files are kept.

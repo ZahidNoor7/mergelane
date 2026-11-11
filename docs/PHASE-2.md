@@ -81,7 +81,7 @@ paused today (ADR-0020), so Phase 2 cannot finish until the owner turns it back 
 1. CI stays paused, with no manual runs for now (ADR-0020). Phase 2's exit still needs it.
 2. Native messaging (ADR-0021).
 3. YouTube: option A, yt-dlp only with hard limits (ADR-0026); Deno ships as a third program.
-4. Telegram: remove it, after the YouTube work.
+4. Telegram: remove it, after the YouTube work. Done on branch `m2.6-remove-telegram`.
 5. Probes: keep the public targets (ADR-0008).
 6. FFmpeg: our own minimal LGPL build (ADR-0028). Every release attaches the bundled programs' source (ADR-0027).
 7. Chrome Web Store: later, once Phase 2's installer works. Until then the extension is loaded by hand.

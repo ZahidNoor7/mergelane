@@ -21,6 +21,8 @@ All notable changes to Mergelane are recorded here. The format follows
 ### Fixed
 
 - Selecting a download no longer nudges the download list up a few pixels.
+- The Dashboard says when a download with a start time starts ("Starts at 1:00 AM"), and that a download started
+  late, as the download list does, instead of "Waiting for a turn".
 
 ## [0.3.0] - 2026-11-12
 

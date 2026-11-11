@@ -25,6 +25,8 @@ import {
   setSolidGlass,
   setWindowTheme
 } from './windowBackground'
+import { openedAtLogin } from './loginItem'
+import { startMenuBar } from './menuBar'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
 import { MIN_WINDOW, openingSize } from '../shared/windowSize'
@@ -48,6 +50,8 @@ let quitAfterSuspending = false
 let tray: Tray | null = null
 let isQuitting = false
 let hasShownTrayNotification = false
+/** The first window waits to be asked for when macOS opened Mergelane at login (ADR-0037). */
+let startHidden = false
 
 function ensureTray(): Tray {
   if (tray && !tray.isDestroyed()) return tray
@@ -147,7 +151,9 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (!testKnobs.hideWindow) mainWindow?.show()
+    // Opened at login, Mergelane starts in the menu bar and the Dock, its window shown on request.
+    if (!testKnobs.hideWindow && !startHidden) mainWindow?.show()
+    startHidden = false
     markAppReady()
   })
 
@@ -217,6 +223,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  startHidden = openedAtLogin()
   electronApp.setAppUserModelId('io.github.zahidnoor7.mergelane')
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
@@ -267,7 +274,19 @@ app.whenReady().then(async () => {
 
   createWindow()
   if (testKnobs.hideWindow) app.dock?.hide()
-  startUpdater(() => mainWindow, await loadSettings())
+  const settings = await loadSettings()
+  startUpdater(() => mainWindow, settings)
+  startMenuBar(
+    {
+      totalSpeed: () => downloadManager?.totalSpeed() ?? 0,
+      open: () => bringForward(ensureWindow()),
+      quit: () => {
+        isQuitting = true
+        app.quit()
+      }
+    },
+    settings
+  )
 
   app.on('activate', function () {
     if (mainWindow && !mainWindow.isDestroyed()) {

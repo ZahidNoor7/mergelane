@@ -53,6 +53,9 @@ export const testKnobs = {
   /** A file an update's disk image path is written to instead of opening it and quitting, so a
    * test run never opens anything on the Mac (e2e/updates.spec.ts). */
   updateOpenLog: env['MERGELANE_E2E_UPDATE_OPEN_LOG'],
+  /** The login item status a test run pretends macOS reports ('enabled', 'requires-approval' or
+   * 'not-registered'); unset, a test or development build has no login item to offer. */
+  loginItemStatus: env['MERGELANE_E2E_LOGIN_ITEM'],
   /** How long after launch the daily update check first looks whether a check is due. */
   updateFirstCheckMs: positiveNumber('MERGELANE_E2E_UPDATE_FIRST_CHECK_MS', 10_000),
   /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */
@@ -60,6 +63,18 @@ export const testKnobs = {
   /** `MERGELANE_E2E_DHT_BOOTSTRAP=127.0.0.1:9` starts the DHT from these nodes instead of the
    * internet's, so a test can have a DHT that reaches no one. */
   torrentDhtBootstrap: env['MERGELANE_E2E_DHT_BOOTSTRAP']?.split(',').filter(Boolean)
+}
+
+/** What a test run would have shown on the Mac (a notification, the menu bar's title) or
+ * registered with it (a login item), kept on the main process's global for the test to read with
+ * evaluateMain: `globalThis.__mergelaneTest`. */
+export function testRecord(kind: string, value: unknown, replace = false): void {
+  const store = ((globalThis as Record<string, unknown>).__mergelaneTest ??= {}) as Record<
+    string,
+    unknown
+  >
+  if (replace) store[kind] = value
+  else ((store[kind] ??= []) as unknown[]).push(value)
 }
 
 /** `MERGELANE_E2E_STREAMS=2` fixes how many streams each network runs and turns the automatic

@@ -64,6 +64,7 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     updateSettings: vi.fn(() => Promise.resolve()),
+    loginItem: vi.fn(() => Promise.resolve({ on: false, status: 'unavailable' })),
     usenetServer,
     chooseDestinationFolder: vi.fn(() => Promise.resolve('/Users/test/Films'))
   } as unknown as typeof window.mergelane

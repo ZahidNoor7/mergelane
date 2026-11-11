@@ -630,3 +630,43 @@ until the owner overrides it.
   - The disk image is kept in `<userData>/updates` and emptied at every launch. A test run writes the path it
     would open to a file (`MERGELANE_E2E_UPDATE_OPEN_LOG`) instead of opening anything or quitting.
   - The check sends GitHub the Mac's IP address and the `User-Agent`, and nothing else.
+
+## ADR-0037: The menu bar, Open at login and download notifications (M3.3)
+
+- Status: Owner (2026-11-11). For Open at login, the owner chose "try it, and show macOS's real status" over leaving
+  it out until a Developer ID exists, and over a manual-only row.
+- Context:
+  - The design's Settings › General › "On this Mac" has three switches: Open at login, the merged speed in the menu
+    bar, and a notification when a download finishes.
+  - Electron's `app.setLoginItemSettings` uses Apple's `SMAppService` on macOS: by default `mainAppService`, the app
+    itself, not a daemon. Electron's docs (v44.4.4, `docs/api/app.md`) warn: "your app should be code signed and
+    notarized for login item settings to work reliably… `openAtLogin` may silently fail to take effect."
+    Mergelane is ad-hoc signed.
+  - Electron's Notification docs: macOS notifications use the UNNotification API, which "requires an application
+    to be code-signed"; an unsigned app gets a `failed` event.
+- Decision:
+  - **Open at login:**
+    - It is off by default. Apple asks that an app not open at login without the user's consent, so the design's
+      default (on) is not followed here.
+    - Turning it on calls `app.setLoginItemSettings({ openAtLogin })` with the default `mainAppService`.
+    - Settings then shows the `status` that `app.getLoginItemSettings()` reports: `enabled`, `requires-approval`
+      or `not-registered`. When macOS didn't take it, the row says how to add Mergelane in System Settings ›
+      General › Login Items.
+    - Only a packaged app registers itself. A development or test build never does.
+    - Opened at login (`wasOpenedAtLogin`), the app starts without its window, in the menu bar and the Dock.
+  - **Menu bar:**
+    - On macOS, an Electron `Tray` with the template icon (`resources/trayTemplate.png`, `@2x`). macOS colours it
+      for a light or dark menu bar.
+    - While bytes move, its title is the merged speed (`setTitle`, `monospacedDigit`), in the units the window
+      uses.
+    - On by default; turning it off removes the item. The menu: Open Mergelane, then Quit Mergelane.
+  - **Notifications:**
+    - When a download finishes and Mergelane isn't the app in front, it posts "Download finished" with the file's
+      name. Clicking it shows that download.
+    - On by default. A `failed` event is logged; macOS's own notification settings govern the rest.
+  - In a test run, none of the three reaches macOS: what would be shown or registered is kept in memory for the
+    tests to read.
+- Consequences:
+  - Whether ad-hoc signing is enough for `SMAppService` and UNNotification is only known on a real install. The
+    Settings row reports what macOS says rather than assuming.
+  - Developer ID signing and notarization (Later) should make all three reliable without code changes.

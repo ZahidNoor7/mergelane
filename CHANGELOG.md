@@ -13,6 +13,12 @@ All notable changes to Mergelane are recorded here. The format follows
   the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
   new version over the old one. Turn on "Download updates in the background" to have it download by itself;
   installing always waits for you.
+- Mergelane in the menu bar: its icon, and the merged speed beside it while downloads run, in the units you chose.
+  Turn it off in Settings › General › On this Mac.
+- Open at login (Settings › General › On this Mac), off until you turn it on. Opened at login, Mergelane starts
+  in the menu bar without its window. If macOS doesn't accept it or wants your approval, the setting says so and
+  tells you where to add Mergelane yourself.
+- "Notify me when a download finishes" turns the finished-download notification off or on.
 - A notice in the sidebar, and a dot on Settings, when a new version is out. The app menu has "Check for
   Updates…".
 

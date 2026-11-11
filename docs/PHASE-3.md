@@ -112,6 +112,10 @@ From the design's Settings › General:
 The login item must fit CLAUDE.md's no-`SMAppService`-daemon rule. Electron's login-item API is checked against
 its docs before choosing.
 
+- **Decided (owner, 2026-11-11, ADR-0037):** Open at login uses Electron's `setLoginItemSettings` (`SMAppService`,
+  the app itself, not a daemon), off by default. It shows the status macOS reports, since an app that isn't
+  notarized may not be accepted.
+
 ### M3.4 Browser extensions
 
 - The design's Settings › Browser extensions: browsers found on this Mac, install, update and on/off state, and the

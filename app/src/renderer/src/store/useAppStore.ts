@@ -137,6 +137,11 @@ interface AppStore {
   setGlassLook: (look: GlassLook) => void
   solidGlass: boolean
   setSolidGlass: (solid: boolean) => void
+  /** Settings › General › On this Mac (ADR-0037). */
+  menuBarSpeed: boolean
+  setMenuBarSpeed: (on: boolean) => void
+  notifyWhenDone: boolean
+  setNotifyWhenDone: (on: boolean) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -365,6 +370,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ solidGlass })
     // Only ever saved as true: off clears it.
     persist({ solidGlass: solidGlass || undefined })
+  },
+  menuBarSpeed: initial.menuBarSpeed,
+  setMenuBarSpeed: (menuBarSpeed) => {
+    set({ menuBarSpeed })
+    // Only ever saved as false: on clears it.
+    persist({ menuBarSpeed: menuBarSpeed ? undefined : false })
+  },
+  notifyWhenDone: initial.notifyWhenDone,
+  setNotifyWhenDone: (notifyWhenDone) => {
+    set({ notifyWhenDone })
+    persist({ notifyWhenDone: notifyWhenDone ? undefined : false })
   },
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),

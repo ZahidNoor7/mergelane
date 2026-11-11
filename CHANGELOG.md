@@ -5,60 +5,55 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
-### Changed
+## [0.3.0] - 2026-11-12
 
-- By default the extension now sends Mergelane only files over 1 MB that are videos, archives, disk images, apps
-  or of a type Mergelane doesn't recognise. Documents, images and audio stay with the browser unless you tick them in
-  Settings › Browser extensions.
-- A network's data limit now counts what torrents upload over it as well as what Mergelane downloads, as carriers
-  do. A network that reaches its limit stops carrying uploads too.
-- Slow mode now holds uploads too: at most its speed for all downloads together, and the same for all uploads.
+Mergelane now keeps itself up to date from GitHub, sits in the menu bar, and lets you choose which network carries
+your downloads and your uploads. The browser extension comes inside the app, with one set of rules for every
+browser.
 
 ### Added
 
-- Settings › General › Troubleshooting › Save Diagnostics… (also in the app menu) saves a zip to attach to a GitHub
-  issue: Mergelane's and macOS's versions, your Mac's networks, settings and recent downloads, and the helper's
-  log. Links keep only their site, file names only their type, and passwords, cookies, proxy and news-server
-  sign-ins, your home folder and public IP addresses are left out. Mergelane never sends it anywhere.
-- The Dashboard's Today shows the fastest merged speed of the day, and the network dropouts of the last 24 hours.
-  Dropouts and the fastest speed are now kept when Mergelane quits, for a week, and a network that came back
-  while Mergelane was closed says so.
-- "Offer links I copy" (Settings › Downloads), off until you turn it on. When you switch to Mergelane, a link you
-  copied in another app is offered at the foot of the sidebar: "Download…" opens New download with it, and
-  "Dismiss" puts it away. The same link isn't offered again. Mergelane reads what you copied only when you switch
-  to it, and never saves it. macOS may ask once whether to allow it.
-- Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
-  what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off.
-- "Download and install" downloads the new version's disk image, with progress and Cancel, and checks it against
-  the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
-  new version over the old one. Turn on "Download updates in the background" to have it download by itself;
-  installing always waits for you.
-- Networks › Which network carries what: send every download over one network (Ethernet, say), the running ones
-  included, or over all of them as before. Choose whether the other networks stand in when the chosen one drops,
-  or downloads wait for it.
-- Networks › Which network carries what › Uploads use: send every torrent upload over one network (Wi-Fi, say,
-  to keep them off your iPhone's data plan), whichever network downloads use, or over the networks each torrent
-  downloads over, as before. Running torrents follow a change at once.
-- Speed & data limits: limit how fast torrents upload, for all networks together and for each network. Upload
-  limits are separate from download limits and slow mode, and uploads still don't count toward data limits.
-- Settings › Browser extensions shows when each browser's extension last reached Mergelane and its version, and
-  says when to restart a browser to use a newer one. "What the extension does" sets the rules once for every
-  browser: whether to send downloads, a minimum size, the file types, and whether to list a page's videos.
-- Settings › Browser extensions finds Chrome, Edge, Chromium and Firefox on your Mac and guides you through
-  loading the Mergelane extension in each. The extension now comes inside Mergelane, so you no longer build it
-  yourself, and Microsoft Edge is supported. Brave, Vivaldi and Safari are listed with what they still need.
-- Mergelane in the menu bar: its icon, and the merged speed beside it while downloads run, in the units you chose.
-  Turn it off in Settings › General › On this Mac.
-- Open at login (Settings › General › On this Mac), off until you turn it on. Opened at login, Mergelane starts
-  in the menu bar without its window. If macOS doesn't accept it or wants your approval, the setting says so and
-  tells you where to add Mergelane yourself.
-- "Notify me when a download finishes" turns the finished-download notification off or on.
-- A notice in the sidebar, and a dot on Settings, when a new version is out. The app menu has "Check for
-  Updates…".
+- **Updates.** Settings › Updates checks GitHub for a newer Mergelane on request and once a day, and shows what's
+  new. "Download and install" downloads it with progress, checks it against the SHA-256 published with the
+  release, and "Quit and install" opens it so you drag the new version over the old one. Choose Stable or Beta,
+  skip a version, download in the background, or turn checks off. The sidebar and the app menu ("Check for
+  Updates…") say when one is out.
+- **On this Mac** (Settings › General):
+  - the merged speed in the menu bar while downloads run;
+  - Open at login, off until you turn it on; it starts in the menu bar, and says plainly if macOS wants your
+    approval or didn't accept it;
+  - a switch for the notification when a download finishes.
+- **Which network carries what** (Networks): send every download over one network, the running ones included,
+  and every torrent upload over one network (keep them off your iPhone's data plan, say). Choose whether the other
+  networks stand in when the chosen one drops.
+- **Upload limits** (Speed & data limits): how fast torrents upload, in total and per network.
+- **Browser extensions** (Settings):
+  - finds Chrome, Edge, Chromium and Firefox on your Mac and walks you through loading the extension, which now
+    comes inside Mergelane; Microsoft Edge is supported; Brave, Vivaldi and Safari say what they still need;
+  - shows when each browser last reached Mergelane, and when to restart one for a newer extension;
+  - "What the extension does": one set of rules for every browser: whether to send downloads, a minimum size, the
+    file types, and whether to list a page's videos.
+- **Offer links I copy** (Settings › Downloads), off until you turn it on. When you switch to Mergelane, a link you
+  copied is offered at the foot of the sidebar. Mergelane reads the clipboard only then, and never saves it. macOS
+  may ask once whether to allow it.
+- **Save Diagnostics…** (Settings › General › Troubleshooting, and the app menu) saves a zip to attach to a GitHub
+  issue. Links keep only their site and file names only their type; passwords, cookies, sign-ins, your home folder
+  and IP addresses are left out. Mergelane never sends it anywhere.
+- **Today** on the Dashboard shows the fastest merged speed of the day and the network dropouts of the last 24
+  hours. Dropouts and the fastest speed are kept when Mergelane quits, for a week.
+
+### Changed
+
+- By default the extension sends Mergelane only files over 1 MB that are videos, archives, disk images, apps, or
+  of a type Mergelane doesn't recognise. Documents, images and audio stay with the browser unless you tick them in
+  Settings › Browser extensions.
+- A network's data limit counts what torrents upload over it as well as what Mergelane downloads, as carriers do.
+  A network at its limit stops uploading too.
+- Slow mode holds uploads too: at most its speed for all downloads together, and the same for all uploads.
 
 ### Fixed
 
-- Speed & data limits › Reset data usage: when the reset fails, its window now stays open and says why, instead of
+- Speed & data limits › Reset data usage: when the reset fails, its window stays open and says why, instead of
   closing as if it had worked.
 
 ## [0.2.0] - 2026-11-11

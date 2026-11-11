@@ -1,26 +1,29 @@
-# Media tools: yt-dlp and FFmpeg
+# Media tools: yt-dlp, FFmpeg and Deno
 
-Mergelane uses two outside programs for video:
+Mergelane uses three outside programs for video:
 
-- **yt-dlp** finds and downloads video from websites.
+- **yt-dlp** finds a YouTube video's formats (ADR-0026). Mergelane downloads them itself.
 - **FFmpeg** joins separate audio and video tracks, and turns HLS and DASH streams into normal files.
+- **Deno** is the JavaScript runtime yt-dlp runs YouTube's player challenges in (see "Deno" below).
 
-CLAUDE.md requires that both ship only as separate programs inside the app, fetched when the app is built, checked
-against pinned SHA-256 checksums, and never committed to git. This page says which exact builds we use, why, and
-what their licences ask of us.
+CLAUDE.md requires that all of them ship only as separate programs inside the app, fetched (or, for FFmpeg, built)
+when the app is built, checked against pinned SHA-256 checksums, and never committed to git. This page says which
+exact builds we use, why, and what their licences ask of us.
 
 ## In short
 
 | | yt-dlp | FFmpeg |
 |---|---|---|
 | Version | 2026.10.26 (latest release on 2026-11-10) | 9.0.2 (latest stable FFmpeg, released 2026-09-18) |
-| Comes from | yt-dlp's own GitHub release | Martin Riedl's build server, ffmpeg.martin-riedl.de |
-| File | `yt-dlp_macos` (37.5 MB) | `ffmpeg.zip` (28.4 MB), containing one 66.3 MB program |
+| Comes from | yt-dlp's own GitHub release | **Built by Mergelane** from ffmpeg.org's source release (ADR-0028) |
+| File | `yt-dlp_macos.zip` (54.2 MB), unpacked into a folder (96 MB, 134 files) | `ffmpeg-9.0.2.tar.xz` (12.0 MB), built into one 4.1 MB program |
 | Runs on Apple silicon | Yes: a universal program with an arm64 part | Yes: arm64 only |
-| Checksum published by the source | Yes, in the release's `SHA2-256SUMS` file | Yes, a `.sha256` file next to the download |
-| Licence of the program we ship | GPL version 3 or later (yt-dlp's own code is Unlicense) | GPL version 3 or later |
+| Checksum | The release's `SHA2-256SUMS` | Pinned by us; FFmpeg's GPG signature checked when it was pinned |
+| Licence of the program we ship | GPL version 3 or later (yt-dlp's own code is Unlicense) | **LGPL version 2.1 or later** |
+| Source on each Mergelane release | `yt-dlp-2026.10.26-source.tar.gz` | `ffmpeg-9.0.2-source.tar.xz` and `ffmpeg-9.0.2-build-ffmpeg.sh` |
 
-To fetch them (on a Mac, with Node.js 22 or later, as in CI, and the Xcode command line tools):
+To fetch and build them (on an Apple silicon Mac, with Node.js 22 or later, as in CI, and the Xcode command line
+tools, which the FFmpeg build needs: clang and make):
 
 ```sh
 node scripts/media-tools/fetch.mjs            # into app/resources/bin (ignored by git)
@@ -28,53 +31,136 @@ node scripts/media-tools/fetch.mjs some/dir   # or anywhere else
 ```
 
 The pinned list is `scripts/media-tools/tools.json`. The licence texts are committed in
-`scripts/media-tools/licenses/`, and the script copies them next to the programs.
+`scripts/media-tools/licenses/`, and the script copies them next to the programs. A full fetch took 80 seconds on the
+owner's Mac (2026-11-11), most of it downloads and the FFmpeg build; a second run that finds everything in place takes
+a fraction of a second.
 
-## yt-dlp: which file and why
+## yt-dlp: the unpacked macOS build (ADR-0031)
 
 We use the official release from https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26, the file named
-`yt-dlp_macos`. yt-dlp's README describes it as the "Universal MacOS (10.15+) standalone executable
-(recommended for MacOS)".
+`yt-dlp_macos.zip`: the same program as the single-file `yt-dlp_macos`, as a folder with the program `yt-dlp_macos`
+and its `_internal` files (Python, its libraries, and yt-dlp's code).
 
-- **It runs natively on Apple silicon.** "Universal" means the file holds two copies of the program, one for Intel
-  (`x86_64`) and one for Apple silicon (`arm64`); the Mac picks the `arm64` one. `lipo -archs` reports
-  `x86_64 arm64`, and running it printed `2026.10.26`.
-- **It needs nothing else installed.** It carries its own Python. The other macOS-capable downloads are not suitable:
-  the plain `yt-dlp` file needs Python installed on the Mac, and `yt-dlp_macos.zip` is a folder of many files
-  (it starts faster, but is harder to bundle and sign; see the open questions).
-- **The checksum is the publisher's.** The SHA-256 we computed,
-  `0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa`, matches the line for `yt-dlp_macos` in the release's `SHA2-256SUMS` file and GitHub's own record of the upload.
-  yt-dlp also signs `SHA2-256SUMS` with GPG; that signature was not checked here because GPG is not installed.
+- **Why the folder, not the single file.** The single file is a PyInstaller "one-file" program: every run unpacks
+  itself into a new temporary folder first. On the owner's Mac each run of it took about 24 seconds, and each YouTube
+  video costs at least two runs (New download, then one per network as it downloads, ADR-0030). The folder needs no
+  unpacking. Measured on 2026-11-11 with `yt-dlp_macos --version`, as installed by `fetch.mjs`:
+  - first start after a fresh install: 21.4 s, and 24.7 s after a second fresh install. Almost all of it is waiting
+    (0.6 s of CPU): it looks like macOS's one-time check of newly written programs;
+  - every start after that: 0.25 to 0.26 s;
+  - a copy re-signed ad-hoc with the hardened runtime, as packaging does: 0.32 s the first time, 0.25 s after.
+  How long the very first start takes for a user after installing the DMG can only be measured on a packaged build.
+- **It runs natively on Apple silicon.** `lipo -archs` on `yt-dlp_macos` reports `x86_64 arm64`, and it prints
+  `2026.10.26`.
+- **The checksum is the publisher's.** The zip's SHA-256,
+  `20d98fa608998eff87d1d35a6e9fb65e4b874639a6cc89addc19da3becde3ef1`, matches its line in the release's
+  `SHA2-256SUMS` and GitHub's own digest of the upload (checked 2026-11-11). yt-dlp also signs `SHA2-256SUMS` with GPG;
+  that signature was not checked here (see the open questions).
+- **One repair: three links.** yt-dlp's build workflow makes the zip with `zip -r` (`.github/workflows/build.yml` at
+  the tag), which stores symbolic links as copies. So the zip's `_internal/Python.framework` holds copies where
+  PyInstaller made links (`Versions/Current`, and `Python` and `Resources` at the top). electron-builder's signer
+  (`@electron/osx-sign`) refuses that framework ("bundle format is ambiguous (could be app or framework)"), so the app
+  could not be packaged. `tools.json` lists the three (`links`), and `fetch.mjs` turns each back into its link, only
+  when the copy is byte-for-byte identical to what the link points to. Every file keeps its contents; the folder
+  shrinks from 124 MB to 96 MB. Re-signed with the hardened runtime as electron-builder does, all 105 Mach-O files in
+  it then verify (`codesign --verify --strict`), and the program runs.
 - It is ad-hoc signed (no Apple Developer ID). Mergelane re-signs everything in its bundle anyway.
 
-Not part of this change, but worth knowing for the YouTube review: yt-dlp's README says full YouTube support now also
-needs `yt-dlp-ejs` and a JavaScript runtime such as Deno or Node.js.
+For YouTube, yt-dlp also needs `yt-dlp-ejs` (its challenge-solver scripts) and a JavaScript runtime. Checked on
+2026-11-11 against the pinned single-file program, from the same release and the same code:
 
-## FFmpeg: which build and why
+- **The scripts are built into the program.** Its `--verbose` header lists `yt_dlp_ejs-0.8.0` among its libraries,
+  and the README says of `--remote-components`: "This option is currently not needed if you are using an official
+  executable". yt-dlp checks the scripts against SHA3-512 hashes kept in its own code
+  (`yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py`, version 0.8.0), so they are pinned with the program. The
+  folder build has them in `_internal/yt_dlp_ejs`.
+- **Nothing is fetched at run time.** Mergelane passes `--no-remote-components`; yt-dlp would otherwise only fetch
+  scripts from npm or GitHub when told to (`ejs:npm`, `ejs:github`, which are off by default).
+- **The runtime is ours.** `--no-js-runtimes --js-runtimes deno:<path>` enables only the bundled Deno (the header
+  then reads `JS runtimes: deno-2.9.8`). yt-dlp runs it as `deno run --ext=js --no-code-cache --no-prompt
+  --no-remote --no-lock --node-modules-dir=none --no-config --no-npm --cached-only -`
+  (`jsc/_builtin/deno.py`).
+- The live test (`app/e2e/youtubeLive.spec.ts`) passed with the folder build and our FFmpeg on 2026-11-11.
 
-The FFmpeg project (ffmpeg.org) publishes only source code and points to other people's builds. For macOS its
-download page links to one site, evermeet.cx. These are the arm64 options that were checked, each on its own site:
+## FFmpeg: our own minimal build (ADR-0028)
 
-| Source | Apple silicon build? | Notes | Verdict |
-|---|---|---|---|
-| evermeet.cx (the one ffmpeg.org links) | **No.** Intel only. The site says: "I do not plan to provide native ffmpeg binaries for Apple Silicon ARM." | Good build notes and GPG signatures, but Intel code would not meet CLAUDE.md's arm64-only rule. | Rejected |
-| osxexperts.net | Yes, FFmpeg 9.0.2 (`ffmpeg902arm.zip`) | Publishes one SHA-256, without saying whether it is for the zip or the program. Does not publish the configure options. Its "Source used to compile" link points to FFmpeg's 6.1 branch, not 9.0.2. Says the files are "for educational purposes only". | Not chosen: weak provenance |
-| eugeneware/ffmpeg-static (GitHub) | Yes, `ffmpeg-darwin-arm64` | Latest release b6.1.1 (November 2025). Its download script takes the macOS arm64 build from osxexperts.net (`ffmpeg6arm.zip`, FFmpeg 6). | Rejected: old and second-hand |
-| Martin Riedl's build server, ffmpeg.martin-riedl.de | Yes, FFmpeg 9.0.2 release build (and snapshots) | Publishes a `.sha256` file for every download, a `versions.txt` with the exact configure line and every library version, and its build script (https://git.martin-riedl.de/ffmpeg/build-script). Each version has its own download address, and older versions stay listed. The program is signed with an Apple Developer ID ("Martin Riedl (KU3N25YGLU)") with the hardened runtime. | **Chosen** |
+FFmpeg's project publishes source code only. Mergelane builds its FFmpeg from the official source release with
+`scripts/media-tools/build-ffmpeg.sh`, which `fetch.mjs` runs after checking the tarball's pinned SHA-256.
 
-What was checked on the chosen download:
+**Why our own build.** Mergelane only joins and rewraps media with stream copy (`app/src/main/media/mux`), so it needs
+no encoders. The earlier choice, Martin Riedl's static GPL build (ADR-0022), downloads x264 from its `master` branch on
+every build without recording the commit, so we could not attach the exact source of the program we would ship
+(ADR-0027). The prebuilt macOS builds that were compared (evermeet.cx: Intel only; osxexperts.net: no configure
+options published; the ffmpeg-static npm package: an old second-hand build) are recorded in ADR-0022.
 
-- The zip's SHA-256 matches the published one:
-  `c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924`.
-- The zip holds a single file, `ffmpeg`. Its own SHA-256,
-  `2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384`, is a value **we computed**; it is pinned too, so the script can check the unpacked program and skip downloads it already has.
-- `lipo -archs` reports `arm64`, and `ffmpeg -version` reports 9.0.2 with the configure line below.
-- `otool -L` lists only Apple's own system libraries and frameworks, so every codec library is built into the program
-  (statically linked) and nothing else needs installing.
+**What the build contains** (the configure options in `build-ffmpeg.sh`):
 
-The trust trade-off: Martin Riedl's server is a one-person project and ffmpeg.org does not link to it. We rely on him
-for what is inside the build. The pinned checksums mean the file can never change under us without the build failing,
-and the Developer ID signature identifies who built it.
+- `--disable-everything`, then only:
+  - demuxers `mov` (MP4 and M4A), `mpegts`, `matroska` (MKV and WebM), `aac`, `mp3`, `ac3` and `eac3`, which are the
+    formats the mux module whitelists (`INPUT_DEMUXERS` in `run.ts`);
+  - muxers `mp4` and `matroska`;
+  - parsers for H.264, HEVC, AV1, VP8, VP9, AAC (and LATM), AC-3, MPEG audio, Opus, FLAC and Vorbis;
+  - decoders for AAC, AAC LATM, MP3, AC-3, E-AC-3, Opus, FLAC, Vorbis and VP9: stream copy reads a frame or two to
+    learn what a container doesn't say. Nothing is ever re-encoded; the build has no encoders at all;
+  - bitstream filters `aac_adtstoasc`, `vp9_superframe` and `extract_extradata`;
+  - protocols `file` (the media) and `pipe` (the module reads `-progress pipe:1` on standard output; the inputs are
+    limited to `file` by `-protocol_whitelist file`).
+- `--disable-autodetect --disable-network`, no devices (`--disable-avdevice`), no ffplay or ffprobe, and no outside
+  libraries except macOS's own zlib and system frameworks (`otool -L`).
+- Not `--enable-gpl`, `--enable-version3` or `--enable-nonfree`. The script fails if the result's `-buildconf` shows
+  any of them, or if `ffmpeg -L` does not report the GNU Lesser General Public License.
+
+**What was checked** (2026-11-11, this Mac, FFmpeg 9.0.2):
+
+- The tarball: 12,040,788 bytes, SHA-256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`, and
+  `gpg --verify` against `ffmpeg-9.0.2.tar.xz.asc` gave "Good signature" from the FFmpeg release signing key
+  `FCF986EA15E6E293A5644F10B4322F04D67658D8`, the fingerprint ffmpeg.org's download page publishes. Both are in
+  `tools.json` (`signatureUrl`, `signingKey`); the fetch checks the SHA-256, not the signature.
+- The program: 4.1 MB, arm64 only, LGPL version 2.1 or later. Two separate builds on this Mac gave the same SHA-256.
+- It joined all 52 video and audio combinations tried, identical to Homebrew's full FFmpeg 8.1.2 (H.264, HEVC, VP9 and
+  AV1 video with AAC, Opus, MP3, AC-3 and E-AC-3 audio, into MP4 and MKV, and MPEG-TS rewraps).
+- The first version of the script had only the `file` protocol, so every join through the app's mux module failed:
+  the module asks for `-progress pipe:1` ("Send program-friendly progress information to url", ffmpeg's
+  documentation), and FFmpeg answered "Protocol not found". Adding `pipe` fixed it; the module's real-FFmpeg tests
+  cover it.
+- The test suite runs the app's own joins with it, and checks that it refuses what it should: no encoders, no
+  network protocols (http, https, tcp and rtmp are "Protocol not found", and nothing connects), no `lavfi` or
+  `avfoundation` input (`app/e2e/mux.spec.ts`).
+- It can't make test media (no encoders, no `lavfi`), nor write the `null` output format the tests read files back
+  with, so the tests use a second, full FFmpeg for that: Homebrew's (`brew install ffmpeg`), or the one named by
+  `MERGELANE_E2E_FIXTURE_FFMPEG`. That one is test-only and never shipped. The FFmpeg under test is
+  `MERGELANE_FFMPEG_PATH`, else `app/resources/bin/ffmpeg`, and never Homebrew's (`app/e2e/streamMedia.ts`).
+
+Anything beyond stream copy, such as re-encoding, would need this build to grow.
+
+## Deno: which file and why
+
+yt-dlp needs a JavaScript runtime for YouTube (README, "Dependencies": "A JavaScript runtime/engine like deno
+(recommended)"). The app itself can't be it: its `runAsNode` fuse is off (ADR-0016).
+
+| | Deno |
+|---|---|
+| Version | 2.9.8 (latest stable release on 2026-11-11, published 2026-10-21) |
+| Comes from | Deno's own GitHub release, https://github.com/denoland/deno/releases/tag/v2.9.8 |
+| File | `deno-aarch64-apple-darwin.zip` (38.8 MB), containing one 81.5 MB program, `deno` |
+| Runs on Apple silicon | Yes: arm64 only (`lipo -archs`) |
+| Checksums published by the source | Yes: `deno-aarch64-apple-darwin.zip.sha256sum` for the zip, `deno-aarch64-apple-darwin.sha256sum` for the program |
+| Licence | MIT |
+
+What was checked on the download (2026-11-11):
+
+- The zip's SHA-256, `9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e`, matches its `.sha256sum`
+  file and GitHub's record of the upload.
+- The program's SHA-256, `d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba`, matches the release's
+  `deno-aarch64-apple-darwin.sha256sum`. Both are pinned in `tools.json`.
+- It is signed with Deno's Developer ID ("Deno Land Inc. (2H4KBF436B)"), links only macOS's own libraries
+  (`otool -L`), and `deno --version` printed `deno 2.9.8 (stable, release, aarch64-apple-darwin)`.
+- Re-signed ad-hoc with the hardened runtime and the app's `entitlements.mac.plist` (as electron-builder does), it
+  still runs JavaScript with the flags yt-dlp uses: V8 needs the `allow-jit` entitlement, which that file has. The
+  packaging test checks this on the real bundle.
+- Deno writes caches it can't be told not to into `DENO_DIR` (yt-dlp's code says "Can't avoid analysis cache").
+  Mergelane points `DENO_DIR` at a folder of its own for each yt-dlp run and deletes it after, and sets
+  `DENO_NO_UPDATE_CHECK` and `DENO_NO_PROMPT` (all from `deno --help`, "Environment variables").
 
 ## Licences, in plain words
 
@@ -87,124 +173,165 @@ This is a summary for planning, not legal advice.
   executables include GPLv3+ licensed code, and as such the combined work is licensed under GPLv3+". On macOS this
   includes, for example, mutagen (GPL-2.0-or-later). The full list is in `licenses/yt-dlp/THIRD_PARTY_LICENSES.txt`
   (some entries there are marked as Linux- or Windows-only).
-- So we treat the program we ship as **GPL version 3 or later**: `licenses/yt-dlp/GPL-3.0.txt`.
+- So we treat the program we ship as **GPL version 3 or later**: `licenses/yt-dlp/GPL-3.0.txt`. The folder build is the
+  same program in another form, so this is unchanged (ADR-0031).
 
 ### FFmpeg
 
-- FFmpeg is LGPL by default. This build was configured with `--enable-gpl --enable-version3`, which FFmpeg's own
-  `configure` script turns into the licence **"GPL version 3 or later"**. It was **not** built with
-  `--enable-nonfree` (which FFmpeg says makes a build "unredistributable"), so we may redistribute it.
-- Why GPL: it includes x264 and x265, which FFmpeg lists as GPL libraries. It also includes OpenSSL 3 and libvmaf
-  (Apache 2.0). FFmpeg's `configure` refuses OpenSSL 3 with the GPL unless `--enable-version3` is given, and its
-  `LICENSE.md` asks for the same with libvmaf.
-- Exact configure line of this build:
-
-  ```text
-  --prefix=/Volumes/ffmpeg_arm64/out --pkg-config-flags=--static --extra-version='https://www.martin-riedl.de'
-  --enable-gray --enable-libxml2 --enable-version3 --enable-gpl --enable-openssl --enable-libfreetype
-  --enable-fontconfig --enable-libharfbuzz --enable-libbluray --enable-libsnappy --enable-libsrt --enable-libvmaf
-  --enable-libass --enable-libklvanc --enable-libzimg --enable-libzvbi --enable-libaom --enable-libdav1d
-  --enable-libopenh264 --enable-libopenjpeg --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvvenc
-  --enable-libwebp --enable-libx264 --enable-libx265 --enable-libmp3lame --enable-libopus --enable-libvorbis
-  --enable-libtheora
-  ```
-
-- Libraries listed for this build (versions in `licenses/ffmpeg/BUILD-VERSIONS.txt`): aom, libass, libbluray, dav1d, fontconfig,
-  freetype, fribidi, harfbuzz, libklvanc, lame, openh264, OpenJPEG, OpenSSL, opus, rav1e, SDL, snappy, srt, svt-av1,
-  libtheora, libvmaf, libvorbis, vpx, vvenc, libwebp, x264, x265, libxml2, zimg, zlib and zvbi.
+- FFmpeg is LGPL version 2.1 or later unless it is configured with `--enable-gpl` or `--enable-version3` (its
+  `LICENSE.md`). Ours is configured with neither, and with no outside library that would ask for them, so the program
+  we ship is **LGPL version 2.1 or later**, as `ffmpeg -L` reports.
+- Texts: `licenses/ffmpeg/LICENSE.md` and `licenses/ffmpeg/COPYING.LGPLv2.1`, both from the verified 9.0.2 tarball.
+- The LGPL asks that the program comes with its complete corresponding source, or with equivalent access to it from
+  the same place (section 4), and defines that source as "all the source code for all modules it contains, plus any
+  associated interface definition files, plus the scripts used to control compilation and installation of the
+  library". For us that is exactly two files: the tarball and `build-ffmpeg.sh`. Both are attached to every release.
 - FFmpeg's `LICENSE.md` also says three of its files come from libjpeg, and that when only the program (not source)
   is shipped, the documentation must state that "this software is based in part on the work of the Independent JPEG
-  Group". That sentence goes in `THIRD-PARTY-NOTICES.md`.
-- Texts: `licenses/ffmpeg/LICENSE.md` and `licenses/ffmpeg/COPYING.GPLv3`, both from FFmpeg's `n9.0.2` tag.
+  Group". We ship the source too, but the sentence is in `THIRD-PARTY-NOTICES.md` anyway.
 
-### What the GPL means for Mergelane
+### Deno
+
+- Deno is released under the **MIT** licence: `licenses/deno/LICENSE.md`, from the `v2.9.8` tag. It asks only that
+  the notice ships with the program, which the fetch script and the packaging config do.
+- Being MIT, it needs no source offer (ADR-0027), so `tools.json` gives no `sourceSha256` for it and the release
+  doesn't attach its source.
+- The program also contains V8 (BSD-3-Clause), TypeScript (Apache-2.0) and many Rust libraries under their own
+  permissive licences. Deno's release publishes no list of them, and they are not collected here yet (see the open
+  questions).
+
+### What this means for Mergelane
 
 - **Mergelane stays MIT.** It runs these tools as separate programs and does not link their code into its own. The
   GPL (version 3, section 5) calls this an "aggregate": putting a GPL program in one "does not cause this License to
   apply to the other parts of the aggregate."
-- **What we must do whenever we hand out a DMG:**
-  1. Ship the licence texts with the programs. The fetch script and the proposed packaging config do this.
+- **What we do whenever we hand out a DMG:**
+  1. Ship the licence texts with the programs: `fetch.mjs` copies them, electron-builder puts them in
+     `Contents/Resources/licenses/`, and the packaging test checks they are there.
   2. Keep the authors' notices, and never present the tools as Mergelane's own work.
-  3. Make the matching source code available ("Corresponding Source"): the source for exactly these builds, including
-     the build scripts. Because we distribute over the internet (GitHub Releases), GPL version 3 section 6(d) lets the
-     source sit on another server, even someone else's, "provided you maintain clear directions next to the object
-     code saying where to find the Corresponding Source". It also says "you remain obligated to ensure that it is
-     available for as long as needed".
-- **Where that source is today:**
-  - FFmpeg 9.0.2: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (signed by FFmpeg; the `.asc` signature is next
-    to it), plus the library sources at the versions in `BUILD-VERSIONS.txt`, and the build script at
-    https://git.martin-riedl.de/ffmpeg/build-script. That repository has no tags, so the exact script revision used
-    for this build is not recorded.
-  - yt-dlp 2026.10.26: https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.tar.gz (its SHA-256 is
-    in `tools.json`). For the bundled libraries, `THIRD_PARTY_LICENSES.txt` points to the original projects and says
-    the yt-dlp maintainers will provide sources on request.
-- **Recommendation:** because we stay responsible even when the source lives on someone else's server, attach the
-  source archives (FFmpeg 9.0.2 with its library sources, and yt-dlp 2026.10.26) to every Mergelane GitHub release
-  that ships these programs, and say so in `THIRD-PARTY-NOTICES.md`. This needs your decision (see open questions).
+  3. Make the matching source code available: every GitHub release has yt-dlp's source tarball, FFmpeg's source
+     tarball and FFmpeg's build script attached (ADR-0027, `scripts/media-tools/sources.mjs`, `docs/RELEASING.md`),
+     each checked against its pinned SHA-256, and the release notes say so. For the libraries bundled in yt-dlp,
+     `THIRD_PARTY_LICENSES.txt` points to the original projects and says the yt-dlp maintainers will provide sources
+     on request.
 
 ## How the fetch works
 
-`scripts/media-tools/fetch.mjs` uses only Node.js built-ins and the macOS tools `ditto`, `tar` and `lipo`. For each
-tool in `tools.json` it:
+`scripts/media-tools/fetch.mjs` uses only Node.js built-ins and the macOS tools `ditto`, `tar`, `lipo` and `bash`.
+Each tool in `tools.json` says how it is installed (`install`):
 
-1. skips the tool when the installed program already has the pinned SHA-256 (it only refreshes the licence texts);
+- **`file`** (Deno): one program, `<output>/<name>`. Skipped when that file already has the pinned SHA-256 (only the
+  licence texts are refreshed).
+- **`folder`** (yt-dlp): an archive whose contents become `<output>/<name>/`; `executable` names the program in it,
+  and `links` the copies to turn back into links (see the yt-dlp section).
+- **`build`** (FFmpeg): the source tarball at `sourceUrl`, pinned by `sourceSha256`, built by `buildScript`, a script
+  next to `tools.json`.
+
+For each one it:
+
+1. checks whether the installed copy is still right: for a file, its SHA-256; for a folder or a build, the stamp in
+   `<output>/.stamps/<name>.json` must match the pinned hashes (and the build script's SHA-256, for a build) and the
+   hash of what is installed (the program, or every file, link and permission in the folder). If so, nothing is
+   downloaded or built;
 2. downloads the pinned address, following redirects. Only `https` is allowed (plain `http` only for the local test
    server);
-3. checks the download's SHA-256 **before** anything is unpacked or made executable. A mismatch stops the build with
-   both values printed, and the download is deleted;
-4. unpacks a zip with `/usr/bin/ditto` (or a tar archive with `/usr/bin/tar`) into an empty temporary folder, refuses
-   paths that lead out of it, and checks the unpacked program's own SHA-256;
+3. checks the download's SHA-256 **before** anything is unpacked, built or made executable. A mismatch stops with both
+   values printed, and the download is deleted;
+4. for a file, unpacks a zip with `/usr/bin/ditto` (or a tar archive with `/usr/bin/tar`) into an empty temporary
+   folder, refuses paths that lead out of it, and checks the program's own SHA-256; for a folder, unpacks it the same
+   way and refuses anything in it that is not a file, a folder, or a link that stays inside; for a build, runs
+   `/bin/bash <script> <tarball> <out-dir>` (an argument list, no command line for a shell to parse) with its own
+   temporary folder as `TMPDIR`, removed afterwards whatever happens; the script must write `<out-dir>/<name>`;
 5. checks that `lipo -archs` lists `arm64`;
-6. copies the licence texts to `<output>/licenses/<tool>/`, then installs the program as `<output>/<tool>` with
-   permissions 0755.
+6. replaces `<output>/licenses/<tool>/` with exactly the tool's licence texts, then installs the program (mode
+   0755) or the folder, and writes the stamp.
 
-Any failure exits with code 1 and a message starting `fetch-media-tools:`, and leaves no half-installed program.
+Any failure exits with code 1 and a message starting `fetch-media-tools:` (a failed build ends with the last lines of
+its output), and leaves no half-installed program: whatever was installed before stays as it was.
 
-Tests (no network; they build tiny programs with `clang` and serve them from a local web server):
+Tests (no network and no real compile: tiny programs made with `clang`, served from a local web server, and fake
+build scripts):
 
 ```sh
 node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/fetch.mjs' \
   scripts/media-tools/fetch.test.mjs
+node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/sources.mjs' \
+  scripts/media-tools/sources.test.mjs
 ```
 
 ## Updating a pinned version
 
 Do this in a scratch folder, never in the repository.
 
-1. **yt-dlp:** `gh api repos/yt-dlp/yt-dlp/releases/latest`. Download `yt-dlp_macos` and `SHA2-256SUMS` from that
-   release, check that `shasum -a 256 yt-dlp_macos` matches its line in `SHA2-256SUMS`, and run
-   `lipo -archs` on it. In `tools.json`, update `version`, `url`, `sha256`, `sourceUrl`, `sourceSha256` (the
-   `yt-dlp.tar.gz` line) and `checksumSource`. Replace `licenses/yt-dlp/LICENSE` and `THIRD_PARTY_LICENSES.txt` with
-   the files from the new tag, and re-read the README's "Licensing" section in case it changed.
-2. **FFmpeg:** on https://ffmpeg.martin-riedl.de, under "Download Release Build" › "macOS (Apple Silicon/arm64)", take
-   the FFmpeg (ZIP) link and its SHA256 file. Download and check the zip, unpack it with `ditto -x -k`, run
-   `shasum -a 256`, `lipo -archs`, `otool -L` and `ffmpeg -version` on the program. Check that the configure line
-   has no `--enable-nonfree`. Update `version`, `url`, `sha256`, `binarySha256`, `sourceUrl` and `checksumSource`.
-   Replace `licenses/ffmpeg/BUILD-VERSIONS.txt` with that build's `versions.txt`, and `LICENSE.md` and
-   `COPYING.GPLv3` with the files from FFmpeg's new tag (for example `n9.0.3`).
-3. Run the tests and the fetch, update the versions and checksums in `THIRD-PARTY-NOTICES.md`, and delete the scratch
-   folder.
+- **FFmpeg:** on https://ffmpeg.org/download.html, take the newest release's `ffmpeg-X.Y.Z.tar.xz` and its `.asc`,
+  and the release signing key's fingerprint from the page's "Release Verification" section
+  (`FCF986EA15E6E293A5644F10B4322F04D67658D8` on 2026-11-11). Import the key (from the page's link) into a
+  scratch GPG home and run `gpg --verify ffmpeg-X.Y.Z.tar.xz.asc ffmpeg-X.Y.Z.tar.xz`: it must say "Good signature"
+  from that fingerprint. Then:
+  1. In `tools.json`, update `version`, `sourceUrl`, `sourceSha256` (`shasum -a 256`), `signatureUrl`, `signingKey`
+     if it changed, and the `n<version>` tag in `licenseUrl`.
+  2. Replace `licenses/ffmpeg/LICENSE.md` and `COPYING.LGPLv2.1` with the files from the new tarball, and read
+     `LICENSE.md` for changes.
+  3. Run `bash scripts/media-tools/build-ffmpeg.sh ffmpeg-X.Y.Z.tar.xz out` once by hand. If configure rejects a
+     component name, adjust the lists (keep them in step with `app/src/main/media/mux/run.ts`).
+  4. Run `node scripts/media-tools/fetch.mjs` and the app's FFmpeg tests: `mux.spec.ts` (which also checks the build
+     refuses encoding, the network and devices), `streamTransfer.spec.ts`, `streamDownload.spec.ts`,
+     `youtube.spec.ts` and `youtubeDownload.spec.ts`.
+- **yt-dlp:** `gh api repos/yt-dlp/yt-dlp/releases/latest`. Download `yt-dlp_macos.zip` and `SHA2-256SUMS` from that
+  release, check that `shasum -a 256 yt-dlp_macos.zip` matches its line in `SHA2-256SUMS` (and the `digest` GitHub
+  lists for the asset), unpack it with `ditto -x -k`, and run `lipo -archs` and `--version` on `yt-dlp_macos`. Then:
+  1. In `tools.json`, update `version`, `url`, `sha256`, `sourceUrl`, `sourceSha256` (the `yt-dlp.tar.gz` line) and
+     `checksumSource`.
+  2. Check `links`: list the unpacked folder's symbolic links (`find . -type l`) and its duplicate files. If the zip
+     now keeps links, the entries are simply found in place; if the Python version changed (`Versions/3.14`), update
+     the `Versions/Current` target. `fetch.mjs` refuses a link whose copy is not identical.
+  3. Replace `licenses/yt-dlp/LICENSE` and `THIRD_PARTY_LICENSES.txt` with the files from the new tag, and re-read the
+     README's "Licensing" section in case it changed.
+  4. Run the fetch, the YouTube tests, and the live test once (`MERGELANE_YOUTUBE_LIVE=1`, see
+     `app/e2e/youtubeLive.spec.ts`).
+- **Deno:** `gh api repos/denoland/deno/releases/latest`. Download `deno-aarch64-apple-darwin.zip`, its
+  `.zip.sha256sum` and `deno-aarch64-apple-darwin.sha256sum` from that release. Check the zip against the first,
+  unpack it with `ditto -x -k`, check the program against the second, and run `lipo -archs` and `deno --version`. In
+  `tools.json`, update `version`, `url`, `sha256`, `binarySha256`, `sourceUrl`, `checksumSource` and
+  `binaryChecksumSource`. Replace `licenses/deno/LICENSE.md` with the file from the new tag. yt-dlp 2026.10.26 needs
+  Deno 2.3.0 or later (`MIN_SUPPORTED_VERSION` in `yt_dlp/utils/_jsruntime.py`); check that again when either
+  changes.
+
+Afterwards, run the tests, update the versions and checksums in `THIRD-PARTY-NOTICES.md`, and delete the scratch
+folder. CI caches `app/resources/bin` by the hash of `tools.json`, the licence texts, `build-ffmpeg.sh` and
+`fetch.mjs`, so any of these changing fetches and builds afresh.
 
 ## Where they go in the app
 
-The fetch writes to `app/resources/bin/` (ignored by git). Packaging then copies the programs to
-`Mergelane.app/Contents/Resources/yt-dlp` and `…/ffmpeg`, and the licence texts to `…/Contents/Resources/licenses/`
-(the `electron-builder.yml` change is proposed, not yet applied). In development, the app can run them from
-`app/resources/bin/`.
+The fetch writes to `app/resources/bin/` (ignored by git). Packaging (`app/electron-builder.yml`, `extraResources`)
+then copies:
+
+- the folder `yt-dlp/` to `Mergelane.app/Contents/Resources/yt-dlp/` (the program is `yt-dlp/yt-dlp_macos`; links are
+  kept);
+- `ffmpeg` and `deno` to `Contents/Resources/ffmpeg` and `…/deno`;
+- the licence texts to `Contents/Resources/licenses/`.
+
+electron-builder re-signs every Mach-O file inside the bundle, the yt-dlp folder's included, ad-hoc with the hardened
+runtime. `scripts/ci/package-test.sh` checks the result: every Mach-O file verifies, `yt-dlp_macos --version` runs,
+FFmpeg is arm64, runs, reports the LGPL and was configured without `--enable-gpl`, `--enable-version3` or
+`--enable-nonfree`, Deno runs JavaScript, and the licence texts are there.
+
+The app finds them with `resolveToolPath` (`app/src/main/media/mux/tools.ts`): in the bundle when packaged, in
+`app/resources/bin/` in development, or where `MERGELANE_FFMPEG_PATH`, `MERGELANE_YTDLP_PATH` (the program, not the
+folder) or `MERGELANE_DENO_PATH` point (development and tests only).
 
 ## Open questions for the owner
 
-1. **Source for the GPL:** attach the FFmpeg and yt-dlp source archives to each Mergelane release (safest), or rely on
-   the upstream download links (allowed by the GPL, but we stay responsible if they disappear)?
-2. **FFmpeg builder:** accept Martin Riedl's build server as the source of FFmpeg? The alternative with similar
-   features would be building FFmpeg ourselves in CI, which is slower and more work but fully under our control.
-3. **ffprobe:** yt-dlp's README lists ffmpeg *and* ffprobe as strongly recommended. The same server publishes a
-   matching ffprobe 9.0.2. Add it as a third pinned tool? (It was not downloaded or checked here.)
-4. **yt-dlp format:** keep the single-file `yt-dlp_macos`, or switch to the unpacked `yt-dlp_macos.zip`, which starts
-   faster? The packaging test should run the bundled `yt-dlp --version` either way, because Mergelane re-signs it with
-   the hardened runtime.
-5. **Per-library notices for FFmpeg:** the build bundles about thirty libraries, several under BSD, MIT or Apache
-   licences that ask for their notices to be shipped. Collect each library's licence text into
-   `licenses/ffmpeg/` as a follow-up?
-6. **GPG check for yt-dlp:** also verify yt-dlp's GPG signature on `SHA2-256SUMS` when updating? It needs GPG, which is
-   not installed on this Mac.
+1. **The yt-dlp links repair.** `fetch.mjs` turns the three framework copies in `yt-dlp_macos.zip` back into links so
+   the app can be signed (see the yt-dlp section). The alternative is to leave `_internal/Python.framework` out
+   altogether: no Mach-O file in the folder links to it (`otool -L`: macOS's libraries and the folder's own
+   `libssl`, `libcrypto` and `libzstd`; the Python library is `_internal/Python`), which would save another 14 MB,
+   but it removes upstream files instead of restoring their layout, and was not tested. Keep the repair (current
+   choice) or switch?
+2. **ffprobe:** yt-dlp's README lists ffmpeg and ffprobe as recommended. Mergelane runs yt-dlp only to list formats
+   (`--dump-single-json`) and does the downloading and joining itself, so neither is used by yt-dlp; the build has
+   ffprobe disabled. Close this question?
+3. **GPG check for yt-dlp:** also verify yt-dlp's GPG signature on `SHA2-256SUMS` when updating? GPG is now available
+   on this Mac (`/opt/homebrew/bin/gpg`); yt-dlp's public key would need to be pinned like FFmpeg's.
+4. **Deno's bundled components:** collect the licence notices of what is built into Deno (V8, TypeScript and its Rust
+   libraries) into `licenses/deno/` before the first public release (ADR-0029)?

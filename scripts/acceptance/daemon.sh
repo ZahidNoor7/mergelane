@@ -7,8 +7,9 @@
 # Criteria covered here: 3 (system flows spread over both links; off leaves routing unchanged),
 # 4 (kill -9 leaves no Mergelane routes; connectivity intact), 5 (refused while a VPN is up, and
 # turns itself off when one appears, without touching the VPN's routes), and the system half of 6
-# (new flows avoid a dead link within 5 s). Also: another user is refused (ADR-0005), and launchd
-# restarts the daemon after kill -9 (ADR-0017).
+# (new flows avoid a dead link within 5 s). Also: another user is refused (ADR-0005), launchd
+# restarts the daemon after kill -9 (ADR-0017), and auto-resume turns merging back on after kill -9
+# but not after a clean stop (ADR-0024).
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -207,6 +208,37 @@ sudo "$DAEMON" cleanup
 [ -z "$(marked_routes)" ] && pass "no marked routes after cleanup" || fail "marked routes remain after cleanup"
 if diff <(echo "$BEFORE") <(routes); then pass "routing table back to its original state"; else fail "routing differs after kill -9 and cleanup"; fi
 curl -fsS --max-time 15 -o /dev/null https://api.github.com/ && pass "internet works after kill -9" || fail "no connectivity after kill -9"
+
+step "ADR-0024: with auto-resume on, merging comes back after kill -9, but not after a clean stop"
+# The restart is done by hand with the same flags, standing in for launchd (whose job has fixed
+# arguments and would probe the runner's real internet links instead of the simulated ones).
+start_daemon >/dev/null || fail "daemon did not start"
+wait_links_up || fail "links not up"
+"$DAEMON" auto-resume on | grep -q '^auto-resume after a crash: on' && pass "auto-resume turned on" || fail "auto-resume on failed"
+"$DAEMON" on >/dev/null || fail "enable failed"
+echo "kill -9 daemon pid $DAEMON_PID"
+sudo kill -9 "$DAEMON_PID"
+sleep 1
+start_daemon >/dev/null || fail "daemon did not restart after kill -9"
+resumed=""
+for _ in $(seq 1 200); do # the daemon waits up to 10 s for a link to pass its probe
+  "$DAEMON" status 2>/dev/null | grep -q '^system merge: on ' && resumed=1 && break
+  sleep 0.1
+done
+[ -n "$resumed" ] && pass "merging came back on by itself after kill -9" || fail "merging did not resume after kill -9"
+UTUN=$(our_utun)
+[ -n "$UTUN" ] && capture_routes | grep -q "$UTUN" && pass "capture routes back, on $UTUN" || fail "no capture routes after resume"
+"$DAEMON" events | grep -qE ' (found|probe-ok)$' && pass "the restarted daemon logs link changes" || fail "no link events after the restart"
+sudo kill -TERM "$DAEMON_PID"
+for _ in $(seq 1 50); do pgrep -f "^$BIN/mergelane-daemon run" >/dev/null || break; sleep 0.1; done
+start_daemon >/dev/null || fail "daemon did not restart after a clean stop"
+sleep 12 # longer than auto-resume's wait, so a wrong resume would have happened by now
+"$DAEMON" status | grep -q '^system merge: off ' && pass "a clean stop starts off, even with auto-resume on" || fail "merging resumed after a clean stop"
+capture_routes | grep -q . && fail "capture routes after a clean restart" || pass "no capture routes after a clean restart"
+"$DAEMON" auto-resume off >/dev/null || fail "auto-resume off failed"
+sudo kill -TERM "$DAEMON_PID"
+for _ in $(seq 1 50); do pgrep -f "^$BIN/mergelane-daemon run" >/dev/null || break; sleep 0.1; done
+if diff <(echo "$BEFORE") <(routes); then pass "routing table back to its original state"; else fail "routing differs after the auto-resume runs"; fi
 
 step "ADR-0017: launchd installs, restarts after kill -9, and uninstalls"
 sudo "$DAEMON" install --uid "$(id -u)" --source "$DAEMON" && pass "installed" || fail "install failed"

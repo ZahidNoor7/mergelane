@@ -1,3 +1,4 @@
+import { youtubeLink } from '../../src/shared/youtube'
 import { api } from './api'
 import {
   describe,
@@ -168,6 +169,58 @@ async function download(tabId: number, url: string, button: HTMLButtonElement): 
   if (result === 'closed') void render()
 }
 
+// --- The YouTube video the tab shows (ADR-0026): only its address goes, for yt-dlp to look up --
+
+/** The Send button clicked and not yet answered, or answered by Mergelane taking it. */
+let video: 'busy' | 'sent' | undefined
+
+const VIDEO_MESSAGES: Record<HandOver, string> = {
+  sent: 'Sent to Mergelane. Pick the quality in its New download window.',
+  kept: 'Mergelane couldn’t take this video. Try again.',
+  closed: 'Mergelane isn’t open. Open it, then try again.'
+}
+
+function showVideo(): void {
+  const button = element<HTMLButtonElement>('video-send')
+  button.textContent =
+    video === 'busy'
+      ? 'Sending…'
+      : video === 'sent'
+        ? 'Sent to Mergelane'
+        : 'Send this video to Mergelane'
+  button.classList.toggle('sent', video === 'sent')
+  button.classList.toggle('primary', video !== 'sent')
+  if (video) button.setAttribute('aria-disabled', 'true')
+  else button.removeAttribute('aria-disabled')
+  if (video === 'busy') button.setAttribute('aria-busy', 'true')
+  else button.removeAttribute('aria-busy')
+}
+
+async function renderVideo(): Promise<void> {
+  const tab = await targetTab()
+  const link = tab?.url ? youtubeLink(tab.url) : null
+  element('video').hidden = link?.kind !== 'video'
+  if (link?.kind !== 'video') return
+  // YouTube's tab titles end in " - YouTube"; without the tabs permission there's none.
+  element('video-name').textContent = tab?.title?.replace(/\s+-\s+YouTube$/, '') || link.url
+  showVideo()
+}
+
+element('video-send').addEventListener('click', async () => {
+  const tab = await targetTab()
+  if (video || tab?.id === undefined) return
+  video = 'busy'
+  showVideo()
+  element('video-status').textContent = ''
+  const result = ((await api.runtime
+    .sendMessage({ sendVideo: { tabId: tab.id } } satisfies MediaRequest)
+    .catch(() => null)) ?? 'kept') as HandOver
+  video = result === 'sent' ? 'sent' : undefined
+  showVideo()
+  element('video-status').textContent = VIDEO_MESSAGES[result]
+  if (result === 'closed') void render()
+})
+
 // ------------------------------------------------------------------------------------------------
 
 element<HTMLInputElement>('capture').addEventListener('change', (event) => {
@@ -204,6 +257,7 @@ api.runtime.onMessage.addListener((message) => {
   if (changed !== undefined && changed === shownTab) void renderMedia()
 })
 void render()
+void renderVideo()
 void renderMedia()
 // So the toolbar icon agrees with the popup now, not at its next check.
 void api.runtime.sendMessage({ checkMergelane: true }).catch(() => {})

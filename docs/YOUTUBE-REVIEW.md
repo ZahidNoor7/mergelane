@@ -1,6 +1,6 @@
 # YouTube options review
 
-Milestone M2.2. Prepared 2026-11-10. Status: waiting for the owner's choice.
+Milestone M2.2. Prepared 2026-11-10. Status: decided 2026-11-11, option A for YouTube plus D for other sites (ADR-0026); implemented in M2.2 YouTube.
 
 **This is information to help you choose, not legal advice.** Anything I could not check says "not verified".
 

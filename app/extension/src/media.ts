@@ -17,10 +17,12 @@ export interface PageMedia {
 }
 
 /** Extension pages → background, one field at a time: a tab's list (answered with PageMedia or
- * null), or hand one of its streams to Mergelane (answered with HandOver). */
+ * null), hand one of its streams to Mergelane, or hand it the YouTube video the tab shows (both
+ * answered with HandOver). */
 export interface MediaRequest {
   mediaOf?: number
   sendMedia?: { tabId: number; url: string }
+  sendVideo?: { tabId: number }
 }
 /** Background → extension pages, after a tab's list changed. */
 export interface MediaChanged {
@@ -32,9 +34,10 @@ export type HandOver = 'sent' | 'kept' | 'closed'
 /** Per tab: a master playlist and its variants fit, a live stream's refetches can't flood it. */
 export const MAX_MEDIA = 20
 
-/** Not listed or handed over until the owner decides how Mergelane treats YouTube
- * (docs/YOUTUBE-REVIEW.md). Its web player streams over its own protocol anyway, so plain
- * manifests from these hosts are rare (live streams); they are skipped, not detected. */
+/** Manifests from these hosts are never listed (ADR-0023): a YouTube video goes to Mergelane by its
+ * page's address instead, for the bundled yt-dlp to look up (ADR-0026, the popup's "Send this
+ * video to Mergelane"). Its web player streams over its own protocol anyway, so plain manifests
+ * from these hosts are rare (live streams); they are skipped, not detected. */
 export const PENDING_SITES: readonly string[] = [
   'youtube.com',
   'youtube-nocookie.com',

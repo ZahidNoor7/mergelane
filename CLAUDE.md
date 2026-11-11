@@ -25,9 +25,14 @@ Read this file at the start of every session. Keep `docs/PROGRESS.md` up to date
   routes, and a `mergelane-daemon cleanup` command must exist.
 - **Legal.** No DRM circumvention. No private or sign-in-only media beyond what the user's own browser
   session legitimately provides. Never use "IDM" or other trademarks in names or marketing.
+- **YouTube (owner, 2026-11-11, ADR-0026).** yt-dlp only. No cookies, and no PO tokens, captured or generated.
+  Drop every format marked DRM or "maybe" DRM. Only links the user pasted or opened: no crawling. Our own
+  googlevideo/SABR client and token replay are ruled out. Get a lawyer's view before the public 1.0 release.
 - **Licensing.** App code is MIT. Keep the upstream MIT copyright notices (see Upstream sources).
-  FFmpeg (GPL) and yt-dlp ship only as separate executables, fetched at build time with pinned SHA-256
-  checksums and never committed. Their licences go in `THIRD-PARTY-NOTICES.md` and the app bundle.
+  FFmpeg, yt-dlp and Deno ship only as separate executables, never committed. yt-dlp (GPL) and Deno (MIT) are
+  fetched at build time with pinned SHA-256 checksums. FFmpeg is our own minimal LGPL build, compiled at build
+  time from FFmpeg's signed source release, pinned by SHA-256 (ADR-0028). Their licences go in
+  `THIRD-PARTY-NOTICES.md` and the app bundle, and every GitHub release attaches their source (ADR-0027).
 
 ## Upstream sources (all MIT)
 
@@ -50,7 +55,8 @@ Mergelane.app (Electron, TypeScript, React)
 └─ Contents/Resources/
    ├─ mergelane-daemon   (Go, arm64, ad-hoc signed)
    ├─ yt-dlp             (official macOS binary, pinned)
-   └─ ffmpeg             (arm64 static build, pinned)
+   ├─ deno               (official arm64 binary, pinned; yt-dlp's JavaScript runtime for YouTube)
+   └─ ffmpeg             (our own arm64 LGPL build from pinned source; stream copy only)
 
 mergelane-daemon (root, launchd LaunchDaemon)
 ├─ installed once by the app via an admin-password prompt

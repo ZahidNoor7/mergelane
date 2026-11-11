@@ -14,6 +14,7 @@ import type { BrowserContext, ProbeResult } from '../shared/types'
 import { browserContextFrom, requestHeaders } from './download/browserContext'
 import type { DownloadManager } from './download/downloadManager'
 import { probeUrl } from './download/probe'
+import { youtubeLink } from '../shared/youtube'
 import type { Offer } from './openLinks'
 import { loadSettings, saveSettings } from './settings'
 import { testKnobs } from './testKnobs'
@@ -214,8 +215,9 @@ async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<Brid
     return { ok: true, token }
   }
 
-  // A magnet link has nothing to check here: New download looks it up.
-  if (/^magnet:/i.test(request.url)) return hold({ url: request.url })
+  // A magnet link has nothing to check here: New download looks it up. So has a YouTube link: yt-dlp
+  // can take longer than the extension waits, and it goes without the browser's cookies.
+  if (/^magnet:/i.test(request.url) || youtubeLink(request.url)) return hold({ url: request.url })
 
   const checkedProbe = await checked(request, gone)
   // A stream's name from the browser (its page's title, say) beats one made up from its link.

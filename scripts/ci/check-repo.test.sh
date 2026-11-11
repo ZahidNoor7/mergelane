@@ -65,6 +65,26 @@ mkdir -p "$F/vendor" && echo "x" >"$F/vendor/yt-dlp.exe" && git -C "$F" add -A
 expect "committed yt-dlp.exe" 1 "third-party executable committed" "$F"
 
 make_fixture "$F"
+mkdir -p "$F/app/resources/bin" && echo "not really deno" >"$F/app/resources/bin/deno" && git -C "$F" add -A
+expect "committed deno" 1 "third-party executable committed" "$F"
+
+make_fixture "$F"
+mkdir -p "$F/app/resources/bin/yt-dlp" && echo "x" >"$F/app/resources/bin/yt-dlp/yt-dlp_macos" && git -C "$F" add -f -A
+expect "committed yt-dlp folder program" 1 "third-party executable committed" "$F"
+
+make_fixture "$F"
+mkdir -p "$F/vendor/yt-dlp/_internal" && echo "x" >"$F/vendor/yt-dlp/_internal/base_library.zip" && git -C "$F" add -A
+expect "committed yt-dlp _internal data" 1 "instead): vendor/yt-dlp/_internal/base_library.zip" "$F"
+
+make_fixture "$F"
+mkdir -p "$F/app/resources/bin/.stamps" && echo "{}" >"$F/app/resources/bin/.stamps/ffmpeg.json" && git -C "$F" add -f -A
+expect "committed fetch output" 1 "instead): app/resources/bin/.stamps/ffmpeg.json" "$F"
+
+make_fixture "$F"
+mkdir -p "$F/scripts/media-tools" && echo "#!/bin/sh" >"$F/scripts/media-tools/build-ffmpeg.sh" && git -C "$F" add -A
+expect "the FFmpeg build script is allowed" 0 "all checks passed" "$F"
+
+make_fixture "$F"
 cp /usr/bin/true "$F/helper" && git -C "$F" add -A
 expect "committed universal Mach-O binary" 1 "compiled binary committed: helper" "$F"
 

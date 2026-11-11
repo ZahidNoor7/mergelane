@@ -109,10 +109,10 @@ Answers so far:
 
 - Q1: the owner made the repo public on 2026-11-10.
 - Q5: the initial commit is pushed to `main`, per the CLAUDE.md workflow (one branch and PR per milestone).
-- Q2–Q4: work proceeds on the recommended option, recorded as an ADR the owner can override:
-  - Q2: proving launch after quarantine removal;
-  - Q3: configurable probes defaulting to upstream's targets;
-  - Q4: Telegram removed.
+- Q2–Q4, answered by the owner on 2026-11-11:
+  - Q2: accepted. CI proves the launch after the documented quarantine removal (ADR-0013).
+  - Q3: accepted. Probes stay configurable and default to upstream's public targets (ADR-0008).
+  - Q4: remove Telegram. It was in fact still in the app (ADR-0012), and the removal follows the YouTube work.
 
 1. **Repo visibility and CI cost.**
    - The repo is private. On private repos macOS runners cost $0.062/min.

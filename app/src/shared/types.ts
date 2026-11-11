@@ -51,19 +51,22 @@ export interface NzbProbeResult extends ProbeResultBase {
   nzb: NzbInfo
 }
 
-/** An HLS or DASH video: a manifest of segments, joined into one file with FFmpeg once they are
- * in (see main/download/stream/). Its size isn't known until it downloads. */
+/** An HLS or DASH video, or a YouTube video: tracks fetched in segments, joined into one file with
+ * FFmpeg once they are in (see main/download/stream/). An HLS or DASH video's size isn't known
+ * until it downloads; a YouTube quality's is (StreamVariant.bytes). */
 export interface StreamProbeResult extends ProbeResultBase {
   kind: 'stream'
   stream: StreamInfo
 }
 
-export type StreamProtocol = 'hls' | 'dash'
+/** `youtube`: a YouTube video, whose formats the bundled yt-dlp finds (ADR-0026). */
+export type StreamProtocol = 'hls' | 'dash' | 'youtube'
 
 /** One quality of a stream, for New download's picker. */
 export interface StreamVariant {
-  /** What StartStreamDownloadRequest.variantId takes: an HLS variant's id, or a DASH video
-   * representation's. */
+  /** What StartStreamDownloadRequest.variantId takes: an HLS variant's id, a DASH video
+   * representation's, or a YouTube video's yt-dlp format ids ("137+140", or "18" for one with
+   * its sound in it). */
   id: string
   /** Bits per second, as the manifest declares it. */
   bandwidth: number
@@ -72,6 +75,9 @@ export interface StreamVariant {
   frameRate?: number
   /** RFC 6381 codec strings, as the manifest names them. */
   codecs?: string[]
+  /** What downloading it takes, in bytes, when that is known before it starts (YouTube's formats
+   * say). */
+  bytes?: number
 }
 
 export interface StreamInfo {

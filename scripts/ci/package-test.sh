@@ -109,11 +109,56 @@ nmhost_version=$("$NMHOST" --version) || fail "the bundled browser host does not
 [[ "$nmhost_version" == "mergelane-nmhost $VERSION" ]] || fail "the bundled browser host says '$nmhost_version'"
 echo "bundled browser host: $nmhost_version"
 # Re-signed ad-hoc with the hardened runtime by electron-builder; they must still run.
-"$APP/Contents/Resources/yt-dlp" --version >/dev/null || fail "the bundled yt-dlp does not run"
-"$APP/Contents/Resources/ffmpeg" -version >/dev/null || fail "the bundled ffmpeg does not run"
-for f in licenses/ffmpeg/COPYING.GPLv3 licenses/yt-dlp/GPL-3.0.txt; do
+# yt-dlp is its unpacked build, a folder (ADR-0031): every Mach-O file in it must verify after the
+# re-sign (the loop above checks the whole app; this one makes sure the folder is really there).
+YTDLP_DIR="$APP/Contents/Resources/yt-dlp"
+[ -d "$YTDLP_DIR/_internal" ] || fail "the bundled yt-dlp folder has no _internal folder"
+[ -x "$YTDLP_DIR/yt-dlp_macos" ] || fail "the bundled yt-dlp_macos is missing"
+[[ " $(lipo -archs "$YTDLP_DIR/yt-dlp_macos") " == *" arm64 "* ]] || fail "the bundled yt-dlp_macos has no arm64 code"
+ytdlp_machos=0
+while IFS= read -r -d '' f; do
+  if file -b "$f" | grep -q 'Mach-O'; then
+    ytdlp_machos=$((ytdlp_machos + 1))
+    codesign --verify --strict "$f" 2>/dev/null || fail "not validly signed: ${f#"$APP"/}"
+  fi
+done < <(find "$YTDLP_DIR" -type f -print0)
+[ "$ytdlp_machos" -gt 1 ] || fail "found $ytdlp_machos Mach-O files in the yt-dlp folder, expected its program and libraries"
+echo "yt-dlp folder: $ytdlp_machos Mach-O files, all validly signed"
+ytdlp_version=$("$YTDLP_DIR/yt-dlp_macos" --version) || fail "the bundled yt-dlp does not run"
+echo "bundled yt-dlp: $ytdlp_version"
+# FFmpeg is Mergelane's own build from FFmpeg's source (ADR-0028): LGPL 2.1 or later, nothing that
+# would make it GPL or nonfree, arm64, and it runs. (Outputs are read whole before grep, so grep -q
+# can't cut a pipe short under pipefail.)
+FFMPEG="$APP/Contents/Resources/ffmpeg"
+[ "$(lipo -archs "$FFMPEG")" = "arm64" ] || fail "the bundled ffmpeg is not arm64-only"
+ffmpeg_version=$("$FFMPEG" -hide_banner -version) || fail "the bundled ffmpeg does not run"
+ffmpeg_license=$("$FFMPEG" -hide_banner -L) || fail "the bundled ffmpeg does not show its licence"
+grep -q 'GNU Lesser General Public' <<<"$ffmpeg_license" || fail "the bundled ffmpeg does not report the LGPL"
+grep -q 'version 2.1 of the License' <<<"$ffmpeg_license" || fail "the bundled ffmpeg does not report LGPL version 2.1"
+ffmpeg_buildconf=$("$FFMPEG" -hide_banner -buildconf) || fail "the bundled ffmpeg does not show its configuration"
+if grep -qE -- '--enable-(gpl|version3|nonfree)' <<<"$ffmpeg_buildconf"; then
+  fail "the bundled ffmpeg was configured with --enable-gpl, --enable-version3 or --enable-nonfree"
+fi
+echo "bundled ffmpeg: ${ffmpeg_version%%$'\n'*}"
+for f in licenses/ffmpeg/LICENSE.md licenses/ffmpeg/COPYING.LGPLv2.1 licenses/yt-dlp/GPL-3.0.txt \
+  licenses/yt-dlp/LICENSE licenses/yt-dlp/THIRD_PARTY_LICENSES.txt; do
   [ -s "$APP/Contents/Resources/$f" ] || fail "$f is missing from the bundle"
 done
+[ ! -e "$APP/Contents/Resources/licenses/ffmpeg/COPYING.GPLv3" ] ||
+  fail "licenses/ffmpeg/COPYING.GPLv3 (from the old GPL build) is still in the bundle"
+# Deno, which yt-dlp runs YouTube's player challenges in (ADR-0026): arm64 only, and it must still
+# run, with JIT, once re-signed with the hardened runtime.
+DENO="$APP/Contents/Resources/deno"
+[ -x "$DENO" ] || fail "the bundled deno is missing"
+[ "$(lipo -archs "$DENO")" = "arm64" ] || fail "the bundled deno is not arm64-only"
+deno_version=$(DENO_NO_UPDATE_CHECK=1 DENO_DIR="$WORK/deno" "$DENO" --version | head -n 1) ||
+  fail "the bundled deno does not run"
+echo "bundled deno: $deno_version"
+deno_sum=$(printf 'console.log(1 + 2)' |
+  DENO_NO_UPDATE_CHECK=1 DENO_DIR="$WORK/deno" "$DENO" run --ext=js --no-prompt --no-remote --no-config -) ||
+  fail "the bundled deno cannot run JavaScript"
+[ "$deno_sum" = "3" ] || fail "the bundled deno printed '$deno_sum' for 1 + 2"
+[ -s "$APP/Contents/Resources/licenses/deno/LICENSE.md" ] || fail "licenses/deno/LICENSE.md is missing from the bundle"
 open -n "$APP"
 
 step "Wait for the bridge socket's health message to report ready (up to ${READY_TIMEOUT_S}s)"

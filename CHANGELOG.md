@@ -37,6 +37,12 @@ All notable changes to Mergelane are recorded here. The format follows
 - yt-dlp and FFmpeg ship inside the app, fetched at build time with pinned checksums.
 - A release workflow, run by hand.
 
+- YouTube downloads, through yt-dlp only: paste a YouTube link, or use the extension's "Send this video to
+  Mergelane" on a YouTube page. No cookies or sign-in; protected (DRM) videos, playlists, channels and live
+  streams are refused. Each network fetches its own share.
+- Deno ships inside the app as yt-dlp's JavaScript runtime.
+- Every release attaches the source code of yt-dlp and FFmpeg, and the script that builds FFmpeg.
+
 - System merge, for daily use:
   - an optional "Turn back on after a crash" setting, off by default;
   - networks that come back after unplugging, sleep or a reconnected phone are checked again from scratch, and
@@ -46,6 +52,9 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- FFmpeg is now Mergelane's own minimal build from FFmpeg's official source: LGPL instead of GPL, and 4.1 MB
+  instead of 66 MB. It only joins and rewraps media; it never re-encodes.
+- yt-dlp ships as its unpacked macOS build, which starts in a quarter of a second instead of about 24 seconds.
 - The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.
 
 - Automatic updates are off until updates can be checked through the GitHub Releases API (ADR-0010).

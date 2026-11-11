@@ -10,9 +10,11 @@
 //       1. CHANGELOG.md's section for the version;
 //       2. the requirements and the install steps (CLAUDE.md: they must be on the release page);
 //       3. README.md's "honest limits" section, read from the README so the two never drift apart;
-//       4. a table of the SHA-256 checksums of the DMG and the zip;
-//       5. where to get the source code of the GPL programs inside the app (yt-dlp and FFmpeg),
-//          from each tool's sourceUrl in scripts/media-tools/tools.json (docs/MEDIA-TOOLS.md).
+//       4. a table of the SHA-256 checksums of every file attached to the release;
+//       5. the programs inside the app (yt-dlp, FFmpeg and Deno) with their licences, and where their
+//          source code is: the archives and build script attached to the release by
+//          scripts/media-tools/sources.mjs (ADR-0027), and the upstream links, all from
+//          scripts/media-tools/tools.json (docs/MEDIA-TOOLS.md).
 //
 // --changelog, --readme, --manifest and --package replace the repository's own files (for tests).
 // Exit codes: 0 done; 1 the release is not ready, and the message says why; 2 wrong usage.
@@ -20,6 +22,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import { isCopyleft, releaseSourceNames } from '../media-tools/sources.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '../..')
@@ -150,10 +153,15 @@ export function parseChecksums(text) {
   return entries
 }
 
-/** The DMG and zip this version's notes point to must both have a checksum. */
-export function missingAssets(entries, version) {
+/**
+ * The files the notes point to that the checksum file doesn't list: the DMG and the zip, and, given
+ * the media-tools manifest, every source archive and build script the notes say are attached.
+ */
+export function missingAssets(entries, version, manifest) {
   const listed = new Set(entries.map(({ file }) => file))
-  return Object.values(assetNames(version)).filter((file) => !listed.has(file))
+  const expected = Object.values(assetNames(version))
+  if (manifest !== undefined) expected.push(...sourceAssets(manifest))
+  return expected.filter((file) => !listed.has(file))
 }
 
 export function checksumTable(entries) {
@@ -164,25 +172,57 @@ export function checksumTable(entries) {
   ].join('\n')
 }
 
-const DISPLAY_NAMES = { ffmpeg: 'FFmpeg' }
+const DISPLAY_NAMES = { ffmpeg: 'FFmpeg', deno: 'Deno' }
 
-/** The source links the GPL asks for, one entry per tool in tools.json. Throws when one is missing. */
-export function gplSources(manifest) {
+/** The media-tools manifest's tools, or an error when it has none. */
+function toolsOf(manifest) {
   const tools = manifest?.tools
   if (!Array.isArray(tools) || tools.length === 0) {
     throw new Error('the media-tools manifest has no "tools" list')
   }
   return tools
+}
+
+/** The source archives and build scripts attached to the release (sources.mjs names them). */
+export function sourceAssets(manifest) {
+  return toolsOf(manifest).flatMap((tool) => {
+    const names = releaseSourceNames(tool)
+    return names === null ? [] : [names.source, names.buildScript].filter(Boolean)
+  })
+}
+
+/**
+ * One entry per program in tools.json: its licence, and where its source code is. A program with a
+ * pinned source has the archive (and its build script, when we build it) attached to the release
+ * (ADR-0027), and the upstream link is given as well. Throws when a program has no https sourceUrl,
+ * or when a GPL or LGPL program has no pinned source to attach.
+ */
+export function bundledPrograms(manifest) {
+  return toolsOf(manifest)
     .map((tool) => {
       if (typeof tool?.sourceUrl !== 'string' || !tool.sourceUrl.startsWith('https://')) {
         throw new Error(`${tool?.name ?? 'a tool'} has no https sourceUrl in the media-tools manifest`)
       }
-      const lines = [
-        `- **${DISPLAY_NAMES[tool.name] ?? tool.name} ${tool.version}**: ${tool.license}`,
-        `  - Source: <${tool.sourceUrl}>` +
-          (tool.sourceSha256 ? ` (SHA-256 \`${tool.sourceSha256}\`)` : '')
-      ]
-      if (tool.buildScriptUrl) lines.push(`  - Build script: <${tool.buildScriptUrl}>`)
+      const names = releaseSourceNames(tool)
+      if (names === null && isCopyleft(tool.license)) {
+        throw new Error(
+          `${tool.name} is ${tool.license}, but the media-tools manifest pins no sourceSha256, so its source would not be attached (ADR-0027)`
+        )
+      }
+      const lines = [`- **${DISPLAY_NAMES[tool.name] ?? tool.name} ${tool.version}**: ${tool.license}`]
+      if (names === null) {
+        lines.push(`  - Source code: <${tool.sourceUrl}> (not attached: its licence does not ask for it)`)
+      } else {
+        lines.push(
+          `  - Source code: \`${names.source}\`, attached to this release (SHA-256 \`${tool.sourceSha256}\`)`
+        )
+        if (names.buildScript !== null) {
+          lines.push(
+            `  - Build script: \`${names.buildScript}\`, attached to this release (\`scripts/media-tools/${tool.buildScript}\` in this version's source code)`
+          )
+        }
+        lines.push(`  - Upstream: <${tool.sourceUrl}>`)
+      }
       return lines.join('\n')
     })
     .join('\n')
@@ -239,13 +279,14 @@ The same list is attached as \`SHA256SUMS\`.
 
 ## Open-source programs inside the app
 
-Mergelane's own code is MIT-licensed. For video, the app also contains these programs, shipped as
-separate executables under the GNU General Public License. Their licence texts and build details (such
-as the library versions built into FFmpeg) are inside the app in
+Mergelane's own code is MIT-licensed. For video, the app also contains these programs, each shipped as
+a separate executable under its own licence. Their licence texts are inside the app in
 \`Mergelane.app/Contents/Resources/licenses/\`, and \`THIRD-PARTY-NOTICES.md\` lists every notice.
-Their source code is available here:
+The source code of each program under the GPL or the LGPL is attached to this release, exactly as it
+went into the app, with the script that built it where Mergelane builds the program itself. The
+upstream links are given as well.
 
-${gplSources(manifest)}
+${bundledPrograms(manifest)}
 `
 }
 
@@ -313,7 +354,8 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
     }
 
     const checksums = parseChecksums(readText(options.checksums, 'the checksum file'))
-    const missing = missingAssets(checksums, version)
+    const manifest = readJson(options.manifest, 'the media-tools manifest')
+    const missing = missingAssets(checksums, version, manifest)
     if (missing.length > 0) throw new Error(`the checksum file does not list ${missing.join(' or ')}`)
     const limits = honestLimits(readText(options.readme, 'the README'))
     if (!limits) throw new Error('README.md has no "## ... (honest limits)" section to copy')
@@ -322,7 +364,7 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
       changes: changelogSection(changelog, version),
       limits,
       checksums,
-      manifest: readJson(options.manifest, 'the media-tools manifest')
+      manifest
     })
     if (options.out) {
       writeFileSync(options.out, notes)

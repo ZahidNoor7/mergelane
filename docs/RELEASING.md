@@ -12,14 +12,18 @@ on GitHub's macOS 27 runner (`xcode-27`) and:
    `CHANGELOG.md` has a section for it, that you started it from `main`, and that no release for that version
    exists already (a tag that exists must point at the commit being built);
 2. builds the helper (`mergelane-daemon`) and the browser host (`mergelane-nmhost`), stamped with the version;
-3. fetches yt-dlp and FFmpeg, each checked against its pinned SHA-256 (`docs/MEDIA-TOOLS.md`);
+3. fetches yt-dlp and Deno, and builds FFmpeg from its source release (ADR-0028), each download checked against its
+   pinned SHA-256 (`docs/MEDIA-TOOLS.md`). The FFmpeg build uses the runner's Xcode command line tools;
 4. builds the DMG and the zip, ad-hoc signed (there is no Apple Developer ID yet, ADR-0003);
 5. audits the Electron fuses with REA (ADR-0016);
 6. installs the DMG the way a user does, launches it and waits until it reports ready (`scripts/ci/package-test.sh`,
    ADR-0013), then checks the app inside the zip as well;
-7. computes `SHA256SUMS` for the DMG and the zip;
-8. writes the release notes with `scripts/release/notes.mjs`;
-9. creates the release `v<version>` with the DMG, the zip and `SHA256SUMS` attached.
+7. collects the source code the bundled programs' licences ask us to offer (ADR-0027) with
+   `scripts/media-tools/sources.mjs`: yt-dlp's source tarball, FFmpeg's source tarball and FFmpeg's build script, each
+   checked against its pinned SHA-256;
+8. computes `SHA256SUMS` for the DMG, the zip and those source files;
+9. writes the release notes with `scripts/release/notes.mjs`;
+10. creates the release `v<version>` with the DMG, the zip, `SHA256SUMS` and the source files attached.
 
 If any step fails, nothing is uploaded.
 
@@ -29,9 +33,11 @@ The release notes contain:
 - the requirements (macOS 27 or later, Apple silicon only) and the install steps, including **Open Anyway** and
   the `xattr` command (CLAUDE.md requires them on the release page);
 - the honest limits, copied from `README.md`'s "What to expect (honest limits)" section;
-- the checksums;
-- where to get the source code of yt-dlp and FFmpeg, which the GPL requires, taken from
-  `scripts/media-tools/tools.json`.
+- the checksums of every attached file;
+- the programs inside the app and their licences: yt-dlp (GPL-3.0-or-later), FFmpeg (LGPL-2.1-or-later) and Deno
+  (MIT), with the names of the attached source archives and build script and the upstream links, all taken from
+  `scripts/media-tools/tools.json`. The notes script stops if `SHA256SUMS` doesn't list every file the notes say is
+  attached, or if a GPL or LGPL program has no pinned source.
 
 ## Before the first release
 
@@ -98,7 +104,9 @@ shows the release notes once they're written.
 Open the repository's **Releases** page. The draft `v1.2.3` is visible only to people with write access. Check:
 
 - the notes read well, and the install steps and checksums are there;
-- three files are attached: `Mergelane-1.2.3-arm64.dmg`, `Mergelane-1.2.3-arm64-mac.zip` and `SHA256SUMS`;
+- six files are attached: `Mergelane-1.2.3-arm64.dmg`, `Mergelane-1.2.3-arm64-mac.zip`, `SHA256SUMS`, and the source
+  files: `yt-dlp-<version>-source.tar.gz`, `ffmpeg-<version>-source.tar.xz` and `ffmpeg-<version>-build-ffmpeg.sh`
+  (with the versions in `tools.json`, for example `ffmpeg-9.0.2-source.tar.xz`);
 - ideally, download the DMG and install it on your own Mac following the notes, to see what users will see.
 
 You can edit the notes in the draft directly.
@@ -123,6 +131,8 @@ Publishing makes the release public. Its tag, `v1.2.3`, points at the commit tha
 | `Tag v1.2.3 already points at ...` | That version was tagged on another commit. Use a new version, or delete the tag if it was a mistake. |
 | `A release for v1.2.3 already exists` | A draft from an earlier run is still there. Delete it (below) and run again. |
 | The fuse audit, the packaging test or the zip check fails | The build is not safe to ship. Nothing was uploaded. Fix the cause in a pull request first. |
+| `fetch-media-tools: ffmpeg: the build failed: ...` | FFmpeg did not compile; the message ends with the build's last lines. Reproduce with `node scripts/media-tools/fetch.mjs` on a Mac and fix `build-ffmpeg.sh` in a pull request. |
+| `media-tools sources: ...` or `the checksum file does not list ...-source...` | A source archive could not be downloaded or did not match its pinned SHA-256, so the release would not carry the source it promises. Check the upstream link in `tools.json`; never ship without it. |
 
 To delete a draft you don't want, open it on the **Releases** page and delete it, or in Terminal:
 
@@ -139,15 +149,14 @@ you've already checked an identical build.
   account, signing and notarization are switched on in `app/electron-builder.yml` and with secrets; this workflow
   then needs those secrets passed to the build step.
 - **No automatic updates.** The app doesn't download updates itself (ADR-0010). Users download the new DMG.
-- **No GPL source archives attached.** The notes link to the yt-dlp and FFmpeg source on their own sites. Whether to
-  also attach the source archives to every release is an open question for the owner (`docs/MEDIA-TOOLS.md`,
-  question 1).
 
 ## Testing the notes script
 
 ```sh
 node --test --experimental-test-coverage --test-coverage-include='scripts/release/notes.mjs' \
   scripts/release/notes.test.mjs
+node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/sources.mjs' \
+  scripts/media-tools/sources.test.mjs
 ```
 
 To preview the checks on your own machine: `node scripts/release/notes.mjs --version 1.2.3 --check`.

@@ -42,6 +42,7 @@ import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
 import { currentWindowBackground, setWindowTheme } from '../windowBackground'
 import { showUpdateMenu, updateState } from '../updater'
+import { readAppUsage } from '../appUsage'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -252,6 +253,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))
 
   handle('freeSpace', async (_event, dir) => freeSpace(dir))
+  handle('appUsage', async () => readAppUsage())
 
   handle('torrentFiles', async (_event, id) => manager.torrentFiles(id))
   handle('chooseTorrentFiles', async (_event, id, selected) =>

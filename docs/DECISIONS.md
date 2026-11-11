@@ -569,3 +569,25 @@ until the owner overrides it.
     `design-system/mergelane/redesign/README.md`.
   - Many Playwright specs change with the layout.
   - Seven themes in two modes make 14 colour sets to check on every screen.
+
+## ADR-0035: Mergelane's own CPU and memory are read by the app, not reported by the helper
+
+- Status: Accepted (2026-11-11), in M3.1 pull request 6b. It replaces `docs/PHASE-3.md`'s plan that the helper
+  report its usage in a new optional status field.
+- Context: the Dashboard's "Mergelane on this Mac" shows the CPU and memory of the app, the helper, and the
+  download tools (yt-dlp, FFmpeg, Deno), as Activity Monitor counts them (100% is one core). Go can read its own
+  CPU time, but its current resident memory on macOS needs Mach calls through cgo; `getrusage` gives only the peak.
+- Decision:
+  - The app's processes come from Electron's `app.getAppMetrics()`. CPU is the change in
+    `cpu.cumulativeCPUUsage` (CPU seconds since the process started) over the time between readings;
+    memory is `memory.workingSetSize`, in kilobytes (electronjs.org ProcessMetric, CPUUsage and MemoryInfo
+    docs, read 2026-11-11).
+  - The helper and the tools come from one unprivileged `/bin/ps -A -o pid=,ppid=,%cpu=,rss=,comm=` call. `ps`
+    reports a root process's CPU and memory to any user. The helper is found by its executable name. The tools
+    are the main process's descendants that aren't Electron's own (by pid), nor `ps` itself, nor the crash reporter.
+  - Read once a second, only while the Dashboard shows.
+- Consequences:
+  - The helper and its protocol don't change. There are no new fixtures or contract tests, and no admin test run
+    for this pull request.
+  - Every part is measured the same way, so the totals add up as Activity Monitor would show them.
+  - `ps` %CPU is a short decaying average, so a short burst shows a little later than in the app's own figure.

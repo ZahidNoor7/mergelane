@@ -69,7 +69,10 @@ export const COVERED = [
   'src/renderer/src/screens/SettingsScreen.tsx',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
   // M3.1 pull request 6a: the Dashboard's Today.
-  'src/renderer/src/components/DashboardToday.tsx'
+  'src/renderer/src/components/DashboardToday.tsx',
+  // M3.1 pull request 6b: Mergelane on this Mac.
+  'src/renderer/src/components/UsagePanel.tsx',
+  'src/shared/appUsage.ts'
 ]
 
 export default defineConfig({

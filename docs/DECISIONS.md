@@ -540,3 +540,30 @@ until the owner overrides it.
   Mergelane kept running. `CFFIXED_USER_HOME` is read by Apple's open-source CoreFoundation but is not documented by
   Apple.
 - Consequences: the Gatekeeper verdict ("not notarised", not "damaged") is proven only by the CI path.
+
+## ADR-0034: The owner's redesign is Phase 3's first milestone (M3.1)
+
+- Status: Accepted by the owner (2026-11-11). The plan around it, `docs/PHASE-3.md`, is proposed.
+- Context: the renderer still looks like Plexo's. The owner designed a new look in a claude.ai artifact and declared it
+  final on 2026-11-11. The roadmap has no place for it.
+- Decision:
+  - The redesign is M3.1, the first milestone of Phase 3, released as 0.2.0, before Phase 3's features. Their new
+    screens are then built once, in the new style.
+  - The reference is the fixed copy in `design-system/mergelane/redesign/` (artifact version `1794387759-a310`).
+  - All seven themes ship, each in light and dark: Porcelain (the default), Sandstone, Graphite, Sage, Dusk, Liquid
+    Glass and High contrast.
+  - The app opens on Downloads.
+  - Auto appearance (follow the Mac) comes back. Electron's `nativeTheme.themeSource` accepts `system`
+    (electronjs.org, latest docs, read 2026-11-11; recheck on Electron 44 when building).
+  - Screens for features the app doesn't have yet (updates, extension management, routing per direction, upload
+    limits, daily totals, menu bar, login item, notifications) ship with the milestone that builds each feature. A
+    control with nothing behind it is not shipped.
+  - Features the app has that the design leaves out are kept and restyled into the new layout.
+  - The per-network colour picker stays. A picked colour overrides the theme's colour, which is the default.
+  - Network rows show the connection type, not the Wi-Fi name, so no Location permission is asked for.
+  - Renderer code gets unit tests with Vitest, React Testing Library and V8 coverage: 90% of changed lines.
+- Consequences:
+  - `design-system/mergelane/MASTER.md` no longer describes the app once M3.1 lands. It is updated in M3.1's first
+    pull request, with the owner's OK.
+  - Many Playwright specs change with the layout.
+  - Seven themes in two modes make 14 colour sets to check on every screen.

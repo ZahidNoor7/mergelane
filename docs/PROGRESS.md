@@ -440,6 +440,10 @@ Last updated: 2026-11-11
     count received bytes only; slow mode stays download-only.
   - **Pre-existing failure, not from this branch:** `scheduleQueue.spec` "schedule dialog saves, cancels edits…"
     fails at its toolbar indicator on unchanged `main` too (run on 2026-11-11 around 23:00 local).
+    **Explained and fixed** (branch `fix-schedule-test`): not the time of day. Since M3.1 the spec opens the dialog
+    from the Networks place, and the indicator is only in the Downloads header, so it was never there. The spec now
+    goes to Downloads for it and also checks the sidebar's schedule line; it passes at 23:46 local and just past
+    midnight (other time zones). The spec's 11 tests are now `@smoke` (about 3 s each).
 - **M3.7 Diagnostics and history** (branch `m3.7-diagnostics`, ADR-0042).
   - **History:** network events and the day's fastest merged speed are logged by the main process and kept in
     `userData/network-activity.json` (a week, at most 50 events). A drop still open at quit and connected at

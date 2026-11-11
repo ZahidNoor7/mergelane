@@ -5,6 +5,15 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The new look begins (ADR-0034):
+  - new colours, from the Porcelain theme, the first of seven themes;
+  - new fonts, Archivo and Fragment Mono, bundled in the app.
+  - The other themes can be chosen once the Settings screen arrives.
+- On a new install, Mergelane follows the Mac's light or dark appearance. A light or dark choice you made before
+  stays.
+
 ## [0.1.0] - 2026-11-11
 
 The first release: a download manager for Apple silicon Macs on macOS 27 or later that can use every internet

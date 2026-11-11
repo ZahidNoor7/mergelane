@@ -1,262 +1,186 @@
-# Design System Master File
+# Mergelane design system
 
-> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
-> If that file exists, its rules **override** this Master file.
-> If not, strictly follow the rules below.
+> **How to use this file:** when building a screen, read this file, then `pages/<screen>.md` if it exists. A page
+> file overrides this one only where it says so.
+
+- **Source of truth:** the owner's final design, `design-system/mergelane/redesign/prototype.html` (ADR-0034,
+  declared final 2026-11-11). This file states its rules in words. When the two disagree, the prototype wins, except
+  for the owner's later changes listed in `redesign/README.md`.
+- **In code:** colours in `app/src/shared/themes.ts` (seeds) and `app/src/renderer/src/assets/main.css` (everything
+  derived), fonts in `app/src/renderer/src/assets/fonts/`.
+- **Status:** M3.1 builds it in seven pull requests (`docs/PHASE-3.md`). Screens not yet rebuilt still use the old
+  layout with the new colours and fonts.
+- **Replaces:** the Plexo-era system (graphite with amber, Manrope and Roboto Mono, a hero band), retired by
+  ADR-0034.
 
 ---
 
-**Project:** Mergelane
-**Generated:** 2026-11-10 23:39:13
-**Category:** Utility: download manager and network tool (the generator guessed "Password Manager"; corrected)
-**Design Dials:** Motion 3/10 (Subtle) | Density 8/10 (Dense / Dashboard)
+## The idea
 
----
+Mergelane is named for a merge lane. **Each network is a lane drawn as thick as its speed, and the lanes merge into
+one road** whose width is the merged speed. That diagram (the Confluence) is the one memorable element. It heads the
+download list, a download's details and the dashboard. Lane markings drift along a lane only while it carries bytes.
+Everything around it stays quiet: a Mac-style window with a sidebar, a list and a details pane.
 
-## Reconciliation with Mergelane's existing look (read this first; it wins over the generated values below)
+## Colour
 
-The generator was run for "download manager network dashboard macOS utility" (ui-ux-pro-max `--design-system`,
-M2.3). It matched the right *style* (Minimalism & Swiss Style: functional, grid-based, high contrast) and density,
-but its category ("Password Manager"), palette, fonts, page pattern and some rules don't fit an app that already has
-a designed look. Mergelane keeps one look, so the existing tokens win:
+### Themes
 
-| Generated | Mergelane uses instead | Why |
+There are seven themes, each with a light and a dark version: **Porcelain** (the default), Sandstone, Graphite,
+Sage, Dusk, Liquid Glass and High contrast.
+- Light, Dark or Auto (follow the Mac) is a separate choice. Auto is the default on a new install.
+- A theme is a handful of **seeds** per mode, in `shared/themes.ts`:
+  - grounds: `desk`, `window`, `sidebar`, `sidebarCard`, `bg`, `card`;
+  - ink: `text`, plus `sidebarInk` when the sidebar is dark in light mode (Graphite, Dusk);
+  - one accent: `accent`, `accentOn`, and `accentInk` where the accent differs as text (Liquid Glass);
+  - three network colours: `wifi`, `usb`, `ethernet`, and `netOn` for glyphs drawn on them;
+  - optional strengths: `line`, `lineSubtle`, `lineStrong`, `ink2`, `ink3`, which High contrast and Liquid Glass
+    raise.
+- **Everything else is derived** in `main.css` with `color-mix(in oklab, …)`. Components use only derived tokens,
+  never a raw hex.
+
+| Token | Derived as |
+|---|---|
+| `--text-secondary`, `--text-tertiary` | ink at `--ink-2` (76%) and `--ink-3` (63%) into the ground |
+| `--border`, `--border-subtle`, `--border-strong` | ink at `--line` (14%), `--line-subtle` (8%), `--line-strong` (34%). Decorative only. |
+| `--control` | ink 52% into the ground: the edge of a field, checkbox or switch (at least 3:1) |
+| `--sunken`, `--bg-tertiary`, `--track-bg` | ink 4.5%, 5% and 10% into the ground: wells, secondary fills, empty tracks |
+| `--hover`, `--selected` | accent 6% and 15% into the ground |
+| `--focus`, `--switch-on` | the accent |
+| `--color-<network>-bg`, `-border`, `-text` | the network colour 14% and 40% into the ground; 60% into the ink for text |
+
+- `.ml-surface` re-grounds a region on the sidebar's seeds. A dark sidebar in a light theme then gets its own
+  hovers, lines and ink.
+- Theme changes ease every colour for 220 ms, with no movement, so this runs under Reduce Motion too.
+
+### What colour means
+
+- **A network's colour is its identity:** lanes, split bars, chunks, chart fills, tiles. A network keeps its colour
+  everywhere within a theme. The user may pick a colour for a network (the swatches in `main.css`); a pick overrides
+  the theme's colour in every theme.
+- **Text never takes a network's colour** (except the legacy `-text` tokens, mixed toward the ink for 4.5:1).
+- **The accent** marks the primary action, the selection, focus and switches that are on.
+- **States** keep one meaning in every theme:
+  - `--color-danger`, plus an icon and a word, means something needs action now;
+  - `--color-warning` means it needs action soon, though nothing is broken (for example, the helper is out of
+    date);
+  - healthy states are secondary ink with an icon, never green.
+
+### Contrast (enforced)
+
+`app/src/renderer/src/theme/contrast.test.ts` checks all 14 colour sets against WCAG 2:
+- text, secondary and tertiary text: at least 4.5:1 on the ground, cards and the sidebar;
+- controls, network colours, the accent and swatches: at least 3:1;
+- text on the accent: at least 4.5:1;
+- danger and warning: at least 4.5:1.
+
+A theme that fails does not ship.
+
+## Type
+
+| Role | Font | Notes |
 |---|---|---|
-| Navy/green palette (`#1E3A5F`, `#059669`…) | The tokens in `app/src/renderer/src/assets/main.css`: graphite ground (`--bg` `#ffffff` / dark `#1b1e20`), card `--bg-secondary`, text `--text` / `--text-secondary` / `--text-tertiary`, amber accent `--color-accent` for primary actions, `--color-danger` for states that need action | The "Mergelane v2" design; one color system, mapped to shadcn names in `@theme inline` |
-| — | Network identity colors: `--color-wifi` (teal), `--color-usb` (amber), `--color-ethernet` (steel) and the user swatches (`theme.ts`) | A network keeps one color on every screen (`useNetworkVisuals`) |
-| Fira Code / Fira Sans from Google Fonts | Manrope (words) and Roboto Mono (figures, instrument labels), bundled in `assets/fonts` | No network requests (CLAUDE.md: no servers); already the app's type |
-| `cursor: pointer` on clickables | The arrow cursor everywhere (`main.css` base layer) | A desktop app: native controls keep the arrow |
-| Cards with drop shadows (`--shadow-md`) | Hairline (0.5px) borders and the hero band; panels separated by rules, not floating cards | The existing screens' structure |
-| GSAP scroll reveals | No entrance motion. CSS transitions only for feedback (100–200ms); the combine diagram's flow animation is the one ambient motion | Motion 3/10; `prefers-reduced-motion` already stops all animation in `main.css` |
-| "Trust & Authority + Conversion" landing pattern | Not applicable (no marketing pages) | — |
+| Words: headings, labels, body | **Archivo**, variable (`wght` 100–900, `wdth` 62–125) | Weights 540 to 720 carry the hierarchy. |
+| Every figure: speeds, sizes, percentages, counts, times | Archivo through the **`figures`** utility | `font-stretch: 76%; font-variant-numeric: tabular-nums`, like a road sign's numerals. A ticking number never moves its neighbours. |
+| Identifiers: `en0`, hosts, paths, links, shortcut hints | **Fragment Mono** | Only for things you would type or copy. |
+| The wordmark "Mergelane" | Saira 600 | Only in Settings › Updates and About. Bundled when first used (M3.2). |
+| Liquid Glass | the system font (SF Pro) | That theme's look. Figures stay tabular at normal width. |
 
-Kept from the generated system: the Swiss/minimal style, dense spacing (4/8/12/16/20/24px — Tailwind's 1/2/3/4/5/6),
-4.5:1 text contrast, visible focus rings (`--color-ring`), no color-only indicators (every state has a word and/or an
-icon), no emoji icons (Lucide only).
+- **Bundled offline.** No font is ever fetched (CLAUDE.md). Licences are in `assets/fonts/` and
+  `THIRD-PARTY-NOTICES.md`.
+- **Sentence case everywhere.** There are no tracked all-caps labels; section titles are short sentence-case
+  headings.
 
-Charts (dataviz skill): the network palette was run through `validate_palette.js`. Light mode passes every check.
-Dark mode passes CVD separation (worst adjacent ΔE 11.3) and contrast, but its muted design hues sit outside the
-validator's lightness band and chroma floor. The hues are the owner's design and stay; charts therefore never rely
-on color alone: each network's chart is its own small multiple labelled with the network's name, and stacked charts
-sit beside a labelled legend (the combine diagram).
+## Layout
 
----
+- **Window:**
+  - the sidebar (236 px) holds the places (Dashboard, Downloads, Networks), each network's live speed, the merged
+    total, free space, Slow mode and Settings;
+  - then the content, with its own toolbar. There is no title bar, status bar or hero band.
+- **Breakpoints follow the window's width, not the screen's:**
+  - below 760 px, a compact bar (merged speed, settings, the places as a segmented control) replaces the sidebar;
+  - when the content area is at least 860 px, a selected download's details sit beside the list (400 px).
+    Otherwise they replace the list, with a back button;
+  - below 520 px, "New download" becomes an icon button with a label for assistive tech;
+  - New download is a sheet. From 640 px it drops from the toolbar; below that it rises from the bottom;
+  - in Settings, the section list sits on the side from 620 px of its own width, and becomes a segmented row below.
+- **The minimum window** stays 720 × 620.
+- **Alignment:** left aligned; one scrolling column per pane.
 
-## Global Rules
+## Shapes and depth
 
-### Color Palette
+- **Radii:** 6, 8, 12 and 16 px (`--radius-sm` to `--radius-xl`). Panels and cards are 12 px. **Controls that act are
+  capsules**: buttons, fields, segmented controls, chips.
+- **Lines before shadows.** Shadows only lift what floats: the sheet (`--shadow-sheet`), popovers, and a raised
+  control (`--shadow-raise`).
+- **The scrim** (`--scrim`) sits only behind the modal sheet.
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#1E3A5F` | `--color-primary` |
-| On Primary | `#FFFFFF` | `--color-on-primary` |
-| Secondary | `#334155` | `--color-secondary` |
-| On Secondary | `#FFFFFF` | `--color-on-secondary` |
-| Accent/CTA | `#059669` | `--color-accent` |
-| On Accent/CTA | `#000000` | `--color-on-accent` |
-| Background | `#0F172A` | `--color-background` |
-| Foreground | `#FFFFFF` | `--color-foreground` |
-| Card | `#192134` | `--color-card` |
-| Card Foreground | `#FFFFFF` | `--color-card-foreground` |
-| Muted | `#10192E` | `--color-muted` |
-| Muted Foreground | `#94A3B8` | `--color-muted-foreground` |
-| Border | `rgba(255,255,255,0.08)` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| On Destructive | `#FFFFFF` | `--color-on-destructive` |
-| Ring | `#FFFFFF` | `--color-ring` |
+## Components
 
-**Color Notes:** Vault dark blue + secure green
+Rebuilt from the prototype's components, on the Base UI primitives in `components/ui/`:
 
-### Typography
-
-- **Heading Font:** Fira Code
-- **Body Font:** Fira Sans
-- **Mood:** dashboard, data, analytics, code, technical, precise
-- **Google Fonts:** [Fira Code + Fira Sans](https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap)
-
-**CSS Import:**
-```css
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
-```
-
-### Spacing Variables
-
-*Density: 8/10 — Dense / Dashboard*
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--space-xs` | `2px` / `0.125rem` | Tight gaps |
-| `--space-sm` | `4px` / `0.25rem` | Icon gaps, inline spacing |
-| `--space-md` | `8px` / `0.5rem` | Standard padding |
-| `--space-lg` | `12px` / `0.75rem` | Section padding |
-| `--space-xl` | `16px` / `1rem` | Large gaps |
-| `--space-2xl` | `24px` / `1.5rem` | Section margins |
-| `--space-3xl` | `32px` / `2rem` | Hero padding |
-
-### Shadow Depths
-
-| Level | Value | Usage |
-|-------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
-
----
-
-## Component Specs
-
-### Buttons
-
-```css
-/* Primary Button */
-.btn-primary {
-  background: #059669;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-/* Secondary Button */
-.btn-secondary {
-  background: transparent;
-  color: #1E3A5F;
-  border: 2px solid #1E3A5F;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-```
-
-### Cards
-
-```css
-.card {
-  background: #0F172A;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
-}
-```
-
-### Inputs
-
-```css
-.input {
-  padding: 12px 16px;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 200ms ease;
-}
-
-.input:focus {
-  border-color: #1E3A5F;
-  outline: none;
-  box-shadow: 0 0 0 3px #1E3A5F20;
-}
-```
-
-### Modals
-
-```css
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
-  max-width: 500px;
-  width: 90%;
-}
-```
-
----
-
-## Style Guidelines
-
-**Style:** Minimalism & Swiss Style
-
-**Keywords:** Clean, simple, spacious, functional, white space, high contrast, geometric, sans-serif, grid-based, essential
-
-**Best For:** Enterprise apps, dashboards, documentation sites, SaaS platforms, professional tools
-
-**Key Effects:** Subtle hover (200-250ms), smooth transitions, sharp shadows if any, clear type hierarchy, fast loading
-
-### Page Pattern
-
-**Pattern Name:** Trust & Authority + Conversion
-
-- **Conversion Strategy:** Security badges. Case studies. Transparent pricing. Low-friction form. Provide pause/stop and stop the logo carousel on focus, hover, and reduced motion. Previous/next controls provide the keyboard equivalent; pause offscreen/hidden and render a static logo set under reduced motion.
-- **CTA Placement:** Contact Sales / Get Quote (primary) + Nav
-- **Section Order:** Hero (mission/credibility) > Proof (logos, certs, stats) > Solution overview > Clear CTA path
-
----
+| Component | Rule |
+|---|---|
+| **Button** | Variants primary (the accent), secondary, ghost and destructive. A capsule. Pressed: scale 0.96 for 100 ms. |
+| **Switch** | 38 × 22. The knob widens while held. On uses the accent, never a network colour. |
+| **Segmented** | A capsule group of pressed-state buttons with counts. It replaces drop-down filters. |
+| **Confluence** | Lanes as thick as their speed, merging at 60% of the width. Dropped lanes are dashed in danger. Thickness eases to new readings (τ 0.16 s); markings stop when idle or under Reduce Motion. |
+| **Chunk map** (LaneMap) | Capsule dashes coloured by the network that fetched each chunk. One focusable group: arrow keys, Home and End, with a polite readout ("Chunk 42 of 97: fetched over Ethernet"). |
+| **Split bar** | A download's progress split by network share, 6 px, with 2 px gaps. |
+| **Throughput chart** | 60 seconds stacked by network, with a total line in ink. Focusable; arrow keys move the readout. |
+| **Network row** | A tinted tile with the network's icon, its name and interface, its state in words, limits, a sparkline, speed and a "Use for downloads" switch. |
+| **Sheet** | In 320 ms (`cubic-bezier(0.2, 0.9, 0.25, 1)`), out 200 ms along the same path. Focus is trapped and returns to the trigger. Escape or the scrim closes it. |
 
 ## Motion
 
-**Scroll Reveal** (Subtle) — Trigger: scroll (viewport enter) | Duration: 300-400ms | Easing: `power1.out`
+- **Motion answers an action.** Nothing animates on its own except the Confluence's lane markings while bytes flow.
+- **Press feedback** comes on pointer-down, in 100 ms.
+- **Reduce Motion:** slides become 150 ms fades; lane markings, springs and smooth scrolling stop; colour fades stay.
+  The prototype misses this in two places, and the app must not: the switch knob's slide, and the smooth scroll from
+  Settings to Networks.
 
-```js
-gsap.from(el, { opacity: 0, y: 12, duration: 0.35, ease: 'power1.out', scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none reverse' } });
-```
+## Liquid Glass
 
-**Framework notes:** Requires the ScrollTrigger plugin registered once via gsap.registerPlugin(ScrollTrigger); Use matchMedia('(prefers-reduced-motion: reduce)') to skip non-essential motion and render the final state immediately
+The Liquid Glass theme adds a material: a translucent sidebar, toolbar controls and sheets over the desktop.
+- **The material:** Electron's window material (`vibrancy`), not a painted wallpaper.
+- **Lists and cards:** the design's own text says they stay on solid ground, but its CSS gives them a translucent fill.
+  Pull request 7 settles this with the owner.
+- **Accessibility settings:**
+  - Reduce Transparency, from the Mac (`nativeTheme.prefersReducedTransparency`) or the in-app switch, makes every
+    layer solid;
+  - Increase Contrast thickens fills and lines.
+- **Its graphics cost** is measured with "Mergelane on this Mac" before it ships (M3.1 pull request 7).
 
-- ✅ Keep the y offset small (8-16px) so it reads as a fade, not a slide
-- ❌ Don't reveal below-the-fold content needed for SEO/crawlers as invisible-by-default without a no-JS fallback
-- ⚡ toggleActions 'play none none reverse' avoids re-triggering on every scroll direction change
+## Accessibility
 
----
+- The contrast floors above, tested.
+- Focus: a visible 2 px ring in `--focus` with a 2 px offset on every control.
+- Every state has a word or an icon as well as a colour.
+- Icons are Lucide only, with no emoji; an icon-only button has a label.
+- Live numbers are not live regions. Changes worth announcing once, such as a dropped network, go in a polite
+  `role="log"`.
 
-## Anti-Patterns (Do NOT Use)
+## Copy
 
-- ❌ Excessive decoration
-- ❌ Color-only indicators
+Plain verbs, sentence case and no jargon, as the prototype's strings do.
+- An action keeps its name through the flow ("Remove from list", then "Remove").
+- Empty states say what to do next.
+- Errors say what happened and how to fix it.
+- Typography: typographic apostrophes (’), the ellipsis character (…) and the › separator in paths such as
+  "Settings › Appearance".
 
-### Additional Forbidden Patterns
+## Do not
 
-- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
-- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
-- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
-- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
-- ❌ **Instant state changes** — Always use transitions (150-300ms)
-- ❌ **Invisible focus states** — Focus states must be visible for a11y
+- No hero band, no tracked uppercase or mono section labels, no gradient decoration.
+- No network colour on text, and no green for "healthy".
+- No `cursor: pointer`: it's a desktop app, so controls keep the arrow.
+- No fonts, images or scripts loaded from the internet.
+- No control that has nothing behind it: a feature's screen ships with the feature (ADR-0034).
 
----
+## Before a screen is done
 
-## Pre-Delivery Checklist
-
-Before delivering any UI code, verify:
-
-- [ ] No emojis used as icons (use SVG instead)
-- [ ] All icons from consistent icon set (Heroicons/Lucide)
-- [ ] `cursor-pointer` on all clickable elements
-- [ ] Hover states with smooth transitions (150-300ms)
-- [ ] Light mode: text contrast 4.5:1 minimum
-- [ ] Focus states visible for keyboard navigation
-- [ ] `prefers-reduced-motion` respected
-- [ ] Responsive: 375px, 768px, 1024px, 1440px
-- [ ] No content hidden behind fixed navbars
-- [ ] No horizontal scroll on mobile
+1. It matches the prototype in all seven themes, in light and dark (the contrast test passes).
+2. Keyboard: every control is reachable, has a visible focus ring and a sensible order.
+3. Reduce Motion, Reduce Transparency and Increase Contrast each change what they should.
+4. It works at 720 px wide and in the compact bar below 760.
+5. Unit tests cover 90% of the changed lines (Vitest); Playwright specs updated for any changed text.

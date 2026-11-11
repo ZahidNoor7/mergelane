@@ -16,6 +16,7 @@ import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBrid
 import { registerNativeHost } from './nativeHost'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
+import { currentWindowBackground, setWindowTheme } from './windowBackground'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
 import type { DownloadManager } from './download/downloadManager'
@@ -115,9 +116,9 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Mergelane',
-    // Matches the renderer's dark-mode background so a live window resize
-    // (which briefly exposes the raw window background) doesn't flash white.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
+    // The theme's ground in the current mode, so a live window resize (which briefly exposes the
+    // raw window background) and the first frame don't flash another colour.
+    backgroundColor: currentWindowBackground(),
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // One title bar on every OS: the renderer's own strip (see TitleBar.tsx), with the OS's
     // window controls over it — macOS's traffic lights, or the minimize/maximize/close that
@@ -221,6 +222,7 @@ app.whenReady().then(async () => {
   // Applied before the window is created so the initial background/icon already match —
   // the saved preference otherwise only takes effect on the next 'updated' event.
   nativeTheme.themeSource = await loadThemeSource()
+  setWindowTheme((await loadSettings()).appearanceTheme)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -246,7 +248,7 @@ app.whenReady().then(async () => {
   if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
-    mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
+    mainWindow?.setBackgroundColor(currentWindowBackground())
     if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 

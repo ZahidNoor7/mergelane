@@ -1,8 +1,8 @@
-import type { ThemeSource } from '@shared/types'
+import { usePrefersDark } from '../hooks/usePrefersDark'
 import { useAppStore } from '../store/useAppStore'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-const OPTIONS: { id: ThemeSource; nextLabel: string; icon: React.JSX.Element }[] = [
+const OPTIONS: { id: 'light' | 'dark'; nextLabel: string; icon: React.JSX.Element }[] = [
   {
     id: 'light',
     nextLabel: 'Switch to dark theme',
@@ -34,11 +34,15 @@ const OPTIONS: { id: ThemeSource; nextLabel: string; icon: React.JSX.Element }[]
   }
 ]
 
+/** Flips between light and dark. On Auto it shows the mode the Mac is in now and switches to the
+ * other, which then stays; Auto itself is chosen in Settings › Appearance. */
 export function ThemeToggle(): React.JSX.Element {
   const themeSource = useAppStore((store) => store.themeSource)
   const setThemeSource = useAppStore((store) => store.setThemeSource)
+  const prefersDark = usePrefersDark()
 
-  const current = OPTIONS.find((option) => option.id === themeSource) ?? OPTIONS[0]
+  const shown = themeSource === 'system' ? (prefersDark ? 'dark' : 'light') : themeSource
+  const current = shown === 'dark' ? OPTIONS[1] : OPTIONS[0]
 
   const toggle = (): void => {
     setThemeSource(current.id === 'light' ? 'dark' : 'light')

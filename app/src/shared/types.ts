@@ -1,4 +1,5 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
+import type { ThemeId } from './themes'
 
 export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'other'
 export type IpFamily = 4 | 6
@@ -11,7 +12,8 @@ export interface NetworkAddress {
   subnet?: string
 }
 
-export type ThemeSource = 'light' | 'dark'
+/** Light, dark, or 'system' (Auto: follow the Mac), as nativeTheme.themeSource takes it. */
+export type ThemeSource = 'system' | 'light' | 'dark'
 
 export interface NetworkInterfaceInfo {
   /** Stable identifier for this interface (currently the OS device name, e.g. "en0"). */
@@ -573,6 +575,8 @@ export interface DownloadSchedule {
 export interface AppSettings {
   downloadSchedule?: DownloadSchedule
   themeSource?: ThemeSource
+  /** The colour theme (shared/themes.ts). Missing or unknown means the default, Porcelain. */
+  appearanceTheme?: ThemeId
   /** Only ever saved as false: updates download on their own unless turned off. */
   autoUpdate?: boolean
   /** The last destination folder picked. */
@@ -607,6 +611,7 @@ export interface InitialState {
   homeDir: string
   downloadsDir: string
   themeSource: ThemeSource
+  appearanceTheme: ThemeId
   networkPreferences: NetworkPreferences
   downloadsAtOnce: number
   speedLimit?: number

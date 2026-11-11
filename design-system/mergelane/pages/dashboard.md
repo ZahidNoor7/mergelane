@@ -1,67 +1,44 @@
-# Dashboard Page Overrides
+# Dashboard
 
-> **PROJECT:** Mergelane
-> **Generated:** 2026-11-10 23:39:13, then written up for M2.3
-> **Page Type:** Dashboard / Data View
->
-> **IMPORTANT:** Rules in this file **override** the Master file (`design-system/mergelane/MASTER.md`), whose
-> "Reconciliation" section already overrides its generated values. Only deviations are documented here.
-
----
+> Overrides `../MASTER.md` only where it says so. The layout follows the final design's Dashboard
+> (`../redesign/prototype.html`, `DashboardScreen`). It is rebuilt in M3.1 pull request 6. Until then the screen in
+> `app/src/renderer/src/screens/DashboardScreen.tsx` keeps its M2.3 layout with the new colours and fonts.
 
 ## What the page is for
 
-One place that answers, at a glance: what is downloading and how fast, what each network is doing, whether a
-network dropped and what happened to the traffic, whether system-wide merging is on (and why not), and what
-combined speed can and can't do. Implemented in `app/src/renderer/src/screens/DashboardScreen.tsx`.
+One place that answers, at a glance:
+- what is downloading, and how fast;
+- what each network is doing, and whether one dropped;
+- what Mergelane itself costs the Mac.
 
-## Layout (default window 760×640, minimum 720×620)
+It is reached from the sidebar, where it is the first place. The app opens on Downloads (ADR-0034).
 
-```
-┌ ‹ Downloads │ Dashboard ─────────────────────────────────────────────┐  header (h-12), like a download's screen
-├ hero band ─────────────────────────────────────────────────────────────┤
-│ [combine diagram: every network → one stream]  TOTAL SPEED  [throughput │  the one memorable element:
-│                                                 12.4 MB/s    chart, all │  the same instrument a download's
-│                                                 ACTIVE 2 · DONE IN 1m  │  screen opens on, for everything
-├────────────────────────────────────────────────────────────────────────┤
-│ DOWNLOADING 2                                           1 queued       │  rows: name, speed, network-colored
-│ ubuntu.iso ……………………………………………………………………………… 4.1 MB/s       │  progress, "42% · 1.2 of 3 GB · 1m left"
-│ NETWORKS 3                    │ FAILOVER                               │  side by side from 900px
-│ ● Wi-Fi  en0   Up    3.2 MB/s │ All 3 networks are up.                 │
-│ OTHER APPS                                                             │  system merge (SystemMergeSection,
-│ [System merge  ◯]  per-link charts while on                            │  embedded as-is) + per-link charts
-│ ABOUT COMBINED SPEED   four plain statements (2 columns from 900px)    │  the honest limits, always shown
-└────────────────────────────────────────────────────────────────────────┘
-```
+## Layout, top to bottom
 
-- Left aligned; one scrolling column under a fixed header and hero; 20px side gutters (the list's).
-- Section labels use the list screen's group label (mono, 10.5px, tracked, uppercase) so the two screens read as
-  one app. Statements and empty states are sentence case.
-- No cards with shadows. Sections are separated by the list's hairline label rule; the system merge control sits
-  in one bordered well because it is a control surface (it came from the networks popover).
+1. **The Confluence:** every network's lane merging into the total.
+2. **Last minute:** the stacked throughput chart by network, with its legend.
+3. **Today:** bytes per network, the fastest merged speed, and network dropouts (for example "2, all back").
+4. **Downloading:** every unfinished download with its split bar. A row opens it in Downloads.
+5. **Mergelane on this Mac:** CPU (as Activity Monitor counts it: 100% is one full core) and memory, a one-minute CPU
+   sparkline in ink, and a table by part: downloads engine, app window, graphics, system merge helper, video tools.
 
-## Type
+Two columns when the content is at least `@3xl` wide; one column below.
 
-- Header title 15px Manrope semibold, -0.01em. Row titles 13.5–14px medium. Body 12.5px, leading 1.6.
-- Figures in Roboto Mono with `tabular-nums` where they line up (row speeds, axis ticks); the hero figure keeps
-  the existing BigStat treatment.
+## Rules that stay from M2.3
 
-## Color
+- Text never takes a network's colour. Healthy states use secondary ink with an icon.
+- Live numbers are not live regions. Network dropouts are a polite `role="log"`, so a drop is announced once.
+- The honest limits of combined speed ("About combined speed") stay on the Dashboard.
+- Every empty state says what to do:
+  - nothing downloading: how to start one;
+  - no network: connect one;
+  - one network: there is nothing to fail over to;
+  - helper not installed: what system merge needs.
 
-- Network hue = identity only (dots, progress segments, chart fills). Text never takes a network's color.
-- `--color-danger` + an icon + a word for states that need action (no connection, paused by a data limit,
-  can't reach the server, link without internet). Healthy states use secondary ink with an icon.
+## Data the design needs that the app adds
 
-## Motion and live data
-
-- Nothing enters with motion. Rows give instant press feedback (100ms background change).
-- Live numbers are not live regions (they would be read every second). New failover events are a polite
-  `role="log"`, so a dropped network is announced once.
-- Reduced motion: the global rule in `main.css` stops the combine diagram's flow and every transition.
-
-## Empty states (each says what to do)
-
-- Nothing downloading: how to start one (paste, drop, New download).
-- No network: join Wi-Fi, plug in Ethernet or tether a phone; Scan again / Network settings.
-- One network: nothing to fail over to; connect a second.
-- Helper not installed: SystemMergeSection's own install prompt, plus a line saying downloads don't need it.
+- **"Today" totals and the fastest merged speed** are kept across restarts, with a daily rollover. Until that exists
+  (M3.7), the section shows only what is known since the app opened, and says so.
+- **CPU and memory:** from Electron's `app.getAppMetrics()` (`cumulativeCPUUsage` over the interval, so 100% is one
+  core), plus a new optional status field in which the helper reports its own usage (protocol v1, additive). Built
+  in M3.1 pull request 6.

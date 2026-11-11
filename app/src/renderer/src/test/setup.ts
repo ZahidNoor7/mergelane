@@ -12,6 +12,7 @@ const initialState: InitialState = {
   homeDir: '/Users/test',
   downloadsDir: '/Users/test/Downloads',
   themeSource: 'light',
+  appearanceTheme: 'porcelain',
   networkPreferences: {},
   downloadsAtOnce: 3,
   slowMode: false,

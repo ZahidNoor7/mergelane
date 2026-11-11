@@ -260,6 +260,16 @@ Last updated: 2026-11-11
     1. `node scripts/release/local-release.mjs --version 0.2.0` on `main`;
     2. the same with `--upload`, which makes the **draft**;
     3. the owner installs the DMG, then publishes the draft.
+  - Merged (#33). The first build without upload stopped at the packaging test's last check:
+    - the launched test copy had created `~/Library/Preferences/io.github.zahidnoor7.mergelane.plist`;
+    - it held only three keys that Electron writes on every launch, which macOS saves under the real home whatever
+      `CFFIXED_USER_HOME` says. With 0.1.0 the file already held them, so nothing changed then.
+    - The file is still there; deleting it was blocked by the permission check. It is harmless.
+- **Packaging test fixes** (branch `fix-package-prefs`), in `scripts/ci/package-test.sh`:
+  - the app's preferences are compared by content (`defaults export`), without Electron's three launch keys;
+  - the ad-hoc signature check reads `codesign`'s whole report before matching. Piped into `grep -q` under
+    `pipefail`, it failed a good signature (twice in a row while fixing the first issue).
+  - The local packaging test then passed on the built 0.2.0 DMG, and the release scripts' tests passed (88).
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

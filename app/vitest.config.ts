@@ -46,7 +46,13 @@ export const COVERED = [
   ...['WindowChrome', 'NetworkTile', 'SpeedText', 'SpeedUnitToggle'].map(
     (name) => `src/renderer/src/components/${name}.tsx`
   ),
-  'src/renderer/src/hooks/useElementWidth.ts'
+  'src/renderer/src/hooks/useElementWidth.ts',
+  // M3.1 pull request 5b-1: the download list, its filters and its rows.
+  'src/renderer/src/screens/DownloadsScreen.tsx',
+  ...['DownloadFilters', 'DownloadGlyphs'].map((name) => `src/renderer/src/components/${name}.tsx`),
+  'src/renderer/src/components/fileTypeIcons.ts',
+  'src/renderer/src/hooks/useMergeLanes.ts',
+  'src/shared/downloadFilters.ts'
 ]
 
 export default defineConfig({

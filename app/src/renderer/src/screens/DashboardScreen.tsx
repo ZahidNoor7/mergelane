@@ -6,7 +6,7 @@ import {
 } from '@shared/types'
 import { CircleCheck, CirclePause, Gauge, Plug, Plus, TriangleAlert, Unplug } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Confluence, PLACEHOLDER_LANES, type ConfluenceLane } from '../components/Confluence'
+import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
 import { HeroBand } from '../components/HeroBand'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { Sparkline } from '../components/Sparkline'
@@ -14,6 +14,7 @@ import { SystemMergeSection } from '../components/SystemMergeSection'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useFormatSpeed, useFormatSpeedLimit } from '../hooks/useFormatSpeed'
+import { useMergeLanes } from '../hooks/useMergeLanes'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals, type ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useSystemMerge } from '../hooks/useSystemMerge'
@@ -34,8 +35,6 @@ import {
   formatEta,
   formatPercent,
   formatWhen,
-  groupByNetwork,
-  networkActive,
   speedTicks,
   wantedBytes
 } from '../utils/format'
@@ -161,43 +160,14 @@ export function DashboardScreen(): React.JSX.Element {
 function DashboardHero(): React.JSX.Element {
   const formatSpeedLimit = useFormatSpeedLimit()
   const downloads = Object.values(useAppStore((store) => store.downloads))
-  const interfaces = useAppStore((store) => store.interfaces)
   const speedLimit = useAppStore((store) => store.speedLimit)
   const slowMode = useAppStore((store) => store.slowMode)
   const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
   const networkVisual = useNetworkVisuals()
-
-  const active = activeDownloads(downloads)
+  const { lanes, summaries, active, progress } = useMergeLanes()
   const running = active.running.length > 0
   const history = combinedHistory(downloads)
-  const carrying = new Set(
-    active.running.flatMap((download) =>
-      groupByNetwork(download)
-        .filter(networkActive)
-        .map((group) => group.id)
-    )
-  )
-  const summaries = networkSummaries(interfaces, downloads, {}, {})
-  // Each network as a lane: as thick as its speed while it carries bytes, and in words otherwise.
-  const lanes: ConfluenceLane[] = summaries.map((network) => {
-    const visual = networkVisual(network.id, network.kind, network.osName)
-    return {
-      id: network.id,
-      interfaceName: network.id,
-      name: visual.name,
-      color: visual.solid,
-      speed: network.speed,
-      on: carrying.has(network.id),
-      down: network.condition === 'offline',
-      limited: network.condition === 'limited',
-      note:
-        network.condition === 'paused'
-          ? 'Data limit reached'
-          : network.condition === 'unreachable'
-            ? 'Can’t reach the server'
-            : 'Idle'
-    }
-  })
+
   // The chart draws the networks that carried something in the last minute, in the list's order.
   const charted = summaries.filter((network) => history[network.id]?.some((value) => value > 0))
   const speedCap = slowMode
@@ -205,10 +175,6 @@ function DashboardHero(): React.JSX.Element {
     : speedLimit !== undefined
       ? `Limited to ${formatSpeedLimit(speedLimit)}`
       : ''
-  // What's running and when it will be done, under the merged speed.
-  const progress = running
-    ? `${active.running.length} downloading${active.etaSeconds === undefined ? '' : `, about ${formatEta(active.etaSeconds)} left`}`
-    : 'Nothing downloading'
 
   return (
     <HeroBand className="shrink-0">

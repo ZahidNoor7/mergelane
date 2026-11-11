@@ -112,6 +112,25 @@ Last updated: 2026-11-11
     passed 4 repeats alone and the next full run. Its output wasn't kept, so the cause is unknown. Seen once.
   - **Local runs need `env -u ELECTRON_RUN_AS_NODE`** when started from a VS Code terminal, which sets that
     variable and makes Electron start as plain Node ("bad option: --remote-debugging-port=0").
+- **M3.1, pull request 5b is split in two**, as 4 was. 5b-1 is the list; 5b-2 is the details pane, in which
+  the Inspector replaces the three download screens.
+- **M3.1, pull request 5b-1** (branch `m3.1-downloads`): the download list in the design's layout.
+  - **Toolbar:** the title "Downloads" with what's running ("2 downloading, 1 waiting"), the search field, the
+    schedule button, the networks menu and New download. The schedule button and the networks menu move out in
+    5e and 5d.
+  - **Above the list:** the Confluence of every network, from a new `useMergeLanes` hook that the Dashboard
+    also uses now.
+  - **Status tabs** with counts replace the status menu (`DownloadFilterMenu`, deleted).
+  - **Filters by date added and file type:** the logic is in `shared/downloadFilters.ts`, and the panel and the
+    chips in `components/DownloadFilters.tsx`. Date ranges are whole days on the Mac's calendar, counted by when
+    each download was added (`startedAt`). The filters last while the window is open; they are not saved.
+  - **Rows:** a file-type icon, the kind tags (`KindTags`, which replaces `TorrentBadge`, `UsenetBadge` and
+    `StreamBadge`), the split bar, the progress in words, the speed, and the next-step button. The whole row
+    opens the download; its button is named by the file name (it was "Open <name>").
+  - **Kept, restyled:** the checkboxes and the selection toolbar, the keys (⌘A, ⌘F, Escape, Delete), the
+    right-click menu, the network dots, and "Clear finished list".
+  - **Unit tests:** `DownloadsScreen`, `DownloadFilters`, `DownloadGlyphs`, `fileTypeIcons`, `useMergeLanes`
+    and `shared/downloadFilters` are in `COVERED`, at 97–100% of lines.
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

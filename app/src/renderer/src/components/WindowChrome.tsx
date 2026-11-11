@@ -1,5 +1,13 @@
 import { cn } from 'cn'
-import { ArrowDownToLine, Gauge, HardDrive, LayoutDashboard, Unplug, Waypoints } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  Gauge,
+  HardDrive,
+  LayoutDashboard,
+  Settings,
+  Unplug,
+  Waypoints
+} from 'lucide-react'
 import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
@@ -9,8 +17,7 @@ import { networkSummaries } from '../utils/dashboard'
 import { formatBytes } from '../utils/format'
 import { NetworkTile } from './NetworkTile'
 import { SpeedText } from './SpeedText'
-import { SpeedUnitToggle } from './SpeedUnitToggle'
-import { ThemeToggle } from './ThemeToggle'
+import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -20,15 +27,14 @@ import { UpdateIndicator } from './UpdateIndicator'
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
 // their top left (main/index.ts trafficLightPosition), on a strip the window is dragged by.
 //
-// Settings arrives with its screen (M3.1 pull request 5e). Until then the units and theme toggles,
-// which Settings will hold, stay here so nothing is lost.
+// Settings is at the sidebar's foot (a button in the compact bar), opened by ⌘, too (App.tsx).
 
 /** Width of the window at which the sidebar replaces the compact bar. */
 export const SIDEBAR_FROM = 760
 
 type Place = Screen
 
-const PLACES: { id: Place; label: string; icon: typeof LayoutDashboard }[] = [
+const PLACES: { id: Exclude<Place, 'settings'>; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine },
   { id: 'networks', label: 'Networks', icon: Waypoints }
@@ -96,6 +102,8 @@ const NAV_ITEM =
 
 export function Sidebar(): React.JSX.Element {
   const [place, setPlace] = usePlace()
+  const settings = place === 'settings'
+  const openSettings = useAppStore((store) => store.openSettings)
   const lanes = useNetworkLanes()
   const inProgress = useAppStore(
     (store) =>
@@ -187,13 +195,20 @@ export function Sidebar(): React.JSX.Element {
           <div className="px-1.5">
             <SlowModeSwitch withLabel />
           </div>
-          <div className="flex items-center justify-between gap-2 border-t border-rule px-1.5 pt-2.5">
-            <SpeedUnitToggle />
-            {/* The design's update notice and Settings item replace these with Settings (5e). */}
-            <div className="flex items-center gap-1.5">
-              <UpdateIndicator />
-              <ThemeToggle />
-            </div>
+          {/* Settings, as the design's sidebar ends; the update button beside it until M3.2 gives
+              Settings its Updates section and the design's update notice. */}
+          <div className="-mx-1 flex items-center gap-1.5 border-t border-rule pt-2">
+            <button
+              type="button"
+              aria-current={settings ? 'page' : undefined}
+              onClick={() => openSettings()}
+              className={NAV_ITEM}
+            >
+              <Settings aria-hidden className="size-4" />
+              <span className="flex-1 text-left">Settings</span>
+              <kbd className="font-mono text-[11px] font-normal text-ink-3">⌘,</kbd>
+            </button>
+            <UpdateIndicator />
           </div>
         </div>
       </div>
@@ -204,6 +219,8 @@ export function Sidebar(): React.JSX.Element {
 /** The narrow window's frame: the merged speed and the places as a segmented control. */
 export function CompactBar(): React.JSX.Element {
   const [place, setPlace] = usePlace()
+  const settings = place === 'settings'
+  const openSettings = useAppStore((store) => store.openSettings)
   const lanes = useNetworkLanes()
   const merged = lanes.reduce((sum, lane) => sum + (lane.out ? 0 : lane.speed), 0)
   return (
@@ -221,8 +238,16 @@ export function CompactBar(): React.JSX.Element {
         </span>
         <div className="ml-auto flex items-center gap-2.5">
           <SlowModeSwitch withLabel={false} />
-          <SpeedUnitToggle />
-          <ThemeToggle />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Settings"
+            aria-current={settings ? 'page' : undefined}
+            onClick={() => openSettings()}
+          >
+            <Settings />
+          </Button>
         </div>
       </div>
       <nav aria-label="Mergelane">

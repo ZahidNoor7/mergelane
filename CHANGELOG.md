@@ -46,6 +46,10 @@ All notable changes to Mergelane are recorded here. The format follows
   downloads use it. System merge and the recent network dropouts are on it too, and Speed & data limits opens
   from it.
 - A network's colour can be set back to the theme's colour.
+- A Settings screen (⌘, or the sidebar's foot) with General (speed units, slow mode, total speed), Appearance
+  (Auto, Light or Dark, and the seven themes with previews) and Downloads (where downloads go, how many run at
+  once, the schedule, the news server, and a way to each network's limits). The units and theme buttons leave the
+  sidebar.
 - Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
   file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
   downloads it would leave, and the filters that are on show as chips you can remove.

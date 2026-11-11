@@ -22,9 +22,11 @@ export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** The window's places (the sidebar's): the downloads, the dashboard or the networks. The Settings
- * screen joins them in M3.1 pull request 5e. */
-export type Screen = 'downloads' | 'dashboard' | 'networks'
+/** The window's places (the sidebar's): the downloads, the dashboard, the networks or settings. */
+export type Screen = 'downloads' | 'dashboard' | 'networks' | 'settings'
+
+/** Settings' sections. Updates and Browser extensions come with M3.2 and M3.4. */
+export type SettingsSection = 'general' | 'appearance' | 'downloads'
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -50,6 +52,10 @@ interface AppStore {
   history: FinishedDownload[]
   /** The place the window shows. */
   screen: Screen
+  /** The section Settings shows. */
+  settingsSection: SettingsSection
+  /** Goes to Settings, at a section when one is given. */
+  openSettings: (section?: SettingsSection) => void
   /** The download whose details show: beside the list in a wide window, or in its place in a
    * narrow one while `detailOpen`. */
   selectedId: string | null
@@ -153,6 +159,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   downloads: {},
   history: [],
   screen: 'downloads',
+  settingsSection: 'general',
+  openSettings: (section) =>
+    set((store) => ({
+      screen: 'settings',
+      settingsSection: section ?? store.settingsSection,
+      detailOpen: false
+    })),
   selectedId: null,
   detailOpen: false,
   downloadFilter: 'all',

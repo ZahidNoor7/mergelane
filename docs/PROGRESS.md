@@ -270,6 +270,15 @@ Last updated: 2026-11-11
   - the ad-hoc signature check reads `codesign`'s whole report before matching. Piped into `grep -q` under
     `pipefail`, it failed a good signature (twice in a row while fixing the first issue).
   - The local packaging test then passed on the built 0.2.0 DMG, and the release scripts' tests passed (88).
+- **0.2.0 draft release created** (after #34, from `main` at `706a6e3`):
+  - the build without upload passed everything: fuse audit, packaging test (102 entries unchanged), zip check and
+    sources;
+  - two `--upload` runs then stopped before uploading anything, both at FFmpeg's source download from ffmpeg.org
+    (a 60-second stall, then `ECONNRESET`). The third run created the draft.
+  - The draft has six files. GitHub's digests match `app/dist/SHA256SUMS`: DMG `44ba38b3…`, zip `8e55b0d8…`.
+  - **Next:** the owner installs the DMG from the draft, then publishes it (`docs/RELEASING.md`, steps 5 and 6).
+  - **Follow-up:** `scripts/media-tools/sources.mjs` tries each download once. A retry with a pause would ride out
+    an unreliable ffmpeg.org.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

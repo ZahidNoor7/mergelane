@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, symlink, unlink, writeFile } from 'node:fs/pro
 import { join } from 'node:path'
 import { BLOCK, expect, test, treeSha, type MergelaneApp } from './fixtures'
 import { seededBytes } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 
 /** Hold the actual history save, rather than relying on a quick click landing in its window. */
 async function holdHistoryWrite(mergelane: MergelaneApp): Promise<void> {
@@ -113,7 +113,7 @@ test.describe('removal during completion @smoke', () => {
       await stubTrash(mergelane, trash)
       await holdHistoryWrite(mergelane)
       const id = await mergelane.start(
-        await torrentFileOnDisk(torrent),
+        await swarm.torrentFileOnDisk(torrent),
         treeSha(files.map((data) => ({ path: (data as { name?: string }).name!, data })))
       )
       await waitForHistoryWrite(mergelane)
@@ -157,7 +157,7 @@ test('failed torrent cancellation stays visible across restart and can be retrie
       uploadLimit: 64 * 1024
     })
     const id = await mergelane.start(
-      await torrentFileOnDisk(torrent),
+      await swarm.torrentFileOnDisk(torrent),
       treeSha(files.map((data) => ({ path: (data as { name?: string }).name!, data })))
     )
     await mergelane.api.pauseDownload(id)

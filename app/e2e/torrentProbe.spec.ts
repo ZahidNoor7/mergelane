@@ -1,12 +1,12 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { createServer as createNetServer, type AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type WebTorrent from 'webtorrent'
 import type { Torrent } from 'webtorrent'
 import { expect, test } from './fixtures'
 import { seededBytes } from './origin'
+import { removeScratch, scratchFolder } from './torrentSwarm'
 
 // Getting a torrent in: every way in gives the same answer, and a torrent Mergelane can't save
 // safely is refused before anything is written. Peers come from the link itself (x.pe), so no
@@ -24,14 +24,37 @@ function named(data: Buffer, name: string): Buffer {
   return Object.assign(data, { name })
 }
 
-/** A client seeding `files` (one file, or a folder of them when `folder` is given). */
+const clients: WebTorrent[] = []
+const servers: Server[] = []
+/** Seeders' folders and .torrent files' folders, removed after each test. */
+const folders: string[] = []
+test.afterEach(async () => {
+  await Promise.all(clients.splice(0).map((client) => new Promise((done) => client.destroy(done))))
+  await Promise.all(servers.splice(0).map((server) => new Promise((done) => server.close(done))))
+  await removeScratch(folders.splice(0))
+})
+
+/** A new folder for this test, gone after it. */
+async function folderForTest(prefix: string): Promise<string> {
+  const path = await scratchFolder(prefix)
+  folders.push(path)
+  return path
+}
+
+/** A client seeding `files` (one file, or a folder of them when `folder` is given). Its files go
+ * in a folder of its own: left to webtorrent, they would pile up in /tmp/webtorrent. */
 async function seed(
   files: Buffer[],
   folder?: string
 ): Promise<{ client: WebTorrent; torrent: Torrent }> {
   const client = new (await loadWebTorrent())(quiet)
+  const path = await folderForTest('mergelane-seed-')
   const torrent = await new Promise<Torrent>((resolve) =>
-    client.seed(files.length === 1 ? files[0] : files, { name: folder, announce: [] }, resolve)
+    client.seed(
+      files.length === 1 ? files[0] : files,
+      { name: folder, announce: [], path },
+      resolve
+    )
   )
   return { client, torrent }
 }
@@ -45,13 +68,6 @@ async function serveTorrent(body: Uint8Array): Promise<{ url: string; server: Se
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/file.torrent`, server }
 }
-
-const clients: WebTorrent[] = []
-const servers: Server[] = []
-test.afterEach(async () => {
-  await Promise.all(clients.splice(0).map((client) => new Promise((done) => client.destroy(done))))
-  await Promise.all(servers.splice(0).map((server) => new Promise((done) => server.close(done))))
-})
 
 test.describe('getting a torrent in', () => {
   test('a link to a .torrent', async ({ mergelane }) => {
@@ -75,7 +91,7 @@ test.describe('getting a torrent in', () => {
       'Album'
     )
     clients.push(client)
-    const path = join(await mkdtemp(join(tmpdir(), 'mergelane-torrent-')), 'album.torrent')
+    const path = join(await folderForTest('mergelane-torrent-'), 'album.torrent')
     await writeFile(path, torrent.torrentFile)
 
     const probe = await mergelane.api.probeUrl(path)

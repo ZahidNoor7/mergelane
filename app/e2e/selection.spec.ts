@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test'
 import { DEFAULT_DOWNLOAD_SCHEDULE } from '../src/shared/downloadSchedule'
 import { BLOCK, expect, test, treeSha } from './fixtures'
 import { seededBytes } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 
 /** The selection toolbar keeps the next step as buttons; the rest is behind More actions. */
 async function openMore(page: Page): Promise<void> {
@@ -177,7 +177,7 @@ test('trashing finished torrent files preserves unrelated files in the torrent f
     const files = [named(seededBytes(BLOCK, 81), 'a.bin'), named(seededBytes(BLOCK, 82), 'b.bin')]
     const torrent = await swarm.seed(files, { folder: 'Owned', pieceLength: 16 * 1024 })
     await mergelane.start(
-      await torrentFileOnDisk(torrent),
+      await swarm.torrentFileOnDisk(torrent),
       treeSha(
         files.map((data) => ({
           path: (data as { name?: string }).name!,
@@ -222,7 +222,7 @@ test('cancelling an unfinished torrent preserves unrelated files in its folder',
       uploadLimit: 64 * 1024
     })
     const id = await mergelane.start(
-      await torrentFileOnDisk(torrent),
+      await swarm.torrentFileOnDisk(torrent),
       treeSha(
         files.map((data) => ({
           path: (data as { name?: string }).name!,

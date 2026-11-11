@@ -4,7 +4,7 @@ import { dataPeriodKey, nextDataReset } from '../src/shared/dataLimits'
 import type { Wire } from 'webtorrent'
 import { BLOCK, expect, LAN_ADDRESS, test } from './fixtures'
 import { seededBytes, sha256 } from './origin'
-import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+import { named, Swarm } from './torrentSwarm'
 
 // Speed & data limits (main/network/limits.ts): every byte received goes through them, whether
 // an HTTP response's or a torrent peer's, and every torrent block sent goes through the upload
@@ -71,7 +71,7 @@ test.describe('speed and data limits', () => {
       const torrent = await swarm.seed([named(data, 'limited.bin')], { pieceLength: 64 * KB })
       await mergelane.api.updateSettings({ speedLimit: 384 * KB })
       const started = Date.now()
-      await mergelane.start(await torrentFileOnDisk(torrent), sha256(data))
+      await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data))
       await mergelane.waitForTorrentStatus('completed', 30_000)
       expect(Date.now() - started).toBeGreaterThan(1500)
     } finally {
@@ -110,7 +110,9 @@ test.describe('speed and data limits', () => {
           uploadLimit: 160 * KB
         })
         await mergelane.api.updateSettings(settings)
-        await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a'] })
+        await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
+          networks: ['a']
+        })
         await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
         // Nothing can be uploaded before there's someone to upload to.
         const started = Date.now()
@@ -161,7 +163,7 @@ test.describe('speed and data limits', () => {
           pieceLength: 64 * KB,
           uploadLimit: 160 * KB
         })
-        const id = await mergelane.start(await torrentFileOnDisk(seeder), sha256(data), {
+        const id = await mergelane.start(await swarm.torrentFileOnDisk(seeder), sha256(data), {
           networks: ['a']
         })
         await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
@@ -223,7 +225,7 @@ test.describe('data limits and uploads', () => {
         networkPreferences: { b: { dataLimit: LIMIT } }
       })
 
-      await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), {
+      await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data), {
         networks: ['a', 'b']
       })
       await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)

@@ -598,8 +598,8 @@ Last updated: 2026-11-11
     The failed test restarts the worker, so the rest of the group passed. It shows under load because a busy run
     is when one worker picks up two groups. The afterAll now forgets the media with the folder.
     - Before: `--repeat-each=10 --workers=4`, no extra load: 3 of 10 copies failed, all with that message.
-    - After: 1,200 runs of the file's 40 tests, 0 failed: twice with no extra load, three times with 12 `yes`
-      processes running (load average 68–90), each `--repeat-each=10 --workers=4`.
+    - After: five runs of `--repeat-each=10 --workers=4` (2,000 test runs, this test 50 times), 0 failed: two
+      with no extra load, three with 12 `yes` processes running (load average 68–90).
   - **Dashboard:** a download with a start time said "Waiting for a turn" in the Dashboard's Downloading list. It
     now says "Starts at 1:00 AM" (or "tomorrow at …"), and a download that started late says "Started late", in the
     download list's words: `activeDetail` in `utils/dashboard.ts` uses `describeStartAt` and the new `STARTED_LATE`

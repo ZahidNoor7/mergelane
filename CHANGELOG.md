@@ -8,8 +8,11 @@ All notable changes to Mergelane are recorded here. The format follows
 ### Added
 
 - Settings › Updates shows your version, checks GitHub for a newer Mergelane on request and once a day, and shows
-  what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off. For now, a
-  found update opens its page on GitHub; downloading it in the app comes next.
+  what's new in it. Choose the Stable or Beta channel, skip a version, or turn automatic checks off.
+- "Download and install" downloads the new version's disk image, with progress and Cancel, and checks it against
+  the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
+  new version over the old one. Turn on "Download updates in the background" to have it download by itself;
+  installing always waits for you.
 - A notice in the sidebar, and a dot on Settings, when a new version is out. The app menu has "Check for
   Updates…".
 

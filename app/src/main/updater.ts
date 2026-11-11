@@ -1,3 +1,5 @@
+import { appendFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { app, Menu, net, shell, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import {
@@ -10,10 +12,13 @@ import {
 import type { AppSettings, UpdateState } from '../shared/types'
 import { saveSettings } from './settings'
 import { testKnobs } from './testKnobs'
+import { downloadDiskImage, publishedChecksum, UpdateFailure } from './updateDownload'
 
 // Mergelane's own updates (docs/DECISIONS.md ADR-0036): GitHub's public Releases API is asked for the
-// newest release on the chosen channel, on request and once a day. Nothing is downloaded yet: that
-// comes with M3.2b (download, check the SHA-256, open the disk image).
+// newest release on the chosen channel, on request and once a day. A found update's disk image is
+// downloaded (on request, or by itself when the user chose that), checked against the SHA-256 its
+// release publishes, and opened for the user, who drags the new Mergelane over the old one: the app
+// never replaces itself.
 
 const DAY_MS = 24 * 60 * 60_000
 /** How often the daily check looks at whether a day has passed. */
@@ -25,12 +30,26 @@ let state: UpdateState = {
   version: '0.0.0',
   channel: 'stable',
   autoCheck: true,
+  backgroundDownload: false,
+  progress: null,
   lastChecked: null,
   latest: null,
   skipped: null,
   error: null
 }
 let getWindow: () => BrowserWindow | null = () => null
+/** The download under way, to cancel it. */
+let downloading: AbortController | null = null
+/** The checked disk image, once status is 'ready'. */
+let readyPath: string | null = null
+
+/** Where update disk images are kept; emptied at every launch. */
+const updatesDir = (): string => join(app.getPath('userData'), 'updates')
+
+const busy = (): boolean =>
+  state.status === 'downloading' || state.status === 'verifying' || state.status === 'ready'
+
+const headers = (): Record<string, string> => ({ 'User-Agent': `Mergelane/${state.version}` })
 
 export function updateState(): UpdateState {
   return state
@@ -52,9 +71,11 @@ function save(patch: AppSettings): void {
 /** GitHub's answer as words for the person reading Settings › Updates. */
 class CheckFailure extends Error {}
 
-/** Asks GitHub now. A check already running is joined rather than repeated. */
+/** Asks GitHub now. A check already running is joined rather than repeated, and an update being
+ * downloaded or ready isn't checked over. */
 let running: Promise<UpdateState> | null = null
 export function checkForUpdates(): Promise<UpdateState> {
+  if (busy()) return Promise.resolve(state)
   running ??= check().finally(() => {
     running = null
   })
@@ -68,7 +89,7 @@ async function check(): Promise<UpdateState> {
       headers: {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': GITHUB_API_VERSION,
-        'User-Agent': `Mergelane/${state.version}`
+        ...headers()
       }
     })
     // GitHub's rate limits answer 403 or 429 (docs: Rate limits for the REST API).
@@ -86,6 +107,7 @@ async function check(): Promise<UpdateState> {
     const lastChecked = Date.now()
     save({ updateLastChecked: lastChecked })
     set({ status: latest ? 'available' : 'current', latest, lastChecked })
+    if (latest && state.autoCheck && state.backgroundDownload) void downloadUpdate()
   } catch (error) {
     console.error('[mergelane] update check failed', error)
     set({
@@ -99,17 +121,24 @@ async function check(): Promise<UpdateState> {
   return state
 }
 
-/** Automatic checks on or off, and the channel. A new channel forgets what the old one found. */
+/** Automatic checks on or off, background downloads on or off, and the channel. A new channel
+ * forgets what the old one found, and stops its download. */
 export function setUpdatePreferences(preferences: {
   autoCheck?: boolean
+  backgroundDownload?: boolean
   channel?: UpdateChannel
 }): void {
-  const { autoCheck, channel } = preferences
+  const { autoCheck, backgroundDownload, channel } = preferences
   if (typeof autoCheck === 'boolean' && autoCheck !== state.autoCheck) {
     set({ autoCheck })
     save({ updateAutoCheck: autoCheck ? undefined : false })
   }
+  if (typeof backgroundDownload === 'boolean' && backgroundDownload !== state.backgroundDownload) {
+    set({ backgroundDownload })
+    save({ updateBackgroundDownload: backgroundDownload ? true : undefined })
+  }
   if ((channel === 'stable' || channel === 'beta') && channel !== state.channel) {
+    forgetDownload()
     set({
       channel,
       latest: null,
@@ -123,11 +152,91 @@ export function setUpdatePreferences(preferences: {
 /** Not this version: the next check offers only a newer one. */
 export function skipUpdate(version: string): void {
   if (state.latest?.version !== version) return
-  set({ skipped: version, latest: null, status: 'idle' })
+  forgetDownload()
+  set({ skipped: version, latest: null, status: 'idle', progress: null, error: null })
   save({ updateSkipped: version })
 }
 
-/** The release's page on GitHub, in the browser: where the disk image is until M3.2b. */
+/** Downloads the found update's disk image and checks its SHA-256: 'downloading', 'verifying',
+ * then 'ready', or 'error' with the reason (the update stays offered, to try again). */
+export async function downloadUpdate(): Promise<void> {
+  const { latest, status } = state
+  if (!latest?.dmg || !latest.checksumsUrl || (status !== 'available' && status !== 'error')) return
+  const { dmg, checksumsUrl } = latest
+  const controller = new AbortController()
+  downloading = controller
+  set({ status: 'downloading', progress: { received: 0, total: dmg.size }, error: null })
+  try {
+    const expected = await publishedChecksum(checksumsUrl, dmg.name, {
+      headers: headers(),
+      signal: controller.signal
+    })
+    // Progress in steps of half a percent: enough for the bar, without flooding the window.
+    let shown = 0
+    readyPath = await downloadDiskImage({
+      url: dmg.url,
+      name: dmg.name,
+      size: dmg.size,
+      expected,
+      dir: updatesDir(),
+      headers: headers(),
+      signal: controller.signal,
+      onProgress: (received) => {
+        if (received - shown < dmg.size / 200 && received < dmg.size) return
+        shown = received
+        set({ progress: { received, total: dmg.size } })
+      },
+      onVerifying: () => set({ status: 'verifying' })
+    })
+    set({ status: 'ready', progress: null })
+  } catch (error) {
+    if (controller.signal.aborted) return
+    console.error('[mergelane] update download failed', error)
+    set({
+      status: 'error',
+      progress: null,
+      error:
+        error instanceof UpdateFailure
+          ? error.message
+          : 'Couldn’t download the update. Check your connection and try again.'
+    })
+  } finally {
+    if (downloading === controller) downloading = null
+  }
+}
+
+/** Stops the download; the update is offered again. */
+export function cancelUpdateDownload(): void {
+  if (!downloading) return
+  forgetDownload()
+  set({ status: 'available', progress: null, error: null })
+}
+
+/** Stops a download under way and forgets a ready disk image. */
+function forgetDownload(): void {
+  downloading?.abort()
+  downloading = null
+  readyPath = null
+}
+
+/** Opens the checked disk image in the Finder and quits, so the user can drag the new Mergelane
+ * over this one. Running downloads pause on the way out, as at any quit. */
+export async function installUpdate(): Promise<void> {
+  if (state.status !== 'ready' || !readyPath) return
+  // A test run must never open a disk image on the Mac or quit: it notes what it would open.
+  if (testKnobs.updateOpenLog) {
+    await appendFile(testKnobs.updateOpenLog, `${readyPath}\n`)
+    return
+  }
+  const problem = await shell.openPath(readyPath)
+  if (problem) {
+    set({ status: 'error', error: `macOS couldn’t open the disk image: ${problem}` })
+    return
+  }
+  app.quit()
+}
+
+/** The release's page on GitHub, in the browser, for a release without a disk image to download. */
 export async function openReleasePage(): Promise<void> {
   const page = state.latest?.pageUrl
   if (page && RELEASE_PAGE.test(page)) await shell.openExternal(page)
@@ -179,7 +288,7 @@ function setAppMenu(): void {
 /** A check when automatic checks are on and the last one is a day old (or there wasn't one). */
 function checkIfDue(): void {
   const { autoCheck, lastChecked, status } = state
-  if (!autoCheck || status === 'available') return
+  if (!autoCheck || status === 'available' || busy()) return
   if (lastChecked === null || Date.now() - lastChecked >= DAY_MS) void checkForUpdates()
 }
 
@@ -193,10 +302,13 @@ export function startUpdater(window: () => BrowserWindow | null, saved: AppSetti
     version: parseVersion(version) ? version : '0.0.0',
     channel: saved.updateChannel ?? 'stable',
     autoCheck: saved.updateAutoCheck !== false,
+    backgroundDownload: saved.updateBackgroundDownload === true,
     lastChecked: saved.updateLastChecked ?? null,
     skipped: saved.updateSkipped ?? null
   }
   setAppMenu()
+  // A disk image from an earlier launch is either installed or out of date.
+  rm(updatesDir(), { recursive: true, force: true }).catch(() => {})
   if (testKnobs.hideWindow && !testKnobs.releasesUrl) return
   // A little after launch, so the check doesn't compete with the window opening.
   setTimeout(checkIfDue, testKnobs.updateFirstCheckMs)

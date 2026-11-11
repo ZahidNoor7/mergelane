@@ -624,4 +624,9 @@ until the owner overrides it.
 - Consequences:
   - An update takes one drag, and macOS may ask for "Open Anyway" once per new version.
   - A future Developer ID build can switch to an in-app install without changing how updates are checked.
+  - The SHA-256 comes from the same release as the disk image. It catches a broken or tampered download on the
+    way, but not a release replaced by someone who controls the GitHub account. A Developer ID signature would
+    close that gap.
+  - The disk image is kept in `<userData>/updates` and emptied at every launch. A test run writes the path it
+    would open to a file (`MERGELANE_E2E_UPDATE_OPEN_LOG`) instead of opening anything or quitting.
   - The check sends GitHub the Mac's IP address and the `User-Agent`, and nothing else.

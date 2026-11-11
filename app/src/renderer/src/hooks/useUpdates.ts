@@ -16,6 +16,6 @@ export function useUpdates(): void {
   }, [])
 }
 
-/** Whether there's an update to tell the user about. */
+/** Whether there's an update to tell the user about: found, on its way, or ready. */
 export const hasUpdate = (update: { status: string } | null): boolean =>
-  update?.status === 'available'
+  ['available', 'downloading', 'verifying', 'ready'].includes(update?.status ?? '')

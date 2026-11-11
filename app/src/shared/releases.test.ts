@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   compareVersions,
+  downloadableUrl,
+  parseChecksums,
   newestUpdate,
   parseVersion,
   releaseFromGitHub,
@@ -197,5 +199,35 @@ describe('newestUpdate', () => {
         { current: '0.2.0', channel: 'stable', skipped: null }
       )
     ).toThrow('isn’t a list of releases')
+  })
+})
+
+describe('downloadableUrl', () => {
+  it('takes https anywhere, and plain http only from this Mac', () => {
+    for (const url of [
+      'https://github.com/x',
+      'http://127.0.0.1:9/x',
+      'http://localhost/x',
+      'http://[::1]:8/x'
+    ]) {
+      expect(downloadableUrl(url)).toBe(true)
+    }
+    for (const url of ['http://example.com/x', 'ftp://127.0.0.1/x', 'not a url', 7, null]) {
+      expect(downloadableUrl(url)).toBe(false)
+    }
+  })
+})
+
+describe('parseChecksums', () => {
+  it('reads shasum’s text and binary lines, and skips the rest', () => {
+    const a = 'A'.repeat(64)
+    const b = 'b'.repeat(64)
+    const sums = parseChecksums(
+      `${a}  Mergelane-0.3.0-arm64.dmg\r\n${b} *SHA file.zip\nnot a line\n\n`
+    )
+    expect([...sums]).toEqual([
+      ['Mergelane-0.3.0-arm64.dmg', 'a'.repeat(64)],
+      ['SHA file.zip', b]
+    ])
   })
 })

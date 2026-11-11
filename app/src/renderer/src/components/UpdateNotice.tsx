@@ -1,5 +1,4 @@
 import { Sparkles } from 'lucide-react'
-import { hasUpdate } from '../hooks/useUpdates'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from './ui/button'
 
@@ -12,7 +11,9 @@ export function UpdateNotice(): React.JSX.Element | null {
     (store) => store.screen === 'settings' && store.settingsSection === 'updates'
   )
   const openSettings = useAppStore((store) => store.openSettings)
-  if (!update || !hasUpdate(update) || onUpdates) return null
+  // As the design: only when there's something to do, found or ready, not while downloading.
+  const ready = update?.status === 'ready'
+  if (!update || (update.status !== 'available' && !ready) || onUpdates) return null
   return (
     <div
       role="status"
@@ -21,11 +22,12 @@ export function UpdateNotice(): React.JSX.Element | null {
       <p className="flex items-start gap-2 text-[12.5px] leading-snug">
         <Sparkles aria-hidden className="mt-px size-3.5 shrink-0 text-[var(--color-accent-ink)]" />
         <span>
-          <span className="font-[640]">Mergelane {update.latest?.version}</span> is available.
+          <span className="font-[640]">Mergelane {update.latest?.version}</span>{' '}
+          {ready ? 'is ready to install.' : 'is available.'}
         </span>
       </p>
       <Button size="sm" className="self-start" onClick={() => openSettings('updates')}>
-        See what’s new
+        {ready ? 'Install…' : 'See what’s new'}
       </Button>
     </div>
   )

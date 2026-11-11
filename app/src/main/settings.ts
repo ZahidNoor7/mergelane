@@ -111,6 +111,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (isThemeId(parsed.appearanceTheme)) settings.appearanceTheme = parsed.appearanceTheme
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
   if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'
+  if (parsed.updateBackgroundDownload === true) settings.updateBackgroundDownload = true
   if (typeof parsed.updateSkipped === 'string' && parseVersion(parsed.updateSkipped)) {
     settings.updateSkipped = parsed.updateSkipped
   }

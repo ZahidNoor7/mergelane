@@ -103,7 +103,10 @@ export const COVERED = [
   'src/shared/networkActivity.ts',
   'src/shared/diagnostics.ts',
   'src/renderer/src/components/DiagnosticsSettings.tsx',
-  'src/renderer/src/hooks/useNetworks.ts'
+  'src/renderer/src/hooks/useNetworks.ts',
+  // M3.9: New download's When (ADR-0044).
+  'src/shared/startAt.ts',
+  'src/renderer/src/utils/downloadActions.ts'
 ]
 
 export default defineConfig({

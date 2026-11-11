@@ -2,6 +2,7 @@ import type { DownloadState, FinishedDownload } from '@shared/types'
 import { activeFilterCount, filtersActive, matchesFilters } from '@shared/downloadFilters'
 import { matchesSearch, searchTokens } from '@shared/downloadSearch'
 import { scheduleMessage, scheduleWindow } from '@shared/downloadSchedule'
+import { describeStartAt } from '@shared/startAt'
 import { ListFilter, Plus, Search, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -649,11 +650,15 @@ function rowMeta(item: Item, now: number, waiting: string): { parts: string[]; e
             ? `${formatEta(item.timeLeftSeconds)} left`
             : item.speedBytesPerSec === 0
               ? 'Starting'
-              : ''
+              : '',
+          // Its start time passed while Mergelane was closed (ADR-0044).
+          item.missedStartAt !== undefined ? 'Started late' : ''
         ].filter(Boolean)
       }
     case 'queued':
-      return { parts: [waiting, sizes] }
+      return {
+        parts: [item.startAt !== undefined ? describeStartAt(item.startAt, now) : waiting, sizes]
+      }
     case 'paused':
       return { parts: [wanted > 0 ? `Paused at ${percent}%` : 'Paused', sizes] }
     default:

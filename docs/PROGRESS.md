@@ -506,6 +506,31 @@ Last updated: 2026-11-11
   - **To test the in-app update:** 0.2.0 must be installed, and 0.3.0 must be published. A draft is invisible to
     the update check, which uses GitHub's API without a token. 0.2.0 itself is still a draft.
 
+- **M3.9 New download's When** (branch `m3.9-when`, ADR-0044, decided unattended for the owner's review). Built the
+  design's "When: Now / Add to queue / At a time", which M3.1 pull request 5c left out.
+  - **Engine** (`downloadManager.ts`): `StartDownloadRequest.when` (`{ kind: 'queue' }` or `{ kind: 'at', at }`),
+    checked by `shared/startAt.ts parseWhen`. Add to queue makes the download `queued` with `held`: `pump` passes
+    over it until a run ends (`launch`'s `pump(true)`) or Start now. At a time saves `startAt`; a timer looks at the
+    clock at least once a second while one waits and moves a due one to the front of the queue. Both are saved in
+    the manifest and come back waiting after a relaunch; a time missed while Mergelane was closed starts at launch
+    with `missedStartAt`. `resumeDownload` on a planned download is Start now; pausing one clears its plan.
+  - **UI:** the sheet's When row (segmented control, time field, the hint under Add to queue, a warning when the
+    schedule holds the time), the button ("Add to queue", "Start at 1:00 AM"). Rows: "Starts at …",
+    "Started late". Details: when a queued one's turn comes, or why it started late. A new `start` action ("Start
+    now") on rows, menus, the toolbar and the details header.
+  - **Tests:**
+    - Vitest: `shared/startAt` (14, fake clock) and `utils/downloadActions` (8) are new and in `COVERED`; new tests
+      in `NewDownloadDialog` (4), `DownloadsScreen` (1) and the Inspector (3). Lines: `startAt` and
+      `downloadActions` 100%, `NewDownloadDialog` 99.1%, `DownloadsScreen` 98.9%, `InspectorProgress` 98.4%. Full
+      run 341 passed.
+    - `e2e/downloadWhen.spec.ts` (3, `@smoke`): Add to queue doesn't start with room to spare until Start now, and
+      gets its turn when a running download ends; At a time from the sheet sets the next 2-hours-ahead time, and
+      one 4 s ahead waits, then starts on its own; a far time can't be used. After a relaunch the queued and
+      later ones still wait, and one whose time passed while closed starts with "Started late" and the details
+      note. With `scheduleQueue`, `ui` and `concurrency`: 48 passed.
+  - **Not built:** the Dashboard's waiting list still says "Waiting for a turn" for a download with a start time; a
+    date field (the engine already takes up to 7 days ahead).
+
 ### Phase 2 (started 2026-11-10, owner-approved)
 
 **M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.

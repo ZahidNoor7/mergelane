@@ -1,5 +1,7 @@
 import type { NetworkInterfaceInfo, PendingLink, ProbeResult } from '@shared/types'
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { DEFAULT_DOWNLOAD_SCHEDULE } from '@shared/downloadSchedule'
+import { nextStartAt, startAtAction } from '@shared/startAt'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store/useAppStore'
@@ -112,6 +114,9 @@ function open(link?: Partial<PendingLink> & { probe?: ProbeResult }, fields = {}
   )
 }
 const dialog = (): HTMLElement => screen.getByRole('dialog', { name: 'New download' })
+/** The footer's button: "Add to queue" is also one of When's choices. */
+const submit = (): HTMLButtonElement =>
+  dialog().querySelector<HTMLButtonElement>('button[type="submit"]')!
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({
@@ -515,7 +520,8 @@ describe('New download, links from the browser', () => {
       downloadsAtOnce: 1
     })
     open({ probe: HTTP })
-    const add = screen.getByRole('button', { name: 'Add to queue' })
+    const add = submit()
+    expect(add.textContent).toBe('Add to queue')
     await userEvent.setup().click(add)
     await waitFor(() => expect(bridge.startDownload).toHaveBeenCalled())
     expect(useAppStore.getState().selectedId).toBeNull()
@@ -526,5 +532,79 @@ describe('New download, links from the browser', () => {
     } as never)
     open({ probe: HTTP })
     expect(screen.getByRole('button', { name: 'Add to scheduled queue' })).toBeTruthy()
+  })
+})
+
+describe('New download, when it starts (ADR-0044)', () => {
+  const when = (): HTMLElement => screen.getByRole('group', { name: 'When' })
+  const choice = (name: string): HTMLElement => within(when()).getByRole('button', { name })
+
+  it('starts now unless told otherwise, as it always has', async () => {
+    open({ probe: HTTP })
+    expect(choice('Now').getAttribute('aria-pressed')).toBe('true')
+    expect(submit().textContent).toBe('Download')
+    await userEvent.setup().click(submit())
+    await waitFor(() => expect(bridge.startDownload).toHaveBeenCalled())
+    expect(bridge.startDownload.mock.calls[0][0]).not.toHaveProperty('when')
+    expect(useAppStore.getState().selectedId).toBe('new-id')
+  })
+
+  it('adds one to the queue without opening it, saying when its turn comes', async () => {
+    open({ probe: HTTP })
+    const user = userEvent.setup()
+    await user.click(choice('Add to queue'))
+    expect(choice('Add to queue').getAttribute('aria-pressed')).toBe('true')
+    expect(
+      screen.getByText(
+        'It waits for a turn: it starts when a running download finishes, or when you start it.'
+      )
+    ).toBeTruthy()
+    expect(submit().textContent).toBe('Add to queue')
+    await user.click(submit())
+    await waitFor(() =>
+      expect(bridge.startDownload).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'http', when: { kind: 'queue' } }),
+        'l1'
+      )
+    )
+    expect(useAppStore.getState().selectedId).toBeNull()
+  })
+
+  it('starts one at a time: the next time the clock reads it', async () => {
+    open({ probe: HTTP })
+    const user = userEvent.setup()
+    await user.click(choice('At a time'))
+    const field = screen.getByLabelText('Start time') as HTMLInputElement
+    expect(field.value).toBe('01:00')
+    expect(submit().textContent).toBe(startAtAction(nextStartAt('01:00')!))
+    expect(submit().querySelector('svg')).toBeTruthy()
+
+    fireEvent.change(field, { target: { value: '23:45' } })
+    expect(submit().textContent).toBe(startAtAction(nextStartAt('23:45')!))
+    // Cleared, the field goes back to the time it offers first.
+    fireEvent.change(field, { target: { value: '' } })
+    expect(field.value).toBe('01:00')
+    fireEvent.change(field, { target: { value: '23:45' } })
+
+    await user.click(submit())
+    await waitFor(() => expect(bridge.startDownload).toHaveBeenCalled())
+    const [request] = bridge.startDownload.mock.calls[0]
+    expect(request.when).toEqual({ kind: 'at', at: nextStartAt('23:45') })
+    expect(useAppStore.getState().selectedId).toBeNull()
+  })
+
+  it('says when the schedule will hold it past its time, and goes back to Now', async () => {
+    // Downloads only from 02:00 to 06:00.
+    useAppStore.setState({
+      downloadSchedule: { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true, startMinute: 120 }
+    } as never)
+    open({ probe: HTTP })
+    const user = userEvent.setup()
+    await user.click(choice('At a time'))
+    expect(screen.getByText(/outside your download schedule/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '03:00' } })
+    expect(screen.queryByText(/outside your download schedule/)).toBeNull()
+    await user.click(choice('Now'))
+    expect(screen.queryByLabelText('Start time')).toBeNull()
   })
 })

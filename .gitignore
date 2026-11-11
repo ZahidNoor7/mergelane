@@ -30,6 +30,8 @@ coverage.out
 # Logs
 *.log
 npm-debug.log*
+# scripts/ci/local.sh's run logs
+/local-ci-logs/
 
 # OS and editor
 .DS_Store

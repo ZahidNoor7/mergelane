@@ -46,6 +46,9 @@ All notable changes to Mergelane are recorded here. The format follows
   downloads use it. System merge and the recent network dropouts are on it too, and Speed & data limits opens
   from it.
 - A network's colour can be set back to the theme's colour.
+- The Dashboard takes the new design: the Confluence and the last minute at the top, then Today (what Mergelane
+  downloaded today, by network, with the fastest download and the network dropouts) beside what's downloading.
+  Its sections have the new sentence-case headings.
 - A Settings screen (⌘, or the sidebar's foot) with General (speed units, slow mode, total speed), Appearance
   (Auto, Light or Dark, and the seven themes with previews) and Downloads (where downloads go, how many run at
   once, the schedule, the news server, and a way to each network's limits). The units and theme buttons leave the

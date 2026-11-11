@@ -136,10 +136,6 @@
   --color-success: var(--text-secondary);
   /* The merged total's line in the throughput chart. */
   --node-accent: var(--text);
-  /* Older names, kept until their components are restyled. The hero band goes away (ADR-0034). */
-  --footer-border: var(--border);
-  --hero-bg: linear-gradient(var(--bg), var(--bg));
-  --hero-border: var(--border);
 }
 
 .ml-surface {

@@ -26,7 +26,6 @@ function isEntry(value: unknown): value is FinishedDownload {
     typeof value.id === 'string' &&
     (value.kind === 'http' ||
       value.kind === 'torrent' ||
-      value.kind === 'telegram' ||
       value.kind === 'nzb' ||
       value.kind === 'stream') &&
     typeof value.url === 'string' &&

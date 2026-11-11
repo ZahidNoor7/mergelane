@@ -51,6 +51,24 @@ xattr -dr com.apple.quarantine /Applications/Mergelane.app
 System-wide merging needs a small helper (`mergelane-daemon`) that runs as a system service. Mergelane asks for
 your administrator password once to install it. You can remove it from Mergelane's settings at any time.
 
+### Helper commands
+
+The helper can also be driven from Terminal. It is installed as
+`/Library/PrivilegedHelperTools/io.github.zahidnoor7.mergelane.daemon`; the commands below call it
+`mergelane-daemon`. Only you (the user who installed it) and root can talk to it.
+
+| Command                                   | What it does                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `mergelane-daemon status`                 | Shows whether system merge is on, and why not if it is off                                    |
+| `mergelane-daemon on` / `off`             | Turns system merge on or off                                                                  |
+| `mergelane-daemon links` / `stats`        | Lists the networks it uses, and live traffic per network                                      |
+| `mergelane-daemon events`                 | Shows the last 50 network changes (a network lost, back, or failing its check)                |
+| `mergelane-daemon auto-resume on` / `off` | Whether merging turns itself back on after the helper crashes (off by default)                |
+| `sudo mergelane-daemon cleanup`           | Removes any routes Mergelane left behind. Use it if your internet stops working after a crash |
+
+After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
+an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.
+
 ## Browser extension (Chrome)
 
 The extension hands downloads you click in Chrome to Mergelane. It talks to Mergelane only through Chrome's native

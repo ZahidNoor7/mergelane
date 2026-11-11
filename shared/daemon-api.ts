@@ -11,6 +11,22 @@
  * request (a peer that is not allowed, a line that is not JSON or is too long) come with `id: ""`;
  * after `NOT_AUTHORIZED` and after an over-long line the daemon closes the connection.
  *
+ * Versions and compatibility:
+ * - `v` is the wire format's version. A daemon accepts only its own (`UNSUPPORTED_VERSION`
+ *   otherwise) and reports it as `StatusResult.protocol`, so `protocol` is also the oldest app
+ *   protocol the daemon accepts: there is no separate "minAppProtocol" field, the two are equal by
+ *   construction. An app first checks `status.protocol === PROTOCOL_VERSION`; on a mismatch it must
+ *   not call anything else, and offers to update whichever side is older.
+ * - Within one protocol version changes are additive only: a new method, a new optional param, a
+ *   new result field. Result guards ignore unknown fields, so an older app keeps working with a newer
+ *   daemon. A newer app must expect `UNKNOWN_METHOD` from an older daemon for a method added later:
+ *   `setAutoResume` and `events` arrived in M2.4, still protocol 1, and a daemon from before M2.4
+ *   answers both with `UNKNOWN_METHOD` (and sends no `autoResume` in status). Anything that is not
+ *   additive needs protocol 2.
+ * - `StatusResult.version` is the daemon's build version, stamped with `-X main.version` (release
+ *   builds use the app's package.json version; local builds say `dev`). The app compares it with its
+ *   own version to offer a helper update.
+ *
  * Dependency-free and erasable-syntax only, so it can be imported from the Electron main process,
  * the renderer and Node's type stripping alike.
  */
@@ -27,16 +43,29 @@ export const MAX_LINE_BYTES = 65536
 /** Largest per-link cap `setLimit` accepts, in Mbit/s. */
 export const MAX_LIMIT_MBPS = 1e6
 
+/** How many link events the daemon keeps; `events` returns at most this many. */
+export const MAX_EVENTS = 50
+
+/** `setAutoResume` and `events` were added in M2.4: older daemons answer `UNKNOWN_METHOD`. */
 export const Method = {
   status: 'status',
   enable: 'enable',
   disable: 'disable',
   links: 'links',
   stats: 'stats',
-  setLimit: 'setLimit'
+  setLimit: 'setLimit',
+  setAutoResume: 'setAutoResume',
+  events: 'events'
 } as const
 export type Method = (typeof Method)[keyof typeof Method]
 export const METHODS: readonly Method[] = Object.values(Method)
+
+/** The methods whose params are required; every other method takes none or optional ones. */
+export const METHODS_WITH_REQUIRED_PARAMS: readonly Method[] = [
+  Method.setLimit,
+  Method.setAutoResume
+]
+type MethodWithRequiredParams = typeof Method.setLimit | typeof Method.setAutoResume
 
 /** Stable error codes. A code never changes meaning within a protocol version. */
 export const ErrorCode = {
@@ -67,16 +96,48 @@ export const LINK_STATES = ['up', 'unknown', 'down'] as const
 /** Result of a link's internet probe; `unknown` means not probed yet. */
 export type LinkState = (typeof LINK_STATES)[number]
 
-/** Result of `status`, `enable` and `disable`. */
+/** A link's state in `events`: a `LinkState`, or `gone` while its interface is not there. */
+export const LINK_EVENT_STATES = ['up', 'unknown', 'down', 'gone'] as const
+export type LinkEventState = (typeof LINK_EVENT_STATES)[number]
+
+/**
+ * Why a link's state changed. The set is closed within protocol 1, like `ErrorCode`.
+ * - `found`: a link the daemon had not seen appeared (also every link at the daemon's start).
+ * - `lost`: its interface, address or default route went away (unplugged, asleep).
+ * - `returned`: a link that had gone came back, perhaps with a new interface index.
+ * - `address`: its address changed, so it is checked again.
+ * - `probe-ok` / `probe-failed`: the internet check through it passed / failed.
+ */
+export const LINK_EVENT_REASONS = [
+  'found',
+  'lost',
+  'returned',
+  'address',
+  'probe-ok',
+  'probe-failed'
+] as const
+export type LinkEventReason = (typeof LINK_EVENT_REASONS)[number]
+
+/** Result of `status`, `enable`, `disable` and `setAutoResume`. */
 export interface StatusResult {
   state: DaemonState
-  /** Why merging is off when it did not go off on request, e.g. a VPN conflict or a crash. */
+  /**
+   * Why merging is off when it did not go off on request, e.g. a VPN conflict or a crash, and why
+   * auto-resume did not turn it back on. While `state` is `on`, a reason is present only when
+   * auto-resume turned merging back on after a crash.
+   */
   reason?: string
   /** When `state` last changed, RFC 3339. */
   since?: string
-  /** The daemon's build version. */
+  /** The daemon's build version (`-X main.version`); see "Versions and compatibility" above. */
   version: string
+  /** Always `PROTOCOL_VERSION`; also the oldest app protocol this daemon accepts. */
   protocol: ProtocolVersion
+  /**
+   * The "turn system merge back on after a crash" setting (`setAutoResume`); off by default. Every
+   * daemon since M2.4 sends it; an older daemon leaves it out and has no such setting.
+   */
+  autoResume?: boolean
 }
 
 /** Params of methods that take none: absent, or an empty object. */
@@ -143,6 +204,29 @@ export interface SetLimitResult {
   mbps: number
 }
 
+/** Saved by the daemon; takes effect at its next start after a crash. Result: `StatusResult`. */
+export interface SetAutoResumeParams {
+  enabled: boolean
+}
+
+/** One change in a link's state, for the failover history. */
+export interface LinkEvent {
+  /** RFC 3339. */
+  at: string
+  /** BSD name, e.g. `en0`. */
+  link: string
+  /** The state `links` reported for it (IPv4's probe, or IPv6's on a link without IPv4). */
+  from: LinkEventState
+  to: LinkEventState
+  reason: LinkEventReason
+}
+
+/** The most recent link changes, oldest first, at most `MAX_EVENTS`. Kept in memory only, so the
+ * list starts empty at every daemon start. */
+export interface EventsResult {
+  events: LinkEvent[]
+}
+
 /** Params and result type of every method. */
 export interface MethodTypes {
   status: { params: NoParams; result: StatusResult }
@@ -151,17 +235,19 @@ export interface MethodTypes {
   links: { params: NoParams; result: LinksResult }
   stats: { params: NoParams; result: StatsResult }
   setLimit: { params: SetLimitParams; result: SetLimitResult }
+  setAutoResume: { params: SetAutoResumeParams; result: StatusResult }
+  events: { params: NoParams; result: EventsResult }
 }
 export type ParamsOf<M extends Method> = MethodTypes[M]['params']
 export type ResultOf<M extends Method> = MethodTypes[M]['result']
 
-/** `setLimit` is the only method whose params are required. */
+/** `setLimit` and `setAutoResume` are the methods whose params are required. */
 export type Request<M extends Method = Method> = {
   [K in M]: {
     v: ProtocolVersion
     id: string
     method: K
-  } & (K extends 'setLimit' ? { params: ParamsOf<K> } : { params?: ParamsOf<K> })
+  } & (K extends MethodWithRequiredParams ? { params: ParamsOf<K> } : { params?: ParamsOf<K> })
 }[M]
 
 export interface ErrorBody {
@@ -211,6 +297,10 @@ function isString(x: unknown): x is string {
   return typeof x === 'string'
 }
 
+function isBoolean(x: unknown): x is boolean {
+  return typeof x === 'boolean'
+}
+
 function isNonEmptyString(x: unknown): x is string {
   return typeof x === 'string' && x !== ''
 }
@@ -255,13 +345,19 @@ export function isSetLimitParams(x: unknown): x is SetLimitParams {
   return isObj(x) && onlyKeys(x, ['link', 'mbps']) && isNonEmptyString(x.link) && isMbps(x.mbps)
 }
 
+export function isSetAutoResumeParams(x: unknown): x is SetAutoResumeParams {
+  return isObj(x) && onlyKeys(x, ['enabled']) && isBoolean(x.enabled)
+}
+
 const paramGuards: { [M in Method]: (x: unknown) => x is ParamsOf<M> } = {
   status: isNoParams,
   enable: isNoParams,
   disable: isDisableParams,
   links: isNoParams,
   stats: isNoParams,
-  setLimit: isSetLimitParams
+  setLimit: isSetLimitParams,
+  setAutoResume: isSetAutoResumeParams,
+  events: isNoParams
 }
 
 /** Whether `x` is a request the daemon accepts: envelope, method and params. */
@@ -269,7 +365,7 @@ export function isRequest(x: unknown): x is Request {
   if (!isObj(x) || x.v !== PROTOCOL_VERSION || !isNonEmptyString(x.id) || !isMethod(x.method)) {
     return false
   }
-  if (x.params === undefined) return x.method !== Method.setLimit
+  if (x.params === undefined) return !METHODS_WITH_REQUIRED_PARAMS.includes(x.method)
   return paramGuards[x.method](x.params)
 }
 
@@ -280,7 +376,8 @@ export function isStatusResult(x: unknown): x is StatusResult {
     optional(x, 'reason', isString) &&
     optional(x, 'since', isTimestamp) &&
     isString(x.version) &&
-    x.protocol === PROTOCOL_VERSION
+    x.protocol === PROTOCOL_VERSION &&
+    optional(x, 'autoResume', isBoolean)
   )
 }
 
@@ -325,13 +422,30 @@ export function isSetLimitResult(x: unknown): x is SetLimitResult {
   return isObj(x) && isNonEmptyString(x.link) && isMbps(x.mbps)
 }
 
+export function isLinkEvent(x: unknown): x is LinkEvent {
+  return (
+    isObj(x) &&
+    isTimestamp(x.at) &&
+    isNonEmptyString(x.link) &&
+    (LINK_EVENT_STATES as readonly unknown[]).includes(x.from) &&
+    (LINK_EVENT_STATES as readonly unknown[]).includes(x.to) &&
+    (LINK_EVENT_REASONS as readonly unknown[]).includes(x.reason)
+  )
+}
+
+export function isEventsResult(x: unknown): x is EventsResult {
+  return isObj(x) && Array.isArray(x.events) && x.events.every(isLinkEvent)
+}
+
 const resultGuards: { [M in Method]: (x: unknown) => x is ResultOf<M> } = {
   status: isStatusResult,
   enable: isStatusResult,
   disable: isStatusResult,
   links: isLinksResult,
   stats: isStatsResult,
-  setLimit: isSetLimitResult
+  setLimit: isSetLimitResult,
+  setAutoResume: isStatusResult,
+  events: isEventsResult
 }
 
 /** Whether `x` is a valid result of `method`. */

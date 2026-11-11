@@ -1,9 +1,11 @@
 import type { ProbeResult, UsenetServer } from '@shared/types'
+import { youtubeLink } from '@shared/youtube'
 import { cn } from 'cn'
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Film,
   FolderOpen,
   Globe,
   Lock,
@@ -224,6 +226,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const stream = ready?.kind === 'stream' ? ready.stream : null
   const qualities = stream ? streamQualityOptions(stream.variants) : []
   const quality = qualityChoice ?? qualities[0]?.id
+  const youtube = stream?.protocol === 'youtube'
+  // yt-dlp takes a while to answer for a YouTube video: said so, so the wait isn't a mystery.
+  const askingYoutube = probe.status === 'probing' && youtubeLink(url)?.kind === 'video'
 
   // Asked for once an NZB turns up: no other download needs it.
   const wantsServer = nzb !== null && server === undefined
@@ -237,10 +242,13 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const chosenFiles = torrent
     ? torrent.files.flatMap((_, index) => (skippedFiles.includes(index) ? [] : [index]))
     : []
-  // What will be downloaded: a torrent's chosen files, or the whole file.
+  // What will be downloaded: a torrent's chosen files, the quality picked when its size is known
+  // (a YouTube video's), or the whole file.
   const sizeToFetch = torrent
     ? chosenFiles.reduce((sum, index) => sum + torrent.files[index].length, 0)
-    : (ready?.totalBytes ?? null)
+    : (stream?.variants.find((variant) => variant.id === quality)?.bytes ??
+      ready?.totalBytes ??
+      null)
   const availableFreeSpace = destinationDir ? freeSpace : null
   const hasInsufficientSpace =
     availableFreeSpace !== null &&
@@ -554,7 +562,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
         {probe.status === 'probing' && (
           <div className="font-mono text-[11.5px] text-muted-foreground">
-            {probe.noPeersYet ? 'No peers found yet, still looking…' : 'Checking the link…'}
+            {probe.noPeersYet
+              ? 'No peers found yet, still looking…'
+              : askingYoutube
+                ? 'Asking YouTube about this video… it can take a minute.'
+                : 'Checking the link…'}
           </div>
         )}
         {probe.status === 'error' && (
@@ -567,11 +579,15 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         {ready && (
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
-              {(torrent && torrent.files.length > 1) || nzb
-                ? 'DIR'
-                : stream
-                  ? stream.protocol.toUpperCase()
-                  : fileExtensionBadge(fileName)}
+              {(torrent && torrent.files.length > 1) || nzb ? (
+                'DIR'
+              ) : youtube ? (
+                <Film aria-hidden className="size-4" strokeWidth={1.75} />
+              ) : stream ? (
+                stream.protocol.toUpperCase()
+              ) : (
+                fileExtensionBadge(fileName)
+              )}
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               {torrent ? (
@@ -593,6 +609,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                   stream?.durationSeconds !== undefined && formatDuration(stream.durationSeconds),
                   sizeToFetch !== null ? formatBytes(sizeToFetch) : 'size unknown',
                   nzb && 'from Usenet',
+                  youtube && 'from YouTube',
                   stream && 'saved as MP4 or MKV',
                   !torrent &&
                     !nzb &&

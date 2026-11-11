@@ -19,7 +19,7 @@ settled by spike S1 before the work that depends on it starts.
 - Spike S1 ran on `xcode-27` (macOS 27.0.1). Its findings are in ADR-0013, ADR-0015 and ADR-0017. The fake-link
   design in §6 is confirmed with one change: replies return over `lo0`, since pf `reply-to` does not work.
 - M1.2 deviations:
-  - Telegram is kept unchanged (ADR-0012).
+  - Telegram was kept unchanged in Phase 1 (ADR-0012); removed on 2026-11-11 at the owner's request.
   - The extension stays at `app/extension` (ADR-0014).
   - Small inline Windows/Linux branches stay, to keep upstream fixes easy to replay; build targets and
     Windows-only assets are removed.
@@ -109,10 +109,10 @@ Answers so far:
 
 - Q1: the owner made the repo public on 2026-11-10.
 - Q5: the initial commit is pushed to `main`, per the CLAUDE.md workflow (one branch and PR per milestone).
-- Q2–Q4: work proceeds on the recommended option, recorded as an ADR the owner can override:
-  - Q2: proving launch after quarantine removal;
-  - Q3: configurable probes defaulting to upstream's targets;
-  - Q4: Telegram removed.
+- Q2–Q4, answered by the owner on 2026-11-11:
+  - Q2: accepted. CI proves the launch after the documented quarantine removal (ADR-0013).
+  - Q3: accepted. Probes stay configurable and default to upstream's public targets (ADR-0008).
+  - Q4: remove Telegram. It was in fact still in the app (ADR-0012); removed on branch `m2.6-remove-telegram`.
 
 1. **Repo visibility and CI cost.**
    - The repo is private. On private repos macOS runners cost $0.062/min.

@@ -10,5 +10,10 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "../src/shared/browserBridge.ts", "../src/shared/types.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../src/shared/browserBridge.ts",
+    "../src/shared/types.ts",
+    "../src/shared/youtube.ts"
+  ]
 }

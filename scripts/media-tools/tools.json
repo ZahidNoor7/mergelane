@@ -1,12 +1,19 @@
 {
-  "$comment": "Media tools fetched at build time by fetch.mjs, pinned by SHA-256. The binaries are never committed. Read docs/MEDIA-TOOLS.md before changing anything here.",
+  "$comment": "Media tools fetched or built at build time by fetch.mjs, pinned by SHA-256. The programs are never committed. Read docs/MEDIA-TOOLS.md before changing anything here. yt-dlp's links: its zip is made with `zip -r` without -y, which stores the Python framework's symlinks as copies; fetch.mjs turns them back into links (only when identical) so the framework can be code-signed.",
   "tools": [
     {
       "name": "yt-dlp",
       "version": "2026.10.26",
-      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos",
-      "sha256": "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa",
-      "archive": "none",
+      "install": "folder",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos.zip",
+      "sha256": "20d98fa608998eff87d1d35a6e9fb65e4b874639a6cc89addc19da3becde3ef1",
+      "archive": "zip",
+      "executable": "yt-dlp_macos",
+      "links": {
+        "_internal/Python.framework/Versions/Current": "3.14",
+        "_internal/Python.framework/Python": "Versions/Current/Python",
+        "_internal/Python.framework/Resources": "Versions/Current/Resources"
+      },
       "license": "GPL-3.0-or-later for this PyInstaller-bundled executable as a whole; yt-dlp's own code is Unlicense",
       "licenseUrl": "https://github.com/yt-dlp/yt-dlp/blob/2026.10.26/LICENSE",
       "licenseFiles": [
@@ -21,21 +28,37 @@
     {
       "name": "ffmpeg",
       "version": "9.0.2",
-      "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
-      "sha256": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
-      "archive": "zip",
-      "archivePath": "ffmpeg",
-      "binarySha256": "2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384",
-      "license": "GPL-3.0-or-later (configured with --enable-gpl --enable-version3)",
+      "install": "build",
+      "buildScript": "build-ffmpeg.sh",
+      "license": "LGPL-2.1-or-later (built by Mergelane from FFmpeg's source release, without --enable-gpl, --enable-version3 or --enable-nonfree)",
       "licenseUrl": "https://github.com/FFmpeg/FFmpeg/blob/n9.0.2/LICENSE.md",
       "licenseFiles": [
         "licenses/ffmpeg/LICENSE.md",
-        "licenses/ffmpeg/COPYING.GPLv3",
-        "licenses/ffmpeg/BUILD-VERSIONS.txt"
+        "licenses/ffmpeg/COPYING.LGPLv2.1"
       ],
       "sourceUrl": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
-      "checksumSource": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip.sha256",
-      "buildScriptUrl": "https://git.martin-riedl.de/ffmpeg/build-script"
+      "sourceSha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+      "signatureUrl": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz.asc",
+      "signingKey": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+    },
+    {
+      "name": "deno",
+      "version": "2.9.8",
+      "install": "file",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip",
+      "sha256": "9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e",
+      "archive": "zip",
+      "archivePath": "deno",
+      "binarySha256": "d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/denoland/deno/blob/v2.9.8/LICENSE.md",
+      "licenseFiles": [
+        "licenses/deno/LICENSE.md",
+        "licenses/deno/THIRD-PARTY-NOTICES.txt"
+      ],
+      "sourceUrl": "https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz",
+      "checksumSource": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip.sha256sum",
+      "binaryChecksumSource": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.sha256sum"
     }
   ]
 }

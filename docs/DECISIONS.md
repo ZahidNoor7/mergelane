@@ -76,10 +76,11 @@ until the owner overrides it.
   - On every start the daemon runs cleanup and stays disabled until asked to enable.
   - The app explains that system merge was turned off after an unexpected stop.
 - Consequences: A crash costs the user a click. Auto re-enable may come back behind a setting in Phase 2.
+- Update (2026-11-11): the optional setting now exists, off by default (ADR-0024). With it off, this ADR still applies.
 
 ## ADR-0008: Faster link health checks
 
-- Status: Proposed (2026-11-10). Implemented in M1.3 (`daemon/internal/engine/probe.go`).
+- Status: Accepted by the owner (2026-11-11). Implemented in M1.3 (`daemon/internal/engine/probe.go`).
 - Context: Upstream marks a silent link down after about 19 s. Phase 1 requires that new flows avoid a dead link
   within 5 s.
 - Decision:
@@ -94,7 +95,8 @@ until the owner overrides it.
 - Consequences:
   - About one TCP handshake per link every 2 s.
   - A single lost probe briefly demotes a link for new flows only; existing flows are unaffected.
-- Owner question open: whether to probe only the gateway instead (PHASE-1 §4 Q3).
+- Owner answer (2026-11-11, PHASE-1 §4 Q3): keep probing public targets. A gateway-only probe would miss "Wi-Fi up,
+  internet down".
 
 ## ADR-0009: Keep Plexo's HTTP browser bridge in Phase 1
 
@@ -123,7 +125,12 @@ until the owner overrides it.
 
 ## ADR-0012: Telegram source kept, unchanged, for now
 
-- Status: Proposed (2026-11-10, revised the same day). Owner question open (PHASE-1 §4 Q4).
+- Status: Superseded (2026-11-11). The owner chose to remove the Telegram source (PHASE-1 §4 Q4). Removed on branch
+  `m2.6-remove-telegram`:
+  - the source, its dialog and its build-time credentials are gone, with the `telegram`, `qrcode` and `big-integer`
+    packages, which only it used;
+  - Telegram entries an older build saved are dropped when loaded, and their partial data is cleared, never the
+    user's finished files (`e2e/recovery.spec.ts`).
 - Context:
   - Plexo's Telegram source needs a Telegram account plus API credentials. Plexo injects its own at build
     time; Mergelane has none, so users must enter their own.
@@ -135,7 +142,7 @@ until the owner overrides it.
 
 ## ADR-0013: Packaging test launches after the documented quarantine removal
 
-- Status: Proposed (2026-11-10). Owner question open (PHASE-1 §4 Q2). Confirmed by spike S1.
+- Status: Accepted by the owner (2026-11-11, PHASE-1 §4 Q2). Confirmed by spike S1.
 - Decision: The packaging test proves that:
   - the signature verifies;
   - Gatekeeper's verdict on the quarantined app is "not notarised", not "damaged";
@@ -185,6 +192,10 @@ until the owner overrides it.
     tests compare against a measured single-link baseline, not the configured rate.
   - After `ifconfig down` and `up`, a link did not carry traffic again even with its route and ARP entry
     re-added. Link recovery is not a Phase 1 criterion, so M1.5 investigates it.
+    - Update (2026-11-11): XNU's source shows that `ifconfig down` deletes every IPv4 route that uses the link's
+      address, static ones included (the ARP entry, the scoped default and a `via` route), and `up` restores only
+      the interface route. `netsim.sh restore` now re-adds all of them. A new `gone` mode destroys and recreates
+      the link, so it returns with a new index. Proven only once the root suite runs.
   - pf `reply-to` does not work here: `arp -s` refuses a local address.
 
 ## ADR-0016: Harden Electron fuses, and audit them with REA in CI
@@ -253,7 +264,7 @@ until the owner overrides it.
 
 ## ADR-0020: CI paused, runs by hand only
 
-- Status: Owner (2026-11-10)
+- Status: Owner (2026-11-10). Reconfirmed 2026-11-11: CI stays paused, and no manual runs either for now.
 - Decision: At the owner's request, `.github/workflows/ci.yml` runs only on `workflow_dispatch`. Pushes and pull
   requests trigger nothing until the owner asks to resume (the original triggers are noted in the file).
 - Consequences:
@@ -283,7 +294,8 @@ until the owner overrides it.
 
 ## ADR-0022: Where yt-dlp and FFmpeg come from
 
-- Status: Proposed (2026-11-10). Owner questions open (see `docs/MEDIA-TOOLS.md`).
+- Status: yt-dlp part accepted by the owner (2026-11-11). The FFmpeg part is superseded by ADR-0028: we build our
+  own.
 - Decision:
   - yt-dlp: the official `yt-dlp_macos` release (universal, includes arm64), pinned to the hash in the release's
     `SHA2-256SUMS`.
@@ -300,7 +312,7 @@ until the owner overrides it.
 
 ## ADR-0023: The extension offers streams the page already loads (option D); YouTube pending
 
-- Status: Proposed (2026-11-10). YouTube approach still open (`docs/YOUTUBE-REVIEW.md`).
+- Status: Proposed (2026-11-10). The YouTube approach is now decided by ADR-0026.
 - Decision:
   - The extension observes the HLS and DASH manifests a tab loads (headers only) and lists them in its popup.
   - The user hands one to Mergelane, which treats it like any other link. There is no site-specific logic.
@@ -308,3 +320,223 @@ until the owner overrides it.
     owner chooses an approach.
 - Limits: manifests fetched by a site's service worker, built in JavaScript, served from `blob:` URLs or answered
   from Chrome's memory cache are not seen.
+
+## ADR-0024: Optional auto-resume after a crash (follows ADR-0007)
+
+- Status: Proposed (2026-11-11). Implemented in M2.4 (`daemon/internal/state/prefs.go`, `control.Resume`,
+  `cmd/mergelane-daemon/run.go`).
+- Decision:
+  - A new `setAutoResume {enabled}` setting, off by default. The daemon saves it in `prefs.json` in its state
+    directory, together with:
+    - `wantOn`: the user's last explicit choice (on or off);
+    - `cleanExit`: written false at start, true on SIGTERM or SIGINT.
+  - A start counts as a crash only when the previous run did not exit cleanly and either left marked routes or
+    had `wantOn` set. With no `prefs.json`, the routing table decides alone, as before.
+  - After a crash with the setting on, the daemon waits up to 10 s for a link to pass its probe, then runs every
+    check that `enable` runs (VPN guard, usable links) and turns merging back on. If any check fails, merging
+    stays off and the status reason says why.
+  - A clean restart always starts off: a reboot, a logout, or a helper update.
+- Consequences:
+  - With the user's consent, a crash no longer costs a click.
+  - Marked routes left after a clean exit are still cleaned up, but are no longer reported as a crash.
+  - After a helper update the daemon starts off, so the app turns merging back on itself if it was on before
+    the update.
+  - Tested in unit tests only. A real `kill -9`, launchd restart and route re-install needs the root acceptance
+    run in CI, which is paused (ADR-0020).
+
+## ADR-0025: Links that come back, and the link-event log
+
+- Status: Proposed (2026-11-11). Implemented in M2.4 (`daemon/internal/engine`, `daemon/internal/tun`,
+  `daemon/internal/nics`).
+- Context: after unplugging, sleep and wake, or a USB tether reconnecting, a link can disappear and return,
+  sometimes with a new interface index. Probe results from before the return could mark it down again, and the
+  scoped-route sync could forget or duplicate its own routes.
+- Decision:
+  - A link that vanishes and returns, or returns with a new interface index, starts again from scratch: state
+    unknown, cooldown cleared, counters reset, probed at the next tick. Probe results from before the return are
+    discarded when they arrive.
+  - The interface index is kept with the link's addresses and swapped atomically, so every pinned dial reads the
+    current index.
+  - The scoped-route sync tells its own routes from macOS's by the route marker (`RTF_PROTO2`, ADR-0018):
+    - macOS's own scoped default: left alone;
+    - ours with the right gateway: adopted, even if the sync had lost track of it;
+    - ours with an old gateway: replaced;
+    - a link whose only default route is scoped: left to macOS.
+  - The daemon keeps the last 50 link changes in memory and serves them through a new `events` method (protocol
+    v1, additive), oldest first. States: `up`, `unknown`, `down`, `gone`. Reasons: `found`, `lost`, `returned`,
+    `address`, `probe-ok`, `probe-failed`.
+- Consequences:
+  - Failover history can be shown in the app, from the daemon's own record.
+  - The history is lost when the daemon restarts.
+  - How the macOS kernel treats these routes on real interfaces (down and up, a network change, a tether with
+    a new index) could not be checked against an official source. It must be confirmed on the hardware runner.
+
+## ADR-0026: YouTube through yt-dlp only, with hard limits (option A)
+
+- Status: Accepted by the owner (2026-11-11). Review: `docs/YOUTUBE-REVIEW.md`. Implementation: M2.2 YouTube.
+- Context: every way of downloading from YouTube is outside YouTube's Terms of Service; the review compared six
+  options. CLAUDE.md forbids DRM circumvention and sign-in-only media.
+- Decision:
+  - YouTube links are resolved by the bundled yt-dlp only (option A). Other sites keep option D: the extension
+    offers the HLS and DASH streams a page loads (ADR-0023).
+  - No cookies, and no PO tokens, captured or generated. Option B (cookies) is not offered; options C (our own
+    googlevideo/SABR client) and F (token replay) are ruled out.
+  - Every format marked DRM or "maybe" DRM is dropped.
+  - Only links the user pasted or opened. No crawling of playlists or channels.
+  - yt-dlp needs a JavaScript runtime for YouTube; Deno ships as a third pinned program (ADR-0029). The app itself
+    can't act as Node (ADR-0016).
+  - The limits are written into CLAUDE.md.
+- Consequences:
+  - Some videos will fail: anything that needs a sign-in, a token or DRM. The app says so in plain words.
+  - YouTube changes often; the pinned yt-dlp must be updated when it breaks (about monthly upstream).
+  - Before the public 1.0 release, get a lawyer's view (the review notes a German ruling).
+
+## ADR-0027: Every release attaches the source of the programs it bundles
+
+- Status: Accepted by the owner (2026-11-11).
+- Context: GPL version 3 (yt-dlp's macOS program) and LGPL version 2.1 (our FFmpeg, ADR-0028) require us to make
+  the Corresponding Source available. Pointing at someone else's server is allowed, but we stay responsible if it
+  disappears (`docs/MEDIA-TOOLS.md`).
+- Decision: the release workflow attaches, to every GitHub release:
+  - FFmpeg's source release tarball, exactly the one the build verified, plus our build script (in the tagged
+    repository);
+  - yt-dlp's source tarball for the bundled version, pinned by its published SHA-256.
+  - Deno is MIT: its licence text ships in the app, and no source is attached.
+- Consequences: each release carries about 20 MB of source archives. GitHub Releases is free for public repositories.
+
+## ADR-0028: Mergelane builds its own minimal FFmpeg (supersedes ADR-0022's FFmpeg part)
+
+- Status: Accepted by the owner (2026-11-11).
+- Context:
+  - ADR-0022 picked Martin Riedl's static GPL build. Its build script downloads x264 from the `master` branch on
+    every build and doesn't record the commit (`script/build-x264.sh`, checked 2026-11-11), so we can't attach the
+    exact source of the program we would ship (ADR-0027).
+  - Mergelane only joins and rewraps media with stream copy (`app/src/main/media/mux`), so it needs no encoders.
+- Decision:
+  - `scripts/media-tools/build-ffmpeg.sh` builds FFmpeg from FFmpeg's official source release at build time:
+    - the tarball is pinned by SHA-256, and FFmpeg's GPG signature was checked when it was pinned (key
+      `FCF986EA15E6E293A5644F10B4322F04D67658D8`, as published on ffmpeg.org);
+    - `--disable-everything`, then only what stream copy needs:
+      - demuxers mov, mpegts, matroska, aac, mp3, ac3 and eac3, and muxers mp4 and matroska;
+      - parsers, a few decoders that read stream parameters, and the needed bitstream filters;
+      - the `file` protocol for the media, and `pipe`, for the mux module's `-progress pipe:1` (inputs stay limited to
+        `file` by `-protocol_whitelist file`). Leaving `pipe` out broke every join through the app, which the first
+        52-combination check, run without `-progress`, did not catch; `e2e/mux.spec.ts` now checks the protocol list;
+    - no network, no devices and no outside libraries beyond macOS's zlib and system frameworks;
+    - not `--enable-gpl` or `--enable-version3`, so the program is **LGPL version 2.1 or later**. The script
+      refuses a build that reports anything else.
+  - The tests make their sample media with a full FFmpeg (Homebrew's, test-only, never shipped) and join it with
+    ours.
+- Evidence (2026-11-11, FFmpeg 9.0.2, this Mac):
+  - the build takes about 35 s and gives a 4.1 MB program (the static build was 66 MB);
+  - it links only macOS's own libraries;
+  - it joined all 52 of our video and audio combinations, identical to Homebrew's full FFmpeg 8.1.2:
+    - H.264, HEVC, VP9 and AV1 video, each with AAC (MP4 and ADTS), Opus, MP3, AC-3 and E-AC-3 audio, into both MP4
+      and MKV;
+    - MPEG-TS with H.264 or HEVC, rewrapped into both.
+- Consequences:
+  - The exact Corresponding Source is one tarball plus one script. Two separate builds gave the same SHA-256.
+  - Each app build compiles FFmpeg (the first fetch takes about 80 s in all). The result is cached in
+    `app/resources/bin`, keyed by the tarball, the script and the program's hash.
+  - Anything beyond stream copy, such as re-encoding, would need this build to grow.
+
+## ADR-0029: Deno ships as a third pinned program
+
+- Status: Accepted by the owner as part of option A (2026-11-11). Implemented in M2.2 YouTube.
+- Decision:
+  - Deno 2.9.8 (`deno-aarch64-apple-darwin.zip`) is fetched by `fetch.mjs`, with both of the publisher's SHA-256s
+    pinned (zip and program). It ships as `Contents/Resources/deno` with its MIT licence, and `package-test.sh` checks
+    that it runs JavaScript after the hardened-runtime re-sign.
+  - Only yt-dlp runs it, through `--no-js-runtimes --js-runtimes deno:<path>`, with `DENO_DIR` in a private folder
+    deleted after each run and `DENO_NO_UPDATE_CHECK=1`.
+  - yt-dlp's built-in, hash-checked challenge scripts (`yt-dlp-ejs`) are used. `--no-remote-components` is always
+    passed, so no unpinned code is fetched at run time.
+- Consequences:
+  - About 81 MB more in the app. No source to attach, since Deno is MIT (ADR-0027).
+  - Resolved (2026-11-11): Deno publishes no notices file, so `scripts/media-tools/deno-notices.mjs` builds
+    `licenses/deno/THIRD-PARTY-NOTICES.txt` from pinned inputs. It reproduces byte for byte and ships in the app.
+    - **Rust:** every crate in Deno's `Cargo.lock`, each checked against its hash. 25 crates carry only their
+      licence's standard text, without the authors' copyright lines.
+    - **V8:** rusty_v8 and its submodules (V8, ICU, Abseil, LLVM's libc++ and others).
+    - **JavaScript and TypeScript:** TypeScript, and Node.js's own licence part.
+
+## ADR-0030: How YouTube downloads run on several networks (implements ADR-0026)
+
+- Status: Accepted (2026-11-11). Implemented in M2.2 YouTube (`app/src/main/media/youtube`).
+- Context: YouTube's media addresses carry the asking IP address as a signed parameter (`ip` is in `sparams`), so
+  an address fetched over one network is meant for that network only.
+- Decision:
+  - Each network asks yt-dlp for its own addresses, through a loopback CONNECT proxy:
+    - the proxy's connections are pinned to that network with `IP_BOUND_IF`;
+    - it listens on 127.0.0.1 only, only for one yt-dlp run, and only for random credentials.
+  - Each network then downloads with its own addresses, in byte ranges of at most 10 MiB (yt-dlp's chunk size).
+  - Addresses are never saved, only the watch page and the format IDs. A network asks again on every run, a minute
+    before its addresses expire, and after an HTTP 403. After two refusals in a row it sits out.
+  - A network whose request fails sits out; if every network fails, the download fails in plain words.
+- Consequences:
+  - Each download costs one yt-dlp run per network, plus one for the New download dialog. That is more requests to
+    YouTube, so bot checks or rate limits may come sooner than for a single-network downloader.
+  - That two real networks with different public IPs each get working addresses must still be confirmed on real
+    hardware.
+
+## ADR-0031: Ship yt-dlp's unpacked macOS build (updates ADR-0022's yt-dlp part)
+
+- Status: Accepted (2026-11-11).
+- Context: the single-file `yt-dlp_macos` unpacks its Python runtime on every start. On the owner's Mac that took
+  about 24 s per run. YouTube downloads run yt-dlp at least twice (ADR-0030).
+- Decision: ship the official `yt-dlp_macos.zip` from the same release instead, a folder with the program and its
+  `_internal` files, pinned by its SHA-256 in the release's `SHA2-256SUMS`. It starts in about 0.25 s after the
+  first run.
+- Consequences:
+  - The fetch script installs a folder rather than one file.
+  - The published zip stores three symlinks inside `_internal/Python.framework` as plain copies (yt-dlp's
+    `build.yml` zips without `-y`), and codesign then refuses the folder ("bundle format is ambiguous"). The fetch
+    turns each copy back into its link, only when it is byte-identical to the target (listed as `links` in
+    `tools.json`). With that, a mock app signed as electron-builder signs verified, all 107 Mach-O files included.
+  - Measured on the owner's Mac: the first start after a fresh install takes about 21–25 s (macOS's one-time check
+    of new programs; 0.6 s of CPU), then 0.25 s. Re-signed with the hardened runtime: 0.32 s, then 0.25 s. The first
+    start after a user installs the quarantined DMG is not measured yet.
+  - Packaging re-signs every Mach-O file inside it.
+  - The licence analysis is unchanged: the program as a whole is GPL-3.0-or-later, and its source is the same
+    `yt-dlp.tar.gz`.
+
+## ADR-0032: CI checks and releases run on the owner's Mac (follows ADR-0020)
+
+- Status: Owner (2026-11-11). GitHub CI stays paused, and the owner chose to run everything on their own Mac.
+- Decision:
+  - `scripts/ci/local.sh` runs `ci.yml`'s jobs that need no root, reading the commands from `ci.yml` itself, so the
+    two can't drift. A new non-root step runs automatically. A root step, an unknown action or a `${{ }}`
+    expression stops the plan until a rule covers it.
+  - `scripts/ci/local-root.sh` runs the root jobs (netsim, daemon acceptance, app acceptance) with the owner's
+    password, typed once in their own Terminal:
+    - It refuses to start while a VPN is up, a test is already running or Mergelane is open.
+    - It backs up the installed helper (plist, binary, settings) to `/var/db/mergelane-local-ci`, checks the copies'
+      hashes, and pauses the helper.
+    - pf changes are limited to the harness's own anchor, released with a reference token.
+    - It restores everything on success, failure, Ctrl-C or a closed Terminal, with a root watchdog for a runner
+      that is killed outright. Then it verifies the routing table, the leftovers, the helper and the internet.
+    - It offers a dry run and a `--restore` mode.
+  - `scripts/release/local-release.mjs` mirrors `release.yml`. It uploads only with `--upload`, always as a draft,
+    and refuses an existing tag.
+  - "Works on a clean Mac" becomes the owner installing the DMG by hand.
+- Consequences:
+  - There is no CI record for new changes; the local logs in `local-ci-logs/` are the evidence.
+  - While the root suite runs, the owner's real internet is cut for short stretches (about 3 minutes in 20).
+
+## ADR-0033: The packaging test's local mode (amends ADR-0013 for local runs)
+
+- Status: Accepted (2026-11-11).
+- Decision: `package-test.sh --local` (or `MERGELANE_PACKAGE_TEST_LOCAL=1`):
+  - **No quarantine flag and no Gatekeeper assessment.** An earlier local quarantine test brought up Apple's
+    malware warning for the owner. A DMG that already carries the flag is refused.
+  - **The packaged app's launch is isolated:**
+    - it runs with `HOME` and `CFFIXED_USER_HOME` set to a test folder, plus `--user-data-dir` and
+      `--use-mock-keychain`;
+    - it is quit by PID, never through AppleScript;
+    - before-and-after snapshots of the owner's Mergelane data, the browsers' native-messaging manifests,
+      preferences and keychain item fail the test on any change;
+    - it is skipped unless the saved `mergelane:` handler is already Mergelane's.
+- Evidence: three local launches reached ready with all 106 snapshot entries unchanged, while the owner's own
+  Mergelane kept running. `CFFIXED_USER_HOME` is read by Apple's open-source CoreFoundation but is not documented by
+  Apple.
+- Consequences: the Gatekeeper verdict ("not notarised", not "damaged") is proven only by the CI path.

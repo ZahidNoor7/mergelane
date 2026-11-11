@@ -7,9 +7,6 @@ import type {
   ProbeResult,
   StartDownloadRequest,
   SystemMergeSnapshot,
-  TelegramAuthState,
-  TelegramCredentials,
-  TelegramMediaPage,
   TorrentFileEntry,
   TorrentTrackersResult,
   UpdateState,
@@ -51,7 +48,10 @@ export interface IpcContract {
   /** System-wide merging through mergelane-daemon (main/daemon/daemon.ts). */
   systemMerge: { args: []; result: SystemMergeSnapshot }
   setSystemMerge: { args: [on: boolean]; result: SystemMergeSnapshot }
+  /** Installs the bundled helper, or updates an older one (an administrator password prompt). */
   installSystemMerge: { args: []; result: SystemMergeSnapshot }
+  /** Whether merging turns itself back on after the helper restarts. */
+  setSystemMergeAutoResume: { args: [enabled: boolean]; result: SystemMergeSnapshot }
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }
@@ -82,20 +82,6 @@ export interface IpcContract {
   resumeFromLink: { args: [linkId: string, downloadId: string]; result: void }
   /** Forgets the sign-in of a link that won't be started. */
   dismissLink: { args: [id: string]; result: void }
-  /** Where Telegram sign-in stands (see TelegramAuthState). */
-  telegramState: { args: []; result: TelegramAuthState }
-  /** Connects with the user's own credentials and sends a login code to `credentials.phone`. */
-  telegramStartLogin: { args: [credentials: TelegramCredentials]; result: void }
-  /** Starts a QR sign-in: the dialog gets rotating login tokens to render, until scanned. */
-  telegramStartQrLogin: { args: []; result: void }
-  /** Accepts the login code Telegram sent. Stays awaiting when it was wrong. */
-  telegramSubmitCode: { args: [code: string]; result: void }
-  /** Accepts the two-step-verification password. Stays awaiting when it was wrong. */
-  telegramSubmitPassword: { args: [password: string]; result: void }
-  /** Signs out and forgets the session. */
-  telegramLogout: { args: []; result: void }
-  /** One page of Saved Messages media, `offsetId` messages back (unset: the newest). */
-  telegramListMedia: { args: [offsetId?: number, limit?: number]; result: TelegramMediaPage }
   /** The news server NZB downloads come from; null until one is set up. */
   usenetServer: { args: []; result: UsenetServer | null }
   saveUsenetServer: { args: [server: UsenetServerInput]; result: UsenetServer }

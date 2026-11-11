@@ -7,6 +7,7 @@
     "reason": "System merge was turned off because mergelane-daemon stopped unexpectedly.",
     "since": "2026-11-10T09:31:12.25Z",
     "version": "0.1.0",
-    "protocol": 1
+    "protocol": 1,
+    "autoResume": false
   }
 }

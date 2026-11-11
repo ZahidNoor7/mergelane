@@ -10,6 +10,9 @@ import { describeNzb, downloadNzbFile, indexerError, readNzbFile, sniffXml } fro
 import { USENET_OFF, usenetEnabled } from './nzb/usenetServer'
 import { normalizeEtag } from './fileVersion'
 import { describeStream, streamProtocolOf } from './stream/streamPlan'
+import { describeYoutube } from './stream/youtubeStream'
+import { youtubeTools } from '../mediaTools'
+import { youtubeLink } from '../../shared/youtube'
 import {
   describeTorrent,
   downloadTorrentFile,
@@ -178,9 +181,15 @@ function isNzbLink(headers: Headers, url: URL, fileName: string): boolean {
 
 /** What a link would download: a file over HTTP(S), a torrent — a magnet link, a link to a
  * .torrent, or the path of a .torrent on this computer (opened or dropped on the window) — an
- * NZB, by link or path, the same way, or an HLS or DASH video (see stream/streamPlan.ts).
- * `browser`: what the browser it came from sends with it (see BrowserContext). */
+ * NZB, by link or path, the same way, an HLS or DASH video (see stream/streamPlan.ts), or a
+ * YouTube video, which the bundled yt-dlp looks up (see stream/youtubeStream.ts).
+ * `browser`: what the browser it came from sends with it (see BrowserContext); never anything
+ * for YouTube, which gets no cookies (ADR-0026). */
 export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promise<ProbeResult> {
+  // Before any request: youtube.com's pages are only ever asked for by yt-dlp.
+  const youtube = youtubeLink(rawUrl)
+  if (youtube?.kind === 'refused') throw new Error(youtube.reason)
+  if (youtube) return describeYoutube(rawUrl, youtube.url, youtubeTools)
   if (/^magnet:/i.test(rawUrl)) return describeTorrent(await fetchMagnetMetadata(rawUrl), rawUrl)
   if (isAbsolute(rawUrl) && /\.torrent$/i.test(rawUrl)) {
     return describeTorrent(await readTorrentFile(rawUrl), rawUrl)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -62,8 +63,10 @@ func loadFixtures(t *testing.T) []fixture {
 // newResult returns a pointer to the result type of method.
 func newResult(t *testing.T, method string) any {
 	switch method {
-	case MethodStatus, MethodEnable, MethodDisable:
+	case MethodStatus, MethodEnable, MethodDisable, MethodSetAutoResume:
 		return new(Status)
+	case MethodEvents:
+		return new(EventsResult)
 	case MethodLinks:
 		return new(LinksResult)
 	case MethodStats:
@@ -96,6 +99,8 @@ func requestParams(t *testing.T, req Request) any {
 		p, err = parseDisable(req.Params)
 	case MethodSetLimit:
 		p, err = parseSetLimit(req.Params)
+	case MethodSetAutoResume:
+		p, err = parseSetAutoResume(req.Params)
 	default:
 		_, err = paramFields(req.Params)
 	}
@@ -200,6 +205,13 @@ func (h *fixtureHandler) SetLimit(_ context.Context, p SetLimitParams) (SetLimit
 	h.params = p
 	return *h.result.(*SetLimitResult), nil
 }
+func (h *fixtureHandler) SetAutoResume(_ context.Context, p SetAutoResumeParams) (Status, error) {
+	h.params = p
+	return h.status()
+}
+func (h *fixtureHandler) Events(context.Context) (EventsResult, error) {
+	return *h.result.(*EventsResult), nil
+}
 
 // TestFixturesMatchDispatch feeds every request fixture that has a response fixture of the same
 // name through Dispatch, and checks the daemon would send exactly that response.
@@ -267,5 +279,35 @@ func TestServerMatchesErrorFixtures(t *testing.T) {
 	refused := startServer(t, &fakeHandler{}, func(uint32) bool { return false })
 	if got := dialRaw(t, refused.Path()).line(); !jsonEqual(t, got, fixtures["error.not-authorized.response.json"]) {
 		t.Errorf("refusal %s differs from its fixture", got)
+	}
+}
+
+// TestEventFixturesUseKnownValues checks the values Go's string types would let through: every
+// event's states and reason are ones the daemon sends.
+func TestEventFixturesUseKnownValues(t *testing.T) {
+	states := []LinkState{LinkUp, LinkUnknown, LinkDown, LinkGone}
+	seen := 0
+	for _, f := range loadFixtures(t) {
+		if f.method != MethodEvents || f.kind != "response" {
+			continue
+		}
+		resp, err := ParseResponse(f.data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var res EventsResult
+		decodeStrict(t, resp.Result, &res)
+		for _, e := range res.Events {
+			seen++
+			if !slices.Contains(states, e.From) || !slices.Contains(states, e.To) || e.From == e.To {
+				t.Errorf("%s: event %+v has an unknown or unchanged state", f.name, e)
+			}
+			if !slices.Contains(EventReasons(), e.Reason) || e.Link == "" || e.At.IsZero() {
+				t.Errorf("%s: event %+v", f.name, e)
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no event fixture has events")
 	}
 }

@@ -1,0 +1,72 @@
+{
+  "v": 1,
+  "id": "13",
+  "ok": true,
+  "result": {
+    "events": [
+      {
+        "at": "2026-11-10T09:30:00Z",
+        "link": "en0",
+        "from": "gone",
+        "to": "unknown",
+        "reason": "found"
+      },
+      {
+        "at": "2026-11-10T09:30:00Z",
+        "link": "en7",
+        "from": "gone",
+        "to": "unknown",
+        "reason": "found"
+      },
+      {
+        "at": "2026-11-10T09:30:01.204Z",
+        "link": "en0",
+        "from": "unknown",
+        "to": "up",
+        "reason": "probe-ok"
+      },
+      {
+        "at": "2026-11-10T09:30:01.311Z",
+        "link": "en7",
+        "from": "unknown",
+        "to": "up",
+        "reason": "probe-ok"
+      },
+      {
+        "at": "2026-11-10T09:41:07.5Z",
+        "link": "en0",
+        "from": "up",
+        "to": "down",
+        "reason": "probe-failed"
+      },
+      {
+        "at": "2026-11-10T09:41:09Z",
+        "link": "en0",
+        "from": "down",
+        "to": "gone",
+        "reason": "lost"
+      },
+      {
+        "at": "2026-11-10T09:43:30+05:00",
+        "link": "en0",
+        "from": "gone",
+        "to": "unknown",
+        "reason": "returned"
+      },
+      {
+        "at": "2026-11-10T09:43:31.1+05:00",
+        "link": "en0",
+        "from": "unknown",
+        "to": "up",
+        "reason": "probe-ok"
+      },
+      {
+        "at": "2026-11-10T09:50:12Z",
+        "link": "en7",
+        "from": "up",
+        "to": "unknown",
+        "reason": "address"
+      }
+    ]
+  }
+}

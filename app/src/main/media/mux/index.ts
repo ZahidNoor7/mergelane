@@ -5,7 +5,8 @@
 /**
  * Joining and rewrapping downloaded media with FFmpeg, without re-encoding.
  *
- * FFmpeg (GPL) ships as a separate executable in the app bundle and is only ever run as a child
+ * FFmpeg ships as a separate executable in the app bundle: Mergelane's own minimal LGPL build, made
+ * from FFmpeg's source release for stream copy only (ADR-0028). It is only ever run as a child
  * process, never linked (CLAUDE.md, Licensing). This module never decrypts anything: it copies
  * streams Mergelane already downloaded in the clear.
  *
@@ -36,6 +37,7 @@ export { MuxError, type MuxErrorCode } from './errors'
 
 export {
   TOOL_PATH_ENV,
+  TOOL_PROGRAM,
   resolveToolPath,
   type MediaTool,
   type ToolLocations,

@@ -20,7 +20,7 @@ files:
   - '!node_modules/node-datachannel/**'
   - '!node_modules/webrtc-polyfill/**'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  # yt-dlp and FFmpeg ship through extraResources below, not inside app.asar.
+  # yt-dlp, FFmpeg and Deno ship through extraResources below, not inside app.asar.
   - '!resources/bin/**'
 asarUnpack:
   - resources/**
@@ -37,12 +37,20 @@ extraResources:
   # The browser extension's native messaging host (docs/BROWSER-BRIDGE.md, ADR-0021).
   - from: ../daemon/bin/mergelane-nmhost
     to: mergelane-nmhost
-  # yt-dlp and FFmpeg, fetched with pinned SHA-256s by ../scripts/media-tools/fetch.mjs before
-  # packaging (docs/MEDIA-TOOLS.md), with their licence texts.
+  # yt-dlp and FFmpeg, put in resources/bin by ../scripts/media-tools/fetch.mjs before packaging
+  # (docs/MEDIA-TOOLS.md), with their licence texts. yt-dlp is a folder, its unpacked macOS build
+  # (ADR-0031): yt-dlp_macos and its _internal files, copied whole (links kept) to
+  # Contents/Resources/yt-dlp/, where every Mach-O file inside is re-signed. FFmpeg is Mergelane's
+  # own LGPL build from FFmpeg's pinned source release (ADR-0028).
   - from: resources/bin/yt-dlp
     to: yt-dlp
   - from: resources/bin/ffmpeg
     to: ffmpeg
+  # Deno, the JavaScript runtime yt-dlp runs YouTube's player challenges in (ADR-0026). Fetched the
+  # same way; the app itself can't act as Node (ADR-0016). Re-signed with the hardened runtime and
+  # entitlementsInherit, whose allow-jit V8 needs.
+  - from: resources/bin/deno
+    to: deno
   - from: resources/bin/licenses
     to: licenses
 mac:

@@ -11,7 +11,9 @@ import {
   DEFAULT_RETRIES,
   DEFAULT_RETRY_DELAY_MS,
   HlsError,
+  HlsHttpError,
   HlsLimitError,
+  HlsSegmentError,
   HlsUnsupportedError,
   downloadHlsTrack,
   type HlsFetch,
@@ -27,7 +29,20 @@ import {
   remux,
   type ToolResolution
 } from '../../media/mux'
-import { ConnectionError, NoCompatibleRouteError, StreamConnection } from '../../network/routes'
+import {
+  YoutubeError,
+  YoutubeNetworkError,
+  YoutubeSession,
+  type Dial,
+  type YoutubeTarget
+} from '../../media/youtube'
+import {
+  ConnectionError,
+  NoCompatibleRouteError,
+  StreamConnection,
+  connectThrough,
+  oneFamily
+} from '../../network/routes'
 import { advanceBlock, retractBlock } from '../blockProgress'
 import { requestHeaders } from '../browserContext'
 import {
@@ -43,8 +58,10 @@ import {
   resolveStream,
   sameShape,
   streamFileName,
-  type PlannedTrack
+  type PlannedTrack,
+  type ResolvedStream
 } from './streamPlan'
+import { extractYoutube, youtubeFamily, youtubePrograms, type YoutubeTools } from './youtubeStream'
 
 /** How a stream download runs, from the manager (and the tests). */
 export interface StreamTransferOptions {
@@ -58,6 +75,8 @@ export interface StreamTransferOptions {
   streamsPerNetwork: number
   /** Wait before a failed segment's first retry; doubled for each one after. */
   retryDelayMs?: number
+  /** Finds yt-dlp and Deno, for a YouTube video (see youtubeStream.ts). */
+  youtube?: YoutubeTools
 }
 
 /** Redirects a request follows, as the HLS module's own fetch does. */
@@ -72,6 +91,9 @@ const MAX_CONCURRENCY = 32
 const MANIFEST_RETRIES = DEFAULT_RETRIES
 /** The meter of a manifest's request: it counts towards its network's speed only. */
 const MANIFEST_CONNECTION = -1
+/** Times one YouTube request goes again, over the same network or another, after a refusal
+ * (HTTP 403) or a network that sits out: past that, its 403 goes to the segment downloader. */
+const YOUTUBE_ATTEMPTS = 6
 
 /** Outputs FFmpeg is writing right now, in this process: their temporary files aren't stale. */
 const muxing = new Set<string>()
@@ -185,6 +207,8 @@ export class StreamTransfer implements Transfer {
   private fetching = new Set<number>()
   /** Each track's latest size estimate, by role (see HlsProgress). */
   private estimates = new Map<string, number | null>()
+  /** A YouTube video's addresses for this run, per network. */
+  private youtube: YoutubeSession | null = null
 
   constructor(
     private readonly runtime: StreamTransferTarget,
@@ -231,6 +255,10 @@ export class StreamTransfer implements Transfer {
       this.failures.delete(id)
       if (reconnect(id)) connection.reconnect()
     }
+    // A network back on asks YouTube again, though it sat out earlier in this run.
+    for (const network of this.runtime.state.networks) {
+      if (pick(network.id)) this.youtube?.retry(network.id)
+    }
     this.notify()
   }
 
@@ -273,12 +301,7 @@ export class StreamTransfer implements Transfer {
       if (present.every(Boolean)) {
         this.completeBlocks(0, state.totalBlocks)
       } else {
-        const resolved = await resolveStream(
-          this.runtime.requestPayload.url,
-          state.protocol,
-          this.runtime.requestPayload.variantId,
-          { fetch: this.fetchFor(null), signal }
-        )
+        const resolved = await this.resolve(signal)
         const tracks = planTracks(resolved.tracks)
         if (!sameShape(tracks, state.trackSegments)) {
           this.host.failDownload(
@@ -307,9 +330,13 @@ export class StreamTransfer implements Transfer {
       if (this.stopped(signal)) return
       if (error instanceof MuxError && error.detail)
         console.error('[mergelane] FFmpeg', error.detail)
-      this.host.failDownload(message(error))
+      if (error instanceof YoutubeError && error.detail) {
+        console.error('[mergelane] yt-dlp', error.detail)
+      }
+      this.host.failDownload(this.failure(error))
     } finally {
       state.muxing = undefined
+      this.youtube = null
       for (const stream of state.streams) {
         if (stream.status !== 'completed') {
           stream.status = finished
@@ -322,6 +349,77 @@ export class StreamTransfer implements Transfer {
         stream.speedBytesPerSec = 0
       }
       this.host.scheduleUpdate()
+    }
+  }
+
+  /** What a failed run says. A YouTube part is named as one, not by the address it is listed
+   * under (see trackUri). */
+  private failure(error: unknown): string {
+    if (this.runtime.state.protocol !== 'youtube' || !(error instanceof HlsSegmentError)) {
+      return message(error)
+    }
+    const status = error.cause instanceof HlsHttpError ? ` (HTTP ${error.cause.status})` : ''
+    return `YouTube didn’t send part ${error.index + 1} of this video${status}. Try again later.`
+  }
+
+  /**
+   * What the stream takes to download now: its manifest read again, or for a YouTube video,
+   * yt-dlp asked over every network that is on (see YoutubeSession), the run going on as soon as
+   * the first answers. Its signed addresses are asked for afresh on every run, never kept.
+   */
+  private async resolve(signal: AbortSignal): Promise<ResolvedStream> {
+    const { state, requestPayload } = this.runtime
+    if (state.protocol !== 'youtube') {
+      return resolveStream(requestPayload.url, state.protocol, requestPayload.variantId, {
+        fetch: this.fetchFor(null),
+        signal
+      })
+    }
+    const tools = this.options.youtube
+    if (!tools)
+      throw new YoutubeError('failed', 'This build of Mergelane can’t download from YouTube.')
+    // Said at once, before any network is waited for.
+    await youtubePrograms(tools)
+    const session = new YoutubeSession({
+      variantId: requestPayload.variantId,
+      signal,
+      extract: (networkId, stop) =>
+        extractYoutube(requestPayload.url, tools, { dial: this.dialFor(networkId), signal: stop })
+    })
+    this.youtube = session
+    let usable = state.networks.filter((network) => network.status === 'on')
+    while (usable.length === 0) {
+      await this.networkChange(signal)
+      usable = state.networks.filter((network) => network.status === 'on')
+    }
+    const plan = await session.start(usable.map((network) => network.id))
+    return {
+      protocol: 'youtube',
+      tracks: plan.tracks,
+      codecs: plan.codecs,
+      quality: plan.quality,
+      ...(plan.video.durationSeconds !== undefined && {
+        durationSeconds: plan.video.durationSeconds
+      })
+    }
+  }
+
+  /** Opens connections through `networkId` for yt-dlp's loopback proxy: pinned to the network,
+   * through its own proxy when it has one, in the family its downloads use. */
+  private dialFor(networkId: string): Dial {
+    return async (host, port, signal) => {
+      const iface = this.host.networks.find(networkId)
+      if (!iface) throw new Error('The network is not connected')
+      return connectThrough(
+        iface,
+        host,
+        port,
+        false,
+        this.options.connectTimeoutMs,
+        signal,
+        this.host.getProxyForInterface?.(networkId),
+        oneFamily(() => youtubeFamily(this.host.networks.find(networkId)))
+      )
     }
   }
 
@@ -465,13 +563,32 @@ export class StreamTransfer implements Transfer {
           request.block = this.claimBlock(lookup.get(keyOf(url, init.range)), init.range, networkId)
           request.stream = this.claimStream(networkId, request.block)
         }
+        // A YouTube track is listed under an address of Mergelane's own: this network's real one,
+        // and its headers, are the session's.
+        const youtube = track ? this.youtube : null
+        let target: YoutubeTarget | undefined
         let response: { message: IncomingMessage; url: string }
         try {
-          response = await this.send(networkId, url, init.range, signal)
+          if (youtube) target = await youtube.target(networkId, url, signal)
+          response = await this.send(
+            networkId,
+            target?.url ?? url,
+            init.range,
+            signal,
+            target?.headers
+          )
         } catch (error) {
           this.ended(request, false, signal)
-          if (error instanceof NoCompatibleRouteError) {
+          if (error instanceof NoCompatibleRouteError || error instanceof YoutubeNetworkError) {
             this.host.failNetwork(this.network(networkId), error.message)
+          }
+          // A network that sits out a YouTube download: the request goes over another.
+          if (
+            error instanceof YoutubeNetworkError &&
+            attempt < YOUTUBE_ATTEMPTS &&
+            !this.stopped(signal)
+          ) {
+            continue
           }
           // The segment downloader tries a segment again itself; a manifest goes again here,
           // over another network if one is doing better.
@@ -479,6 +596,19 @@ export class StreamTransfer implements Transfer {
           if (error instanceof HlsError) throw error
           await delay((this.options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS) * 2 ** attempt, signal)
           continue
+        }
+        if (youtube && target) {
+          const status = response.message.statusCode ?? 0
+          // Refused: its addresses may have expired early, or been meant for another address.
+          // The network asks yt-dlp again (a few times at most, see YoutubeSession) and the
+          // request goes once more.
+          if (status === 403 && attempt < YOUTUBE_ATTEMPTS && !this.stopped(signal)) {
+            response.message.resume()
+            this.ended(request, false, signal)
+            youtube.refused(networkId, target.generation)
+            continue
+          }
+          if (status === 200 || status === 206) youtube.delivered(networkId)
         }
         const answer: HlsFetchResponse = {
           status: response.message.statusCode ?? 0,
@@ -551,7 +681,11 @@ export class StreamTransfer implements Transfer {
       connection = new StreamConnection(() => this.host.networks.find(networkId), {
         timeoutMs: this.options.timeoutMs,
         connectTimeoutMs: this.options.connectTimeoutMs,
-        proxy: () => this.host.getProxyForInterface?.(networkId)
+        proxy: () => this.host.getProxyForInterface?.(networkId),
+        // The family yt-dlp asked YouTube from over this network (see dialFor).
+        ...(this.runtime.state.protocol === 'youtube' && {
+          resolveHost: oneFamily(() => youtubeFamily(this.host.networks.find(networkId)))
+        })
       })
       this.connections.set(networkId, connection)
     }
@@ -559,12 +693,14 @@ export class StreamTransfer implements Transfer {
   }
 
   /** Sends one GET over `networkId`, following redirects. The browser's headers are worked out for
-   * every hop, so a cookie only goes where the browser itself would send it. */
+   * every hop, so a cookie only goes where the browser itself would send it; `own` headers (a
+   * YouTube format's) replace them. */
   private async send(
     networkId: string,
     url: string,
     range: HlsRange | undefined,
-    signal: AbortSignal
+    signal: AbortSignal,
+    own?: Record<string, string>
   ): Promise<{ message: IncomingMessage; url: string }> {
     const { browser } = this.runtime.requestPayload
     let current = url
@@ -577,7 +713,7 @@ export class StreamTransfer implements Transfer {
       }
       const headers: Record<string, string> = {
         'Accept-Encoding': 'identity',
-        ...requestHeaders(target, browser),
+        ...(own ?? requestHeaders(target, browser)),
         ...(range && { Range: `bytes=${range.start}-${range.end}` })
       }
       const { res } = await this.connection(networkId).request(target, headers, signal)

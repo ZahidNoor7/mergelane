@@ -321,7 +321,6 @@ export class MergelaneApp {
       if (entry.kind === 'http') return { ...entry, blocks: [], streams: [] }
       if (entry.kind === 'nzb') return { ...entry, blocks: [], streams: [] }
       if (entry.kind === 'stream') return { ...entry, blocks: [], streams: [] }
-      if (entry.kind === 'telegram') return { ...entry, blocks: [], readers: [] }
       return { ...entry, pieces: [], peers: [] }
     })
     // One that finished between the two calls is in both: history has its final state.
@@ -399,9 +398,7 @@ export class MergelaneApp {
     const connections = state
       ? (state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream'
           ? state.streams
-          : state.kind === 'telegram'
-            ? state.readers
-            : state.peers
+          : state.peers
         ).map((connection) => `${connection.interfaceId}:${connection.status}`)
       : undefined
     throw new Error(

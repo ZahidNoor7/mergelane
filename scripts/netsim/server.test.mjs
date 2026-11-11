@@ -2,8 +2,13 @@
 // main() normally binds 10.77.99.1, which exists only while netsim is up (root); these tests bind
 // 127.0.0.1 instead, and the CI netsim job runs it for real.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { createServer, request } from 'node:http'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { createCounters, fillBlock, handleControl, handleFile, main, parseRange } from './server.mjs'
 
 const MIB = 1024 * 1024
@@ -141,4 +146,60 @@ test('main starts one listener per link plus control, and rejects bad ids', asyn
     process.exitCode = 0
   }
   assert.match(errors[0], /^usage:/)
+})
+
+test('with an IPv6 address, each link also listens there and counts into the same link', async () => {
+  // netsim's own IPv6 address exists only while it is up; ::1 stands in for it here.
+  const started = await main(['6', '0', '::1'], '127.0.0.1')
+  try {
+    const [v4, v6, control] = started.servers
+    assert.equal(v4.address().port, 8086)
+    assert.deepEqual([v6.address().address, v6.address().port], ['::1', 8086])
+    const who = await new Promise((resolve, reject) => {
+      const req = request({ host: '::1', family: 6, port: 8086, path: '/whoami' }, (res) => {
+        const chunks = []
+        res.on('data', (c) => chunks.push(c))
+        res.on('end', () => resolve(JSON.parse(Buffer.concat(chunks).toString())))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    assert.deepEqual(who, { client: '::1', link: '6' })
+    await get(v4, '/whoami')
+    const stats = JSON.parse((await get(control, '/stats')).body.toString())
+    assert.equal(stats.links['6'].requests, 2)
+    assert.deepEqual(stats.links['6'].clients, ['::1', '127.0.0.1'])
+  } finally {
+    for (const server of started.servers) server.close()
+  }
+})
+
+test('main rejects an IPv6 argument that is not an address', async () => {
+  const { error } = console
+  console.error = () => {}
+  try {
+    assert.equal(await main(['1', '0', 'localhost'], '127.0.0.1'), null)
+  } finally {
+    console.error = error
+    process.exitCode = 0
+  }
+})
+
+// with-netsim.sh starts this file with node. Under a path with a space (the owner's checkout is in
+// "Personal Projects") the old guard never matched: node exited 0 at once, silently, and every netsim
+// suite reported "the test server did not start". A bad link id shows main() ran without binding.
+test('run as a script from a path with a space, or through a symlink, main runs', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'netsim server '))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const spaced = join(dir, 'Personal Projects')
+  mkdirSync(spaced)
+  const script = join(spaced, 'server.mjs')
+  copyFileSync(join(dirname(fileURLToPath(import.meta.url)), 'server.mjs'), script)
+  const link = join(dir, 'linked server.mjs')
+  symlinkSync(script, link)
+  for (const path of [script, link]) {
+    const run = spawnSync(process.execPath, [path, '9'], { encoding: 'utf8', timeout: 10_000 })
+    assert.equal(run.status, 2, `through ${path}: ${run.stderr}`)
+    assert.match(run.stderr, /^usage: node server\.mjs <link ids/m)
+  }
 })

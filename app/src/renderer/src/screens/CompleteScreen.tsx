@@ -164,20 +164,8 @@ export function CompleteScreen({
           { label: 'Networks', value: String(groups.length) },
           // The most it ran at once: streams that didn't make it faster were closed along the way.
           {
-            label: isTorrent
-              ? 'Peers'
-              : download.kind === 'telegram'
-                ? 'Readers'
-                : download.kind === 'nzb'
-                  ? 'Connections'
-                  : 'Streams',
-            value: String(
-              isTorrent
-                ? download.peakPeers
-                : download.kind === 'telegram'
-                  ? download.peakReaders
-                  : download.peakStreams
-            )
+            label: isTorrent ? 'Peers' : download.kind === 'nzb' ? 'Connections' : 'Streams',
+            value: String(isTorrent ? download.peakPeers : download.peakStreams)
           }
         ].map((stat, index) => (
           <div

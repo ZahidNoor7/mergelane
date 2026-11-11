@@ -4,7 +4,7 @@ Updated at the end of every working session.
 
 ## Phase 1: proof of concept and foundation
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 ### Done
 
@@ -78,9 +78,91 @@ Last updated: 2026-11-10
   - whether the FFmpeg build source is acceptable;
   - whether to attach GPL sources to releases.
 
+**M2.3 dashboard: done, PR #7** (branch `m2.3-dashboard`).
+
+**M2.4 system merge for daily use: done, pending CI** (branch `m2.4-merge-daily`).
+- **Helper:**
+  - an optional "Turn back on after a crash" setting, off by default (ADR-0024);
+  - links that come back are re-probed from scratch, and their scoped routes re-synced (ADR-0025);
+  - a log of the last 50 link changes (`events`);
+  - CLI commands `events` and `auto-resume on|off`.
+  - Go: vet, staticcheck and `go test -race` pass. New and changed code is 100% covered.
+- **App:**
+  - an out-of-date helper is detected (version, protocol, or a missing method) and an **Update** button
+    reinstalls it;
+  - merging that was on before an update is turned back on afterwards;
+  - the auto-resume switch;
+  - a "Recent network dropouts" list from the helper's event log.
+  - Coverage: `snapshot.ts` 100%, `client.ts` 99%. Full smoke suite: 379 passed, 1 skipped (existing).
+- **Not proven yet** (needs root in CI, which is paused, or the owner's Mac):
+  - a real `kill -9`, launchd restart and auto-resume;
+  - how macOS treats the re-synced routes on real interfaces;
+  - unplugging, sleep and wake;
+  - IPv6 capture in the simulator (still open from the M2.4 plan).
+
+**M2.2 YouTube: done, pending CI** (branch `m2.2-youtube`).
+- **YouTube, option A** (ADR-0026, ADR-0030):
+  - yt-dlp only, with no cookies or tokens; DRM formats dropped;
+  - each network asks for its own addresses through a pinned loopback proxy, then downloads its share;
+  - the extension's "Send this video to Mergelane".
+- **Deno 2.9.8** ships as yt-dlp's JavaScript runtime (ADR-0029).
+- **Our own FFmpeg** (ADR-0028): built from FFmpeg's signed 9.0.2 source, LGPL, stream copy only, 4.1 MB.
+- **yt-dlp's unpacked build** (ADR-0031): it starts in 0.25 s instead of about 24 s, after a one-time first start.
+- **Sources:** every release attaches the yt-dlp and FFmpeg source, plus our FFmpeg build script (ADR-0027).
+- **Tests:**
+  - full smoke suite: 428 passed, 1 skipped (existing);
+  - script tests: 128 passed;
+  - the live YouTube test passed locally (one public test video, temp folder);
+  - coverage: YouTube modules 99.4–100%, `fetch.mjs` 99.3%, `sources.mjs` 97.6%, `notes.mjs` 99.5%.
+- **Not proven yet** (needs CI or real hardware):
+  - two networks with different public IPs;
+  - the real `electron-builder` signing of the yt-dlp folder;
+  - the FFmpeg build on the CI runner.
+- **Open before the first public release:** the notices of the third-party code built into Deno (ADR-0029).
+
+**Finishing Phase 2 on the owner's Mac** (branch `m2.7-finish-phase2`, ADR-0032, ADR-0033):
+- `scripts/ci/local.sh`: all 6 non-root jobs pass.
+  - repo-checks: 226 tests;
+  - app checks;
+  - smoke: 428 passed, 1 skipped;
+  - package: build, fuse audit, local package test;
+  - daemon: 567 passed, 7 skipped that need root;
+  - extension: 16 passed.
+- `scripts/ci/local-root.sh`: run by the owner in Terminal. It adds the IPv6 and link-recovery acceptance cases.
+  - **First run, 2026-11-11 11:26: no network suite ran.** `go` passed and the netsim unit tests passed (11 + 93).
+    The netsim self-test, daemon and app suites all stopped at "the test server did not start".
+  - **Cause:** the checkout's path has a space ("Personal Projects"). `scripts/netsim/server.mjs` and
+    `scripts/ci/local-root-lib.mjs` compared `import.meta.url` (percent-encoded) with the raw path, so neither ran:
+    - the test server exited at once, silently;
+    - every check the library makes printed nothing and passed: VPN, address clashes, leftovers, routes, the
+      helper's restore, and the summary.
+    - CI paths have no space, so CI never showed it.
+  - **The Mac was fine afterwards** (checked read-only):
+    - the helper's plist and binary have the same SHA-256 as before, and merging is on again;
+    - no feth links, netsim addresses or routes, state folders or test processes are left.
+    - Not checkable without root: the pf anchor's rules and the dummynet pipes. The next run checks them.
+  - **Fixed:**
+    - both scripts use the repo's `pathToFileURL(realpathSync(argv[1]))` guard, with regression tests that run them
+      from a folder with a space and through a symlink;
+    - `with-netsim.sh` compares netsim's pf anchor by its rules, not its name: macOS 27.0.1 kept listing it after
+      `netsim.sh down`;
+    - the local leak step fails when the leftover route was never added. CI's step already did.
+- **The Deno notices** (ADR-0029) are generated and shipped.
+- **`local-release.mjs`:** a full dry run built the DMG, zip and sources; nothing was uploaded.
+- **Next:**
+  1. The owner runs the root suite again, with the fixes.
+  2. Merge PRs #1–#11 in order.
+  3. Add the `[0.1.0]` changelog section and build the release on `main`, as a draft.
+  4. The owner installs the DMG by hand.
+
 **Owner choices for Phase 2:**
-- CI stays paused (ADR-0020).
-- YouTube: review first, no YouTube code until the owner picks an approach.
+- CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11). Everything runs on the
+  owner's Mac instead (ADR-0032).
+- YouTube: option A with hard limits (ADR-0026); Deno shipped.
+- FFmpeg: our own LGPL build (ADR-0028); sources attached to every release (ADR-0027).
+- Probes and the quarantine test accepted (ADR-0008, ADR-0013); Telegram removed (ADR-0012, branch
+  `m2.6-remove-telegram`: 3,570 lines and four packages gone; smoke 428 passed, 1 skipped).
+- Chrome Web Store: later, once Phase 2's installer works.
 - Keep the `m1.4-pinning` branch.
 
 ### Phase 1 closed, pending the owner's approval
@@ -114,8 +196,7 @@ CI is **paused** at the owner's request (ADR-0020); runs start only by hand.
 
 ### Blockers and open questions
 
-- **Owner questions Q2–Q4** in `docs/PHASE-1.md` §4. Work proceeds on the recommended option (ADR-0008,
-  ADR-0012, ADR-0013).
+- **Owner questions Q2–Q4** in `docs/PHASE-1.md` §4: answered on 2026-11-11 (ADR-0008, ADR-0012, ADR-0013).
 - **Link recovery** after `ifconfig down` and `up` doesn't work in the harness yet (ADR-0015). It is not a
   Phase 1 criterion.
 - **The helper runs only after the app is approved** (ADR-0019). The admin-prompt install still needs

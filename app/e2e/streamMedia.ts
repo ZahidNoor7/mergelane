@@ -1,6 +1,7 @@
 // Real HLS and DASH streams for the stream download tests: tiny media made with FFmpeg's own lavfi
 // sources (testsrc, sine), cut into segments by FFmpeg's HLS and DASH muxers, and a static server
-// that logs which segments it was asked for, from which source address, and can hold them.
+// that logs which segments it was asked for, from which source address, and can hold them. Also
+// which FFmpeg each test uses: see APP_FFMPEG and FIXTURE_FFMPEG.
 
 import { execFile } from 'node:child_process'
 import { accessSync, constants, statSync } from 'node:fs'
@@ -22,24 +23,66 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-/** The FFmpeg the tests use: the override, the fetched copy, or a Homebrew install; null skips. */
-export const FFMPEG =
-  [
-    process.env.MERGELANE_FFMPEG_PATH,
-    join(__dirname, '..', 'resources', 'bin', 'ffmpeg'),
-    '/opt/homebrew/bin/ffmpeg',
-    '/usr/local/bin/ffmpeg'
-  ].find((path): path is string => !!path && isExecutableFile(path)) ?? null
+// Two FFmpegs (ADR-0028):
+// - the app's, the one under test: Mergelane's own minimal LGPL build, which only joins and
+//   rewraps. It can't encode, has no lavfi sources and no `null` output format, so it can neither
+//   make test media nor read media back the way inspect() does;
+// - a full FFmpeg for exactly that (test-only, never shipped): Homebrew's, or another one named by
+//   MERGELANE_E2E_FIXTURE_FFMPEG.
+// The app's never falls back to Homebrew's, so the tests that join media really join it with ours.
 
-export const NO_FFMPEG = 'needs FFmpeg (set MERGELANE_FFMPEG_PATH, or brew install ffmpeg)'
+/** The app's FFmpeg: MERGELANE_FFMPEG_PATH, else app/resources/bin/ffmpeg (`npm run
+ * fetch:media-tools` builds it there). Null when that isn't an executable file. */
+export const APP_FFMPEG_CANDIDATE =
+  process.env.MERGELANE_FFMPEG_PATH || join(__dirname, '..', 'resources', 'bin', 'ffmpeg')
+export const APP_FFMPEG: string | null = isExecutableFile(APP_FFMPEG_CANDIDATE)
+  ? APP_FFMPEG_CANDIDATE
+  : null
 
-function ffmpeg(): string {
-  if (FFMPEG === null) throw new Error(NO_FFMPEG)
-  return FFMPEG
+/** A full FFmpeg to make test media and read it back: MERGELANE_E2E_FIXTURE_FFMPEG when set, else
+ * Homebrew's. Null when there is none. */
+export const FIXTURE_FFMPEG: string | null =
+  (process.env.MERGELANE_E2E_FIXTURE_FFMPEG
+    ? [process.env.MERGELANE_E2E_FIXTURE_FFMPEG]
+    : ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg']
+  ).find(isExecutableFile) ?? null
+
+const NO_APP_FFMPEG = `needs Mergelane's FFmpeg, not found at ${APP_FFMPEG_CANDIDATE}: run "npm run fetch:media-tools" in app/, or set MERGELANE_FFMPEG_PATH`
+const NO_FIXTURE_FFMPEG =
+  'needs a full FFmpeg to make test media (test-only): brew install ffmpeg, or set MERGELANE_E2E_FIXTURE_FFMPEG'
+
+/** Why a test that needs these FFmpegs can't run, naming each one missing; '' when it can. Use as
+ * `test.skip(!!reason, reason)`. */
+export function missingFfmpeg(needs: { app?: boolean; fixture?: boolean }): string {
+  return [
+    needs.app && APP_FFMPEG === null ? NO_APP_FFMPEG : '',
+    needs.fixture && FIXTURE_FFMPEG === null ? NO_FIXTURE_FFMPEG : ''
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+/** For tests that make media and have the app's FFmpeg join it. */
+export const NEEDS_FFMPEG = missingFfmpeg({ app: true, fixture: true })
+/** For tests that only make media (or read it back). */
+export const NEEDS_FIXTURE_FFMPEG = missingFfmpeg({ fixture: true })
+
+/** The full FFmpeg, or an error saying how to get one. */
+export function fixtureFfmpeg(): string {
+  if (FIXTURE_FFMPEG === null) throw new Error(NO_FIXTURE_FFMPEG)
+  return FIXTURE_FFMPEG
+}
+
+/** The app's FFmpeg, or an error saying how to get it. */
+export function appFfmpeg(): string {
+  if (APP_FFMPEG === null) throw new Error(NO_APP_FFMPEG)
+  return APP_FFMPEG
 }
 
 async function ff(args: string[], cwd: string): Promise<void> {
-  await run(ffmpeg(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args], { cwd })
+  await run(fixtureFfmpeg(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args], {
+    cwd
+  })
 }
 
 /** Seconds of media, in one-second segments: 8 per track. */
@@ -318,10 +361,11 @@ export interface Inspection {
   size: string | null
 }
 
-/** Reads a file back with FFmpeg: every stream must copy through cleanly, and the input dump says
- * what streams there are. Works with any FFmpeg, ffprobe or not. */
+/** Reads a file back with the full FFmpeg: every stream must copy through cleanly, and the input
+ * dump says what streams there are. Needs the `null` output format, which the app's FFmpeg doesn't
+ * have. */
 export async function inspect(file: string): Promise<Inspection> {
-  const { stderr } = await run(ffmpeg(), [
+  const { stderr } = await run(fixtureFfmpeg(), [
     '-nostdin',
     '-hide_banner',
     '-i',

@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { Activity, ChevronRight, Plus, Search, Send, X } from 'lucide-react'
+import { Activity, ChevronRight, Plus, Search, X } from 'lucide-react'
 import { cn } from 'cn'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DownloadContextMenu } from '../components/DownloadContextMenu'
@@ -100,7 +100,6 @@ export function DownloadsScreen(): React.JSX.Element {
   const history = useAppStore((store) => store.history)
   const setView = useAppStore((store) => store.setView)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
-  const openTelegram = useAppStore((store) => store.openTelegram)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -305,23 +304,6 @@ export function DownloadsScreen(): React.JSX.Element {
               setLimitsOpen(true)
             }}
           />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => openTelegram()}
-                  aria-label="Telegram"
-                  className="px-2.5"
-                >
-                  <Send className="size-3.5" />
-                  <span className="hidden lg:inline">Telegram</span>
-                </Button>
-              }
-            />
-            <TooltipContent>Telegram Saved Messages</TooltipContent>
-          </Tooltip>
           <Button type="button" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             New download
@@ -492,7 +474,6 @@ function EmptyState(): React.JSX.Element {
   )
   const loadInterfaces = useAppStore((store) => store.loadInterfaces)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
-  const openTelegram = useAppStore((store) => store.openTelegram)
 
   return (
     <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
@@ -524,10 +505,6 @@ function EmptyState(): React.JSX.Element {
             Paste a link ({PASTE_SHORTCUT}) or drop a .torrent or .nzb anywhere in this window.
           </div>
           <div className="mt-1 flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => openTelegram()}>
-              <Send data-icon="inline-start" />
-              Telegram
-            </Button>
             <Button type="button" onClick={() => openNewDownload()}>
               <Plus data-icon="inline-start" />
               New download

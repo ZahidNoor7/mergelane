@@ -1,12 +1,15 @@
-// Layer B (Node only, no Electron): the FFmpeg module in src/main/media/mux. Real FFmpeg joins and
-// rewraps tiny media generated with its own lavfi sources (testsrc, sine); stand-in "ffmpeg"
-// shell scripts cover what a real run can't show on demand: the exact argv and environment, a
-// process that is still running when it's aborted, one that ignores SIGTERM, and crashes.
+// Layer B (Node only, no Electron): the FFmpeg module in src/main/media/mux. The app's own FFmpeg
+// (ADR-0028) joins and rewraps tiny media that a full, test-only FFmpeg generates with its lavfi
+// sources (testsrc, sine) and reads back (see streamMedia.ts); stand-in "ffmpeg" shell scripts
+// cover what a real run can't show on demand: the exact argv and environment, a process that is
+// still running when it's aborted, one that ignores SIGTERM, and crashes. The app's FFmpeg is also
+// checked to be the minimal LGPL build: no encoders, no network, no devices.
 
 import { expect, test } from '@playwright/test'
 import { execFile } from 'node:child_process'
-import { accessSync, constants, statSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -15,48 +18,28 @@ import {
   KILL_GRACE_MS,
   MuxError,
   TEMP_SUFFIX,
-  TOOL_PATH_ENV,
+  TOOL_PROGRAM,
   containerForCodecs,
   muxVideoAudio,
   remux,
   resolveToolPath,
   type MuxProgress
 } from '../src/main/media/mux'
+import { NEEDS_FFMPEG, appFfmpeg, fixtureFfmpeg, inspect, missingFfmpeg } from './streamMedia'
 
 const run = promisify(execFile)
-const appRoot = join(__dirname, '..')
-
-function isExecutableFile(path: string): boolean {
-  try {
-    accessSync(path, constants.X_OK)
-    return statSync(path).isFile()
-  } catch {
-    return false
-  }
-}
-
-/** The FFmpeg the media tests use: the override, the fetched copy, or a Homebrew install. */
-const FFMPEG =
-  [
-    process.env[TOOL_PATH_ENV.ffmpeg],
-    join(appRoot, 'resources', 'bin', 'ffmpeg'),
-    '/opt/homebrew/bin/ffmpeg',
-    '/usr/local/bin/ffmpeg'
-  ].find((path): path is string => !!path && isExecutableFile(path)) ?? null
-
-function ffmpeg(): string {
-  if (FFMPEG === null) throw new Error('No FFmpeg (the test should have been skipped)')
-  return FFMPEG
-}
-
 let rootPromise: Promise<string> | undefined
 /** One scratch folder per worker, removed after the file's tests. */
 function root(): Promise<string> {
   return (rootPromise ??= mkdtemp(join(tmpdir(), 'mergelane-mux-')))
 }
 
+// Fully parallel, a worker can be handed more of this file's tests after its afterAll: the folder
+// is made again on demand (as in streamTransfer.spec.ts).
 test.afterAll(async () => {
-  if (rootPromise) await rm(await rootPromise, { recursive: true, force: true })
+  const removed = rootPromise
+  rootPromise = undefined
+  if (removed) await rm(await removed, { recursive: true, force: true })
 })
 
 /** A fresh, empty folder for one test. */
@@ -124,8 +107,9 @@ interface Media {
   ts: string
 }
 
+/** Makes media with the full, test-only FFmpeg: the app's can't encode. */
 async function ff(args: string[]): Promise<void> {
-  await run(ffmpeg(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args])
+  await run(fixtureFfmpeg(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...args])
 }
 
 const VIDEO_SOURCE = ['-f', 'lavfi', '-i', 'testsrc=size=160x120:rate=15:duration=2']
@@ -162,38 +146,6 @@ function media(): Promise<Media> {
   return (mediaPromise ??= generate())
 }
 
-interface Inspection {
-  /** The demuxer FFmpeg picked, e.g. "mov,mp4,m4a,3gp,3g2,mj2" or "matroska,webm". */
-  format: string
-  video: string[]
-  audio: string[]
-}
-
-/** Reads a file back with FFmpeg itself: every stream must copy through cleanly (exit 0), and the
- * input dump says what streams there are. Works with any FFmpeg, ffprobe or not. */
-async function inspect(file: string): Promise<Inspection> {
-  const { stderr } = await run(ffmpeg(), [
-    '-nostdin',
-    '-hide_banner',
-    '-i',
-    `file:${file}`,
-    '-map',
-    '0',
-    '-c',
-    'copy',
-    '-f',
-    'null',
-    '-'
-  ])
-  const input = stderr.slice(0, stderr.indexOf('Output #0'))
-  const streams = [...input.matchAll(/Stream #0:\d+\S*: (Video|Audio): (\w+)/g)]
-  return {
-    format: /Input #0, (\S+), from/.exec(input)?.[1] ?? '',
-    video: streams.filter((match) => match[1] === 'Video').map((match) => match[2]),
-    audio: streams.filter((match) => match[1] === 'Audio').map((match) => match[2])
-  }
-}
-
 /** Top-level ISO BMFF box types, in file order. */
 async function topLevelBoxes(file: string): Promise<string[]> {
   const data = await readFile(file)
@@ -223,12 +175,17 @@ test.describe('FFmpeg mux module @smoke', () => {
       return { resources, appDir, bin }
     }
 
+    /** Writes a stand-in program at `path`, making its folder. */
+    async function program(path: string, mode = 0o755): Promise<void> {
+      await mkdir(join(path, '..'), { recursive: true })
+      await writeFile(path, '#!/bin/sh\n', { mode })
+    }
+
     test('a packaged app uses Contents/Resources and ignores the environment', async () => {
       const { resources, appDir, bin } = await layout()
-      for (const tool of ['ffmpeg', 'yt-dlp']) {
-        await writeFile(join(resources, tool), '#!/bin/sh\n', { mode: 0o755 })
-      }
-      await writeFile(join(bin, 'ffmpeg'), '#!/bin/sh\n', { mode: 0o755 })
+      await program(join(resources, 'ffmpeg'))
+      await program(join(resources, 'yt-dlp', 'yt-dlp_macos'))
+      await program(join(bin, 'ffmpeg'))
       const where = {
         isPackaged: true,
         resourcesPath: resources,
@@ -240,14 +197,14 @@ test.describe('FFmpeg mux module @smoke', () => {
         source: 'packaged'
       })
       expect(await resolveToolPath('yt-dlp', where)).toEqual({
-        path: join(resources, 'yt-dlp'),
+        path: join(resources, 'yt-dlp', 'yt-dlp_macos'),
         source: 'packaged'
       })
     })
 
     test('development uses app/resources/bin; an empty override is no override', async () => {
       const { resources, appDir, bin } = await layout()
-      await writeFile(join(bin, 'yt-dlp'), '#!/bin/sh\n', { mode: 0o755 })
+      await program(join(bin, 'yt-dlp', 'yt-dlp_macos'))
       expect(
         await resolveToolPath('yt-dlp', {
           isPackaged: false,
@@ -255,7 +212,34 @@ test.describe('FFmpeg mux module @smoke', () => {
           appRoot: appDir,
           env: { MERGELANE_YTDLP_PATH: '' }
         })
-      ).toEqual({ path: join(bin, 'yt-dlp'), source: 'development' })
+      ).toEqual({ path: join(bin, 'yt-dlp', 'yt-dlp_macos'), source: 'development' })
+    })
+
+    test('yt-dlp is its unpacked build: the program inside its folder, as fetch and packaging install it', async () => {
+      // tools.json says how fetch.mjs installs each tool, electron-builder.yml where it goes.
+      const manifest = JSON.parse(
+        await readFile(join(__dirname, '..', '..', 'scripts', 'media-tools', 'tools.json'), 'utf8')
+      ) as { tools: { name: string; install: string; executable?: string }[] }
+      const builder = await readFile(join(__dirname, '..', 'electron-builder.yml'), 'utf8')
+      for (const { name, install, executable } of manifest.tools) {
+        const tool = name as keyof typeof TOOL_PROGRAM
+        expect(TOOL_PROGRAM[tool], name).toBe(install === 'folder' ? `${name}/${executable}` : name)
+        expect(builder, name).toContain(`- from: resources/bin/${name}\n    to: ${name}\n`)
+      }
+      expect(TOOL_PROGRAM['yt-dlp']).toBe('yt-dlp/yt-dlp_macos')
+
+      // The single program an older fetch left in its place is not taken for it.
+      const { resources, appDir, bin } = await layout()
+      await program(join(bin, 'yt-dlp'))
+      const old = await resolveToolPath('yt-dlp', {
+        isPackaged: false,
+        resourcesPath: resources,
+        appRoot: appDir,
+        env: {}
+      })
+      expect(old.path === null && old.reason).toBe(
+        `yt-dlp was not found at ${join(bin, 'yt-dlp', 'yt-dlp_macos')}. Run "npm run fetch:media-tools" in app/ to download it.`
+      )
     })
 
     test('the environment overrides each tool in development', async () => {
@@ -321,7 +305,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       })
       expect(packaged).toMatchObject({ path: null, source: 'packaged' })
       expect(packaged.path === null && packaged.reason).toBe(
-        `yt-dlp was not found at ${join(resources, 'yt-dlp')}. Reinstall Mergelane to restore it.`
+        `yt-dlp was not found at ${join(resources, 'yt-dlp', 'yt-dlp_macos')}. Reinstall Mergelane to restore it.`
       )
 
       const override = await resolveToolPath('ffmpeg', {
@@ -356,10 +340,10 @@ test.describe('FFmpeg mux module @smoke', () => {
         `FFmpeg at ${join(bin, 'ffmpeg')} is not a file. Run "npm run fetch:media-tools" in app/ to download it.`
       )
 
-      await writeFile(join(bin, 'yt-dlp'), '#!/bin/sh\n', { mode: 0o644 })
+      await program(join(bin, 'yt-dlp', 'yt-dlp_macos'), 0o644)
       const plain = await resolveToolPath('yt-dlp', { ...base, env: {} })
       expect(plain.path === null && plain.reason).toBe(
-        `yt-dlp at ${join(bin, 'yt-dlp')} is not executable. Run "npm run fetch:media-tools" in app/ to download it.`
+        `yt-dlp at ${join(bin, 'yt-dlp', 'yt-dlp_macos')} is not executable. Run "npm run fetch:media-tools" in app/ to download it.`
       )
     })
   })
@@ -972,18 +956,136 @@ test.describe('FFmpeg mux module @smoke', () => {
     })
   })
 
+  test.describe('Mergelane’s own FFmpeg, the minimal LGPL build (ADR-0028)', () => {
+    const missing = missingFfmpeg({ app: true })
+    test.skip(!!missing, missing)
+
+    /** What `ffmpeg -hide_banner <option>` prints. */
+    async function show(option: string): Promise<string> {
+      return (await run(appFfmpeg(), ['-hide_banner', option])).stdout
+    }
+
+    /** The entries of an `-encoders` or `-devices` list: the lines after its dashed line. */
+    function entries(list: string): string[] {
+      const lines = list.split('\n')
+      return lines.slice(lines.findIndex((line) => /^ -+$/.test(line)) + 1).filter(Boolean)
+    }
+
+    /** The stderr of an FFmpeg run that must fail. */
+    async function refusal(args: string[]): Promise<string> {
+      const error = await failure(run(appFfmpeg(), ['-nostdin', '-hide_banner', ...args]))
+      return (error as { stderr: string }).stderr
+    }
+
+    test('is licensed LGPL 2.1 or later, with no encoders, devices or network', async () => {
+      const license = await show('-L')
+      expect(license).toContain('GNU Lesser General Public\nLicense')
+      expect(license).toContain('version 2.1 of the License, or (at your option) any later version')
+      const buildconf = await show('-buildconf')
+      expect(buildconf).not.toMatch(/--enable-(gpl|version3|nonfree)\b/)
+      for (const option of [
+        '--disable-everything',
+        '--disable-autodetect',
+        '--disable-network',
+        '--disable-avdevice'
+      ]) {
+        expect(buildconf).toContain(option)
+      }
+      expect(entries(await show('-encoders'))).toEqual([])
+      expect(entries(await show('-devices'))).toEqual([])
+      // file for the media, pipe for -progress on stdout: nothing that reaches a network.
+      expect(await show('-protocols')).toBe(
+        'Supported file protocols:\nInput:\n  file\n  pipe\nOutput:\n  file\n  pipe\n'
+      )
+    })
+
+    test('refuses network addresses without connecting anywhere', async () => {
+      const dir = await scratch()
+      let connections = 0
+      const server = createServer((_request, response) => response.end())
+      server.on('connection', () => connections++)
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      const { port } = server.address() as AddressInfo
+      try {
+        for (const url of [
+          `http://127.0.0.1:${port}/video.mp4`,
+          `https://127.0.0.1:${port}/video.mp4`,
+          `tcp://127.0.0.1:${port}`,
+          `rtmp://127.0.0.1:${port}/live`
+        ]) {
+          const stderr = await refusal([
+            '-i',
+            url,
+            '-c',
+            'copy',
+            '-f',
+            'mp4',
+            `file:${join(dir, 'o.mp4')}`
+          ])
+          expect(stderr, url).toContain('Protocol not found')
+        }
+      } finally {
+        server.close()
+      }
+      expect(connections).toBe(0)
+      expect(await readdir(dir)).toEqual([])
+    })
+
+    test('has no generated sources or capture devices to read from', async () => {
+      const dir = await scratch()
+      for (const [format, input] of [
+        ['lavfi', 'testsrc'],
+        ['avfoundation', '0:0']
+      ]) {
+        const stderr = await refusal([
+          '-f',
+          format,
+          '-i',
+          input,
+          '-t',
+          '1',
+          `file:${join(dir, 'o.mkv')}`
+        ])
+        expect(stderr).toContain(`Unknown input format: '${format}'`)
+      }
+      expect(await readdir(dir)).toEqual([])
+    })
+  })
+
   test.describe('with a real FFmpeg', () => {
-    test.skip(
-      FFMPEG === null,
-      'No FFmpeg found: set MERGELANE_FFMPEG_PATH, run "npm run fetch:media-tools" in app/, or install ffmpeg with Homebrew.'
-    )
+    test.skip(!!NEEDS_FFMPEG, NEEDS_FFMPEG)
+
+    test('the app’s FFmpeg refuses to re-encode: it can only copy streams', async () => {
+      const { h264, aac } = await media()
+      const dir = await scratch()
+      for (const [input, codec] of [
+        [h264, ['-c:v', 'libx264']],
+        [h264, ['-c:v', 'h264']],
+        [aac, ['-c:a', 'aac']]
+      ] as const) {
+        const error = await failure(
+          run(appFfmpeg(), [
+            ...['-nostdin', '-hide_banner', '-i', `file:${input}`, ...codec],
+            ...['-f', 'mp4', `file:${join(dir, 'o.mp4')}`]
+          ])
+        )
+        expect((error as { stderr: string }).stderr).toContain(`Unknown encoder '${codec[1]}'`)
+      }
+      expect(await readdir(dir)).toEqual([])
+    })
 
     test('joins H.264 and AAC into an MP4 with its index at the front', async () => {
       const { h264, aac } = await media()
       const dir = await scratch()
       const output = join(dir, 'joined.mp4')
       expect(
-        await muxVideoAudio({ ffmpeg: ffmpeg(), video: h264, audio: aac, output, container: 'mp4' })
+        await muxVideoAudio({
+          ffmpeg: appFfmpeg(),
+          video: h264,
+          audio: aac,
+          output,
+          container: 'mp4'
+        })
       ).toEqual({ output, container: 'mp4' })
 
       const found = await inspect(output)
@@ -1000,7 +1102,13 @@ test.describe('FFmpeg mux module @smoke', () => {
       const { vp9, opus } = await media()
       const dir = await scratch()
       const output = join(dir, 'joined.mkv')
-      await muxVideoAudio({ ffmpeg: ffmpeg(), video: vp9, audio: opus, output, container: 'mkv' })
+      await muxVideoAudio({
+        ffmpeg: appFfmpeg(),
+        video: vp9,
+        audio: opus,
+        output,
+        container: 'mkv'
+      })
 
       expect((await readFile(output)).subarray(0, 4)).toEqual(EBML_MAGIC)
       const found = await inspect(output)
@@ -1015,7 +1123,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       const dir = await scratch()
 
       const mp4 = await muxVideoAudio({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         video: h264,
         audio: aac,
         output: join(dir, 'first.mkv'),
@@ -1027,7 +1135,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       expect(await topLevelBoxes(mp4.output)).toContain('moov')
 
       const mkv = await muxVideoAudio({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         video: vp8,
         audio: opus,
         output: join(dir, 'second'),
@@ -1038,7 +1146,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       expect(await inspect(mkv.output)).toMatchObject({ video: ['vp8'], audio: ['opus'] })
 
       const unknown = await muxVideoAudio({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         video: h264,
         audio: aac,
         output: join(dir, 'third.mp4'),
@@ -1056,11 +1164,16 @@ test.describe('FFmpeg mux module @smoke', () => {
       const { muxed, h264 } = await media()
       const dir = await scratch()
       const withAudio = join(dir, 'with.mp4')
-      await muxVideoAudio({ ffmpeg: ffmpeg(), video: muxed, output: withAudio, container: 'mp4' })
+      await muxVideoAudio({
+        ffmpeg: appFfmpeg(),
+        video: muxed,
+        output: withAudio,
+        container: 'mp4'
+      })
       expect(await inspect(withAudio)).toMatchObject({ video: ['h264'], audio: ['aac'] })
 
       const silent = join(dir, 'silent.mkv')
-      await muxVideoAudio({ ffmpeg: ffmpeg(), video: h264, output: silent, container: 'mkv' })
+      await muxVideoAudio({ ffmpeg: appFfmpeg(), video: h264, output: silent, container: 'mkv' })
       expect(await inspect(silent)).toMatchObject({ video: ['h264'], audio: [] })
     })
 
@@ -1069,7 +1182,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       const dir = await scratch()
       const reports: MuxProgress[] = []
       await muxVideoAudio({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         video: h264,
         audio: aac,
         output: join(dir, 'p.mp4'),
@@ -1085,7 +1198,7 @@ test.describe('FFmpeg mux module @smoke', () => {
 
       const unknownLength: MuxProgress[] = []
       await muxVideoAudio({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         video: h264,
         audio: aac,
         output: join(dir, 'q.mp4'),
@@ -1099,7 +1212,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       const { ts, aac } = await media()
       const dir = await scratch()
       const fromTs = await remux({
-        ffmpeg: ffmpeg(),
+        ffmpeg: appFfmpeg(),
         input: ts,
         output: join(dir, 'stream.ts'),
         container: 'auto',
@@ -1113,7 +1226,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       })
 
       const audioOnly = join(dir, 'audio.mka')
-      await remux({ ffmpeg: ffmpeg(), input: aac, output: audioOnly, container: 'mkv' })
+      await remux({ ffmpeg: appFfmpeg(), input: aac, output: audioOnly, container: 'mkv' })
       expect(await inspect(audioOnly)).toMatchObject({ video: [], audio: ['aac'] })
       expect((await readdir(dir)).sort()).toEqual(['audio.mka', 'stream.mp4'])
     })
@@ -1125,7 +1238,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       await writeFile(corrupt, Buffer.alloc(64 * 1024, 0x5a))
       const error = await failure(
         muxVideoAudio({
-          ffmpeg: ffmpeg(),
+          ffmpeg: appFfmpeg(),
           video: corrupt,
           audio: aac,
           output: join(dir, 'out.mp4'),
@@ -1149,7 +1262,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       const dir = await scratch()
       const error = await failure(
         muxVideoAudio({
-          ffmpeg: ffmpeg(),
+          ffmpeg: appFfmpeg(),
           video: vp8,
           audio: opus,
           output: join(dir, 'out.mp4'),
@@ -1169,11 +1282,29 @@ test.describe('FFmpeg mux module @smoke', () => {
         playlist,
         `#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nfile:${h264}\n#EXT-X-ENDLIST\n`
       )
+      // The app's FFmpeg has no HLS demuxer at all: it can't even read the playlist.
       const error = await failure(
-        remux({ ffmpeg: ffmpeg(), input: playlist, output: join(dir, 'out.mp4'), container: 'mp4' })
+        remux({
+          ffmpeg: appFfmpeg(),
+          input: playlist,
+          output: join(dir, 'out.mp4'),
+          container: 'mp4'
+        })
       )
       expect(error).toMatchObject({ code: 'ffmpeg-failed' })
-      expect((error as MuxError).detail).toContain('whitelist')
+      expect((error as MuxError).detail).toContain('Invalid data found when processing input')
+      expect(await readdir(dir)).toEqual(['video.m3u8'])
+      // A full FFmpeg has one, and the module's demuxer whitelist refuses it there too.
+      const full = await failure(
+        remux({
+          ffmpeg: fixtureFfmpeg(),
+          input: playlist,
+          output: join(dir, 'out.mp4'),
+          container: 'mp4'
+        })
+      )
+      expect(full).toMatchObject({ code: 'ffmpeg-failed' })
+      expect((full as MuxError).detail).toContain('whitelist')
       expect(await readdir(dir)).toEqual(['video.m3u8'])
     })
 
@@ -1191,7 +1322,7 @@ test.describe('FFmpeg mux module @smoke', () => {
       await writeFile(audio, await readFile(aac))
       const output = join(dir, 'out; rm -rf $HOME.mp4')
 
-      await muxVideoAudio({ ffmpeg: ffmpeg(), video, audio, output, container: 'mp4' })
+      await muxVideoAudio({ ffmpeg: appFfmpeg(), video, audio, output, container: 'mp4' })
       expect(await inspect(output)).toMatchObject({ video: ['h264'], audio: ['aac'] })
       for (const folder of [base, dir, process.cwd()]) {
         expect((await readdir(folder)).filter((name) => name.startsWith('PWNED'))).toEqual([])

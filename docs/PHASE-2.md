@@ -1,7 +1,8 @@
 # Phase 2: MVP (proposal)
 
 Status: **approved and started 2026-11-10.**
-- **Done:** M2.1 (PR #5).
+- **Done:** M2.1 (PR #5), M2.2 (PR #6), M2.3 (PR #7), M2.4 (PR #8; IPv6 capture in the simulator still open), and
+  M2.2's YouTube part (branch `m2.2-youtube`).
 - **Owner choices:**
   - native messaging;
   - YouTube reviewed before any code;
@@ -75,7 +76,17 @@ paused today (ADR-0020), so Phase 2 cannot finish until the owner turns it back 
    simulated network, including a link that comes back.
 5. Every Phase 1 criterion still passes. The full CI suite is green.
 
-## Questions for the owner before starting
+## Owner answers (2026-11-11)
+
+1. CI stays paused, with no manual runs for now (ADR-0020). Phase 2's exit still needs it.
+2. Native messaging (ADR-0021).
+3. YouTube: option A, yt-dlp only with hard limits (ADR-0026); Deno ships as a third program.
+4. Telegram: remove it, after the YouTube work. Done on branch `m2.6-remove-telegram`.
+5. Probes: keep the public targets (ADR-0008).
+6. FFmpeg: our own minimal LGPL build (ADR-0028). Every release attaches the bundled programs' source (ADR-0027).
+7. Chrome Web Store: later, once Phase 2's installer works. Until then the extension is loaded by hand.
+
+## Questions for the owner before starting (as asked)
 
 1. When should CI come back on? Phase 2's exit needs it.
 2. Browser capture: native messaging (CLAUDE.md's architecture) or Plexo's HTTP bridge?

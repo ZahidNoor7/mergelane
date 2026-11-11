@@ -102,6 +102,31 @@ func TestParseRunFlagsRejectsBadValues(t *testing.T) {
 	}
 }
 
+func TestSplitProbeTargetsByFamily(t *testing.T) {
+	cases := []struct {
+		in     []string
+		v4, v6 []string
+	}{
+		{nil, nil, nil},
+		{[]string{"198.51.100.10:80", "1.1.1.1:443"}, []string{"198.51.100.10:80", "1.1.1.1:443"}, nil},
+		{[]string{"[2001:db8::10]:80"}, nil, []string{"[2001:db8::10]:80"}},
+		{
+			[]string{"198.51.100.10:80", "[2001:db8:198:51:100::10]:80", "example.com:443", "[::ffff:1.2.3.4]:80"},
+			// a host name and an IPv4-mapped literal stay IPv4, as every target did before
+			[]string{"198.51.100.10:80", "example.com:443", "[::ffff:1.2.3.4]:80"},
+			[]string{"[2001:db8:198:51:100::10]:80"},
+		},
+		// malformed entries keep the old behaviour: an IPv4 target whose probe fails
+		{[]string{"2001:db8::10", "no-port"}, []string{"2001:db8::10", "no-port"}, nil},
+	}
+	for _, tc := range cases {
+		v4, v6 := splitProbeTargets(tc.in)
+		if !slices.Equal(v4, tc.v4) || !slices.Equal(v6, tc.v6) {
+			t.Errorf("splitProbeTargets(%q) = %q, %q; want %q, %q", tc.in, v4, v6, tc.v4, tc.v6)
+		}
+	}
+}
+
 // events records, in order, what the fakes were asked to do.
 type events struct {
 	mu   sync.Mutex
@@ -120,10 +145,12 @@ func (e *events) get() []string {
 	return slices.Clone(e.list)
 }
 
-// fakeEngine stands in for engine.Scheduler: every link it was built with is present and up.
+// fakeEngine stands in for engine.Scheduler: every link it was built with is present, and up
+// unless linkState says otherwise.
 type fakeEngine struct {
 	found      []nics.Nic
 	probesDone chan struct{} // closed when RunProbes returns
+	linkState  string        // SlotStats.State of every link; "" means "up"
 
 	mu      sync.Mutex
 	auto    bool
@@ -138,9 +165,24 @@ func newFakeEngine(found []nics.Nic) *fakeEngine {
 }
 
 func (e *fakeEngine) Snapshot() []engine.SlotStats {
+	state := e.linkState
+	if state == "" {
+		state = "up"
+	}
 	var out []engine.SlotStats
 	for _, n := range e.found {
-		out = append(out, engine.SlotStats{Name: n.Name, Index: n.Index, Present: true, State: "up", State6: "-"})
+		out = append(out, engine.SlotStats{Name: n.Name, Index: n.Index, Present: true, State: state, State6: "-"})
+	}
+	return out
+}
+
+// fakeEventAt is when fakeEngine's one link event happened.
+var fakeEventAt = time.Date(2026, 11, 10, 9, 30, 0, 0, time.UTC)
+
+func (e *fakeEngine) Events() []engine.LinkEvent {
+	var out []engine.LinkEvent
+	for _, n := range e.found {
+		out = append(out, engine.LinkEvent{At: fakeEventAt, Link: n.Name, From: engine.StateGone, To: "checking", Reason: engine.EventFound})
 	}
 	return out
 }
@@ -255,6 +297,7 @@ type harness struct {
 	routes       []rib.Route
 	routesErr    error
 	links        []nics.Nic
+	linkState    string // what the fake scheduler reports for every link; "" means "up"
 	discoverErr  error
 	conflicts    []string
 
@@ -317,6 +360,7 @@ func newHarness(t *testing.T) *harness {
 		newMerger: func(found []nics.Nic, v6 engine.V6Mode, mtu int) (runEngine, runTunnel) {
 			h.mergerArgs = []any{found, v6, mtu}
 			h.eng = newFakeEngine(found)
+			h.eng.linkState = h.linkState
 			return h.eng, h.tun
 		},
 		guard: func(context.Context, func(string) bool) ([]string, error) { return h.conflicts, nil },
@@ -536,7 +580,8 @@ func TestRunDaemonAuthorizesOnlyRootAndTheAllowedUser(t *testing.T) {
 		t.Fatalf("status from an unlisted user = %v, want NOT_AUTHORIZED", err)
 	}
 	// Every CLI command reports the refusal.
-	for _, args := range [][]string{{"status"}, {"on"}, {"off"}, {"links"}, {"stats"}, {"limit", "en0", "5"}} {
+	for _, args := range [][]string{{"status"}, {"on"}, {"off"}, {"links"}, {"stats"}, {"limit", "en0", "5"},
+		{"events"}, {"auto-resume", "on"}} {
 		code, _, errOut := run(args[0], append([]string{"-socket", h.cfg.socketPath}, args[1:]...)...)
 		if code != 1 || !strings.Contains(errOut, "NOT_AUTHORIZED") {
 			t.Errorf("%v = %d %q, want NOT_AUTHORIZED", args, code, errOut)

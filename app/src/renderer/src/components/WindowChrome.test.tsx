@@ -191,6 +191,11 @@ describe('Sidebar', () => {
     await userEvent.setup().click(slowMode)
     expect(useAppStore.getState().slowMode).toBe(true)
     expect(updateSettings).toHaveBeenCalledWith({ slowMode: true })
+    // Its tooltip says it holds uploads too (owner, 2026-11-11).
+    await userEvent.setup().hover(slowMode.closest('label')!)
+    expect(
+      await screen.findByText(/Limit downloads and uploads to .+ each/, {}, { timeout: 3000 })
+    ).toBeTruthy()
   })
 
   it('opens Settings from its foot, and marks it while it shows', async () => {

@@ -99,6 +99,10 @@ describe('Settings, General', () => {
     show()
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy()
     expect(screen.getByText(/Megabytes per second/)).toBeTruthy()
+    // Slow mode holds uploads too (owner, 2026-11-11).
+    expect(
+      screen.getByText(/downloads at 2 MB\/s in total, and its uploads at 2 MB\/s too/)
+    ).toBeTruthy()
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Mbps' }))
     expect(useAppStore.getState().speedUnit).toBe('bits')

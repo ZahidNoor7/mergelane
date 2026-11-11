@@ -17,7 +17,8 @@ import { readJson, updateJson } from '../jsonFile'
 //
 // Torrent uploads have limits of their own (ADR-0041): every block a peer is sent passes through
 // takeUpload(), on the network the peer is on, which says how long to hold it back. Data limits
-// count received bytes only, as before: "Uploads and other apps don't count."
+// count both directions, as carriers do (owner, 2026-11-11): what's received, in take(), and each
+// block once it's actually sent, in countUpload(). Other apps' traffic doesn't count.
 
 /** A rate as a bucket of tokens (bytes) that refills at `rate` per second. Taking more than it
  * holds leaves it in debt, and the debt is the wait. A second's worth is all it ever holds, so a
@@ -99,15 +100,14 @@ export class Limits {
     return join(app.getPath('userData'), 'network-usage.json')
   }
 
-  /** Takes up the limits in `settings`. Slow mode, when on, stands in for the total download
-   * limit; upload limits are their own. */
+  /** Takes up the limits in `settings`. Slow mode, when on, stands in for both totals: its speed
+   * for all downloads together, and the same speed again, in a bucket of its own, for all uploads
+   * (owner, 2026-11-11). */
   configure(settings: AppSettings): void {
     // A slow mode speed never changed isn't saved: it's the default the window shows.
-    const total = settings.slowMode
-      ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
-      : settings.speedLimit
-    this.total = adjust(this.total, total)
-    this.uploadTotal = adjust(this.uploadTotal, settings.uploadLimit)
+    const slow = settings.slowMode ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED) : null
+    this.total = adjust(this.total, slow ?? settings.speedLimit)
+    this.uploadTotal = adjust(this.uploadTotal, slow ?? settings.uploadLimit)
     const preferences = settings.networkPreferences ?? {}
     adjustEach(this.perNetwork, preferences, (preference) => preference?.speedLimit)
     adjustEach(this.uploadPerNetwork, preferences, (preference) => preference?.uploadLimit)
@@ -122,6 +122,23 @@ export class Limits {
   /** Counts `bytes` just received on `networkId`, and says how many ms to stop reading for. */
   take(networkId: string, bytes: number): number {
     const now = Date.now()
+    this.count(networkId, bytes, now)
+    return Math.max(
+      this.total?.take(bytes, now) ?? 0,
+      this.perNetwork.get(networkId)?.take(bytes, now) ?? 0
+    )
+  }
+
+  /** Counts `bytes` just sent to a torrent peer on `networkId` against its data limit. Sent, not
+   * asked for in takeUpload: a block held back and then refused (the peer choked meanwhile) never
+   * goes out. */
+  countUpload(networkId: string, bytes: number): void {
+    this.count(networkId, bytes, Date.now())
+  }
+
+  /** Adds `bytes`, received or sent, to the network's usage in every period, and tells
+   * onLimitReached when they take it to its limit. */
+  private count(networkId: string, bytes: number, now: number): void {
     this.rollPeriods(now)
     const period = this.periods.get(networkId) ?? 'month'
     const before = this.usage[period].bytes[networkId] ?? 0
@@ -131,18 +148,14 @@ export class Limits {
     this.saveTimer ??= setTimeout(() => void this.save(), USAGE_SAVE_MS)
     const limit = this.dataLimits.get(networkId)
     // Told once the caller is done with its bytes: what it does may stop the very connection
-    // they came in on.
+    // they came in on, or went out on.
     if (limit !== undefined && before < limit && before + bytes >= limit) {
       setImmediate(this.onLimitReached)
     }
-    return Math.max(
-      this.total?.take(bytes, now) ?? 0,
-      this.perNetwork.get(networkId)?.take(bytes, now) ?? 0
-    )
   }
 
-  /** Counts `bytes` about to be sent to a torrent peer on `networkId`, and says how many ms to
-   * hold them back for. Not counted against data limits. */
+  /** Asks to send `bytes` to a torrent peer on `networkId`, and says how many ms to hold them
+   * back for. They count against its data limit once sent (countUpload). */
   takeUpload(networkId: string, bytes: number): number {
     const now = Date.now()
     return Math.max(

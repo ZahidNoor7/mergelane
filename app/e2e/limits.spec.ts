@@ -1,13 +1,15 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { dataPeriodKey, nextDataReset } from '../src/shared/dataLimits'
-import { BLOCK, expect, test } from './fixtures'
+import type { Wire } from 'webtorrent'
+import { BLOCK, expect, LAN_ADDRESS, test } from './fixtures'
 import { seededBytes, sha256 } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 // Speed & data limits (main/network/limits.ts): every byte received goes through them, whether
-// an HTTP response's or a torrent peer's. The checks fixture verifies each finished download's
-// bytes, which is what matters most here: holding a connection back must never garble it.
+// an HTTP response's or a torrent peer's, and every torrent block sent goes through the upload
+// limits and counts toward its network's data limit. The checks fixture verifies each finished
+// download's bytes, which is what matters most here: holding a connection back must never garble it.
 
 const KB = 1024
 
@@ -130,6 +132,130 @@ test.describe('speed and data limits', () => {
       }
     })
   }
+
+  // Slow mode holds uploads too (owner, 2026-11-11): its speed for all downloads, and the same
+  // again, a bucket of its own, for all uploads. Once Mergelane has half the torrent the seeder
+  // leaves and another client joins: Mergelane then receives nothing but that client's requests,
+  // so the download limits, which hold back what's read, can't slow uploads in passing, and the
+  // other client wants all Mergelane has. The control sets the total speed limit to the same
+  // speed instead: it holds downloads only, so uploads run past the bound. The download can't
+  // finish without a seeder, so it's cancelled (and the checks fixture sees nothing left behind).
+  const SLOW_CASES = [
+    {
+      scope: 'speed-limit',
+      title: 'a total speed limit alone leaves torrent uploads to run past it',
+      settings: { speedLimit: UPLOAD_LIMIT }
+    },
+    {
+      scope: 'slow-mode',
+      title: 'slow mode holds torrent uploads to its speed too',
+      settings: { slowMode: true, slowModeSpeed: UPLOAD_LIMIT }
+    }
+  ] as const
+  for (const [index, { scope, title, settings }] of SLOW_CASES.entries()) {
+    test(title, async ({ mergelane }) => {
+      const swarm = await new Swarm().start()
+      try {
+        const data = seededBytes(2 * 1024 * KB, 40 + index)
+        const seeder = await swarm.seed([named(data, `slow-${scope}.bin`)], {
+          pieceLength: 64 * KB,
+          uploadLimit: 160 * KB
+        })
+        const id = await mergelane.start(await torrentFileOnDisk(seeder), sha256(data), {
+          networks: ['a']
+        })
+        await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
+        await mergelane.api.updateSettings(settings)
+        await new Promise<void>((resolve) => seeder.destroy({}, () => resolve()))
+        const started = Date.now()
+        await swarm.leech(seeder)
+        await new Promise((resolve) => setTimeout(resolve, 6000))
+        const sent = (await mergelane.currentTorrent())!.bytesUploaded
+        const seconds = (Date.now() - started) / 1000
+        // As the upload limit tests bound it: the speed for the time, a second's worth a bucket may
+        // hold, and one 16 KB block.
+        const allowed = UPLOAD_LIMIT * (seconds + 1) + 16 * KB
+        if (scope === 'speed-limit') {
+          expect(sent).toBeGreaterThan(allowed)
+        } else {
+          expect(sent, 'it did upload').toBeGreaterThan(0)
+          expect(sent).toBeLessThanOrEqual(allowed)
+        }
+        await mergelane.api.cancelDownload(id)
+        await mergelane.waitForTorrentStatus('cancelled')
+      } finally {
+        await swarm.stop()
+      }
+    })
+  }
+})
+
+// Uploads count toward data limits (owner, 2026-11-11): carriers count both directions. Downloads
+// go over a and uploads over b, so b carries nothing but uploads (and a few protocol messages it
+// receives, far under the limit): what takes it to its limit is uploads alone. Then it stops: its
+// peers are dropped, and nothing more goes out over it.
+test.describe('data limits and uploads', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the second network')
+
+  test('a network’s data limit is reached by uploads alone, and then it stops uploading', async ({
+    mergelane
+  }) => {
+    const LIMIT = 256 * KB
+    const swarm = await new Swarm().start()
+    try {
+      const data = seededBytes(4 * 1024 * KB, 45)
+      const torrent = await swarm.seed([named(data, 'upload-limit.bin')], {
+        pieceLength: 64 * KB,
+        uploadLimit: 400 * KB
+      })
+      // Another client, counting what it receives from Mergelane over b (from the LAN address,
+      // where nothing else in the swarm is). It announces first, so Mergelane dials it, over a and
+      // its twin over b; it wants nothing until Mergelane has half the torrent to give it.
+      const other = await swarm.leech(torrent, { deselect: true })
+      await new Promise((resolve) => other.once('trackerAnnounce', resolve))
+      let overB = 0
+      other.on('wire', (wire: Wire, address: string) => {
+        if (!address.replace(/^::ffff:/, '').startsWith(`${LAN_ADDRESS}:`)) return
+        wire.on('download', (bytes: number) => (overB += bytes))
+      })
+      await mergelane.api.updateSettings({
+        routing: { down: 'a', up: 'b', fallback: true },
+        networkPreferences: { b: { dataLimit: LIMIT } }
+      })
+
+      await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), {
+        networks: ['a', 'b']
+      })
+      await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
+      other.files.forEach((file) => file.select())
+
+      await expect
+        .poll(async () => (await mergelane.api.networkUsage()).b ?? 0, { timeout: 30_000 })
+        .toBeGreaterThanOrEqual(LIMIT)
+      // Blocks already on their way still land; nothing more goes out over b after that.
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const stoppedAt = overB
+      const stopped = (await mergelane.currentTorrent())!.networks.find(
+        (network) => network.id === 'b'
+      )!
+
+      const done = await mergelane.waitForTorrentStatus('completed', 60_000)
+      const b = done.networks.find((network) => network.id === 'b')!
+      expect(b.bytesDownloaded, 'b downloads nothing').toBe(0)
+      expect(stoppedAt, 'the other client received over b').toBeGreaterThan(0)
+      expect(overB, 'nothing more received over b').toBe(stoppedAt)
+      expect(b.bytesUploaded).toBe(stopped.bytesUploaded)
+      // Stopped at the limit: past it by no more than what was in flight when it was reached.
+      expect(b.bytesUploaded).toBeGreaterThanOrEqual(LIMIT - 16 * KB)
+      expect(b.bytesUploaded).toBeLessThanOrEqual(LIMIT + 8 * 16 * KB)
+      // What b used is its uploads, bar the protocol messages it received.
+      const used = (await mergelane.api.networkUsage()).b ?? 0
+      expect(used).toBeGreaterThanOrEqual(b.bytesUploaded)
+      expect(used - b.bytesUploaded).toBeLessThan(LIMIT / 4)
+    } finally {
+      await swarm.stop()
+    }
+  })
 })
 
 test('usage survives period switches and restart, and expired calendar periods reset', async ({

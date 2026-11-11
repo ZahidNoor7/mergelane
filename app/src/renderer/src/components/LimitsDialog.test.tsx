@@ -144,6 +144,19 @@ describe('All downloads', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('slow mode holds uploads too, and stands in for the upload limit in the list', async () => {
+    const user = userEvent.setup()
+    useAppStore.setState({ uploadLimit: 3 * MB })
+    show()
+    expect(
+      screen.getByText(/downloads and uploads are each held to this speed in total/)
+    ).toBeTruthy()
+    expect(nav(/All downloads/).textContent).toContain('Upload limit 3 MB/s')
+    await user.click(screen.getByRole('switch'))
+    expect(nav(/All downloads/).textContent).toContain('Slow mode on')
+    expect(nav(/All downloads/).textContent).not.toContain('Upload limit')
+  })
+
   it('no limit keeps the number for when a limit is chosen again', async () => {
     const user = userEvent.setup()
     useAppStore.setState({ uploadLimit: 5 * MB, speedLimit: 8 * MB })
@@ -258,6 +271,11 @@ describe('A network', () => {
     useAppStore.setState({ networkPreferences: { en7: { dataLimit: 2 * GB } } })
     show('en7')
     await waitFor(() => expect(nav(/iPhone/).textContent).toContain('Data limit reached'))
+    // Uploads count now (owner, 2026-11-11): the hint says so.
+    expect(
+      screen.getByText(/Stops downloads and uploads on iPhone at the limit\. Counts what Mergelane/)
+    ).toBeTruthy()
+    expect(screen.queryByText(/Uploads and other apps don’t count/)).toBeNull()
     expect(screen.getByText(/3\.0 GB of 2\.0 GB this month/)).toBeTruthy()
     expect(screen.getByText(/Resets on/)).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Week' }))
@@ -270,6 +288,7 @@ describe('A network', () => {
     await user.click(screen.getByRole('button', { name: 'Reset data usage' }))
     const confirm = screen.getByRole('alertdialog')
     expect(confirm.textContent).toContain('Reset data usage for iPhone?')
+    expect(confirm.textContent).toContain('Downloads and uploads can use this network again')
     await user.click(within(confirm).getByRole('button', { name: 'Reset data usage' }))
     expect((await within(confirm).findByRole('alert')).textContent).toContain('Can’t write')
     await user.click(within(confirm).getByRole('button', { name: 'Reset data usage' }))

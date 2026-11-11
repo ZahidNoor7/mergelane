@@ -48,7 +48,7 @@ export interface IpcContract {
   listHistory: { args: []; result: FinishedDownload[] }
   /** Forgets every finished download; their files stay. */
   clearHistory: { args: []; result: void }
-  /** Bytes each network has received in its selected calendar period, by id (see NetworkPreference.dataLimit). */
+  /** Bytes each network has received and sent in its selected calendar period, by id (see NetworkPreference.dataLimit). */
   networkUsage: { args: []; result: Record<string, number> }
   /** System-wide merging through mergelane-daemon (main/daemon/daemon.ts). */
   systemMerge: { args: []; result: SystemMergeSnapshot }

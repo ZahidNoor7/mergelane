@@ -94,7 +94,9 @@ function SlowModeSwitch({ withLabel }: { withLabel: boolean }): React.JSX.Elemen
           </label>
         }
       />
-      <TooltipContent>Limit downloads to {formatSpeedLimit(slowModeSpeed)}</TooltipContent>
+      <TooltipContent>
+        Limit downloads and uploads to {formatSpeedLimit(slowModeSpeed)} each
+      </TooltipContent>
     </Tooltip>
   )
 }

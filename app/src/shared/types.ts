@@ -507,7 +507,7 @@ export interface NetworkPreference {
   speedLimit?: number
   /** Bytes a second all torrent uploads together may send over it (ADR-0041). */
   uploadLimit?: number
-  /** Bytes Mergelane may receive in the chosen calendar period. */
+  /** Bytes Mergelane may receive and send (torrent uploads) in the chosen calendar period. */
   dataLimit?: number
   /** Defaults to month for existing settings. Weeks start Monday in local time. */
   dataLimitPeriod?: DataLimitPeriod
@@ -659,9 +659,10 @@ export interface AppSettings {
   /** Bytes a second every download together may take, over every network; unset: no limit. */
   speedLimit?: number
   /** Bytes a second every torrent upload together may send, over every network; unset: no limit.
-   * Slow mode doesn't touch it (ADR-0041). */
+   * Slow mode stands in for it while on (ADR-0041, 2026-11-11). */
   uploadLimit?: number
-  /** While on, slowModeSpeed stands in for speedLimit: a one-click lower limit for calls. */
+  /** While on, slowModeSpeed stands in for speedLimit and, as a separate bucket, for uploadLimit:
+   * a one-click lower limit for calls. */
   slowMode?: boolean
   slowModeSpeed?: number
   /** How speeds are shown everywhere; sizes stay in bytes either way. */

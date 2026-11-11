@@ -259,17 +259,20 @@ export type DownloadUnitState =
  */
 export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit' | 'routed'
 
-/** Networks › Which network carries what (the final design's RoutingPanel, ADR-0040). */
+/** Networks › Which network carries what (the final design's RoutingPanel, ADR-0040 and ADR-0041). */
 export interface DownloadRouting {
   /** 'all': every download uses the networks it has on; otherwise a NetworkInterfaceInfo id that
    * every download goes over, the running ones included. */
   down: string
-  /** When the chosen network is gone: true, downloads use their own networks meanwhile; false, they
-   * wait for it. */
+  /** 'all': a torrent uploads over the networks it downloads over; otherwise a NetworkInterfaceInfo
+   * id that every torrent upload goes out over, whichever network downloads use (ADR-0041). */
+  up: string
+  /** When the chosen network is gone: true, transfers use their own networks meanwhile; false, they
+   * wait for it. One switch for both directions, as the design has it. */
   fallback: boolean
 }
 
-export const DEFAULT_ROUTING: DownloadRouting = { down: 'all', fallback: true }
+export const DEFAULT_ROUTING: DownloadRouting = { down: 'all', up: 'all', fallback: true }
 
 /** A network as one download sees it: whether the user has it on, and how it is doing. */
 interface DownloadNetworkBase {
@@ -502,6 +505,8 @@ export interface NetworkPreference {
   off?: boolean
   /** Bytes a second all downloads together may take over it. */
   speedLimit?: number
+  /** Bytes a second all torrent uploads together may send over it (ADR-0041). */
+  uploadLimit?: number
   /** Bytes Mergelane may receive in the chosen calendar period. */
   dataLimit?: number
   /** Defaults to month for existing settings. Weeks start Monday in local time. */
@@ -650,6 +655,9 @@ export interface AppSettings {
   downloadsAtOnce?: number
   /** Bytes a second every download together may take, over every network; unset: no limit. */
   speedLimit?: number
+  /** Bytes a second every torrent upload together may send, over every network; unset: no limit.
+   * Slow mode doesn't touch it (ADR-0041). */
+  uploadLimit?: number
   /** While on, slowModeSpeed stands in for speedLimit: a one-click lower limit for calls. */
   slowMode?: boolean
   slowModeSpeed?: number
@@ -684,6 +692,7 @@ export interface InitialState {
   networkPreferences: NetworkPreferences
   downloadsAtOnce: number
   speedLimit?: number
+  uploadLimit?: number
   slowMode: boolean
   slowModeSpeed: number
   speedUnit: SpeedUnit

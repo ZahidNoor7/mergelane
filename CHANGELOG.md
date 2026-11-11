@@ -29,6 +29,11 @@ All notable changes to Mergelane are recorded here. The format follows
 - Networks › Which network carries what: send every download over one network (Ethernet, say), the running ones
   included, or over all of them as before. Choose whether the other networks stand in when the chosen one drops,
   or downloads wait for it.
+- Networks › Which network carries what › Uploads use: send every torrent upload over one network (Wi-Fi, say,
+  to keep them off your iPhone's data plan), whichever network downloads use, or over the networks each torrent
+  downloads over, as before. Running torrents follow a change at once.
+- Speed & data limits: limit how fast torrents upload, for all networks together and for each network. Upload
+  limits are separate from download limits and slow mode, and uploads still don't count toward data limits.
 - Settings › Browser extensions shows when each browser's extension last reached Mergelane and its version, and
   says when to restart a browser to use a newer one. "What the extension does" sets the rules once for every
   browser: whether to send downloads, a minimum size, the file types, and whether to list a page's videos.
@@ -43,6 +48,11 @@ All notable changes to Mergelane are recorded here. The format follows
 - "Notify me when a download finishes" turns the finished-download notification off or on.
 - A notice in the sidebar, and a dot on Settings, when a new version is out. The app menu has "Check for
   Updates…".
+
+### Fixed
+
+- Speed & data limits › Reset data usage: when the reset fails, its window now stays open and says why, instead of
+  closing as if it had worked.
 
 ## [0.2.0] - 2026-11-11
 

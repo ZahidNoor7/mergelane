@@ -115,6 +115,14 @@ export interface TransferHost {
   getProxyForInterface?(networkId: string): ProxyConfig | undefined
 }
 
+/** A torrent's host also says where uploads go (ADR-0041). */
+export interface TorrentTransferHost extends TransferHost {
+  /** The networks routing sends every torrent upload over, or null when a torrent uploads over the
+   * networks it downloads over (see DownloadManager.uploadRoute). Read live: it changes as routing
+   * and networks do. */
+  uploadRoute(): ReadonlySet<string> | null
+}
+
 // Raw per-event deltas are too noisy to display (socket buffers flush in
 // irregular bursts a few ms apart). Averaging over a few seconds instead
 // gives a speed/ETA reading that tracks reality without jumping around.

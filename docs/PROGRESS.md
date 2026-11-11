@@ -416,6 +416,30 @@ Last updated: 2026-11-11
       and resumes on its return.
   - **Noticed:** the screenshot run read the owner's installed helper (0.1.0) and showed it as out of date
     against this 0.2.0 build. It was read only; nothing was clicked.
+- **M3.5b Routing uploads and upload limits** (branch `m3.5b-uploads`, ADR-0041).
+  - **Engine:** `routing.up` (`shared/routing.ts`: `routeFor`, `sanitizeRouting`, shared by both directions).
+    Pinned, a torrent uploads only to peers on that network; the others stay choked and are still downloaded from.
+    A pinned network downloads don't use carries uploads only (its peers and twins dialled, never asked for
+    pieces). webtorrent is told per peer in `torrent/wireGate.ts` (instance wraps of internals, no new patch).
+    `Limits.takeUpload`: total and per-network upload buckets, each block held until they allow it.
+  - **UI:** `RoutingPanel` gains "Uploads use" with its note when the chosen network is gone, and the design's
+    wording for both directions. Speed & data limits gains "Total upload speed" and each network's "Upload speed".
+    A routed network now says "Not used for downloads".
+  - **Fixed on the way:** Reset data usage's confirm closed as it was clicked (Base UI's Close ignores
+    `preventDefault`), so a failed reset never said why. It now uses `preventBaseUIHandler` and stays open.
+  - **Tests:**
+    - Vitest: `shared/routing` (5), `RoutingPanel` (6, 3 new), `LimitsDialog` (13, new; it had none). Lines:
+      `LimitsDialog` 97.4%, `RoutingPanel`, `routing.ts`, `networkStatus` 100%. Full run 261 passed.
+    - `e2e/torrent.spec.ts` "routing uploads" (2): downloads over a and uploads over b (b only uploads, a never
+      does); pinning uploads to a while running stops them on b and downloading over b goes on. Stable over 3
+      repeats.
+    - `e2e/limits.spec.ts` (3): a total and a per-network upload limit hold uploads to 32 KB/s; a no-limit control
+      shows the check has teeth (it ran at about five times the bound).
+  - **Limits, documented in ADR-0041:** a peer that dials in over another network isn't uploaded to while uploads
+    are pinned (webtorrent sends no listen port to twin it on); tracker announces aren't routed; data limits still
+    count received bytes only; slow mode stays download-only.
+  - **Pre-existing failure, not from this branch:** `scheduleQueue.spec` "schedule dialog saves, cancels edits…"
+    fails at its toolbar indicator on unchanged `main` too (run on 2026-11-11 around 23:00 local).
 - **M3.7 Diagnostics and history** (branch `m3.7-diagnostics`, ADR-0042).
   - **History:** network events and the day's fastest merged speed are logged by the main process and kept in
     `userData/network-activity.json` (a week, at most 50 events). A drop still open at quit and connected at

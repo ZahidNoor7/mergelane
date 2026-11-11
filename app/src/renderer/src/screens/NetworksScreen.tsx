@@ -29,8 +29,8 @@ import { formatDataUsage } from '../utils/format'
 // toolbar's networks menu. Speed and data limits are edited in their dialog, opened from here,
 // until the Settings screen (M3.1 pull request 5e) takes its general page.
 //
-// "Which network carries what" (RoutingPanel, ADR-0040) routes downloads; the design's uploads row
-// comes with M3.5b.
+// "Which network carries what" (RoutingPanel) routes downloads (ADR-0040) and torrent uploads
+// (ADR-0041); their speed limits, download and upload, are edited in Speed & data limits.
 
 /** What kind of connection a network is, said plainly (the owner's answer 3 in PHASE-3.md: the
  * connection type only, never the Wi-Fi network's name). */

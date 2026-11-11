@@ -76,6 +76,60 @@ test.describe('speed and data limits', () => {
       await swarm.stop()
     }
   })
+
+  // Upload limits (ADR-0041): every block a peer is sent waits its turn under them. Another client
+  // joins once Mergelane has half the torrent from a slow seeder, so it wants all Mergelane can
+  // send it. Without a limit, Mergelane sends more than the limit would allow: the check has teeth.
+  const UPLOAD_LIMIT = 32 * KB
+  const UPLOAD_CASES = [
+    {
+      scope: 'none',
+      title: 'with no upload limit, torrent uploads run past 32 KB/s',
+      settings: {}
+    },
+    {
+      scope: 'total',
+      title: 'a total upload limit holds torrent uploads to it',
+      settings: { uploadLimit: UPLOAD_LIMIT }
+    },
+    {
+      scope: 'network',
+      title: 'a network’s upload limit holds torrent uploads to it',
+      settings: { networkPreferences: { a: { uploadLimit: UPLOAD_LIMIT } } }
+    }
+  ] as const
+  for (const [index, { scope, title, settings }] of UPLOAD_CASES.entries()) {
+    test(title, async ({ mergelane }) => {
+      const swarm = await new Swarm().start()
+      try {
+        const data = seededBytes(2 * 1024 * KB, 32 + index)
+        const torrent = await swarm.seed([named(data, `uploads-${scope}.bin`)], {
+          pieceLength: 64 * KB,
+          uploadLimit: 160 * KB
+        })
+        await mergelane.api.updateSettings(settings)
+        await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a'] })
+        await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
+        // Nothing can be uploaded before there's someone to upload to.
+        const started = Date.now()
+        await swarm.leech(torrent)
+        const done = await mergelane.waitForTorrentStatus('completed', 60_000)
+        const seconds = (Date.now() - started) / 1000
+        // The limit for the time it ran, plus the second's worth a bucket may hold, plus one 16 KB
+        // block: a held block's timer is rounded to whole ms, so it may go out a moment early.
+        // (Measured: a limited run lands within a block of this; an unlimited one, five times it.)
+        const allowed = UPLOAD_LIMIT * (seconds + 1) + 16 * KB
+        if (scope === 'none') {
+          expect(done.bytesUploaded).toBeGreaterThan(allowed)
+        } else {
+          expect(done.bytesUploaded, 'it did upload').toBeGreaterThan(0)
+          expect(done.bytesUploaded).toBeLessThanOrEqual(allowed)
+        }
+      } finally {
+        await swarm.stop()
+      }
+    })
+  }
 })
 
 test('usage survives period switches and restart, and expired calendar periods reset', async ({

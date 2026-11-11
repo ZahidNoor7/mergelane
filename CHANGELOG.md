@@ -5,69 +5,69 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-11
+
+A new look for the whole app: seven themes, a sidebar, download details beside the list, a Networks screen and a
+Settings screen. Downloads, torrents, video and System merge work as in 0.1.0.
+
+### Added
+
+- Seven themes, each with a light and a dark version: Porcelain, Sandstone, Graphite, Sage, Dusk, Liquid Glass and
+  High contrast. Appearance can be Auto (follows the Mac), Light or Dark.
+- Liquid Glass draws the window in macOS's own glass material. Settings › Appearance offers a Clear or Tinted look
+  and Reduce transparency. Mergelane also follows Reduce Transparency and Increase Contrast from the Mac's
+  Accessibility settings.
+- A Settings screen (⌘, or the foot of the sidebar):
+  - General: speed units, slow mode and total speed.
+  - Appearance: Auto, Light or Dark, and the themes with previews.
+  - Downloads: where downloads go, how many run at once, the schedule, the news server, and a link to each
+    network's limits.
+- A Networks screen. It lists every network with:
+  - its connection type and what it's doing;
+  - its speed, its data limits and its last minute;
+  - a switch for whether new downloads use it.
+
+  System merge and recent network dropouts are there too.
+- Filters for the download list:
+  - by date added: today, yesterday, the last 7 or 30 days, or a custom range;
+  - by file type: documents, images, videos, audio, archives, disk images and applications.
+
+  Each choice shows how many downloads it would leave. Filters that are on show as chips you can remove.
+- "Mergelane on this Mac" on the Dashboard: how much CPU and memory Mergelane uses, as Activity Monitor counts it.
+  It shows the total and each part (the app, the System merge helper, and the video tools yt-dlp, FFmpeg and Deno),
+  with the last minute of CPU.
+- "Today" on the Dashboard: what Mergelane downloaded today, by network, with the fastest download and the network
+  dropouts.
+- A network's colour can be set back to the theme's colour.
+- The chunk map and the speed chart can be read with the keyboard: focus them and use the arrow keys.
+
 ### Changed
 
-- The new look begins (ADR-0034):
-  - new colours, from the Porcelain theme, the first of seven themes;
-  - new fonts, Archivo and Fragment Mono, bundled in the app.
-  - The other themes can be chosen once the Settings screen arrives.
-- A new app icon: the blue Mergelane mark on a charcoal tile.
-- Buttons, switches, fields, checkboxes, tags, menus and dialogs take the new look: capsule controls and a clearer
-  focus outline.
-- The chunk map, the download list's progress bars and the speed charts take the new look. The chunk map and the
-  speed chart can be read with the keyboard: focus them and use the arrow keys.
-- The Confluence replaces the old combine diagram and "TOTAL SPEED": each network is a lane as thick as its speed,
-  merging into one road beside the merged speed. Its markings drift only while bytes flow, and stop under Reduce
-  Motion. Its words are in sentence case ("Merged speed", "2.0× faster than Wi-Fi alone", "Last minute").
-- A sidebar replaces the title bar and the status bar. It holds the places (Dashboard and Downloads, with how many
-  downloads are in progress), every network with its speed or "Out", the merged speed, slow mode, free space,
-  updates and the schedule. In a window narrower than 760 points, a compact bar at the top takes its place.
-- The window opens at 1040 × 720 and can be made as narrow as 720 points.
-- The Dashboard button in the download list and the Dashboard's "Downloads" back button are gone: the sidebar or
-  the compact bar now moves between them.
-- The download list takes the new design:
-  - a title with what's running, and a search field;
-  - the Confluence of every network above the list;
-  - status tabs with counts (All, In progress, Finished, Needs attention), which replace the status menu;
-  - new rows with a file-type icon, tags for torrents, Usenet and video links, and the progress in plain words.
-  - Queued downloads are now listed as "Waiting".
-- A download's details now sit beside the list in a pane, as in the design, when the window is wide enough. In a
-  narrower window they take the list's place, with a "Downloads" button back. The pane replaces the three separate
-  download screens and keeps everything they showed: the speed on each network, the numbers, the last minute, each
-  network with its switch, streams and peers, the chunk map, a torrent's files and trackers, a Usenet download's
-  server and notes, and a failed download's reason and link.
-- Mergelane opens at 1280 × 800, the design's size, or smaller to fit the screen.
-- New download is now a sheet that slides down from the top of the window, as in the design. Its fields sit in
-  labelled rows (Link, Quality, Networks, Streams, Save to). A video's qualities are listed with their sizes, each
-  network shows its tile and a checkbox, and the link says where it comes from (Torrent, Usenet, HLS, DASH,
-  YouTube).
-- A Networks place in the sidebar replaces the networks menu. It lists every network with its connection type,
-  what it's doing, its speed and data limits, its last minute and its speed, with a switch for whether new
-  downloads use it. System merge and the recent network dropouts are on it too, and Speed & data limits opens
-  from it.
-- A network's colour can be set back to the theme's colour.
-- The Dashboard takes the new design: the Confluence and the last minute at the top, then Today (what Mergelane
-  downloaded today, by network, with the fastest download and the network dropouts) beside what's downloading.
-  Its sections have the new sentence-case headings.
-- The Dashboard shows "Mergelane on this Mac": how much CPU and memory Mergelane itself uses, in all and for the
-  app, the system-merge helper and the video tools (yt-dlp, FFmpeg, Deno), as Activity Monitor counts them, with
-  the last minute of CPU.
-- Liquid Glass: in that theme the window is drawn in macOS's own glass material, with the sidebar, the content
-  pane and the cards as layers of glass over it. Settings › Appearance offers a Clear or Tinted look and Reduce
-  transparency; Mergelane also follows Reduce Transparency and Increase Contrast from the Mac's Accessibility
-  settings.
-- A Settings screen (⌘, or the sidebar's foot) with General (speed units, slow mode, total speed), Appearance
-  (Auto, Light or Dark, and the seven themes with previews) and Downloads (where downloads go, how many run at
-  once, the schedule, the news server, and a way to each network's limits). The units and theme buttons leave the
-  sidebar.
-- Filters for the download list: by date added (today, yesterday, the last 7 or 30 days, or a custom range) and by
-  file type (documents, images, videos, audio, archives, disk images, applications). Each choice shows how many
-  downloads it would leave, and the filters that are on show as chips you can remove.
+- New fonts (Archivo and Fragment Mono, bundled in the app), a new app icon, and new buttons, switches, fields,
+  menus and dialogs with a clearer focus outline.
+- A sidebar replaces the title bar and the status bar. It holds:
+  - Dashboard, Downloads and Networks, with how many downloads are in progress;
+  - every network with its speed, or "Out";
+  - the merged speed, slow mode, free space, updates and the schedule.
+
+  In a window narrower than 760 points, a compact bar at the top takes its place.
+- The window opens at 1280 × 800, or smaller to fit the screen. It can be made as narrow as 720 points.
+- The download list:
+  - has a search field and status tabs with counts (All, In progress, Finished, Needs attention);
+  - shows a file-type icon on each row, tags for torrents, Usenet and video links, and the progress in plain words;
+  - lists queued downloads as "Waiting".
+- A download's details open beside the list when the window is wide enough. In a narrower window they take the
+  list's place, with a button back. They keep everything the old download screens showed.
+- New download is a sheet that slides down from the top of the window, with a row for each of Link, Quality,
+  Networks, Streams and Save to. A video's qualities are listed with their sizes, and the link says where it comes
+  from (Torrent, Usenet, HLS, DASH or YouTube).
+- The Confluence replaces the old combine diagram: each network is a lane as thick as its speed, merging into one
+  road beside the merged speed. Its markings move only while data flows, and stay still with Reduce Motion on.
 
 ### Fixed
 
-- Two networks of the same kind, or a network with no known kind, could get colours that look alike (for example,
-  two teals in the Porcelain theme). An extra network now skips colours close to the theme's network colours.
+- Two networks of the same kind, or a network of unknown kind, could get colours that look alike. An extra network
+  now skips colours close to the theme's network colours.
 - On a new install, Mergelane follows the Mac's light or dark appearance. A light or dark choice you made before
   stays.
 

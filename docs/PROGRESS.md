@@ -254,6 +254,12 @@ Last updated: 2026-11-11
 - **Flaky test seen once:** `writeWait.spec` ("a disk-held range is not fetched again…") failed once during a full
   smoke and extension run (`expect(ranges).toHaveLength(4)`), then passed 4 times alone. It relies on timing (a
   2-second hedge), so heavy load can upset it. Watch for it again.
+- **0.2.0 release, pull request** (branch `release-0.2.0`): version 0.2.0 and its `CHANGELOG.md` section, rewritten
+  for users from the M3.1 entries. `notes.mjs --check` passes.
+  - **Next, after the merge** (`docs/RELEASING.md`, "Releasing from this Mac"):
+    1. `node scripts/release/local-release.mjs --version 0.2.0` on `main`;
+    2. the same with `--upload`, which makes the **draft**;
+    3. the owner installs the DMG, then publishes the draft.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

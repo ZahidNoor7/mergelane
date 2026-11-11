@@ -352,7 +352,35 @@ Last updated: 2026-11-11
     - Smoke and extension: 477 passed, 1 skipped.
   - **Not provable in tests:** whether ad-hoc signing is enough for `SMAppService` and macOS notifications. The
     first real install answers that, and the Settings row reports it.
-  - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
+    - Merged (#39).
+- **M3.4a Browser extensions** (branch `m3.4-extensions`, ADR-0038). The owner chose a guided manual install (no
+  Chrome Web Store account) and Safari later.
+  - **Sources:**
+    - native messaging folders from Google's, Microsoft's (Microsoft Learn, through the `microsoft-docs` server)
+      and Mozilla's docs;
+    - Brave and Vivaldi have no official docs, so they're listed as not supported yet;
+    - Arc stops working on 22 December 2026 (arc.net), so it's left out.
+  - The extension is built before packaging (`local-release.mjs`, `ci.yml`, `release.yml`) and ships in
+    `Contents/Resources/browser-extension/`. `package-test.sh` checks it is there and watches Edge's
+    `NativeMessagingHosts` too.
+  - `main/browsers.ts`:
+    - finds browsers in `/Applications` and `~/Applications`;
+    - copies the extension to `<userData>/Browser Extension/<kind>` when the app's version changes;
+    - shows it in the Finder.
+  - `nativeHost.ts` registers Edge too.
+  - **UI:** Settings › Browser extensions, as the design draws it:
+    - browsers on this Mac, and the others, with Scan again;
+    - an Install… guide dialog: Show in Finder, the extensions page with Copy, Developer mode, Load unpacked;
+    - whether the extension has reached Mergelane.
+    - The narrow segmented control uses the design's short labels.
+  - **Tests:**
+    - Vitest: `browsers.ts`, `ExtensionSettings`, `settingsParts`.
+    - `e2e/browserExtensions.spec.ts` (2 tests): it builds its own extension copy and uses a test Applications
+      folder. The Finder is never opened; the app notes what it would show.
+    - `nativeHost.spec` now expects Edge.
+  - **Next, M3.4b:** which browser connected (the helper reports its parent browser), and the capture rules set
+    once in the app and sent to every browser's extension.
+- **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
     of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
     once. Each passed alone, and the full run passed with `--maxWorkers=3`.
 

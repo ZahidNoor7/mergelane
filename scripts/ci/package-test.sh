@@ -73,6 +73,7 @@ WATCHED=(
   "$HOME/Library/Application Support/Google/ChromeForTesting/NativeMessagingHosts"
   "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
   "$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
+  "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
   "$HOME/Library/Caches/Mergelane"
   "$HOME/Library/Caches/$BUNDLE_ID"
   "$HOME/Library/Logs/Mergelane"
@@ -324,6 +325,11 @@ deno_sum=$(printf 'console.log(1 + 2)' |
   fail "the bundled deno cannot run JavaScript"
 [ "$deno_sum" = "3" ] || fail "the bundled deno printed '$deno_sum' for 1 + 2"
 [ -s "$APP/Contents/Resources/licenses/deno/LICENSE.md" ] || fail "licenses/deno/LICENSE.md is missing from the bundle"
+# The browser extension, which Settings › Browser extensions hands to the user (ADR-0038).
+for kind in chrome firefox; do
+  [ -s "$APP/Contents/Resources/browser-extension/$kind/manifest.json" ] ||
+    fail "the $kind browser extension is missing from the bundle"
+done
 [ -s "$APP/Contents/Resources/licenses/deno/THIRD-PARTY-NOTICES.txt" ] ||
   fail "licenses/deno/THIRD-PARTY-NOTICES.txt (what is built into Deno) is missing from the bundle"
 if [ "$LOCAL" = 1 ]; then

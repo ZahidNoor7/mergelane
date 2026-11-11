@@ -77,17 +77,24 @@ The helper can also be driven from Terminal. It is installed as
 After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
 an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.
 
-## Browser extension (Chrome)
+## Browser extension (Chrome, Edge, Chromium, Firefox)
 
-The extension hands downloads you click in Chrome to Mergelane. It talks to Mergelane only through Chrome's native
-messaging, so there is no open network port, and Mergelane registers itself with Chrome when it starts. Until the
-extension is published, load it by hand:
+The extension hands downloads you click in your browser to Mergelane. It talks to Mergelane only through the
+browser's native messaging, so there is no open network port, and Mergelane registers itself with each browser
+when it starts.
 
-1. Build it: `cd app && npm ci && npm run build:extension`.
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose
-   `app/extension/dist/chrome`.
-3. Open Mergelane once, so Chrome learns where to find it. After that the extension's icon shows whether it's
-   connected.
+The extension comes inside Mergelane. Until it is in the browsers' stores, you load it by hand once:
+**Settings › Browser extensions** finds your browsers, shows the extension's folder in the Finder, and walks you
+through it.
+
+- **Chrome, Edge and Chromium:** turn on Developer mode on the browser's extensions page, click **Load unpacked**,
+  and choose the folder. After a Mergelane update, restart the browser to use the new version.
+- **Firefox:** load it as a temporary add-on from `about:debugging`. Firefox keeps an extension Mozilla hasn't
+  signed only until it quits, so load it again after a restart.
+- **Brave and Vivaldi** don't document where they look for Mergelane's helper, so they aren't supported yet.
+  **Safari** needs its own kind of extension, which comes later.
+
+To build it yourself instead: `cd app && npm ci && npm run build:extension`, then load `app/extension/dist/chrome`.
 
 You can also paste any direct download link into **New download** without the extension.
 

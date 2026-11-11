@@ -31,19 +31,30 @@ test.describe('browser host registration @smoke', () => {
   test('writes a manifest for each installed browser only', async () => {
     const home = await mkdtemp(join(tmpdir(), 'mergelane-home-'))
     try {
-      const [chrome, , chromium, mozilla] = browsers(home)
+      const [chrome, , chromium, mozilla, edge] = browsers(home)
       await mkdir(chrome!.dir, { recursive: true })
       await mkdir(mozilla!.dir, { recursive: true })
+      await mkdir(edge!.dir, { recursive: true })
       const written = await registerNativeHost('/bin/host', home)
       expect(written).toEqual([
         join(chrome!.dir, 'NativeMessagingHosts', `${NATIVE_HOST}.json`),
-        join(mozilla!.dir, 'NativeMessagingHosts', `${NATIVE_HOST}.json`)
+        join(mozilla!.dir, 'NativeMessagingHosts', `${NATIVE_HOST}.json`),
+        // Microsoft's docs: the Stable channel's user data folder (learn.microsoft.com).
+        join(
+          home,
+          'Library',
+          'Application Support',
+          'Microsoft Edge',
+          'NativeMessagingHosts',
+          `${NATIVE_HOST}.json`
+        )
       ])
       expect(JSON.parse(await readFile(written[0]!, 'utf8')).allowed_origins).toBeDefined()
       expect(JSON.parse(await readFile(written[1]!, 'utf8')).allowed_extensions).toBeDefined()
+      expect(JSON.parse(await readFile(written[2]!, 'utf8')).allowed_origins).toBeDefined()
       expect(chromium!.dir.endsWith('Chromium')).toBe(true)
       // Written again on every start: the same files, overwritten.
-      expect(await registerNativeHost('/bin/other', home)).toHaveLength(2)
+      expect(await registerNativeHost('/bin/other', home)).toHaveLength(3)
       expect(JSON.parse(await readFile(written[0]!, 'utf8')).path).toBe('/bin/other')
     } finally {
       await rm(home, { recursive: true, force: true })

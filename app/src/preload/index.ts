@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
+import type { BrowserId } from '../shared/browsers'
 import type { UpdateChannel } from '../shared/releases'
 import type {
   AppSettings,
@@ -78,6 +79,8 @@ const mergelaneApi = {
   installUpdate: () => invoke('installUpdate'),
   skipUpdate: (version: string) => invoke('skipUpdate', version),
   openReleasePage: () => invoke('openReleasePage'),
+  browsers: () => invoke('browsers'),
+  revealExtension: (id: BrowserId) => invoke('revealExtension', id),
   loginItem: () => invoke('loginItem'),
   setOpenAtLogin: (on: boolean) => invoke('setOpenAtLogin', on),
   pendingLinks: () => invoke('pendingLinks'),

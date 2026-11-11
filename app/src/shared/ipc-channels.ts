@@ -51,6 +51,8 @@ export const IpcChannels = {
   openReleasePage: 'update:open-release-page',
   showUpdates: 'update:show',
   loginItem: 'app:login-item',
+  browsers: 'browsers:scan',
+  revealExtension: 'browsers:reveal-extension',
   setOpenAtLogin: 'app:set-open-at-login',
   usenetServer: 'usenet:server',
   saveUsenetServer: 'usenet:save-server',

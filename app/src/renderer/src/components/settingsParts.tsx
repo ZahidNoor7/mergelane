@@ -4,20 +4,26 @@
 export function SettingsGroup({
   title,
   description,
+  aside,
   children
 }: {
   title?: string
   description?: string
+  /** A control beside the title (the design's "Scan again"). */
+  aside?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
       {title && (
-        <div className="flex flex-col gap-0.5 px-1">
-          <h3 className="text-[13.5px] font-[650] tracking-[-0.005em]">{title}</h3>
-          {description && (
-            <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">{description}</p>
-          )}
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-1.5 px-1">
+          <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
+            <h3 className="text-[13.5px] font-[650] tracking-[-0.005em]">{title}</h3>
+            {description && (
+              <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">{description}</p>
+            )}
+          </div>
+          {aside}
         </div>
       )}
       <div className="flex flex-col rounded-[14px] bg-card px-4 shadow-[inset_0_0_0_1px_var(--border)]">

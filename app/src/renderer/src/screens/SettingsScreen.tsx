@@ -16,6 +16,7 @@ import {
   Moon,
   Newspaper,
   Palette,
+  Puzzle,
   RefreshCw,
   SlidersHorizontal,
   Sun
@@ -25,6 +26,7 @@ import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
 import { SpeedUnitToggle } from '../components/SpeedUnitToggle'
+import { ExtensionSettings } from '../components/ExtensionSettings'
 import { OnThisMacSettings } from '../components/OnThisMacSettings'
 import { SettingRow, SettingsGroup } from '../components/settingsParts'
 import { UpdateSettings } from '../components/UpdateSettings'
@@ -43,16 +45,17 @@ import { useAppStore, type SettingsSection } from '../store/useAppStore'
 import { toDisplayPath } from '../utils/format'
 
 // Settings, from the final design (design-system/mergelane/redesign/prototype.html, SettingsScreen):
-// General, Appearance, Downloads and Updates. Browser extensions comes with M3.4.
+// General, Appearance, Downloads, Browser extensions and Updates.
 //
 // The schedule, the total speed and slow mode's speed are still edited in the Speed & data limits
 // dialog, and the news server in its own: the rows here open them.
 
-const SECTIONS: { id: SettingsSection; label: string; icon: typeof Palette }[] = [
-  { id: 'general', label: 'General', icon: SlidersHorizontal },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine },
-  { id: 'updates', label: 'Updates', icon: RefreshCw }
+const SECTIONS: { id: SettingsSection; label: string; short: string; icon: typeof Palette }[] = [
+  { id: 'general', label: 'General', short: 'General', icon: SlidersHorizontal },
+  { id: 'appearance', label: 'Appearance', short: 'Appearance', icon: Palette },
+  { id: 'downloads', label: 'Downloads', short: 'Downloads', icon: ArrowDownToLine },
+  { id: 'extensions', label: 'Browser extensions', short: 'Extensions', icon: Puzzle },
+  { id: 'updates', label: 'Updates', short: 'Updates', icon: RefreshCw }
 ]
 
 /** Width of Settings' content from which its sections are a list beside it, not a segmented row. */
@@ -68,6 +71,7 @@ export function SettingsScreen(): React.JSX.Element {
     general: GeneralSettings,
     appearance: AppearanceSettings,
     downloads: DownloadSettings,
+    extensions: ExtensionSettings,
     updates: UpdateSettings
   }[current.id]
   const updateOut = useAppStore((store) => hasUpdate(store.update))
@@ -120,7 +124,7 @@ export function SettingsScreen(): React.JSX.Element {
               {SECTIONS.map((each) => (
                 <ToggleGroupItem key={each.id} value={each.id}>
                   <each.icon aria-hidden />
-                  {each.label}
+                  {each.short}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>

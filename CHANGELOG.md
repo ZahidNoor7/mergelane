@@ -13,6 +13,9 @@ All notable changes to Mergelane are recorded here. The format follows
   the SHA-256 published with the release. "Quit and install" then opens it and quits Mergelane, so you drag the
   new version over the old one. Turn on "Download updates in the background" to have it download by itself;
   installing always waits for you.
+- Settings › Browser extensions finds Chrome, Edge, Chromium and Firefox on your Mac and guides you through
+  loading the Mergelane extension in each. The extension now comes inside Mergelane, so you no longer build it
+  yourself, and Microsoft Edge is supported. Brave, Vivaldi and Safari are listed with what they still need.
 - Mergelane in the menu bar: its icon, and the merged speed beside it while downloads run, in the units you chose.
   Turn it off in Settings › General › On this Mac.
 - Open at login (Settings › General › On this Mac), off until you turn it on. Opened at login, Mergelane starts

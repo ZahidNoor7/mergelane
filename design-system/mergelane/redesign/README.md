@@ -12,6 +12,11 @@ milestone M3.1 in `docs/PHASE-3.md`.
     builds, the `createLucideIcon` and zustand-shaped stand-ins, plain buttons in place of Base UI, the simulated
     data and timers, the prototype controls and the identity section.
 - `brand/` holds the new app icon (default and light) as SVG and PNG, the menu-bar template icon and the marks.
+  - In the app (M3.1 pull request 2): `app/build/icon.icns`, from `icon-default` (all ten iconset sizes, built with
+    `iconutil`); `app/build/icon.png` and `app/resources/icon-dark.png` at 512 px; and
+    `app/resources/trayTemplate.png` and `trayTemplate@2x.png` (set to 144 dpi) for the menu-bar item in M3.3.
+  - The light icon variant is not used yet: macOS's light, dark and tinted app-icon variants need checking against
+    Apple's and electron-builder's docs first.
 
 The artifact's `notes.md` and `tokens-proposal.css` describe an earlier draft (five themes, ink-only actions) and are
 deliberately not copied.

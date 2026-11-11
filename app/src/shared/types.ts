@@ -256,8 +256,18 @@ export type DownloadUnitState =
  *   once the period ends or the limit is raised.
  * - routed: Networks' "Downloads use" sends every download over another network (DownloadRouting). The
  *   download's own choice (`enabled`) is kept for when routing is back on all networks.
+ * - standby: its role is Standby (NetworkRole), and one of the download's Use networks is connected
+ *   and carrying it. It takes over as soon as none is (ADR-0045).
+ * - unused: its role is Don't use (NetworkRole). Like `routed`, the download's own choice is kept.
  */
-export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit' | 'routed'
+export type NetworkStatus =
+  'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit' | 'routed' | 'standby' | 'unused'
+
+/** What a network is for, for Mergelane's own downloads (Networks, ADR-0045): 'use', normal;
+ * 'standby', used only while none of a download's Use networks is connected (a phone's data plan
+ * as a backup); 'never' ("Don't use"), never used for downloads. Routing a direction to one network
+ * (DownloadRouting) wins over its role while it applies. */
+export type NetworkRole = 'use' | 'standby' | 'never'
 
 /** Networks › Which network carries what (the final design's RoutingPanel, ADR-0040 and ADR-0041). */
 export interface DownloadRouting {
@@ -512,6 +522,9 @@ export interface NetworkPreference {
   /** Left out of the last download started, so New download starts without it too (it remembers
    * the last pick, like the folder). A click there puts it back. */
   off?: boolean
+  /** Its role for downloads (NetworkRole); left out, 'use'. Unlike `off`, it applies to every
+   * download, the running ones included (ADR-0045). */
+  role?: Exclude<NetworkRole, 'use'>
   /** Bytes a second all downloads together may take over it. */
   speedLimit?: number
   /** Bytes a second all torrent uploads together may send over it (ADR-0041). */

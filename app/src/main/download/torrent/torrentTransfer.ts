@@ -3,7 +3,7 @@ import { basename, dirname } from 'node:path'
 import type WebTorrent from 'webtorrent'
 import type { Store, Torrent, Wire } from 'webtorrent'
 import { normalizeTrackerUrl } from '../../../shared/torrentTrackers'
-import type { TorrentDownloadNetwork, TorrentPeerState } from '../../../shared/types'
+import type { NetworkStatus, TorrentDownloadNetwork, TorrentPeerState } from '../../../shared/types'
 import { connectRoute } from '../../network/deviceBinding'
 import { routesFor, type NetworkRoute } from '../../network/routes'
 import {
@@ -18,6 +18,11 @@ import { gateTorrent, gateWire, regate, type WireRules } from './wireGate'
 
 /** Peers each network in use may have at once (webtorrent's maxConns is this times the networks). */
 const PEERS_PER_NETWORK = 30
+
+/** A network downloads don't use by choice, which routing's upload network may still be (ADR-0041,
+ * ADR-0045). */
+const UPLOAD_ONLY: ReadonlySet<NetworkStatus> = new Set(['routed', 'off', 'standby', 'unused'])
+
 // A network that has dialled this many peers with none answering, for this long, while another
 // network has peers, can't reach the swarm. It keeps one dial going, to see when it can again.
 const UNREACHABLE_AFTER_ATTEMPTS = 5
@@ -320,7 +325,8 @@ export class TorrentTransfer implements Transfer {
 
   /** Networks that carry this download's uploads only: routing's upload network, while it's
    * connected and downloads are routed (or switched) off it. Not one at its data limit: that stops
-   * Mergelane using a network at all, uploads included. Its status ('routed', 'off') is about
+   * Mergelane using a network at all, uploads included. Its status ('routed', 'off', and a role's
+   * 'standby' or 'unused': routing an upload to a network wins over its role, ADR-0045) is about
    * downloads, so the limit is asked here; reaching it re-reconciles, which drops its peers. */
   private uploadOnly(): TorrentDownloadNetwork[] {
     const route = this.host.uploadRoute()
@@ -328,7 +334,7 @@ export class TorrentTransfer implements Transfer {
     return this.runtime.state.networks.filter(
       (network) =>
         route.has(network.id) &&
-        (network.status === 'routed' || network.status === 'off') &&
+        UPLOAD_ONLY.has(network.status) &&
         Boolean(this.host.networks.find(network.id)) &&
         !this.host.limits.limitReached(network.id)
     )

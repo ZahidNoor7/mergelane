@@ -1,16 +1,27 @@
+import { roleOf } from '@shared/networkRoles'
 import type { NetworkInterfaceKind } from '@shared/types'
 import { cn } from 'cn'
-import { ArrowUp, CircleCheck, Gauge, Info, Plug, Unplug } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import {
+  ArrowUp,
+  CircleCheck,
+  CircleDashed,
+  CircleSlash,
+  Gauge,
+  Info,
+  Plug,
+  Unplug
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkEditPopover } from '../components/NetworkEditPopover'
+import { NetworkRoleMenu } from '../components/NetworkRoleMenu'
+import { STANDBY_HINT } from '../components/networkStatus'
 import { NetworkTile } from '../components/NetworkTile'
 import { RoutingPanel } from '../components/RoutingPanel'
 import { Sparkline } from '../components/Sparkline'
 import { SpeedText } from '../components/SpeedText'
 import { SystemMergeSection } from '../components/SystemMergeSection'
 import { Button } from '../components/ui/button'
-import { Switch } from '../components/ui/switch'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -28,6 +39,9 @@ import { formatDataUsage } from '../utils/format'
 // merge; the recent dropouts; and what combined speed can't do. It takes over the downloads
 // toolbar's networks menu. Speed and data limits are edited in their dialog, opened from here,
 // until the Settings screen (M3.1 pull request 5e) takes its general page.
+//
+// Each network's role for downloads, Use, Standby or Don't use (ADR-0045), is picked on its line,
+// where the design's "Use for downloads" switch is.
 //
 // "Which network carries what" (RoutingPanel) routes downloads (ADR-0040) and torrent uploads
 // (ADR-0041); their speed limits, download and upload, are edited in Speed & data limits.
@@ -52,7 +66,12 @@ export function NetworksScreen(): React.JSX.Element {
   const summaries = networkSummaries(interfaces, downloads, preferences, usage)
   const history = combinedHistory(downloads)
   const connected = summaries.filter((network) => network.condition !== 'offline').length
-  const used = interfaces.filter((iface) => !preferences[iface.id]?.off).length
+  // New download's pick: what it leaves out (`off`), and what each network's role makes of it.
+  const picked = interfaces.filter(
+    (iface) => !preferences[iface.id]?.off && roleOf(preferences[iface.id]) !== 'never'
+  )
+  const used = picked.filter((iface) => roleOf(preferences[iface.id]) === 'use').length
+  const standby = picked.length - used
   const openLimits = (page: string | null): void => {
     setLimitsPage(page)
     setLimitsOpen(true)
@@ -70,7 +89,7 @@ export function NetworksScreen(): React.JSX.Element {
               ? 'No network connected'
               : `${connected} of ${summaries.length} connected. New downloads use ${
                   used === interfaces.length ? 'all of them' : `${used} of them`
-                }.`}
+                }${standby > 0 ? `, ${standby} more on standby` : ''}.`}
           </p>
         </div>
         <Button type="button" variant="secondary" onClick={() => openLimits(null)}>
@@ -160,13 +179,12 @@ function NetworkLine({
   const networkVisual = useNetworkVisuals()
   const formatSpeedLimit = useFormatSpeedLimit()
   const preference = useAppStore((store) => store.networkPreferences[network.id])
-  const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
   const downloads = useAppStore((store) => store.downloads)
   const [hovered, setHovered] = useState<number | null>(null)
-  const switchId = useId()
   const visual = networkVisual(network.id, network.kind, network.osName)
   const out = network.condition === 'offline'
   const on = !preference?.off
+  const role = roleOf(preference)
   const dataLimit = preference?.dataLimit
   const reached = network.condition === 'paused'
   // What its torrents send out over it, for the line under its speed.
@@ -194,11 +212,17 @@ function NetworkLine({
         }
       : network.condition === 'unreachable'
         ? { icon: Unplug, text: 'Connected, but can’t reach the server', alert: true }
-        : !on
-          ? { icon: CircleCheck, text: 'Connected, left out of new downloads', alert: false }
-          : network.speed > 0
-            ? { icon: CircleCheck, text: 'Connected, carrying downloads', alert: false }
-            : { icon: CircleCheck, text: 'Connected, idle', alert: false }
+        : role === 'never'
+          ? { icon: CircleSlash, text: 'Connected, not used for downloads', alert: false }
+          : role === 'standby'
+            ? network.speed > 0
+              ? { icon: CircleDashed, text: 'Standby, carrying downloads', alert: false }
+              : { icon: CircleDashed, text: STANDBY_HINT, alert: false }
+            : !on
+              ? { icon: CircleCheck, text: 'Connected, left out of new downloads', alert: false }
+              : network.speed > 0
+                ? { icon: CircleCheck, text: 'Connected, carrying downloads', alert: false }
+                : { icon: CircleCheck, text: 'Connected, idle', alert: false }
   const StateIcon = state.icon
 
   return (
@@ -208,7 +232,7 @@ function NetworkLine({
         color={visual.solid}
         onColor={visual.onSolid}
         size={34}
-        dim={out || !on}
+        dim={out || !on || role === 'never'}
       />
       <div className="min-w-0">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -301,20 +325,7 @@ function NetworkLine({
         >
           <Gauge />
         </Button>
-        {!out && (
-          <>
-            <label htmlFor={switchId} className="sr-only">
-              Use {visual.name} for new downloads
-            </label>
-            <Switch
-              id={switchId}
-              checked={on}
-              onCheckedChange={(next) =>
-                setNetworkPreference(network.id, { off: !next || undefined })
-              }
-            />
-          </>
-        )}
+        {!out && <NetworkRoleMenu networkId={network.id} name={visual.name} />}
       </div>
     </li>
   )

@@ -26,6 +26,7 @@ import {
   type HttpDownloadState,
   type NetworkInterfaceInfo,
   type NetworkPreferences,
+  type NetworkRole,
   type NetworkStatus,
   DEFAULT_ROUTING,
   type DownloadRouting,
@@ -47,6 +48,7 @@ import {
   type TorrentTrackersResult
 } from '../../shared/types'
 import { routeFor } from '../../shared/routing'
+import { byRole, networkStatuses, roleOf } from '../../shared/networkRoles'
 import { mergeTrackers, normalizeTrackerUrl } from '../../shared/torrentTrackers'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
@@ -250,6 +252,11 @@ function savedRequest(
 const STREAM_REQUESTS_PER_NETWORK = 3
 
 const UI_UPDATE_MS = 200
+
+/** A download's networks set aside by a choice (its own, routing's or a role's) rather than by how
+ * they are doing: not counted when asking whether every network it uses has failed. */
+const SET_ASIDE: ReadonlySet<NetworkStatus> = new Set(['off', 'routed', 'standby', 'unused'])
+
 /** How often a running download takes stock (see run). */
 const TICK_MS = 500
 // Syncing a growing file can briefly monopolize a slow destination drive. Keep recovery
@@ -1358,7 +1365,9 @@ export class DownloadManager {
       )
       const networks = available.map((iface) => newHttpNetwork(iface, usable.includes(iface)))
       if (!splittable(requestPayload)) {
-        for (const network of networks) network.enabled &&= network.id === usable[0].id
+        // One network carries it: a Use one before a Standby one (ADR-0045).
+        const first = byRole(usable, (iface) => this.roleOf(iface.id))[0]
+        for (const network of networks) network.enabled &&= network.id === first.id
         for (const network of networks) network.status = network.enabled ? 'on' : 'off'
       }
       const state: HttpDownloadState = {
@@ -2475,35 +2484,36 @@ export class DownloadManager {
       }
     }
 
+    // Routing decides for every download while it names a network; otherwise each network's role
+    // (Use, Standby, Don't use: ADR-0045) and the download's own choice. Either way the download's
+    // own choice (enabled) stays as it was, for when routing goes back to all networks or the role
+    // changes.
     const route = this.downloadRoute()
-    for (const network of state.networks) {
-      const iface = this.networks.find(network.id)
-      if (iface) {
-        network.label = iface.displayName
-        network.kind = iface.kind
-      }
-      // Routing decides for every download while it names a network; the download's own choice
-      // (enabled) stays as it was, for when routing goes back to all networks.
-      const wanted = route ? route.has(network.id) : network.enabled
-      const status: NetworkStatus = !wanted
-        ? route
-          ? 'routed'
-          : 'off'
-        : !iface && known
-          ? 'offline'
-          : this.limits.limitReached(network.id)
-            ? 'limit'
-            : network.status === 'off' ||
-                network.status === 'offline' ||
-                network.status === 'limit' ||
-                network.status === 'routed'
-              ? 'on'
-              : network.status
+    const statuses = networkStatuses(
+      state.networks.map((network) => {
+        const iface = this.networks.find(network.id)
+        if (iface) {
+          network.label = iface.displayName
+          network.kind = iface.kind
+        }
+        return {
+          id: network.id,
+          enabled: network.enabled,
+          status: network.status,
+          connected: Boolean(iface) || !known,
+          atLimit: this.limits.limitReached(network.id),
+          role: this.roleOf(network.id)
+        }
+      }),
+      route
+    )
+    state.networks.forEach((network, index) => {
+      const status = statuses[index]
       if (status !== network.status) {
         network.status = status
         network.error = undefined
       }
-    }
+    })
     if (state.status !== 'downloading' || runtime.stop.signal.aborted) return
     if (!this.scheduleAllowsDownloads()) {
       void this.pause(state.id, true).catch((error) =>
@@ -2512,9 +2522,7 @@ export class DownloadManager {
       return
     }
 
-    const enabled = state.networks.filter(
-      (network) => network.status !== 'off' && network.status !== 'routed'
-    )
+    const enabled = state.networks.filter((network) => !SET_ASIDE.has(network.status))
     if (enabled.length > 0 && enabled.every((network) => network.status === 'failed')) {
       this.failDownload(runtime, enabled[0].error ?? 'No network could reach the server')
       return
@@ -2528,6 +2536,11 @@ export class DownloadManager {
    * on, and none (the downloads wait) with it off. */
   private downloadRoute(): ReadonlySet<string> | null {
     return routeFor(this.routing, 'down', (id) => Boolean(this.networks.find(id)))
+  }
+
+  /** A network's role for downloads (ADR-0045), as last saved. */
+  private roleOf(networkId: string): NetworkRole {
+    return roleOf(this.networkPreferences[networkId])
   }
 
   /** The same for torrent uploads (ADR-0041): null, each torrent uploads over the networks it

@@ -123,20 +123,33 @@ describe('NetworksScreen', () => {
     expect(within(phone).getByRole('group', { name: /limits$/ }).textContent).toContain('Limit')
     expect(ethernet.textContent).toContain('Connected, left out of new downloads')
     expect(dock.textContent).toContain('Dropped. Its downloads moved to the other networks.')
-    // A network that's gone has nothing to switch.
-    expect(within(dock).queryByRole('switch')).toBeNull()
+    // A network that's gone has no role to pick.
+    expect(within(dock).queryByRole('button', { name: /for downloads/ })).toBeNull()
   })
 
-  it('switches a network for new downloads, and opens its limits or all of them', async () => {
+  it('sets a network’s role for downloads, and opens its limits or all of them', async () => {
     show()
     const user = userEvent.setup()
-    await user.click(
-      screen.getByRole('switch', { name: /^Use .* for new downloads$/, checked: false } as never)
-    )
-    expect(useAppStore.getState().networkPreferences['en5']?.off).toBeUndefined()
-    const wifiSwitch = screen.getAllByRole('switch')[0]
-    await user.click(wifiSwitch)
-    expect(useAppStore.getState().networkPreferences['en0']?.off).toBe(true)
+    // The line's pop-up says its role; Use by default, with what each one does in the menu.
+    await user.click(screen.getByRole('button', { name: 'Ethernet for downloads: Use' }))
+    const menu = await screen.findByRole('menu')
+    expect(menu.textContent).toContain('Ethernet for downloads')
+    expect(menu.textContent).toContain('Used only when no network set to Use is connected')
+    expect(
+      within(menu).getByRole('menuitemradio', { name: /^Use/ }).getAttribute('aria-checked')
+    ).toBe('true')
+    await user.click(within(menu).getByRole('menuitemradio', { name: /^Standby/ }))
+    // Any choice also puts it back in New download's pick.
+    expect(useAppStore.getState().networkPreferences['en5']).toEqual({ role: 'standby' })
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Ethernet for downloads: Standby' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Wi-Fi for downloads: Use' }))
+    await user.click(await screen.findByRole('menuitemradio', { name: /^Don’t use/ }))
+    expect(useAppStore.getState().networkPreferences['en0']?.role).toBe('never')
+    await user.click(screen.getByRole('button', { name: 'Wi-Fi for downloads: Don’t use' }))
+    await user.click(await screen.findByRole('menuitemradio', { name: /^Use/ }))
+    expect(useAppStore.getState().networkPreferences['en0']?.role).toBeUndefined()
 
     await user.click(screen.getByRole('button', { name: 'Wi-Fi limits' }))
     expect(screen.getByRole('dialog').textContent).toBe('Limits en0')
@@ -144,6 +157,30 @@ describe('NetworksScreen', () => {
     show()
     await user.click(screen.getByRole('button', { name: 'Speed & data limits' }))
     expect(screen.getByRole('dialog').textContent).toBe('Limits all')
+  })
+
+  it('says what each role does on the line, and counts standby networks apart', () => {
+    useAppStore.setState({
+      downloads: {},
+      networkPreferences: { en0: { role: 'standby' }, en7: { role: 'never' } }
+    })
+    show()
+    expect(
+      screen.getByText('3 of 3 connected. New downloads use 1 of them, 1 more on standby.')
+    ).toBeTruthy()
+    const [wifi, phone, ethernet] = within(
+      screen.getByRole('list', { name: 'Networks' })
+    ).getAllByRole('listitem')
+    expect(wifi.textContent).toContain('Standby: used only when no network set to Use is connected')
+    expect(phone.textContent).toContain('Connected, not used for downloads')
+    expect(ethernet.textContent).toContain('Connected, idle')
+  })
+
+  it('a Standby network carrying downloads says so', () => {
+    useAppStore.setState({ networkPreferences: { en0: { role: 'standby' } } })
+    show()
+    const wifi = within(screen.getByRole('list', { name: 'Networks' })).getAllByRole('listitem')[0]
+    expect(wifi.textContent).toContain('Standby, carrying downloads')
   })
 
   it('logs networks that dropped or came back, newest first', () => {

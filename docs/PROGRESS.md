@@ -589,6 +589,29 @@ Last updated: 2026-11-11
   - **Not checked:** the real password prompt, bootout and file removal. They need a manual check on the owner's
     Mac with a packaged build; no test ran them.
 
+- **M3.10 link priorities** (branch `m3.10-priorities`, ADR-0045; the roles are the owner's choice of 2026-11-11,
+  the details decided unattended for the owner's review). Each network's role for downloads: Use, Standby, Don't
+  use.
+  - **Engine:** `NetworkPreference.role` (`'standby'`, `'never'`; left out is Use). `shared/networkRoles.ts`:
+    `roleOf`, `sanitizeRole` (main's settings sanitizer), `byRole` (a file that can't be split gets a Use network
+    first) and `networkStatuses`, which `DownloadManager.reconcile` now uses for every network status. New statuses
+    `standby` (held back while one of the download's Use networks is on or still trying) and `unused` (Don't use).
+    Routing wins over roles; torrent uploads routed to a Standby or Don't use network still go out over it
+    (`uploadOnly`). `off` keeps its old meaning (left out of new downloads); picking a role on Networks clears it.
+  - **UI:** the Networks line's switch is now a pop-up button with the three roles, each with what it does; line
+    status texts for Standby and Don't use; the header counts standby networks. New download: Don't use unticked
+    and unpickable, Standby tagged; a note when every network is Don't use. Details texts for the new statuses.
+  - **Tests:**
+    - Vitest: `shared/networkRoles` (21, new) and `NetworkRoleMenu` are in `COVERED`; `NetworksScreen` (the
+      switch test rewritten for the pop-up, 2 new) and `NewDownloadDialog` (3 new). Lines: `networkRoles`,
+      `NetworkRoleMenu`, `networkStatus` and `NetworksScreen` 100%, `NewDownloadDialog` 99.2%. Full run 367 passed.
+    - `e2e/networkRoles.spec.ts` (2, `@smoke`): a Standby b carries nothing while a is connected, takes over when a
+      drops, and stops once a is back; Don't use never carries, Standby carries when no network is Use, and both
+      roles, picked through the Networks pop-up, survive a relaunch. `e2e/torrent.spec.ts` (1 new, `@smoke`): a
+      Standby b downloads nothing while a is connected, yet carries the uploads routed to it. With `routing`,
+      `liveNetworks`, `torrent` and `ui`: all passed.
+  - **Not proven:** real hardware (an iPhone's tethering dropping); system merge has no roles.
+
 ### Phase 2 (started 2026-11-10, owner-approved)
 
 **M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.

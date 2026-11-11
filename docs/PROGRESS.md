@@ -56,8 +56,10 @@ Last updated: 2026-11-11
   - The window background follows the theme.
   - Archivo and Fragment Mono are bundled with their OFL texts. They replace Manrope and Roboto Mono, which had no
     notices.
-  - Contrast tests cover all 14 colour sets. One shortfall in the design is waiting for the owner: Dusk light, the
-    faintest text on a sidebar card, 4.26:1.
+  - Contrast tests cover all 14 colour sets, and every one passes.
+  - The owner darkened Dusk's light sidebar card (`#3A3456` to `#353050`): its faintest text was 4.26:1 and is now
+    4.56:1. This is recorded in `design-system/mergelane/redesign/README.md`.
+  - `design-system/mergelane/MASTER.md` and `pages/dashboard.md` are rewritten for the new design, with the owner's OK.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

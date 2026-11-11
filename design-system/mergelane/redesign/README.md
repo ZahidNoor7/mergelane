@@ -15,3 +15,12 @@ milestone M3.1 in `docs/PHASE-3.md`.
 
 The artifact's `notes.md` and `tokens-proposal.css` describe an earlier draft (five themes, ink-only actions) and are
 deliberately not copied.
+
+## Changes the owner made after the design was final
+
+| Date | Theme and mode | Seed | Design | Now | Why |
+|---|---|---|---|---|---|
+| 2026-11-11 | Dusk, light | `sidebarCard` | `#3A3456` | `#353050` | The faintest sidebar text on a card reached only 4.26:1 (WCAG asks 4.5:1); it now reaches 4.56:1. |
+
+`app/src/renderer/src/theme/contrast.test.ts` applies these to the design's values before comparing them with
+`app/src/shared/themes.ts`, so any other difference still fails.

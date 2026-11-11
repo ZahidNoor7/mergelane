@@ -200,7 +200,7 @@ export const THEMES = [
       window: '#E6E3F0',
       sidebar: '#28233D',
       sidebarInk: '#EEEAF8',
-      sidebarCard: '#3A3456',
+      sidebarCard: '#353050',
       sidebarDark: true,
       bg: '#FBFAFE',
       card: '#FFFFFF',

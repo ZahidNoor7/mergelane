@@ -92,32 +92,32 @@ function pairs(seeds: ThemeSeeds, mode: 'light' | 'dark'): Pair[] {
   return out
 }
 
-// Shortfalls in the owner's final design, kept as designed and reported to the owner (ADR-0034).
-// The sidebar arrives in M3.1 pull request 5a; this must be settled before then. A listed shortfall
-// that starts passing fails the test, so the list cannot go stale.
-const KNOWN_SHORTFALLS = new Set(['dusk/light: text-tertiary on sidebar card'])
-
 describe('every theme meets WCAG contrast in light and dark', () => {
   for (const theme of THEMES) {
     for (const mode of ['light', 'dark'] as const) {
       it(`${theme.id} (${mode})`, () => {
         const failing = pairs(theme[mode], mode)
           .filter((pair) => pair.ratio < pair.minimum)
-          .map((pair) => `${theme.id}/${mode}: ${pair.name}`)
-        const known = [...KNOWN_SHORTFALLS].filter((key) => key.startsWith(`${theme.id}/${mode}:`))
-        expect(failing.sort()).toEqual(known.sort())
+          .map((pair) => `${pair.name}: ${pair.ratio.toFixed(2)} < ${pair.minimum}`)
+        expect(failing).toEqual([])
       })
     }
   }
-
-  it('measures the known Dusk shortfall at 4.26:1', () => {
-    const dusk = THEMES.find((theme) => theme.id === 'dusk')!.light
-    const pair = pairs(dusk, 'light').find(
-      (entry) => entry.name === 'text-tertiary on sidebar card'
-    )!
-    expect(pair.ratio).toBeCloseTo(4.26, 2)
-  })
 })
+
+// Seeds the owner changed after the design was declared final, each with the design's value, so a
+// later change to the design file still fails the comparison below.
+const OWNER_CHANGES = [
+  {
+    // 2026-11-11: the faintest sidebar text reached only 4.26:1 on Dusk's light sidebar card. The
+    // owner chose a slightly darker card; it now reaches 4.56:1.
+    theme: 'dusk',
+    mode: 'light',
+    key: 'sidebarCard',
+    designed: '#3A3456',
+    now: '#353050'
+  }
+] as const
 
 describe('the themes are the owner’s final design', () => {
   it('match ML_THEMES in design-system/mergelane/redesign/prototype.html seed for seed', () => {
@@ -141,6 +141,11 @@ describe('the themes are the owner’s final design', () => {
     const GLASS_ONLY = new Set(['wallpaper', 'glassSidebar'])
     const seeds = (mode: Record<string, unknown>): Record<string, unknown> =>
       Object.fromEntries(Object.entries(mode).filter(([key]) => !GLASS_ONLY.has(key)))
+    for (const change of OWNER_CHANGES) {
+      const seed = designed.find((theme) => theme.id === change.theme)![change.mode]
+      expect(seed[change.key]).toBe(change.designed)
+      seed[change.key] = change.now
+    }
     expect(
       THEMES.map((theme) => ({
         id: theme.id,

@@ -563,7 +563,9 @@ until the owner overrides it.
   - Network rows show the connection type, not the Wi-Fi name, so no Location permission is asked for.
   - Renderer code gets unit tests with Vitest, React Testing Library and V8 coverage: 90% of changed lines.
 - Consequences:
-  - `design-system/mergelane/MASTER.md` no longer describes the app once M3.1 lands. It is updated in M3.1's first
-    pull request, with the owner's OK.
+  - `design-system/mergelane/MASTER.md` and `pages/dashboard.md` were rewritten for the new design in M3.1's first
+    pull request, with the owner's OK (2026-11-11).
+  - The owner's later changes to the design (so far, Dusk's light sidebar card, for contrast) are listed in
+    `design-system/mergelane/redesign/README.md`.
   - Many Playwright specs change with the layout.
   - Seven themes in two modes make 14 colour sets to check on every screen.

@@ -38,6 +38,13 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Phase 3 (proposed 2026-11-11)
+
+- Plan: `docs/PHASE-3.md`, waiting for the owner's approval and answers to its four questions.
+- ADR-0034: the owner's redesign is M3.1, released as 0.2.0. All seven themes ship; the app opens on Downloads;
+  Auto appearance comes back.
+- The final design is copied into `design-system/mergelane/redesign/`.
+
 ### Phase 2 (started 2026-11-10, owner-approved)
 
 **M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.

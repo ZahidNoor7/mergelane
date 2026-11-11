@@ -419,6 +419,23 @@ Last updated: 2026-11-11
 - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
     of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
     once. Each passed alone, and the full run passed with `--maxWorkers=3`.
+- **M3.6 Clipboard monitor** (branch `m3.6-clipboard`, ADR-0043). "Offer links I copy", off by default (owner's
+  decision, 2026-11-11, because of macOS's pasteboard alert).
+  - **Main:** `clipboardOffers.ts` reads the clipboard only on `'browser-window-focus'` and only with the setting
+    on. It sends the window a link (`shared/links.ts copiedLink`), never other text. It keeps only the last
+    offered link's SHA-256, in memory.
+  - **UI:** `CopiedLinkOffer` at the sidebar's foot (under the compact bar when narrow): "Download…" opens New
+    download with the link, and "Dismiss" puts it away. The switch is in Settings › Downloads › Adding downloads.
+    `acceptedLink` moved to `shared/links.ts`, and `utils/format.ts` re-exports it.
+  - **Tests:**
+    - Vitest: `links`, `CopiedLinkOffer`, `useCopiedLinks` at 100% of lines, plus the new Settings row. The store
+      lines added are covered too.
+    - `e2e/clipboardOffer.spec.ts` (3 tests):
+      - off: `clipboard.readText` is never called on focus;
+      - on: a link is offered once, then again only after another copy, and Download… opens New download
+        prefilled with nothing started;
+      - through the real clipboard, which is saved in every format and put back.
+  - **Not checked:** the macOS pasteboard alert itself, which needs a manual check on the owner's Mac.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

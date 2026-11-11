@@ -77,7 +77,7 @@ test.describe('Dashboard @smoke', () => {
     const failover = page.getByRole('region', { name: 'Failover' })
     await expect(failover).toContainText('Only a is connected, so there’s nothing to fail over to.')
     await expect(failover.getByRole('log', { name: 'Network changes' })).toHaveText(
-      'No network has dropped since Mergelane opened.'
+      'No network has dropped in the last week.'
     )
 
     // No helper: system merge offers the install, and says downloads don't need it.

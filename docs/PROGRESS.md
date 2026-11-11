@@ -120,7 +120,7 @@ Last updated: 2026-11-11
   - the FFmpeg build on the CI runner.
 - **Open before the first public release:** the notices of the third-party code built into Deno (ADR-0029).
 
-**Finishing Phase 2 on the owner's Mac** (branch `m2.7-finish-phase2`, ADR-0032, ADR-0033):
+**Finishing Phase 2 on the owner's Mac** (PR #11, merged; ADR-0032, ADR-0033):
 - `scripts/ci/local.sh`: all 6 non-root jobs pass.
   - repo-checks: 226 tests;
   - app checks;
@@ -149,11 +149,29 @@ Last updated: 2026-11-11
     - the local leak step fails when the leftover route was never added. CI's step already did.
 - **The Deno notices** (ADR-0029) are generated and shipped.
 - **`local-release.mjs`:** a full dry run built the DMG, zip and sources; nothing was uploaded.
+- **Done 2026-11-11:**
+  - Root suite, second run: all 11 PASS (PR #11).
+  - Merged into `main`, as merge commits:
+    - #1–#6 and #8–#11, the tested chain: `main` then equalled the tested commit 91e3815;
+    - #12, which keeps the extension test's browser out of `~/Downloads`;
+    - #7, the dashboard, after merging `main` into it: one import conflict, and `local.sh` all 6 jobs PASS (smoke 448);
+    - #13, the 0.1.0 changelog, rewritten for users;
+    - #14, which corrects two README claims also copied into the release notes. "The only network request is the
+      update check" was wrong: there is no update check, and the helper probes 1.1.1.1 and 8.8.8.8 on every link.
+      "Remove it from Mergelane's settings" was wrong: it is `sudo … uninstall`.
+  - **Draft release `v0.1.0`** from 3cd5b3e, built by `local-release.mjs --upload`:
+    - fuse audit, packaging test (local mode) and the zip's version check all PASS;
+    - six files: DMG, zip, `SHA256SUMS`, and FFmpeg's and yt-dlp's sources with FFmpeg's build script;
+    - GitHub's digests match the local build.
 - **Next:**
-  1. ~~The owner runs the root suite again, with the fixes.~~ Done 2026-11-11 12:13: all 11 PASS (PR #11).
-  2. Merge PRs #1–#11 in order.
-  3. Add the `[0.1.0]` changelog section and build the release on `main`, as a draft.
-  4. The owner installs the DMG by hand.
+  1. The owner installs `app/dist/Mergelane-0.1.0-arm64.dmg` by hand and tries it.
+  2. The owner publishes the draft on GitHub (docs/RELEASING.md, steps 5 and 6).
+- **Follow-ups:**
+  - `extensionMedia.spec.ts`'s "Send this video to Mergelane" failed once in a full `local.sh` run: the app's link field
+    lost its last character, and the probe said "isn't a video". Since then it passed 32 runs alone and two full
+    suites. The cause is not found.
+  - The app has no "Remove helper" button: Phase 3 candidate.
+  - `scripts/acceptance/daemon.sh` sets `GOCOVERDIR` only for `run`, so `install`/`uninstall` show 0% coverage.
 
 **Test isolation fix** (branch `fix-e2e-browser-downloads`): the extension e2e test that clicks a download in
 Chromium put the browser's temporary file in the owner's real `~/Downloads` on every run (it came and went, so

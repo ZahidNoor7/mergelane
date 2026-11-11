@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'ele
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { BrowserId } from '../shared/browsers'
+import type { NetworkActivity } from '../shared/networkActivity'
 import type { UpdateChannel } from '../shared/releases'
 import type {
   AppSettings,
@@ -90,6 +91,24 @@ const mergelaneApi = {
   usenetServer: () => invoke('usenetServer'),
   saveUsenetServer: (server: UsenetServerInput) => invoke('saveUsenetServer', server),
   testUsenetServer: (server: UsenetServerInput) => invoke('testUsenetServer', server),
+  networkActivity: () => invoke('networkActivity'),
+  saveDiagnostics: () => invoke('saveDiagnostics'),
+  revealDiagnostics: () => invoke('revealDiagnostics'),
+
+  /** A network dropped or came back, or the day's fastest merged speed rose. */
+  onNetworkActivity: (callback: (activity: NetworkActivity) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, activity: NetworkActivity): void =>
+      callback(activity)
+    ipcRenderer.on(IpcChannels.networkActivityChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.networkActivityChanged, listener)
+  },
+
+  /** The app menu's "Save Diagnostics…": show Settings › General and save one. */
+  onSaveDiagnosticsRequested: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.saveDiagnosticsRequested, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.saveDiagnosticsRequested, listener)
+  },
 
   /** pendingLinks() has the new link. */
   onLinkReceived: (callback: () => void): (() => void) => {

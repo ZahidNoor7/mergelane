@@ -440,6 +440,22 @@ Last updated: 2026-11-11
     count received bytes only; slow mode stays download-only.
   - **Pre-existing failure, not from this branch:** `scheduleQueue.spec` "schedule dialog saves, cancels edits…"
     fails at its toolbar indicator on unchanged `main` too (run on 2026-11-11 around 23:00 local).
+- **M3.7 Diagnostics and history** (branch `m3.7-diagnostics`, ADR-0042).
+  - **History:** network events and the day's fastest merged speed are logged by the main process and kept in
+    `userData/network-activity.json` (a week, at most 50 events). A drop still open at quit and connected at
+    launch reads "came back while Mergelane was closed". Today shows "Fastest merged speed" and the last 24 hours'
+    dropouts, as the design does.
+  - **Diagnostics:** Settings › General › Troubleshooting and the app menu's "Save Diagnostics…" save a zip
+    (`ditto`) of `README.txt`, `diagnostics.json` and the helper log's last 200 lines. Fields come from an
+    allowlist, then every string is redacted (see ADR-0042).
+  - **Tests:**
+    - Vitest: `shared/networkActivity.ts`, `shared/diagnostics.ts` (a planted-secrets test),
+      `DiagnosticsSettings`, `useNetworks` at 100% of lines; `DashboardToday` and `NetworksScreen` updated.
+    - `e2e/diagnostics.spec.ts` (2 tests): a bundle saved from Settings and from the app menu through a stubbed
+      save dialog, unzipped and searched for every planted secret, the home folder and the user name; cancel
+      and an unwritable folder. Dropouts and the fastest speed survive a relaunch.
+  - **Open for the owner:** whether the bundle may hold more (site hosts are in it; file names, folders and
+    custom network names are not).
 - **Flaky under load:** with the Mac at a load average of about 36 (another project's Node processes) and 17 GB
     of swap, Vitest's 5-second limit failed one slow test per run: `NewDownloadDialog` once, `NetworksScreen`
     once. Each passed alone, and the full run passed with `--maxWorkers=3`.

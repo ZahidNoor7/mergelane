@@ -320,7 +320,8 @@ function NetworkLine({
   )
 }
 
-/** The last few networks that dropped or came back, newest first. */
+/** The last few networks that dropped or came back, newest first. The main process keeps a week
+ * of them across restarts (ADR-0042). */
 function Dropouts(): React.JSX.Element | null {
   const events = useAppStore((store) => store.networkEvents)
   const networkVisual = useNetworkVisuals()
@@ -340,9 +341,7 @@ function Dropouts(): React.JSX.Element | null {
       </h2>
       <div role="log" aria-labelledby="networks-dropouts">
         {shown.length === 0 ? (
-          <p className="py-2 text-[12.5px] text-ink-3">
-            No network has dropped since Mergelane opened.
-          </p>
+          <p className="py-2 text-[12.5px] text-ink-3">No network has dropped in the last week.</p>
         ) : (
           <ul className="flex flex-col">
             {shown.map((event) => {
@@ -363,7 +362,9 @@ function Dropouts(): React.JSX.Element | null {
                     <span className="font-mono text-[11px] text-ink-3">{event.id}</span>{' '}
                     {back ? (
                       <span className="text-ink-2">
-                        came back after {formatDowntime(event.downForMs ?? 0)}
+                        {event.whileClosed
+                          ? 'came back while Mergelane was closed'
+                          : `came back after ${formatDowntime(event.downForMs ?? 0)}`}
                       </span>
                     ) : (
                       <span className="text-destructive">dropped</span>
@@ -386,5 +387,7 @@ function formatAgo(ms: number): string {
   const minutes = Math.floor(ms / 60_000)
   if (minutes < 1) return 'just now'
   if (minutes < 60) return `${minutes} min ago`
-  return `${Math.floor(minutes / 60)} h ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours} h ago`
+  return `${Math.floor(hours / 24)} days ago`
 }

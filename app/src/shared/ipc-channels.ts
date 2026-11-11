@@ -56,5 +56,10 @@ export const IpcChannels = {
   setOpenAtLogin: 'app:set-open-at-login',
   usenetServer: 'usenet:server',
   saveUsenetServer: 'usenet:save-server',
-  testUsenetServer: 'usenet:test-server'
+  testUsenetServer: 'usenet:test-server',
+  networkActivity: 'network:activity',
+  networkActivityChanged: 'network:activity-changed',
+  saveDiagnostics: 'diagnostics:save',
+  revealDiagnostics: 'diagnostics:reveal',
+  saveDiagnosticsRequested: 'diagnostics:requested'
 } as const

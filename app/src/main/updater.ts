@@ -10,6 +10,7 @@ import {
   type UpdateChannel
 } from '../shared/releases'
 import type { AppSettings, UpdateState } from '../shared/types'
+import { saveDiagnostics } from './diagnostics'
 import { saveSettings } from './settings'
 import { testKnobs } from './testKnobs'
 import { downloadDiskImage, publishedChecksum, UpdateFailure } from './updateDownload'
@@ -253,7 +254,25 @@ function checkFromMenu(): void {
   void checkForUpdates()
 }
 
-/** Electron's default macOS menu, with "Check for Updates…" under the app's name. */
+/** The app menu's "Save Diagnostics…": the window's Settings › General saves one and says where.
+ * With no window open, the save dialog stands alone and the bundle is shown in the Finder. */
+function diagnosticsFromMenu(): void {
+  const window = getWindow()
+  if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore()
+    // A test run keeps its window off the screen.
+    if (!testKnobs.hideWindow) window.show()
+    window.webContents.send(IpcChannels.saveDiagnosticsRequested)
+    return
+  }
+  saveDiagnostics(null).then(
+    (saved) => saved && shell.showItemInFolder(saved),
+    (error) => console.error('[mergelane] failed to save diagnostics', error)
+  )
+}
+
+/** Electron's default macOS menu, with "Check for Updates…" and "Save Diagnostics…" under the
+ * app's name. */
 function setAppMenu(): void {
   if (process.platform !== 'darwin') return
   Menu.setApplicationMenu(
@@ -267,6 +286,7 @@ function setAppMenu(): void {
             enabled: state.status !== 'checking',
             click: checkFromMenu
           },
+          { id: 'save-diagnostics', label: 'Save Diagnostics…', click: diagnosticsFromMenu },
           { type: 'separator' },
           { role: 'services' },
           { type: 'separator' },

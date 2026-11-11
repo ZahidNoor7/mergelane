@@ -1,5 +1,6 @@
 import type { AppUsage } from './appUsage'
 import type { BrowserId, BrowsersReport } from './browsers'
+import type { NetworkActivity } from './networkActivity'
 import type { UpdateChannel } from './releases'
 import type {
   AppSettings,
@@ -20,7 +21,7 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, magnetCheckStatus, historyChanged,
- * linkReceived, updateStateChanged and showUpdates) — one source of truth for
+ * linkReceived, updateStateChanged, showUpdates, networkActivityChanged and saveDiagnosticsRequested) — one source of truth for
  * both mergelaneApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -114,4 +115,12 @@ export interface IpcContract {
   saveUsenetServer: { args: [server: UsenetServerInput]; result: UsenetServer }
   /** Connects and signs in, over the computer's default route; throws what went wrong. */
   testUsenetServer: { args: [server: UsenetServerInput]; result: void }
+  /** The networks that dropped or came back, and the day's fastest merged speed, kept across
+   * restarts (M3.7). */
+  networkActivity: { args: []; result: NetworkActivity }
+  /** Asks where to save a diagnostics bundle and saves it there; null when the dialog is
+   * cancelled. Only the file's name comes back. */
+  saveDiagnostics: { args: []; result: { fileName: string } | null }
+  /** Shows the last bundle saved in the Finder. */
+  revealDiagnostics: { args: []; result: void }
 }

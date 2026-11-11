@@ -186,12 +186,42 @@ describe('NetworksScreen', () => {
     ])
   })
 
+  it('a dropout from before a restart: back while Mergelane was closed, days ago', () => {
+    useAppStore.setState({
+      networkEvents: [
+        {
+          id: 'en7',
+          osName: 'iPhone',
+          kind: 'usb',
+          change: 'dropped',
+          at: NOW - 3 * 24 * 3600e3,
+          left: 1
+        },
+        {
+          id: 'en7',
+          osName: 'iPhone',
+          kind: 'usb',
+          change: 'recovered',
+          at: NOW - 30 * 3600e3,
+          whileClosed: true,
+          left: 2
+        }
+      ]
+    })
+    show()
+    const items = within(screen.getByRole('log')).getAllByRole('listitem')
+    expect(items.map((item) => item.textContent)).toEqual([
+      'iPhone en7 came back while Mergelane was closed30 h ago',
+      'iPhone en7 dropped3 days ago'
+    ])
+  })
+
   it('with no network, says how to get one', () => {
     useAppStore.setState({ interfaces: [], downloads: {} })
     show()
     expect(screen.getByText('No network connected')).toBeTruthy()
     expect(screen.getByText(/Join a Wi-Fi network/)).toBeTruthy()
-    expect(screen.getByText('No network has dropped since Mergelane opened.')).toBeTruthy()
+    expect(screen.getByText('No network has dropped in the last week.')).toBeTruthy()
     expect(screen.getByText('System merge switch')).toBeTruthy()
   })
 

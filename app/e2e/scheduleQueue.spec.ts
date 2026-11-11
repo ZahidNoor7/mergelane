@@ -40,7 +40,7 @@ test('scheduled queue holds new downloads and manual resumes; manually paused do
   await expect.poll(async () => (await mergelane.byId(first))?.status).toBe('completed')
 })
 
-test('the clock cutoff stops active HTTP transfers, preserves progress, and blocks queue draining', async ({
+test('the clock cutoff stops active HTTP transfers, preserves progress, and blocks queue draining @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -64,7 +64,7 @@ test('the clock cutoff stops active HTTP transfers, preserves progress, and bloc
   await expect.poll(async () => (await mergelane.byId(next))?.status).toBe('completed')
 })
 
-test('scheduled intent survives restart, while expiration stays blocked until disabled', async ({
+test('scheduled intent survives restart, while expiration stays blocked until disabled @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -79,7 +79,10 @@ test('scheduled intent survives restart, while expiration stays blocked until di
   await expect.poll(async () => (await mergelane.byId(id))?.status).toBe('completed')
 })
 
-test('a restart inside the window continues scheduled work', async ({ mergelane, serve }) => {
+test('a restart inside the window continues scheduled work @smoke', async ({
+  mergelane,
+  serve
+}) => {
   const minute = new Date().getHours() * 60 + new Date().getMinutes()
   const open = { ...schedule, startMinute: (minute + 1420) % 1440, endMinute: (minute + 20) % 1440 }
   await mergelane.api.updateSettings({ downloadSchedule: open })
@@ -93,7 +96,7 @@ test('a restart inside the window continues scheduled work', async ({ mergelane,
   await expect.poll(async () => (await mergelane.byId(id))?.status).toBe('completed')
 })
 
-test('the cutoff stops torrent peers and uploads; reopening finishes the same file', async ({
+test('the cutoff stops torrent peers and uploads; reopening finishes the same file @smoke', async ({
   mergelane
 }) => {
   const swarm = await new Swarm().start()
@@ -139,12 +142,17 @@ async function chooseTime(mergelane: MergelaneApp, label: string, time: string):
   }
 }
 
-test('schedule dialog saves, cancels edits, validates times, and restores settings', async ({
+test('schedule dialog saves, cancels edits, validates times, and restores settings @smoke', async ({
   mergelane
 }, testInfo) => {
   const page = mergelane.page
+  // The indicator is in the Downloads place's header (where the app opens); the schedule's state
+  // is also at the sidebar's foot, in every place. Which of its two messages shows depends on the
+  // time of day the test runs, so either is accepted.
   const indicator = page.getByRole('button', { name: 'Download schedule enabled', exact: true })
+  const sidebarSchedule = page.getByText(/^(Downloads stop at|Waiting until) /)
   await expect(indicator).toBeHidden()
+  await expect(sidebarSchedule).toBeHidden()
   await openSchedule(mergelane)
   const dialog = page.getByRole('dialog', { name: 'Speed & data limits' })
   await expect(dialog.getByRole('group', { name: 'Start at', exact: true })).toBeHidden()
@@ -164,7 +172,7 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
   await dialog.getByRole('button', { name: 'End date', exact: true }).click()
   const calendar = page.getByRole('dialog', { name: 'Choose end date' })
   await calendar.getByRole('button', { name: 'Go to the next month' }).click()
-  await page.screenshot({ path: '/tmp/mergelane-schedule-calendar.png' })
+  await page.screenshot({ path: test.info().outputPath('schedule-calendar.png') })
   // Choose a day in the displayed month, excluding the adjacent months' trailing dates.
   await calendar
     .locator('[data-slot="calendar"] td:not([data-outside]) button')
@@ -174,13 +182,16 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
     .getByRole('button', { name: 'End date', exact: true })
     .innerText()
   await testInfo.attach('schedule-dialog.png', {
-    body: await page.screenshot({ path: '/tmp/mergelane-schedule-dialog.png' }),
+    body: await page.screenshot({ path: test.info().outputPath('schedule-dialog.png') }),
     contentType: 'image/png'
   })
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog).toBeHidden()
+  // Saved from the Networks place, which has no indicator: the sidebar says it at once.
+  await expect(sidebarSchedule).toBeVisible()
+  await mergelane.place('Downloads')
   await expect(indicator).toBeVisible()
-  await page.screenshot({ path: '/tmp/mergelane-schedule-toolbar.png' })
+  await page.screenshot({ path: test.info().outputPath('schedule-toolbar.png') })
   await indicator.click()
   await expect(dialog.getByRole('switch', { name: 'Enable download schedule' })).toBeFocused()
   await expect(dialog.getByRole('region', { name: 'Download schedule' })).toBeInViewport()
@@ -215,12 +226,21 @@ test('schedule dialog saves, cancels edits, validates times, and restores settin
   )
   await restored.getByRole('switch', { name: 'Enable download schedule' }).uncheck()
   await restored.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(restored).toBeHidden()
+  await expect(mergelane.page.getByText(/^(Downloads stop at|Waiting until) /)).toBeHidden()
+  // Where the indicator would be, so that its absence means something.
+  await mergelane.place('Downloads')
+  await expect(
+    mergelane.page.getByRole('heading', { name: 'Downloads', level: 1, exact: true })
+  ).toBeVisible()
   await expect(
     mergelane.page.getByRole('button', { name: 'Download schedule enabled', exact: true })
   ).toBeHidden()
 })
 
-test('an overnight schedule remains usable at the minimum window size', async ({ mergelane }) => {
+test('an overnight schedule remains usable at the minimum window size @smoke', async ({
+  mergelane
+}) => {
   await mergelane.evaluateMain(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
     window.setSize(720, 620)
@@ -260,7 +280,7 @@ test('an overnight schedule remains usable at the minimum window size', async ({
   await minute.fill('00')
   await minute.fill('75')
   await expect(minute).toHaveValue('00')
-  await mergelane.page.screenshot({ path: '/tmp/mergelane-schedule-time-dark.png' })
+  await mergelane.page.screenshot({ path: test.info().outputPath('schedule-time-dark.png') })
   await expect(dialog.getByText('Next day', { exact: true })).toBeVisible()
   await dialog.getByRole('button', { name: 'Save', exact: true }).scrollIntoViewIfNeeded()
   await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeInViewport({
@@ -270,7 +290,7 @@ test('an overnight schedule remains usable at the minimum window size', async ({
   await expect(dialog).toBeHidden()
 })
 
-test('main refuses invalid schedule changes without clearing the existing window', async ({
+test('main refuses invalid schedule changes without clearing the existing window @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -286,7 +306,7 @@ test('main refuses invalid schedule changes without clearing the existing window
   await expect.poll(async () => (await mergelane.byId(id))?.status).toBe('completed')
 })
 
-test('quitting during the cutoff saves progress and leaves the restored queue stopped', async ({
+test('quitting during the cutoff saves progress and leaves the restored queue stopped @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -307,7 +327,7 @@ test('quitting during the cutoff saves progress and leaves the restored queue st
   await expect.poll(async () => (await mergelane.byId(id))?.status).toBe('completed')
 })
 
-test('enabling a closed window adopts active work; a manual pause survives its cutoff and restart', async ({
+test('enabling a closed window adopts active work; a manual pause survives its cutoff and restart @smoke', async ({
   mergelane,
   serve
 }) => {
@@ -336,7 +356,7 @@ test('enabling a closed window adopts active work; a manual pause survives its c
   await expect.poll(async () => (await mergelane.byId(active))?.status).toBe('completed')
 })
 
-test('a malformed saved schedule blocks transfers and can be disabled from settings', async ({
+test('a malformed saved schedule blocks transfers and can be disabled from settings @smoke', async ({
   mergelane,
   serve,
   dirs

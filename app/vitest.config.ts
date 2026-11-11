@@ -106,7 +106,10 @@ export const COVERED = [
   'src/renderer/src/hooks/useNetworks.ts',
   // M3.9: New download's When (ADR-0044).
   'src/shared/startAt.ts',
-  'src/renderer/src/utils/downloadActions.ts'
+  'src/renderer/src/utils/downloadActions.ts',
+  // M3.10: each network's role for downloads (ADR-0045).
+  'src/shared/networkRoles.ts',
+  'src/renderer/src/components/NetworkRoleMenu.tsx'
 ]
 
 export default defineConfig({

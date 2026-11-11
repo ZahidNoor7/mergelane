@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { fileTypeOf } from '@shared/downloadFilters'
 import { nextStartAt, startAtAction, startAtScheduleNote } from '@shared/startAt'
+import { byRole, roleOf } from '@shared/networkRoles'
+import { STANDBY_HINT } from './networkStatus'
 import { FILE_TYPE_ICON } from './fileTypeIcons'
 import { NetworkTile } from './NetworkTile'
 import { useEffect, useRef, useState } from 'react'
@@ -293,12 +295,18 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     const dataLimit = networkPreferences[id]?.dataLimit
     return dataLimit !== undefined && (usage[id] ?? 0) >= dataLimit
   }
-  const availableIds = detectedIds.filter((id) => !isReached(id))
+  // A network set to Don't use on Networks is never used for downloads (ADR-0045), so it can't be
+  // picked either.
+  const isNever = (id: string): boolean => roleOf(networkPreferences[id]) === 'never'
+  const availableIds = detectedIds.filter((id) => !isReached(id) && !isNever(id))
   const pickedIds = availableIds.filter((id) => !deselectedInterfaceIds.includes(id))
   // The last pick may be all used up. Then nothing is picked, rather than what was left out: a
   // network left out is often left out on purpose (a phone's metered data), so it's chosen here
   // by hand, never stood in for the one that ran out.
-  const selectedInterfaceIds = isSingleStreamOnly ? pickedIds.slice(0, 1) : pickedIds
+  // One network for a file that can't be split: a Use one before a Standby one.
+  const selectedInterfaceIds = isSingleStreamOnly
+    ? byRole(pickedIds, (id) => roleOf(networkPreferences[id])).slice(0, 1)
+    : pickedIds
   // The networks of the last pick that have used up their data, to say why nothing is picked.
   const usedUpPick =
     pickedIds.length === 0 && availableIds.length > 0
@@ -352,7 +360,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   }
 
   const handleToggleInterface = (id: string): void => {
-    if (isReached(id)) return
+    if (isReached(id) || isNever(id)) return
     if (isSingleStreamOnly) {
       // Single-stream mode can only download through 1 interface at a time
       setDeselectedInterfaceIds(detectedIds.filter((otherId) => otherId !== id))
@@ -800,26 +808,39 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 const selected = selectedInterfaceIds.includes(iface.id)
                 const reached = isReached(iface.id)
                 const preference = networkPreferences[iface.id]
+                const role = roleOf(preference)
+                const unpickable = reached || role === 'never'
                 const speedLimit = preference?.speedLimit
                 const proxy = preference?.proxy
                 const isProxyActive = Boolean(proxy?.enabled && proxy.host)
-                // What's worth knowing before it's picked: it can't be, or it's capped.
-                const note = reached
-                  ? 'Data limit reached'
-                  : speedLimit !== undefined
-                    ? `Limited to ${formatSpeedLimit(speedLimit)}`
-                    : null
+                // What's worth knowing before it's picked: it can't be, it waits, or it's capped.
+                const note =
+                  [
+                    reached
+                      ? 'Data limit reached'
+                      : role === 'never'
+                        ? 'Set to Don’t use on Networks'
+                        : role === 'standby'
+                          ? STANDBY_HINT
+                          : null,
+                    !reached && role !== 'never' && speedLimit !== undefined
+                      ? `Limited to ${formatSpeedLimit(speedLimit)}`
+                      : null
+                  ]
+                    .filter(Boolean)
+                    .join('. ') || null
 
                 const toggleButton = (
                   <button
                     type="button"
                     aria-pressed={selected}
                     // Not `disabled`: a disabled button never gets the hover that says why.
-                    aria-disabled={reached || undefined}
+                    aria-disabled={unpickable || undefined}
                     onClick={() => handleToggleInterface(iface.id)}
                     className={cn(
                       'flex min-w-0 items-center gap-2 rounded-full py-1 pr-1 pl-1 outline-none',
-                      reached && 'cursor-not-allowed line-through'
+                      unpickable && 'cursor-not-allowed',
+                      reached && 'line-through'
                     )}
                   >
                     <NetworkTile
@@ -831,6 +852,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                     />
                     <span className="truncate font-[580]">{visual.name}</span>
                     <span className="font-mono text-[11px] text-ink-3">{iface.id}</span>
+                    {role !== 'use' && (
+                      <span className="rounded-full bg-sunken px-1.5 py-px text-[11px] font-[600] whitespace-nowrap text-ink-2 shadow-[inset_0_0_0_1px_var(--border)]">
+                        {role === 'standby' ? 'Standby' : 'Don’t use'}
+                      </span>
+                    )}
                     <span
                       aria-hidden
                       className={cn(
@@ -853,7 +879,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                       selected
                         ? 'bg-selected shadow-[inset_0_0_0_1px_var(--border-strong)]'
                         : 'shadow-[inset_0_0_0_1px_var(--border)] hover:bg-hover',
-                      reached && 'opacity-50'
+                      unpickable && 'opacity-50'
                     )}
                   >
                     {note === null ? (
@@ -915,11 +941,17 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 this download.
               </Note>
             )}
-            {interfaces.length > 0 && availableIds.length === 0 && (
-              <Note tone="warning">
-                Every network has reached its data limit. Raise one in Speed &amp; data limits.
-              </Note>
-            )}
+            {interfaces.length > 0 &&
+              availableIds.length === 0 &&
+              (interfaces.every((iface) => isNever(iface.id)) ? (
+                <Note tone="warning">
+                  Every network is set to Don’t use. Change one on Networks.
+                </Note>
+              ) : (
+                <Note tone="warning">
+                  Every network has reached its data limit. Raise one in Speed &amp; data limits.
+                </Note>
+              ))}
             {isSingleStreamOnly && selectedInterfaceIds.length === 1 && interfaces.length > 1 && (
               <p className="text-[12px] text-ink-3">
                 This download uses one connection on one network.

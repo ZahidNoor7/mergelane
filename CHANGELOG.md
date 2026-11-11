@@ -13,6 +13,12 @@ All notable changes to Mergelane are recorded here. The format follows
   Start now starts it early. Both survive quitting Mergelane. A time that passed while Mergelane was closed starts
   at the next launch, and the download says it started late. The download schedule still wins: a time outside its
   hours waits for them, and New download says so.
+- **A role for each network.** On Networks, each network's pop-up sets what Mergelane's downloads do with it:
+  **Use** (as before), **Standby** (used only when no network set to Use is connected, for example a phone's data
+  plan kept as a backup: running downloads move to it when the others drop, and back when they return) or
+  **Don't use** (never used for downloads). It applies to running downloads too. New download shows a Standby
+  network as such and can't pick a Don't use one. "Which network carries what" still wins while it names a
+  network.
 
 ## [0.3.0] - 2026-11-12
 

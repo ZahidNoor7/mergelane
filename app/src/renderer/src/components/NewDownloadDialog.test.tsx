@@ -438,6 +438,59 @@ describe('New download, networks and warnings', () => {
   })
 })
 
+describe('New download, network roles (ADR-0045)', () => {
+  const chip = (name: string): HTMLElement =>
+    within(screen.getByRole('group', { name: 'Networks' })).getByRole('button', {
+      name: new RegExp(`^${name}`)
+    })
+
+  it('a Don’t use network can’t be picked; a Standby one is picked, and says so', async () => {
+    useAppStore.setState({
+      interfaces: [iface('en0', 'Wi-Fi'), iface('en5', 'Ethernet'), iface('en7', 'Phone')],
+      networkPreferences: {
+        en0: { role: 'standby', speedLimit: 2 * MB },
+        en7: { role: 'never' }
+      }
+    } as never)
+    open({ probe: HTTP })
+    const phone = chip('Phone')
+    expect(phone.getAttribute('aria-disabled')).toBe('true')
+    expect(phone.getAttribute('aria-pressed')).toBe('false')
+    expect(phone.textContent).toContain('Don’t use')
+    expect(chip('Wi-Fi').getAttribute('aria-pressed')).toBe('true')
+    expect(chip('Wi-Fi').textContent).toContain('Standby')
+    expect(chip('Ethernet').textContent).not.toContain('Standby')
+    const user = userEvent.setup()
+    await user.click(phone)
+    expect(phone.getAttribute('aria-pressed')).toBe('false')
+    await user.click(screen.getByRole('button', { name: 'Download' }))
+    await waitFor(() => expect(bridge.startDownload).toHaveBeenCalled())
+    expect(bridge.startDownload.mock.calls[0][0]).toMatchObject({ interfaceIds: ['en0', 'en5'] })
+    // Left out by its role, not by this pick: nothing is remembered for it.
+    expect(useAppStore.getState().networkPreferences['en7']).toEqual({ role: 'never' })
+  })
+
+  it('a file sent whole goes over a Use network before a Standby one', async () => {
+    useAppStore.setState({ networkPreferences: { en0: { role: 'standby' } } } as never)
+    open({ probe: { ...HTTP, supportsRanges: false } as ProbeResult })
+    await screen.findByText('This download uses one connection on one network.')
+    expect(chip('Ethernet').getAttribute('aria-pressed')).toBe('true')
+    expect(chip('Wi-Fi').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('says when every network is set to Don’t use', async () => {
+    useAppStore.setState({
+      networkPreferences: { en0: { role: 'never' }, en5: { role: 'never' } }
+    } as never)
+    open({ probe: HTTP })
+    expect(
+      await screen.findByText('Every network is set to Don’t use. Change one on Networks.')
+    ).toBeTruthy()
+    expect(screen.queryByText(/Every network has reached its data limit/)).toBeNull()
+    expect(submit().disabled).toBe(true)
+  })
+})
+
 describe('New download, links from the browser', () => {
   it('steps through the links sent, says where one came from, and offers to resume', async () => {
     useAppStore.setState({

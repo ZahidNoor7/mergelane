@@ -324,6 +324,30 @@ test.describe('routing uploads', () => {
     expect(done.bytesUploaded).toBe(b.bytesUploaded)
   })
 
+  test('a Standby network downloads nothing while a is connected, yet carries the uploads routed to it (ADR-0045) @smoke', async ({
+    mergelane
+  }) => {
+    const data = seededBytes(4 * MB, 63)
+    const { torrent, overB, wantAll } = await swarmWithLeecher(data, 'standby.bin')
+    await mergelane.api.updateSettings({
+      networkPreferences: { b: { role: 'standby' } },
+      routing: { down: 'all', up: 'b', fallback: true }
+    })
+
+    await mergelane.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    await mergelane.waitUntil((state) => state.bytesDownloaded >= data.length / 2, 30_000)
+    wantAll()
+    const done = await mergelane.waitForTorrentStatus('completed', 60_000)
+    const a = done.networks.find((network) => network.id === 'a')!
+    const b = done.networks.find((network) => network.id === 'b')!
+    // Held back for downloads by its role, while routing still sends uploads over it.
+    expect(b.status).toBe('standby')
+    expect(b.bytesDownloaded).toBe(0)
+    expect(a.bytesDownloaded).toBe(data.length)
+    expect(overB(), 'what the other client received over b').toBeGreaterThan(0)
+    expect(a.bytesUploaded).toBe(0)
+  })
+
   test('pinning uploads to a while running stops them on b; downloading over b goes on', async ({
     mergelane
   }) => {

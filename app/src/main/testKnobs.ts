@@ -53,6 +53,12 @@ export const testKnobs = {
   /** A file an update's disk image path is written to instead of opening it and quitting, so a
    * test run never opens anything on the Mac (e2e/updates.spec.ts). */
   updateOpenLog: env['MERGELANE_E2E_UPDATE_OPEN_LOG'],
+  /** The folders a test run looks for browsers in, instead of /Applications and ~/Applications
+   * (colon-separated). */
+  applicationFolders: env['MERGELANE_E2E_APPLICATIONS']?.split(':').filter(Boolean),
+  /** An extension build folder (extension/build.mjs <dir>) to hand out, instead of the project's,
+   * which another test may be rebuilding. */
+  extensionBuild: env['MERGELANE_E2E_EXTENSION_BUILD'],
   /** The login item status a test run pretends macOS reports ('enabled', 'requires-approval' or
    * 'not-registered'); unset, a test or development build has no login item to offer. */
   loginItemStatus: env['MERGELANE_E2E_LOGIN_ITEM'],

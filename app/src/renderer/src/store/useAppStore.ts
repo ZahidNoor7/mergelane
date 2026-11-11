@@ -27,8 +27,8 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** The window's places (the sidebar's): the downloads, the dashboard, the networks or settings. */
 export type Screen = 'downloads' | 'dashboard' | 'networks' | 'settings'
 
-/** Settings' sections. Browser extensions comes with M3.4. */
-export type SettingsSection = 'general' | 'appearance' | 'downloads' | 'updates'
+/** Settings' sections. */
+export type SettingsSection = 'general' | 'appearance' | 'downloads' | 'extensions' | 'updates'
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]

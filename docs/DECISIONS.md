@@ -670,3 +670,36 @@ until the owner overrides it.
   - Whether ad-hoc signing is enough for `SMAppService` and UNNotification is only known on a real install. The
     Settings row reports what macOS says rather than assuming.
   - Developer ID signing and notarization (Later) should make all three reliable without code changes.
+
+## ADR-0038: Browser extensions: loaded by hand, documented browsers only (M3.4)
+
+- Status: Owner (2026-11-11). The owner chose a guided manual install over a Chrome Web Store listing (a US$5
+  developer account, a paid service CLAUDE.md rules out without approval), and Safari as its own later milestone.
+- Context:
+  - The design's Settings › Browser extensions installs, updates, turns on and uninstalls the extension in each
+    browser. On macOS, Chrome-family browsers only install an extension by themselves from their store; otherwise
+    the user loads it through Developer mode's "Load unpacked". Release Firefox keeps an unsigned add-on only until
+    it quits.
+  - Native messaging folders are documented by Google (Chrome, Chromium), Microsoft (Edge, Stable channel:
+    `~/Library/Application Support/Microsoft Edge/NativeMessagingHosts`) and Mozilla (Firefox). Brave and Vivaldi
+    document none: community reports conflict (Brave reportedly reads Chrome's folder). Arc's maker says Arc stops
+    working on 22 December 2026.
+- Decision:
+  - **Packaging:** the extension is built (`npm run build:extension`) before packaging and ships inside the app,
+    in `Contents/Resources/browser-extension/{chrome,firefox}`. The packaging test checks it is there.
+  - **Copying:** Mergelane copies the extension to `<userData>/Browser Extension/<kind>` whenever its version
+    changes. That folder is the one the user loads, so the path stays the same across app updates.
+  - **Settings › Browser extensions:**
+    - it finds Chrome, Edge, Chromium and Firefox in `/Applications` and `~/Applications`;
+    - each found browser gets an Install… guide: show the folder in the Finder, the browser's extensions page (to
+      copy), Developer mode, and Load unpacked (or Firefox's temporary add-on).
+    - Brave and Vivaldi show as "not supported yet", with the reason; Safari shows as coming later.
+    - It says whether any browser's extension has reached Mergelane (`browserExtensionUsed`).
+  - **Registration:** Edge is added to the helper registration, next to Chrome, Chromium and Firefox.
+  - The design's Update, Uninstall and on/off switches are left out: Mergelane can't do them to a browser, and the
+    guide says what to do instead.
+- Consequences:
+  - Each browser needs one manual load, and Firefox needs one per restart until the add-on is signed by Mozilla
+    (free, but needs a Mozilla account: the owner's decision).
+  - Next (M3.4b): which browser connected (the helper reports its parent browser), and the capture rules set once
+    in the app for every browser.

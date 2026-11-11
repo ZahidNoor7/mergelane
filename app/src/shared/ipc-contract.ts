@@ -1,4 +1,5 @@
 import type { AppUsage } from './appUsage'
+import type { BrowserId, BrowsersReport } from './browsers'
 import type { UpdateChannel } from './releases'
 import type {
   AppSettings,
@@ -95,6 +96,10 @@ export interface IpcContract {
   installUpdate: { args: []; result: void }
   /** The found release's page on GitHub, in the browser. */
   openReleasePage: { args: []; result: void }
+  /** Looks for the browsers on this Mac and readies the extension for them (M3.4a). */
+  browsers: { args: []; result: BrowsersReport }
+  /** Shows the extension folder for a browser in the Finder. */
+  revealExtension: { args: [id: BrowserId]; result: void }
   /** Whether Mergelane opens at login, and what macOS says about it (ADR-0037). */
   loginItem: { args: []; result: LoginItemState }
   setOpenAtLogin: { args: [on: boolean]; result: LoginItemState }

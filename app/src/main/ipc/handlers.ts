@@ -52,6 +52,7 @@ import {
   updateState
 } from '../updater'
 import { readAppUsage } from '../appUsage'
+import { revealExtension, scanBrowsers } from '../browsers'
 import { loginItemState, setOpenAtLogin } from '../loginItem'
 import { applyMenuBarSettings } from '../menuBar'
 
@@ -323,6 +324,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   )
 
   handle('updateState', () => updateState())
+  handle('browsers', () => scanBrowsers())
+  handle('revealExtension', (_event, id) => revealExtension(id))
   handle('loginItem', () => loginItemState())
   handle('setOpenAtLogin', (_event, on) => setOpenAtLogin(on === true))
   handle('checkForUpdates', () => checkForUpdates())

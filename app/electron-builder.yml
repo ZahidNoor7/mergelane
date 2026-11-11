@@ -37,6 +37,12 @@ extraResources:
   # The browser extension's native messaging host (docs/BROWSER-BRIDGE.md, ADR-0021).
   - from: ../daemon/bin/mergelane-nmhost
     to: mergelane-nmhost
+  # The browser extension itself, built by `npm run build:extension` before packaging. Settings ›
+  # Browser extensions copies it into Mergelane's folder for the user to load (ADR-0038).
+  - from: extension/dist/chrome
+    to: browser-extension/chrome
+  - from: extension/dist/firefox
+    to: browser-extension/firefox
   # yt-dlp and FFmpeg, put in resources/bin by ../scripts/media-tools/fetch.mjs before packaging
   # (docs/MEDIA-TOOLS.md), with their licence texts. yt-dlp is a folder, its unpacked macOS build
   # (ADR-0031): yt-dlp_macos and its _internal files, copied whole (links kept) to

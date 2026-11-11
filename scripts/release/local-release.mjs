@@ -12,7 +12,8 @@
 //      (notes.mjs --check); HEAD is the default branch (main) and equals origin's, after fetching
 //      it; the working tree is clean; the tag exists neither here nor on origin; GitHub has no
 //      release (draft or published) for it;
-//   3. the build: both helpers with -X main.version, the media tools (fetch.mjs), electron-vite and
+//   3. the build: both helpers with -X main.version, the media tools (fetch.mjs), the browser
+//      extension (npm run build:extension), electron-vite and
 //      electron-builder --mac --publish never, into a fresh app/dist;
 //   4. the REA fuse audit, package-test.sh in its local mode (no quarantine; an isolated launch),
 //      and a check of the app in the zip (signature and version);
@@ -396,6 +397,8 @@ export async function release(options, { run, print }) {
 
   stepTitle('Build the arm64 DMG and zip (ad-hoc signed), into a fresh app/dist')
   await rm(dist, { recursive: true, force: true })
+  // The browser extension goes inside the app (electron-builder.yml, ADR-0038).
+  await run('npm', ['run', 'build:extension'], { cwd: app })
   await run('npx', ['electron-vite', 'build'], { cwd: app })
   await run('npx', ['electron-builder', '--mac', '--publish', 'never'], { cwd: app })
 

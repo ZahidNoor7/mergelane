@@ -97,7 +97,7 @@ without reaching your own Mergelane:
   your login keychain.
 - **It quits by process ID**, never by bundle ID, which could quit your Mergelane.
 - **It proves it.** Before and after, it records every file under `~/Library/Application Support/Mergelane` and the
-  Chrome, Chrome for Testing, Chromium and Firefox `NativeMessagingHosts` folders (with SHA-256s and modification
+  Chrome, Chrome for Testing, Chromium, Firefox and Microsoft Edge `NativeMessagingHosts` folders (with SHA-256s and modification
   times), Mergelane's caches, logs, preferences and saved state, its keychain item (attributes only, never the secret)
   and which app opens `mergelane:` and `magnet:` links, and fails if anything changed.
 - **Preferences are compared by content.** Electron writes three keys into the app's preferences on every launch

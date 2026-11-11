@@ -151,7 +151,7 @@ jobs:
       # set: it matters only on pull requests, and this is not one. --publish never: the build
       # uploads nothing itself; the last step does, after every check has passed.
       - name: Build the arm64 DMG and zip (ad-hoc signed)
-        run: npx electron-vite build && npx electron-builder --mac --publish never
+        run: npm run build:extension && npx electron-vite build && npx electron-builder --mac --publish never
 
       # Reads the Electron fuse bytes with REA and fails if any differs from electron-builder.yml
       # (ADR-0016), e.g. if RunAsNode were left on.

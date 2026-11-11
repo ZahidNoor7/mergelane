@@ -288,6 +288,11 @@ describe('release', () => {
     )
     assert.ok(commands.includes('node ../scripts/media-tools/fetch.mjs'))
     assert.ok(commands.includes('npx electron-builder --mac --publish never'))
+    // The extension is built before the app that bundles it.
+    assert.ok(
+      commands.indexOf('npm run build:extension') < commands.indexOf('npx electron-vite build')
+    )
+    assert.ok(commands.includes('npm run build:extension'))
     assert.ok(commands.includes('node ../scripts/ci/audit-fuses.mjs dist/mac-arm64/Mergelane.app'))
     assert.ok(
       commands.includes(

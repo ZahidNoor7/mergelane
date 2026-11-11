@@ -5,7 +5,8 @@ import { CHROME_EXTENSION_ID, FIREFOX_EXTENSION_ID, NATIVE_HOST } from '../share
 
 // Registers mergelane-nmhost with the user's browsers (docs/BROWSER-BRIDGE.md): a per-user
 // manifest in each browser's NativeMessagingHosts folder, no admin rights needed. Locations from
-// Chrome's and Mozilla's native messaging docs (user-specific, macOS).
+// Chrome's, Microsoft's and Mozilla's native messaging docs (user-specific, macOS); Edge's is
+// learn.microsoft.com, "Native messaging", Step 3 (the Stable channel's folder).
 
 interface Browser {
   /** The browser's own Application Support folder: only browsers that have one get a manifest. */
@@ -19,7 +20,8 @@ export function browsers(home: string): Browser[] {
     { dir: join(support, 'Google', 'Chrome'), firefox: false },
     { dir: join(support, 'Google', 'ChromeForTesting'), firefox: false },
     { dir: join(support, 'Chromium'), firefox: false },
-    { dir: join(support, 'Mozilla'), firefox: true }
+    { dir: join(support, 'Mozilla'), firefox: true },
+    { dir: join(support, 'Microsoft Edge'), firefox: false }
   ]
 }
 

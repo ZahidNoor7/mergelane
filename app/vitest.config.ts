@@ -76,6 +76,10 @@ export const COVERED = [
   // M3.3: the menu bar, Open at login and notifications.
   'src/shared/speedText.ts',
   'src/renderer/src/components/OnThisMacSettings.tsx',
+  // M3.4a: Settings › Browser extensions.
+  'src/shared/browsers.ts',
+  'src/renderer/src/components/ExtensionSettings.tsx',
+  'src/renderer/src/components/settingsParts.tsx',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
   // M3.1 pull request 6a: the Dashboard's Today.
   'src/renderer/src/components/DashboardToday.tsx',

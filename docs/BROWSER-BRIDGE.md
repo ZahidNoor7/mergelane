@@ -1,6 +1,7 @@
 # Browser bridge, protocol v2 (native messaging)
 
-How the browser extension hands downloads to the app (ADR-0021). There are three processes:
+How the browser extension hands downloads to the app (ADR-0021). Chrome, Chromium and Microsoft Edge load the
+Chrome build; Firefox loads its own (ADR-0038). There are three processes:
 
 ```text
 extension ──native messaging──► mergelane-nmhost ──Unix socket──► Mergelane.app

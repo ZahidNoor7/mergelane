@@ -35,12 +35,19 @@ test.beforeAll(async () => {
   mkdirSync(join(profile, 'NativeMessagingHosts'))
   // Anything the browser keeps lands here, never in ~/Downloads.
   mkdirSync(join(profile, 'Default'))
+  mkdirSync(join(profile, 'downloads'))
   writeFileSync(
     join(profile, 'Default', 'Preferences'),
     JSON.stringify({
       download: { default_directory: join(profile, 'downloads'), prompt_for_download: false }
     })
   )
+  // With only the preference, its folder not created, the handed-over download's temporary file
+  // came and went in the owner's ~/Downloads on every run (2026-11-11). Now the folder exists, and
+  // Chromium also gets a home of its own (HOME, and CFFIXED_USER_HOME for CoreFoundation, as
+  // package-test.sh --local does: ADR-0033), which leaves the real ~/Downloads out of reach.
+  const home = join(profile, 'home')
+  mkdirSync(join(home, 'Downloads'), { recursive: true })
   writeFileSync(
     join(profile, 'NativeMessagingHosts', `${NATIVE_HOST}.json`),
     hostManifest(HOST_BINARY, false)
@@ -50,6 +57,8 @@ test.beforeAll(async () => {
     args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
     env: {
       ...(process.env as Record<string, string>),
+      HOME: home,
+      CFFIXED_USER_HOME: home,
       MERGELANE_BROWSER_SOCKET: SOCKET,
       MERGELANE_NMHOST_NO_LAUNCH: '1'
     }

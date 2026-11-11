@@ -150,10 +150,15 @@ Last updated: 2026-11-11
 - **The Deno notices** (ADR-0029) are generated and shipped.
 - **`local-release.mjs`:** a full dry run built the DMG, zip and sources; nothing was uploaded.
 - **Next:**
-  1. The owner runs the root suite again, with the fixes.
+  1. ~~The owner runs the root suite again, with the fixes.~~ Done 2026-11-11 12:13: all 11 PASS (PR #11).
   2. Merge PRs #1–#11 in order.
   3. Add the `[0.1.0]` changelog section and build the release on `main`, as a draft.
   4. The owner installs the DMG by hand.
+
+**Test isolation fix** (branch `fix-e2e-browser-downloads`): the extension e2e test that clicks a download in
+Chromium put the browser's temporary file in the owner's real `~/Downloads` on every run (it came and went, so
+nothing was left). Chromium now gets its own home and an existing download folder; three runs and a full
+`@extension` run (16 passed) left `~/Downloads` untouched.
 
 **Owner choices for Phase 2:**
 - CI stays paused, with no manual runs for now (ADR-0020, reconfirmed 2026-11-11). Everything runs on the

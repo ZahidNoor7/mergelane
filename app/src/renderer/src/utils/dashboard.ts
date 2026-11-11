@@ -1,6 +1,7 @@
 import {
   SPEED_HISTORY_SECONDS,
   type DownloadState,
+  type FinishedDownload,
   type NetworkInterfaceInfo,
   type NetworkInterfaceKind,
   type NetworkPreferences
@@ -237,4 +238,52 @@ export function appendLinkSamples(
     next[link.name] = [...(history[link.name] ?? []), Math.max(0, link.rxBps)].slice(-kept)
   }
   return next
+}
+
+/** What Mergelane's downloads brought in today, on this Mac's calendar: by each network that
+ * carried part of them, with the fastest a download ran. A download counts on the day it finished,
+ * or, still going, on the day it started; one that ran over midnight counts on the later day. */
+export interface Today {
+  /** Bytes by network id, biggest first. */
+  byNetwork: { id: string; kind: NetworkInterfaceKind; label: string; bytes: number }[]
+  total: number
+  /** The best speed any of them held for a few seconds (see DownloadState.peakSpeedBytesPerSec). */
+  fastest: number | undefined
+}
+
+export function todayTotals(
+  downloads: DownloadState[],
+  history: FinishedDownload[],
+  now: number
+): Today {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const from = start.getTime()
+  const counted = [
+    ...downloads.filter(
+      (download) =>
+        download.status !== 'cancelled' && (download.completedAt ?? download.startedAt) >= from
+    ),
+    ...history.filter((entry) => (entry.completedAt ?? entry.startedAt) >= from)
+  ]
+  const byNetwork = new Map<string, Today['byNetwork'][number]>()
+  let fastest: number | undefined
+  for (const item of counted) {
+    if (item.peakSpeedBytesPerSec !== undefined) {
+      fastest = Math.max(fastest ?? 0, item.peakSpeedBytesPerSec)
+    }
+    for (const network of item.networks) {
+      if (network.bytesDownloaded <= 0) continue
+      const entry = byNetwork.get(network.id) ?? {
+        id: network.id,
+        kind: network.kind,
+        label: network.label,
+        bytes: 0
+      }
+      entry.bytes += network.bytesDownloaded
+      byNetwork.set(network.id, entry)
+    }
+  }
+  const list = [...byNetwork.values()].sort((a, b) => b.bytes - a.bytes)
+  return { byNetwork: list, total: list.reduce((sum, entry) => sum + entry.bytes, 0), fastest }
 }

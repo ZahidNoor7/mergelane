@@ -67,7 +67,9 @@ export const COVERED = [
   'src/renderer/src/components/NetworkEditPopover.tsx',
   // M3.1 pull request 5e: Settings.
   'src/renderer/src/screens/SettingsScreen.tsx',
-  'src/renderer/src/hooks/useSettingsShortcut.ts'
+  'src/renderer/src/hooks/useSettingsShortcut.ts',
+  // M3.1 pull request 6a: the Dashboard's Today.
+  'src/renderer/src/components/DashboardToday.tsx'
 ]
 
 export default defineConfig({

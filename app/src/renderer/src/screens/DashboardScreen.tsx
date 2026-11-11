@@ -7,7 +7,7 @@ import {
 import { CircleCheck, CirclePause, Gauge, Plug, Plus, TriangleAlert, Unplug } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
-import { HeroBand } from '../components/HeroBand'
+import { DashboardToday } from '../components/DashboardToday'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { Sparkline } from '../components/Sparkline'
 import { SystemMergeSection } from '../components/SystemMergeSection'
@@ -44,9 +44,9 @@ const PASTE_SHORTCUT = isMac ? '⌘V' : 'Ctrl+V'
 const NEW_SHORTCUT = isMac ? '⌘N' : 'Ctrl+N'
 
 /** The list's group label, so both screens title their sections alike. */
-const sectionLabelClass =
-  'font-mono text-[10.5px] leading-none font-medium tracking-[0.18em] text-muted-foreground uppercase'
-const bodyClass = 'text-[12.5px] leading-[1.6] text-[var(--text-secondary)]'
+// The design's SectionTitle (prototype.html): sentence case, on a rule.
+const sectionLabelClass = 'text-[13px] font-[650] tracking-[-0.005em] text-foreground'
+const bodyClass = 'text-[12.5px] leading-[1.6] text-ink-2'
 
 /** README's "What to expect", in the same words: shown where the speeds are, not only in docs. */
 const HONEST_LIMITS = [
@@ -79,10 +79,10 @@ function SectionHeading({
   children?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-[38px] items-center gap-3 border-b-[0.5px] border-border pt-5 pb-3">
+    <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule pt-7 pb-2">
       <h2 className={sectionLabelClass}>
         {label}
-        {count !== undefined && <span className="ml-2.5 tracking-normal">{count}</span>}
+        {count !== undefined && <span className="figures ml-2 font-[500] text-ink-3">{count}</span>}
       </h2>
       <div className="flex-1" />
       {children}
@@ -108,7 +108,7 @@ export function DashboardScreen(): React.JSX.Element {
     <div className="flex h-full flex-col bg-background">
       {/* The window's frame has the way back (the sidebar or the compact bar); the design's
           Toolbar here is only the title (prototype.html, DashboardScreen). */}
-      <div className="window-drag flex min-h-14 shrink-0 flex-col justify-center border-b-[0.5px] border-border px-5 py-2.5">
+      <div className="window-drag flex min-h-14 shrink-0 flex-col justify-center border-b border-rule px-5 py-2.5">
         <h1
           ref={headingRef}
           tabIndex={-1}
@@ -120,9 +120,13 @@ export function DashboardScreen(): React.JSX.Element {
           Every download and network at a glance
         </p>
       </div>
-      <DashboardHero />
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
-        <ActiveDownloadsSection />
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 @container">
+        <DashboardHero />
+        {/* The design's two columns under the hero: what came in today, and what's running. */}
+        <div className="grid gap-x-8 gap-y-2 @min-[768px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <DashboardToday />
+          <ActiveDownloadsSection />
+        </div>
         <div className="grid gap-x-8 @min-[900px]:grid-cols-2">
           <NetworksSection
             onOpenLimits={(page) => {
@@ -177,7 +181,7 @@ function DashboardHero(): React.JSX.Element {
       : ''
 
   return (
-    <HeroBand className="shrink-0">
+    <div className="pt-5">
       <div className="flex items-center gap-[14px]">
         <div className="min-w-0 flex-[1.4]">
           <Confluence
@@ -214,7 +218,7 @@ function DashboardHero(): React.JSX.Element {
           )}
         </div>
       </div>
-    </HeroBand>
+    </div>
   )
 }
 

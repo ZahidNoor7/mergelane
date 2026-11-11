@@ -198,6 +198,23 @@ Last updated: 2026-11-11
     the design's "On this Mac" (open at login, menu-bar speed, notifications), which have no setting today.
   - **e2e:** an `openSettings()` fixture; `ui.spec` sets Dark and the Sage theme in Settings.
   - **Unit tests:** `SettingsScreen` and `useSettingsShortcut` are in `COVERED` at 100%.
+- **M3.1, pull request 6 is split in two:** 6a the Dashboard's layout (no helper change); 6b "Mergelane on this
+  Mac" (CPU and memory), which changes the helper's protocol and needs the owner's admin test run.
+- **M3.1, pull request 6a** (branch `m3.1-dashboard`): the Dashboard in the design's layout.
+  - The hero band is gone (`HeroBand` and the `--hero-*` and `--footer-border` tokens deleted): the Confluence
+    and the last minute sit at the top of the page.
+  - **Today** (`components/DashboardToday.tsx`, `todayTotals` in `utils/dashboard.ts`): what downloads brought
+    in today on the Mac's calendar, by network, with the fastest download (the best per-download peak; Mergelane
+    doesn't record a merged peak across downloads) and the dropouts since the app opened.
+  - Section headings take the design's sentence case on a rule.
+  - **Kept, though the design moved them to Networks:** the network status list, failover, system merge with its
+    merged-traffic chart, and "About combined speed" (the honest limits CLAUDE.md asks for in the UI).
+    Trimming them is the owner's call.
+  - **Unit tests:** `DashboardToday` in `COVERED` at 100%.
+- **Flaky test, `browserBridge.spec`, seen twice now** (5a and 6a): "a download is offered, confirmed, and opens
+  New download filled in". The Link field held the link with `erge` appended (`…/test.binerge`). With the
+  extension test's lost last character (below), two flakes change the Link field's text. No test sends OS
+  keystrokes. Suspect the dialog's link handling (the clipboard read or the link queue racing the draft).
 - **Flaky test, seen twice now:** `extensionMedia.spec`'s "Send this video to Mergelane". The link field shows the
   link without its last character, and the probe says "isn't a video".
   - It happened only during full `local.sh` runs, right after the smoke suite: 2 of about 7.

@@ -6,7 +6,8 @@ import {
   type NetworkInterfaceKind,
   type NetworkPreferences
 } from '@shared/types'
-import { wantedBytes } from './format'
+import { describeStartAt, STARTED_LATE } from '@shared/startAt'
+import { formatBytes, formatEta, formatPercent, wantedBytes } from './format'
 
 // What the dashboard shows, worked out from the store without React or the window, so it can be
 // tested on its own (e2e/dashboardModel.spec.ts).
@@ -45,6 +46,35 @@ export function activeDownloads(downloads: DownloadState[]): ActiveDownloads {
     totalSpeed,
     ...(running.length > 0 && sized && totalSpeed > 0 ? { etaSeconds: remaining / totalSpeed } : {})
   }
+}
+
+/** The line under an unfinished download's bar on the Dashboard, in the download list's words:
+ * "40% · 4.0 MB of 10.0 MB · 2 min left", "Paused at 40% · …", "Starts at 1:00 AM · 0 B" for one
+ * with a start time (ADR-0044), "Waiting for a turn · …" for the rest of the queue, and "Started
+ * late" on one whose start time passed while Mergelane was closed. */
+export function activeDetail(download: DownloadState, now: number): string {
+  const wanted = wantedBytes(download)
+  const known = wanted > 0
+  const percent = formatPercent(download.bytesDownloaded, wanted)
+  const sizes = known
+    ? `${formatBytes(download.bytesDownloaded)} of ${formatBytes(wanted)}`
+    : formatBytes(download.bytesDownloaded)
+  if (download.status === 'downloading') {
+    return [
+      known && `${percent}%`,
+      sizes,
+      download.timeLeftSeconds !== undefined && `${formatEta(download.timeLeftSeconds)} left`,
+      download.missedStartAt !== undefined && STARTED_LATE
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  if (download.status === 'paused') {
+    return known ? `Paused at ${percent}% · ${sizes}` : `Paused · ${sizes}`
+  }
+  const waiting =
+    download.startAt !== undefined ? describeStartAt(download.startAt, now) : 'Waiting for a turn'
+  return `${waiting} · ${sizes}`
 }
 
 /** Each network's speed over every running download, by network id. */

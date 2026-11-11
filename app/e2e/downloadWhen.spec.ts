@@ -93,6 +93,15 @@ test('At a time starts the download at its time, and Start now starts it early @
   expect(planned).toMatchObject({ status: 'queued', startAt: later.getTime(), bytesDownloaded: 0 })
   const row = page.getByRole('listitem').filter({ hasText: 'later.bin' })
   await expect(row).toContainText(/Starts (tomorrow )?at /)
+  // The Dashboard's waiting list says the same, not that it waits for a turn.
+  await mergelane.place('Dashboard')
+  const waiting = page
+    .getByRole('region', { name: 'Active downloads' })
+    .getByRole('listitem')
+    .filter({ hasText: 'later.bin' })
+  await expect(waiting).toContainText(/Starts (tomorrow )?at .* · 0 B of /)
+  await expect(waiting).not.toContainText('Waiting for a turn')
+  await mergelane.place('Downloads')
   await row.getByRole('button', { name: 'Start now later.bin' }).click()
   await expect.poll(async () => (await mergelane.byId(planned!.id))?.status).toBe('completed')
 

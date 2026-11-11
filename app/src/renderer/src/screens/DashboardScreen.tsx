@@ -22,6 +22,7 @@ import { useSystemMerge } from '../hooks/useSystemMerge'
 import { useAppStore } from '../store/useAppStore'
 import { NETWORK_COLOR_SWATCHES } from '../theme'
 import {
+  activeDetail,
   activeDownloads,
   appendLinkSamples,
   combinedHistory,
@@ -31,14 +32,7 @@ import {
   type NetworkEvent,
   type NetworkSummary
 } from '../utils/dashboard'
-import {
-  formatBytes,
-  formatEta,
-  formatPercent,
-  formatWhen,
-  speedTicks,
-  wantedBytes
-} from '../utils/format'
+import { formatBytes, formatPercent, formatWhen, speedTicks, wantedBytes } from '../utils/format'
 
 const isMac = window.mergelane.platform === 'darwin'
 const PASTE_SHORTCUT = isMac ? '⌘V' : 'Ctrl+V'
@@ -231,6 +225,12 @@ function ActiveDownloadsSection(): React.JSX.Element {
   const setFilter = useAppStore((store) => store.setDownloadFilter)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const networkVisual = useNetworkVisuals()
+  // A start time's day ("tomorrow at 1:00 AM") changes at midnight: the list keeps the same clock.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
   const active = activeDownloads(downloads)
   const listed = [...active.running, ...active.paused, ...active.queued]
   const waiting = [
@@ -281,6 +281,7 @@ function ActiveDownloadsSection(): React.JSX.Element {
             <ActiveDownloadRow
               key={download.id}
               download={download}
+              now={now}
               networkVisual={networkVisual}
               onOpen={() => openDownload(download.id)}
             />
@@ -293,10 +294,13 @@ function ActiveDownloadsSection(): React.JSX.Element {
 
 function ActiveDownloadRow({
   download,
+  now,
   networkVisual,
   onOpen
 }: {
   download: DownloadState
+  /** The clock "Starts at" and "tomorrow" are read against. */
+  now: number
   networkVisual: ResolveNetworkVisual
   onOpen: () => void
 }): React.JSX.Element {
@@ -308,19 +312,7 @@ function ActiveDownloadRow({
   const sizes = known
     ? `${formatBytes(download.bytesDownloaded)} of ${formatBytes(wanted)}`
     : formatBytes(download.bytesDownloaded)
-  const detail = running
-    ? [
-        known && `${percent}%`,
-        sizes,
-        download.timeLeftSeconds !== undefined && `${formatEta(download.timeLeftSeconds)} left`
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : download.status === 'paused'
-      ? known
-        ? `Paused at ${percent}% · ${sizes}`
-        : `Paused · ${sizes}`
-      : `Waiting for a turn · ${sizes}`
+  const detail = activeDetail(download, now)
 
   return (
     <li className="group relative -mx-2 flex flex-col gap-1.5 rounded-lg px-2 py-2.5 transition-colors duration-100 focus-within:bg-secondary hover:bg-secondary active:bg-muted">

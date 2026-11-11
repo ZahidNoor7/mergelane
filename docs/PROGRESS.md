@@ -60,6 +60,12 @@ Last updated: 2026-11-11
   - The owner darkened Dusk's light sidebar card (`#3A3456` to `#353050`): its faintest text was 4.26:1 and is now
     4.56:1. This is recorded in `design-system/mergelane/redesign/README.md`.
   - `design-system/mergelane/MASTER.md` and `pages/dashboard.md` are rewritten for the new design, with the owner's OK.
+- **M3.1, pull request 2** (branch `m3.1-icon`): the new app icon.
+  - `build/icon.icns` is made with `iconutil` from the design's icon in all ten sizes; `build/icon.png` and
+    `resources/icon-dark.png` are 512 px versions.
+  - The menu-bar template icons (`resources/trayTemplate.png` and `@2x`, 144 dpi as Electron's Tray docs ask) wait
+    for M3.3.
+  - The extension's icons are unchanged until M3.4.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

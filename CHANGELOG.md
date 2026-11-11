@@ -11,6 +11,7 @@ All notable changes to Mergelane are recorded here. The format follows
   - new colours, from the Porcelain theme, the first of seven themes;
   - new fonts, Archivo and Fragment Mono, bundled in the app.
   - The other themes can be chosen once the Settings screen arrives.
+- A new app icon: the blue Mergelane mark on a charcoal tile.
 - On a new install, Mergelane follows the Mac's light or dark appearance. A light or dark choice you made before
   stays.
 

@@ -10,6 +10,9 @@ All notable changes to Mergelane are recorded here. The format follows
 - By default the extension now sends Mergelane only files over 1 MB that are videos, archives, disk images, apps
   or of a type Mergelane doesn't recognise. Documents, images and audio stay with the browser unless you tick them in
   Settings › Browser extensions.
+- A network's data limit now counts what torrents upload over it as well as what Mergelane downloads, as carriers
+  do. A network that reaches its limit stops carrying uploads too.
+- Slow mode now holds uploads too: at most its speed for all downloads together, and the same for all uploads.
 
 ### Added
 

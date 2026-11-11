@@ -271,7 +271,8 @@ function GeneralPage({
       <section className={sectionClass}>
         <h4 className={headingClass}>Slow mode</h4>
         <p className={hintClass}>
-          Replaces the total speed limit while enabled. Useful during calls or streaming.
+          While enabled, downloads and uploads are each held to this speed in total, in place of the
+          total speed limits. Useful during calls or streaming.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <SpeedInput
@@ -431,7 +432,8 @@ function NetworkPage({
       <section className={sectionClass}>
         <h4 className={headingClass}>Data limit</h4>
         <p className={hintClass}>
-          Stops downloads on {name} at the limit. Uploads and other apps don’t count.
+          Stops downloads and uploads on {name} at the limit. Counts what Mergelane downloads and
+          uploads on it; other apps don’t count.
         </p>
         <LimitChoice
           label={`${name} data limit`}
@@ -508,7 +510,7 @@ function NetworkPage({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {reset === 'usage'
-                ? `This resets ${name}’s usage ${dataUsageLabel(period)} to zero. Its configured limits and usage for other periods stay unchanged. Downloads can use this network again if its data limit was reached.`
+                ? `This resets ${name}’s usage ${dataUsageLabel(period)} to zero. Its configured limits and usage for other periods stay unchanged. Downloads and uploads can use this network again if its data limit was reached.`
                 : `This removes ${name}’s speed, upload speed and data limits. Its recorded data usage stays unchanged. The total speed limits and slow mode still apply.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -861,7 +863,8 @@ function LimitsEditor({
               : speedLimit
                 ? `Limit ${formatSpeedLimit(speedLimit)}`
                 : 'No limit',
-            ...(uploadLimit ? [`Upload limit ${formatSpeedLimit(uploadLimit)}`] : []),
+            // Slow mode stands in for the upload limit too, so it isn't shown while slow mode is on.
+            ...(uploadLimit && !slowMode ? [`Upload limit ${formatSpeedLimit(uploadLimit)}`] : []),
             ...(draft.downloadSchedule?.enabled
               ? [
                   `${scheduleTime(draft.downloadSchedule.startMinute)}–${scheduleTime(draft.downloadSchedule.endMinute)}`

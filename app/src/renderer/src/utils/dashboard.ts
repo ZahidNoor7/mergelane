@@ -110,7 +110,7 @@ export interface NetworkSummary {
 }
 
 /** Every network the computer has, then any a download still lists that has gone, each with
- * its speed and condition. `usage` is what each has received this period (useNetworkUsage). */
+ * its speed and condition. `usage` is what each has received and sent this period (useNetworkUsage). */
 export function networkSummaries(
   interfaces: NetworkInterfaceInfo[],
   downloads: DownloadState[],

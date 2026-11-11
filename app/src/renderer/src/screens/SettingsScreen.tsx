@@ -187,7 +187,7 @@ function GeneralSettings(): React.JSX.Element {
         <SettingRow
           label="Slow mode"
           htmlFor={slowId}
-          hint={`Caps all of Mergelane’s downloads at ${formatSpeedLimit(slowModeSpeed)} in total, so calls and streaming stay smooth. Also in the sidebar.`}
+          hint={`Caps all of Mergelane’s downloads at ${formatSpeedLimit(slowModeSpeed)} in total, and its uploads at ${formatSpeedLimit(slowModeSpeed)} too, so calls and streaming stay smooth. Also in the sidebar.`}
         >
           <Switch id={slowId} checked={slowMode} onCheckedChange={setSlowMode} />
         </SettingRow>

@@ -267,8 +267,10 @@ export class TorrentTransfer implements Transfer {
     })
   }
 
-  /** A peer took `bytes` of a piece from this download, over `network`. */
+  /** A peer took `bytes` of a piece from this download, over `network`: sent, so they count
+   * against its data limit. */
   private onUpload(network: TorrentDownloadNetwork, peer: Peer, bytes: number): void {
+    this.host.limits.countUpload(network.id, bytes)
     const { state } = this.runtime
     network.bytesUploaded += bytes
     state.bytesUploaded += bytes
@@ -318,7 +320,8 @@ export class TorrentTransfer implements Transfer {
 
   /** Networks that carry this download's uploads only: routing's upload network, while it's
    * connected and downloads are routed (or switched) off it. Not one at its data limit: that stops
-   * Mergelane using a network at all, as before. */
+   * Mergelane using a network at all, uploads included. Its status ('routed', 'off') is about
+   * downloads, so the limit is asked here; reaching it re-reconciles, which drops its peers. */
   private uploadOnly(): TorrentDownloadNetwork[] {
     const route = this.host.uploadRoute()
     if (!route) return []
@@ -326,7 +329,8 @@ export class TorrentTransfer implements Transfer {
       (network) =>
         route.has(network.id) &&
         (network.status === 'routed' || network.status === 'off') &&
-        Boolean(this.host.networks.find(network.id))
+        Boolean(this.host.networks.find(network.id)) &&
+        !this.host.limits.limitReached(network.id)
     )
   }
 

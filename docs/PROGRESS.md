@@ -480,6 +480,23 @@ Last updated: 2026-11-11
         prefilled with nothing started;
       - through the real clipboard, which is saved in every format and put back.
   - **Not checked:** the macOS pasteboard alert itself, which needs a manual check on the owner's Mac.
+- **M3.5c Uploads in data limits and slow mode** (branch `m3.5c-upload-limits`, ADR-0041's 2026-11-11 update; owner's
+  decisions).
+  - **Engine:** `Limits.countUpload` counts each torrent block once sent (the wire's `upload` event) toward its
+    network's data limit; `take` and it share one counter. Slow mode now also stands in for the total upload limit,
+    with the same speed in a separate bucket. `TorrentTransfer.uploadOnly()` leaves out a network at its data
+    limit, so an upload-only (routed) network stops too: before, it went on uploading past its limit.
+  - **UI text:** the data limit hint ("Stops downloads and uploads… Counts what Mergelane downloads and uploads on
+    it"), the reset-usage confirmation, slow mode's hints in Speed & data limits and Settings › General, and the
+    sidebar switch's tooltip. With slow mode on, the dialog's list no longer shows the total upload limit it
+    replaces.
+  - **Tests:**
+    - Vitest: `LimitsDialog` (14, 1 new), `SettingsScreen` and `WindowChrome` (new assertions). Lines:
+      `LimitsDialog` 97.4%, `SettingsScreen` and `WindowChrome` 100%. Full run 311 passed.
+    - `e2e/limits.spec.ts` (3 new): b's data limit reached by uploads alone (downloads over a, uploads over b), and
+      nothing more goes out over b; slow mode holds uploads to 32 KB/s, with a control (the total speed limit at
+      the same speed) that runs past it. Each new test failed on unchanged `main` code, and the data limit test
+      failed without the `uploadOnly` check. Stable over 3 repeats. `limits` and `torrent` specs: 33 passed.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

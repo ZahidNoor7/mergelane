@@ -801,6 +801,21 @@ until the owner overrides it.
     newly allowed ones offered a slot, and the next rechoke (every 10 s) settles the slots.
   - A routed network's status now reads "Not used for downloads: they go over another network", as it may still
     upload.
+- **Update (owner, 2026-11-11, M3.5c):** two points above are reversed.
+  - **Uploads count toward data limits.** Carriers count both directions, so a network's data limit now counts
+    the torrent blocks Mergelane sends as well as the bytes it receives. A block counts once it is actually sent
+    (`Limits.countUpload`, from the wire's `upload` event), not when it is asked for (`takeUpload`): one held back
+    and then refused never goes out. At the limit a network carries nothing, uploads included: a network that
+    downloads use gets status `limit` and its peers are dropped, as before; a network that only carries uploads
+    (`routed` or `off` for that download) is now left out of `TorrentTransfer.uploadOnly()` too, so its peers
+    and twins are dropped. Before this, an upload-only network went on uploading past its limit.
+  - **Slow mode holds uploads too.** While on, its speed stands in for the total upload limit as well, in a bucket
+    of its own: at most that speed down and that speed up. Like the download side, it replaces the total limit
+    rather than lowering it, so a total upload limit below the slow mode speed is not in force while slow mode
+    is on. Per-network upload limits still apply.
+  - The dialog's data limit hint, the reset-usage confirmation, slow mode's hints (Speed & data limits, Settings ›
+    General, the sidebar switch's tooltip) say so. Tests: `e2e/limits.spec.ts` "data limits and uploads", and
+    slow mode's upload test with its total-speed-limit control.
 
 ## ADR-0042: Diagnostics bundle, and Today's dropouts and fastest speed kept across restarts (M3.7)
 

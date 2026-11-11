@@ -67,6 +67,12 @@ export const COVERED = [
   'src/renderer/src/components/NetworkEditPopover.tsx',
   // M3.1 pull request 5e: Settings.
   'src/renderer/src/screens/SettingsScreen.tsx',
+  // M3.2 pull request a: the update check and Settings › Updates.
+  'src/shared/releases.ts',
+  ...['UpdateSettings', 'UpdateNotice', 'settingsParts'].map(
+    (name) => `src/renderer/src/components/${name}.tsx`
+  ),
+  'src/renderer/src/hooks/useUpdates.ts',
   'src/renderer/src/hooks/useSettingsShortcut.ts',
   // M3.1 pull request 6a: the Dashboard's Today.
   'src/renderer/src/components/DashboardToday.tsx',

@@ -11,6 +11,7 @@ import {
   type ThemeSource
 } from '../shared/types'
 import { readJson, updateJson } from './jsonFile'
+import { parseVersion } from '../shared/releases'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
 
@@ -108,7 +109,15 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const source = validThemeSource(themeSource)
   if (source) settings.themeSource = source
   if (isThemeId(parsed.appearanceTheme)) settings.appearanceTheme = parsed.appearanceTheme
-  if (parsed.autoUpdate === false) settings.autoUpdate = false
+  if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
+  if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'
+  if (typeof parsed.updateSkipped === 'string' && parseVersion(parsed.updateSkipped)) {
+    settings.updateSkipped = parsed.updateSkipped
+  }
+  const lastChecked = parsed.updateLastChecked
+  if (typeof lastChecked === 'number' && Number.isFinite(lastChecked) && lastChecked > 0) {
+    settings.updateLastChecked = lastChecked
+  }
   if (typeof destinationDir === 'string' && isAbsolute(destinationDir)) {
     settings.destinationDir = destinationDir
   }

@@ -42,7 +42,11 @@ export const IpcChannels = {
   dismissLink: 'app:dismiss-link',
   updateState: 'update:state',
   updateStateChanged: 'update:state-changed',
-  showUpdateMenu: 'update:show-menu',
+  checkForUpdates: 'update:check',
+  setUpdatePreferences: 'update:set-preferences',
+  skipUpdate: 'update:skip',
+  openReleasePage: 'update:open-release-page',
+  showUpdates: 'update:show',
   usenetServer: 'usenet:server',
   saveUsenetServer: 'usenet:save-server',
   testUsenetServer: 'usenet:test-server'

@@ -1,27 +1,36 @@
-import {
-  app,
-  dialog,
-  Menu,
-  shell,
-  type BrowserWindow,
-  type MenuItemConstructorOptions
-} from 'electron'
-import { autoUpdater } from 'electron-updater'
+import { app, Menu, net, shell, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
-import type { UpdateState } from '../shared/types'
+import {
+  GITHUB_API_VERSION,
+  newestUpdate,
+  parseVersion,
+  RELEASES_URL,
+  type UpdateChannel
+} from '../shared/releases'
+import type { AppSettings, UpdateState } from '../shared/types'
 import { saveSettings } from './settings'
+import { testKnobs } from './testKnobs'
 
-const CHECK_EVERY_MS = 4 * 60 * 60_000
-/** Off until updates are checked through the GitHub Releases API and installed by the user: an
- * ad-hoc-signed build can't install updates itself (docs/DECISIONS.md ADR-0010). */
-export const UPDATES_ENABLED = false
-/** Where an update the app couldn't install itself is downloaded from instead. */
-const DOWNLOAD_PAGE = 'https://github.com/ZahidNoor7/mergelane'
+// Mergelane's own updates (docs/DECISIONS.md ADR-0036): GitHub's public Releases API is asked for the
+// newest release on the chosen channel, on request and once a day. Nothing is downloaded yet: that
+// comes with M3.2b (download, check the SHA-256, open the disk image).
 
-let state: UpdateState = { status: 'idle', autoUpdate: true }
+const DAY_MS = 24 * 60 * 60_000
+/** How often the daily check looks at whether a day has passed. */
+const TICK_MS = 60 * 60_000
+const RELEASE_PAGE = /^https:\/\/github\.com\/ZahidNoor7\/mergelane\/releases\//
+
+let state: UpdateState = {
+  status: 'idle',
+  version: '0.0.0',
+  channel: 'stable',
+  autoCheck: true,
+  lastChecked: null,
+  latest: null,
+  skipped: null,
+  error: null
+}
 let getWindow: () => BrowserWindow | null = () => null
-/** A check asked for from the menu answers even when there's nothing new. */
-let asked = false
 
 export function updateState(): UpdateState {
   return state
@@ -31,89 +40,111 @@ function set(patch: Partial<UpdateState>): void {
   const before = state
   state = { ...state, ...patch }
   getWindow()?.webContents.send(IpcChannels.updateStateChanged, state)
-  // Progress alone changes no menu item.
-  if (state.status !== before.status || state.autoUpdate !== before.autoUpdate) setAppMenu()
+  if (state.status !== before.status) setAppMenu()
 }
 
-function answer(message: string, detail?: string): void {
-  if (!asked) return
-  asked = false
-  void dialog.showMessageBox({ message, detail })
-}
-
-function check(fromMenu = false): void {
-  const { status } = state
-  // A failed install isn't retried on a timer: on an unsigned Mac it would fail again, after
-  // downloading the whole update again.
-  if (status === 'checking' || status === 'downloading' || status === 'ready') return
-  if (status === 'error' && !fromMenu) return
-  asked = fromMenu
-  // A failure is reported by the 'error' event too. Unpackaged (dev, e2e), this does nothing.
-  autoUpdater.checkForUpdates().catch(() => {})
-}
-
-function download(): void {
-  set({ status: 'downloading', percent: 0 })
-  autoUpdater.downloadUpdate().catch(() => {})
-}
-
-function setAutoUpdate(on: boolean): void {
-  autoUpdater.autoDownload = on
-  set({ autoUpdate: on })
-  saveSettings({ autoUpdate: on }).catch((error) =>
-    console.error('[mergelane] failed to save the automatic updates setting', error)
+function save(patch: AppSettings): void {
+  saveSettings(patch).catch((error) =>
+    console.error('[mergelane] failed to save the update settings', error)
   )
-  if (on && state.status === 'available') download()
 }
 
-/** The same items in the macOS app menu and in the menu the status bar's update button opens —
- * Windows and Linux windows show no menu bar, so that button is their only way to these. */
-function menuItems(): MenuItemConstructorOptions[] {
-  if (!UPDATES_ENABLED) return []
-  const { status, version } = state
-  const items: MenuItemConstructorOptions[] = []
-  if (status === 'ready') {
-    // Silent, and opened again after: the installer's own pages were all answered the first time.
-    items.push({
-      label: `Restart to Update to ${version}`,
-      click: () => autoUpdater.quitAndInstall(true, true)
+/** GitHub's answer as words for the person reading Settings › Updates. */
+class CheckFailure extends Error {}
+
+/** Asks GitHub now. A check already running is joined rather than repeated. */
+let running: Promise<UpdateState> | null = null
+export function checkForUpdates(): Promise<UpdateState> {
+  running ??= check().finally(() => {
+    running = null
+  })
+  return running
+}
+
+async function check(): Promise<UpdateState> {
+  set({ status: 'checking', error: null })
+  try {
+    const response = await net.fetch(testKnobs.releasesUrl ?? RELEASES_URL, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+        'User-Agent': `Mergelane/${state.version}`
+      }
     })
-  } else if (status === 'downloading') {
-    items.push({ label: `Downloading ${version}…`, enabled: false })
-  } else if (status === 'available') {
-    items.push({ label: `Download Mergelane ${version}`, click: download })
-  } else if (status === 'error') {
-    items.push({
-      label: `Get Mergelane ${version} from the Website…`,
-      click: () => void shell.openExternal(DOWNLOAD_PAGE)
+    // GitHub's rate limits answer 403 or 429 (docs: Rate limits for the REST API).
+    if (response.status === 403 || response.status === 429) {
+      throw new CheckFailure('GitHub asked Mergelane to wait. Try again in an hour.')
+    }
+    if (!response.ok) {
+      throw new CheckFailure(`GitHub answered ${response.status}. Try again later.`)
+    }
+    const latest = newestUpdate(await response.json(), {
+      current: state.version,
+      channel: state.channel,
+      skipped: state.skipped
+    })
+    const lastChecked = Date.now()
+    save({ updateLastChecked: lastChecked })
+    set({ status: latest ? 'available' : 'current', latest, lastChecked })
+  } catch (error) {
+    console.error('[mergelane] update check failed', error)
+    set({
+      status: 'error',
+      error:
+        error instanceof CheckFailure
+          ? error.message
+          : 'Couldn’t reach GitHub. Check your connection and try again.'
     })
   }
-  items.push(
-    {
-      label: status === 'checking' ? 'Checking for Updates…' : 'Check for Updates…',
-      enabled: status === 'idle' || status === 'available' || status === 'error',
-      click: () => check(true)
-    },
-    {
-      label: 'Update Automatically',
-      type: 'checkbox',
-      checked: state.autoUpdate,
-      click: (item) => setAutoUpdate(item.checked)
-    }
-  )
-  return items
+  return state
 }
 
-export function showUpdateMenu(): void {
+/** Automatic checks on or off, and the channel. A new channel forgets what the old one found. */
+export function setUpdatePreferences(preferences: {
+  autoCheck?: boolean
+  channel?: UpdateChannel
+}): void {
+  const { autoCheck, channel } = preferences
+  if (typeof autoCheck === 'boolean' && autoCheck !== state.autoCheck) {
+    set({ autoCheck })
+    save({ updateAutoCheck: autoCheck ? undefined : false })
+  }
+  if ((channel === 'stable' || channel === 'beta') && channel !== state.channel) {
+    set({
+      channel,
+      latest: null,
+      status: state.status === 'checking' ? 'checking' : 'idle',
+      error: null
+    })
+    save({ updateChannel: channel === 'stable' ? undefined : channel })
+  }
+}
+
+/** Not this version: the next check offers only a newer one. */
+export function skipUpdate(version: string): void {
+  if (state.latest?.version !== version) return
+  set({ skipped: version, latest: null, status: 'idle' })
+  save({ updateSkipped: version })
+}
+
+/** The release's page on GitHub, in the browser: where the disk image is until M3.2b. */
+export async function openReleasePage(): Promise<void> {
+  const page = state.latest?.pageUrl
+  if (page && RELEASE_PAGE.test(page)) await shell.openExternal(page)
+}
+
+/** Settings › Updates, from the app menu's "Check for Updates…", with a check started. */
+function checkFromMenu(): void {
   const window = getWindow()
-  if (window) Menu.buildFromTemplate(menuItems()).popup({ window })
+  if (window) {
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.webContents.send(IpcChannels.showUpdates)
+  }
+  void checkForUpdates()
 }
 
-function withSeparator(items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
-  return items.length ? [...items, { type: 'separator' }] : []
-}
-
-/** Electron's default macOS menu, with the update items under the app's name. */
+/** Electron's default macOS menu, with "Check for Updates…" under the app's name. */
 function setAppMenu(): void {
   if (process.platform !== 'darwin') return
   Menu.setApplicationMenu(
@@ -122,8 +153,12 @@ function setAppMenu(): void {
         label: app.name,
         submenu: [
           { role: 'about' },
+          {
+            label: state.status === 'checking' ? 'Checking for Updates…' : 'Check for Updates…',
+            enabled: state.status !== 'checking',
+            click: checkFromMenu
+          },
           { type: 'separator' },
-          ...withSeparator(menuItems()),
           { role: 'services' },
           { type: 'separator' },
           { role: 'hide' },
@@ -141,42 +176,29 @@ function setAppMenu(): void {
   )
 }
 
-/** Checks GitHub Releases now and every few hours (see electron-builder.yml's publish), for the
- * release GitHub marks Latest. A downloaded update installs on restart, or on the next quit if
- * there isn't one. */
-export function startUpdater(window: () => BrowserWindow | null, autoUpdate: boolean): void {
+/** A check when automatic checks are on and the last one is a day old (or there wasn't one). */
+function checkIfDue(): void {
+  const { autoCheck, lastChecked, status } = state
+  if (!autoCheck || status === 'available') return
+  if (lastChecked === null || Date.now() - lastChecked >= DAY_MS) void checkForUpdates()
+}
+
+/** Reads the saved choices, sets up the menu, and starts the daily check. A test run checks only
+ * when asked to, and only its own server, never GitHub. */
+export function startUpdater(window: () => BrowserWindow | null, saved: AppSettings): void {
   getWindow = window
-  state = { ...state, autoUpdate }
-  autoUpdater.autoDownload = autoUpdate
-  // On by default for an rc build, and then it only ever looks for newer rc tags: 1.0.0 would
-  // never reach it. Off, every build follows Latest, whatever its version. A release marked
-  // pre-release on GitHub is never Latest, so it reaches nobody.
-  autoUpdater.allowPrerelease = false
+  const version = testKnobs.updateAppVersion ?? app.getVersion()
+  state = {
+    ...state,
+    version: parseVersion(version) ? version : '0.0.0',
+    channel: saved.updateChannel ?? 'stable',
+    autoCheck: saved.updateAutoCheck !== false,
+    lastChecked: saved.updateLastChecked ?? null,
+    skipped: saved.updateSkipped ?? null
+  }
   setAppMenu()
-  if (!UPDATES_ENABLED) return
-
-  autoUpdater.on('checking-for-update', () => set({ status: 'checking' }))
-  autoUpdater.on('update-not-available', () => {
-    set({ status: 'idle', version: undefined })
-    answer('You’re up to date', `Mergelane ${app.getVersion()} is the newest version.`)
-  })
-  autoUpdater.on('update-available', ({ version }) => {
-    asked = false
-    set({ status: autoUpdater.autoDownload ? 'downloading' : 'available', version, percent: 0 })
-  })
-  autoUpdater.on('download-progress', ({ percent }) => {
-    const whole = Math.floor(percent)
-    if (whole !== state.percent) set({ status: 'downloading', percent: whole })
-  })
-  autoUpdater.on('update-downloaded', ({ version }) => set({ status: 'ready', version }))
-  autoUpdater.on('error', (error) => {
-    console.error('[mergelane] update failed', error)
-    // Before an update is found (offline, GitHub down) there's nothing to show. After, the
-    // website still has it — the way an unsigned Mac build, which can't install it, gets it.
-    set({ status: state.version ? 'error' : 'idle' })
-    answer('Couldn’t check for updates', 'Check your connection and try again.')
-  })
-
-  check()
-  setInterval(check, CHECK_EVERY_MS)
+  if (testKnobs.hideWindow && !testKnobs.releasesUrl) return
+  // A little after launch, so the check doesn't compete with the window opening.
+  setTimeout(checkIfDue, testKnobs.updateFirstCheckMs)
+  setInterval(checkIfDue, TICK_MS)
 }

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
+import type { UpdateChannel } from '../shared/releases'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -66,7 +67,11 @@ const mergelaneApi = {
   removeDownload: (downloadId: string, options?: { trashFile?: boolean }) =>
     invoke('removeDownload', downloadId, options),
   updateState: () => invoke('updateState'),
-  showUpdateMenu: () => invoke('showUpdateMenu'),
+  checkForUpdates: () => invoke('checkForUpdates'),
+  setUpdatePreferences: (preferences: { autoCheck?: boolean; channel?: UpdateChannel }) =>
+    invoke('setUpdatePreferences', preferences),
+  skipUpdate: (version: string) => invoke('skipUpdate', version),
+  openReleasePage: () => invoke('openReleasePage'),
   pendingLinks: () => invoke('pendingLinks'),
   resumeFromLink: (linkId: string, downloadId: string) =>
     invoke('resumeFromLink', linkId, downloadId),
@@ -99,6 +104,13 @@ const mergelaneApi = {
     const listener = (_event: IpcRendererEvent, state: UpdateState): void => callback(state)
     ipcRenderer.on(IpcChannels.updateStateChanged, listener)
     return () => ipcRenderer.removeListener(IpcChannels.updateStateChanged, listener)
+  },
+
+  /** The app menu's "Check for Updates…": show Settings › Updates. */
+  onShowUpdates: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.showUpdates, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.showUpdates, listener)
   },
 
   onNetworksChanged: (callback: (networks: NetworkInterfaceInfo[]) => void): (() => void) => {

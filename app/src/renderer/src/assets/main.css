@@ -411,7 +411,7 @@
 :root[data-palette='liquid'] .ml-content.ml-content-side {
   margin-left: 0;
 }
-:root[data-palette='liquid'] .ml-content .bg-card {
+:root[data-palette='liquid'] :is(.ml-content .bg-card, .ml-notice) {
   background-color: var(--g-card);
   box-shadow: var(--card-sh);
 }

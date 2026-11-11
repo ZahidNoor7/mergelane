@@ -16,6 +16,7 @@ import {
   Moon,
   Newspaper,
   Palette,
+  RefreshCw,
   SlidersHorizontal,
   Sun
 } from 'lucide-react'
@@ -24,6 +25,8 @@ import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
 import { SpeedUnitToggle } from '../components/SpeedUnitToggle'
+import { SettingRow, SettingsGroup } from '../components/settingsParts'
+import { UpdateSettings } from '../components/UpdateSettings'
 import { UsenetServerDialog } from '../components/UsenetServerDialog'
 import { Button } from '../components/ui/button'
 import { Switch } from '../components/ui/switch'
@@ -32,14 +35,14 @@ import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useMergeLanes } from '../hooks/useMergeLanes'
+import { hasUpdate } from '../hooks/useUpdates'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { usePrefersDark } from '../hooks/usePrefersDark'
 import { useAppStore, type SettingsSection } from '../store/useAppStore'
 import { toDisplayPath } from '../utils/format'
 
 // Settings, from the final design (design-system/mergelane/redesign/prototype.html, SettingsScreen):
-// General, Appearance and Downloads, the sections with something behind them today. Updates and
-// Browser extensions come with M3.2 and M3.4.
+// General, Appearance, Downloads and Updates. Browser extensions comes with M3.4.
 //
 // The schedule, the total speed and slow mode's speed are still edited in the Speed & data limits
 // dialog, and the news server in its own: the rows here open them.
@@ -47,7 +50,8 @@ import { toDisplayPath } from '../utils/format'
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Palette }[] = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine }
+  { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine },
+  { id: 'updates', label: 'Updates', icon: RefreshCw }
 ]
 
 /** Width of Settings' content from which its sections are a list beside it, not a segmented row. */
@@ -62,8 +66,10 @@ export function SettingsScreen(): React.JSX.Element {
   const Body = {
     general: GeneralSettings,
     appearance: AppearanceSettings,
-    downloads: DownloadSettings
+    downloads: DownloadSettings,
+    updates: UpdateSettings
   }[current.id]
+  const updateOut = useAppStore((store) => hasUpdate(store.update))
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -91,6 +97,13 @@ export function SettingsScreen(): React.JSX.Element {
               >
                 <each.icon aria-hidden className="size-4" />
                 <span className="flex-1 text-left">{each.label}</span>
+                {each.id === 'updates' && updateOut && (
+                  <span
+                    role="img"
+                    aria-label="Update available"
+                    className="size-2 rounded-full bg-primary"
+                  />
+                )}
               </button>
             ))}
           </nav>
@@ -119,59 +132,6 @@ export function SettingsScreen(): React.JSX.Element {
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function SettingsGroup({
-  title,
-  description,
-  children
-}: {
-  title?: string
-  description?: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section aria-label={title} className="flex flex-col gap-2">
-      {title && (
-        <div className="flex flex-col gap-0.5 px-1">
-          <h3 className="text-[13.5px] font-[650] tracking-[-0.005em]">{title}</h3>
-          {description && (
-            <p className="max-w-[64ch] text-[12.5px] leading-[1.5] text-ink-2">{description}</p>
-          )}
-        </div>
-      )}
-      <div className="flex flex-col rounded-[14px] bg-card px-4 shadow-[inset_0_0_0_1px_var(--border)]">
-        {children}
-      </div>
-    </section>
-  )
-}
-
-function SettingRow({
-  label,
-  hint,
-  htmlFor,
-  children
-}: {
-  label: string
-  hint?: React.ReactNode
-  htmlFor?: string
-  children?: React.ReactNode
-}): React.JSX.Element {
-  const Label = htmlFor ? 'label' : 'span'
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-rule py-3 last:border-b-0">
-      <div className="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
-        <Label htmlFor={htmlFor} className="text-[13.5px] font-[600]">
-          {label}
-        </Label>
-        {hint && <p className="max-w-[60ch] text-[12.5px] leading-[1.5] text-ink-2">{hint}</p>}
-      </div>
-      {children && (
-        <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2">{children}</div>
-      )}
     </div>
   )
 }

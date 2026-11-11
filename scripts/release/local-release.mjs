@@ -136,7 +136,7 @@ export function parseCli(argv) {
   }
 }
 
-/** owner/repo from electron-builder.yml's publish section (where the app looks for updates too). */
+/** owner/repo from electron-builder.yml's publish section: where the release goes. */
 export function repoFromBuilderConfig(text) {
   const publish = /^publish:\s*\n((?:[ \t]+.*\n?)+)/m.exec(text)
   const owner = publish && /^\s+owner:\s*['"]?([\w.-]+)/m.exec(publish[1])

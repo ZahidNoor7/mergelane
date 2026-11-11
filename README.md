@@ -27,11 +27,13 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
   phone tethered to the same Wi-Fi, will not add speed.
 - **VPNs come first.** If another VPN is active, system-wide merging stays off (or turns itself off) and tells
   you why. Mergelane never installs its routes over a VPN's. Downloads inside Mergelane keep working where they can.
-- **No account, no servers, no telemetry.** Everything runs on your Mac, and nothing about you is sent anywhere. One
-  thing reaches out on its own: once installed, the system-wide helper checks every 1 to 2 seconds that each
-  network still reaches the internet. It opens a connection to Cloudflare's and Google's public addresses (1.1.1.1
-  and 8.8.8.8, or their IPv6 equivalents) and closes it without sending any data. This version does not check for
-  updates.
+- **No account, no servers, no telemetry.** Everything runs on your Mac, and nothing about you is sent anywhere. Two
+  things reach out on their own:
+  - Once installed, the system-wide helper checks every 1 to 2 seconds that each network still reaches the
+    internet. It opens a connection to Cloudflare's and Google's public addresses (1.1.1.1 and 8.8.8.8, or their
+    IPv6 equivalents) and closes it without sending any data.
+  - Once a day, the app asks GitHub's public Releases API whether a newer Mergelane is out. GitHub sees your IP
+    address and the app's version, nothing else. You can turn this off in Settings › Updates.
 
 The app says the same on its Dashboard, under **About combined speed**, next to the speeds it describes.
 

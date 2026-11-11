@@ -1,4 +1,5 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
+import type { Release, UpdateChannel } from './releases'
 import type { ThemeId } from './themes'
 
 export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'other'
@@ -549,13 +550,24 @@ export interface SystemMergeSnapshot {
   outages: SystemMergeOutage[]
 }
 
-/** Where the app's own update is (see main/updater.ts). `version` is the update's, once one is
- * found; `percent` only means something while downloading. */
+/** Where the app's own update is (main/updater.ts, docs/DECISIONS.md ADR-0036). */
 export interface UpdateState {
-  status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'
-  autoUpdate: boolean
-  version?: string
-  percent?: number
+  /** idle: not checked since launch, or a found version was skipped; current: the check found
+   * nothing newer; available: `latest` is newer; error: the check failed (`error` says why). */
+  status: 'idle' | 'checking' | 'available' | 'current' | 'error'
+  /** This app's version. */
+  version: string
+  channel: UpdateChannel
+  /** Check once a day while the app runs. */
+  autoCheck: boolean
+  /** When GitHub last answered a check; null if it never has. */
+  lastChecked: number | null
+  /** The newer release, while status is 'available'. */
+  latest: Release | null
+  /** The version the user chose to skip. */
+  skipped: string | null
+  /** What went wrong, in plain words, while status is 'error'. */
+  error: string | null
 }
 
 /** A repeating window for all transfers, interpreted in the computer's local timezone. */
@@ -577,8 +589,14 @@ export interface AppSettings {
   themeSource?: ThemeSource
   /** The colour theme (shared/themes.ts). Missing or unknown means the default, Porcelain. */
   appearanceTheme?: ThemeId
-  /** Only ever saved as false: updates download on their own unless turned off. */
-  autoUpdate?: boolean
+  /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
+  updateAutoCheck?: boolean
+  /** Only ever saved as 'beta': Stable is the default. */
+  updateChannel?: UpdateChannel
+  /** A version the user chose to skip. */
+  updateSkipped?: string
+  /** When GitHub last answered an update check, in milliseconds since the epoch. */
+  updateLastChecked?: number
   /** The last destination folder picked. */
   destinationDir?: string
   /** User customizations (name/color) per network interface id. */

@@ -8,6 +8,7 @@ import { CircleCheck, CirclePause, Gauge, Plug, Plus, TriangleAlert, Unplug } fr
 import { useEffect, useRef, useState } from 'react'
 import { Confluence, PLACEHOLDER_LANES } from '../components/Confluence'
 import { DashboardToday } from '../components/DashboardToday'
+import { UsagePanel } from '../components/UsagePanel'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { Sparkline } from '../components/Sparkline'
 import { SystemMergeSection } from '../components/SystemMergeSection'
@@ -127,6 +128,7 @@ export function DashboardScreen(): React.JSX.Element {
           <DashboardToday />
           <ActiveDownloadsSection />
         </div>
+        <UsagePanel merging={merging} />
         <div className="grid gap-x-8 @min-[900px]:grid-cols-2">
           <NetworksSection
             onOpenLimits={(page) => {

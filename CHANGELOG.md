@@ -49,6 +49,9 @@ All notable changes to Mergelane are recorded here. The format follows
 - The Dashboard takes the new design: the Confluence and the last minute at the top, then Today (what Mergelane
   downloaded today, by network, with the fastest download and the network dropouts) beside what's downloading.
   Its sections have the new sentence-case headings.
+- The Dashboard shows "Mergelane on this Mac": how much CPU and memory Mergelane itself uses, in all and for the
+  app, the system-merge helper and the video tools (yt-dlp, FFmpeg, Deno), as Activity Monitor counts them, with
+  the last minute of CPU.
 - A Settings screen (⌘, or the sidebar's foot) with General (speed units, slow mode, total speed), Appearance
   (Auto, Light or Dark, and the seven themes with previews) and Downloads (where downloads go, how many run at
   once, the schedule, the news server, and a way to each network's limits). The units and theme buttons leave the

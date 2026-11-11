@@ -211,6 +211,16 @@ Last updated: 2026-11-11
     merged-traffic chart, and "About combined speed" (the honest limits CLAUDE.md asks for in the UI).
     Trimming them is the owner's call.
   - **Unit tests:** `DashboardToday` in `COVERED` at 100%.
+- **M3.1, pull request 6b** (branch `m3.1-usage`): "Mergelane on this Mac" (ADR-0035).
+  - `shared/appUsage.ts` (pure: `ps` parsing, the helper and tools by process tree, the app's CPU from
+    cumulative CPU seconds) and `main/appUsage.ts` (gathers it), behind a new `appUsage` IPC call.
+  - `components/UsagePanel.tsx` on the Dashboard: CPU and memory totals, the last minute of CPU, and a table by
+    part (Mergelane, Helper, Video tools).
+  - **Changed plan:** the helper doesn't report its own usage; the app reads it with `ps` (ADR-0035). The helper
+    and its protocol don't change, so this step needs no admin test run.
+  - A real-app e2e check (`dashboard.spec`) caught the `ps` reading counting itself as a video tool; it and the
+    crash reporter are left out by name.
+  - **Unit tests:** `UsagePanel` and `shared/appUsage` are in `COVERED`.
 - **Flaky test, `browserBridge.spec`, seen twice now** (5a and 6a): "a download is offered, confirmed, and opens
   New download filled in". The Link field held the link with `erge` appended (`…/test.binerge`). With the
   extension test's lost last character (below), two flakes change the Link field's text. No test sends OS

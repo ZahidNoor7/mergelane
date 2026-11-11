@@ -114,6 +114,21 @@ test.describe('Dashboard @smoke', () => {
     await expect(downloadsButton).toHaveAttribute('aria-current', 'page')
   })
 
+  test('says how much CPU and memory Mergelane itself uses, read from the real app', async ({
+    mergelane
+  }) => {
+    await mergelane.place('Dashboard')
+    const usage = mergelane.page.getByRole('region', { name: 'Mergelane on this Mac' })
+    const table = usage.getByRole('table', { name: 'Mergelane’s CPU and memory by part' })
+    const app = table.getByRole('row', { name: /^Mergelane / })
+    // The app always uses some memory; its CPU is a percent of one core.
+    await expect(app).toContainText(/\d+(\.\d)?%\s*\d+(\.\d+)? (MB|GB)/)
+    await expect(usage.getByText(/^\d+ MB$|^\d\.\d\d GB$/).first()).toBeVisible()
+    // No helper in a test run, and no video tools running.
+    await expect(table.getByRole('row', { name: /^Helper/ })).toContainText('Not running')
+    await expect(table.getByRole('row', { name: /^Video tools/ })).toContainText('Not running now')
+  })
+
   test('fits the smallest window without scrolling sideways', async ({ mergelane }) => {
     await mergelane.evaluateMain(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0]

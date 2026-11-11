@@ -50,6 +50,7 @@ const mergelaneApi = {
   setSystemMergeAutoResume: (enabled: boolean) => invoke('setSystemMergeAutoResume', enabled),
   resetNetworkUsage: (id) => invoke('resetNetworkUsage', id),
   freeSpace: (dir: string) => invoke('freeSpace', dir),
+  appUsage: () => invoke('appUsage'),
   torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),
   chooseTorrentFiles: (downloadId: string, selected: number[]) =>
     invoke('chooseTorrentFiles', downloadId, selected),

@@ -21,6 +21,7 @@ export const IpcChannels = {
   setSystemMergeAutoResume: 'merge:auto-resume',
   resetNetworkUsage: 'network:reset-usage',
   freeSpace: 'disk:free-space',
+  appUsage: 'app:usage',
   historyChanged: 'history:changed',
   torrentFiles: 'download:torrent-files',
   chooseTorrentFiles: 'download:choose-torrent-files',

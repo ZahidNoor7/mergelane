@@ -1,3 +1,4 @@
+import type { AppUsage } from './appUsage'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -55,6 +56,7 @@ export interface IpcContract {
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }
+  appUsage: { args: []; result: AppUsage }
   /** A torrent download's files, in the torrent's order; empty for any other download. */
   torrentFiles: { args: [id: string]; result: TorrentFileEntry[] }
   /** Which of a torrent download's files to fetch, by index, as it runs or not. Refused for one

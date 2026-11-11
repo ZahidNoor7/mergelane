@@ -579,7 +579,7 @@ Last updated: 2026-11-11
     nothing (ignored by packaged builds). `MERGELANE_E2E_DAEMON_INSTALLED` is now read live.
   - **Tests:**
     - Vitest: `SystemMergeSection.test.tsx` (17), with `SystemMergeSection.tsx` and `useSystemMerge.ts` added to
-      `COVERED` at 100% of lines. Full run: 328 passed.
+      `COVERED` at 100% of lines. Full run (with `main` merged): 358 passed.
     - `e2e/daemonApi.spec.ts` (7 new, Node side): the uninstall command's exact text and quoting (decoded back by
       AppleScript and split by /bin/sh, nothing run), osascript failure parsing, and the removal order against
       the fake daemon (off before the prompt; back on after a cancel; failure; a stuck or silent helper).

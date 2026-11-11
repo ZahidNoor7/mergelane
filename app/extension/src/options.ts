@@ -1,5 +1,5 @@
 import { api } from './api'
-import { mergelanePort, reach } from './mergelane'
+import { reach } from './mergelane'
 import { loadSettings, saveSettings, siteOf } from './settings'
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
@@ -43,8 +43,6 @@ async function renderConnection(): Promise<void> {
         ? 'Update Mergelane to use this extension'
         : 'Mergelane isn’t open'
   element('open-mergelane').hidden = reached !== 'closed'
-  const port = mergelanePort()
-  element('port').textContent = port === null ? '' : `127.0.0.1:${port}`
 }
 
 element<HTMLInputElement>('capture').addEventListener('change', (event) => {

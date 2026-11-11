@@ -2,82 +2,67 @@ import { api } from './api'
 import {
   BRIDGE_API,
   BRIDGE_DEADLINE_MS,
-  BRIDGE_PORTS,
+  NATIVE_HOST,
   type BridgeAddRequest,
-  type BridgeHandoff,
-  type BridgePing
+  type BridgeMessage,
+  type BridgeReply
 } from '../../src/shared/browserBridge'
 import type { BrowserContext, BrowserCookie } from '../../src/shared/types'
 
+// Native messaging (docs/BROWSER-BRIDGE.md): the browser starts Mergelane's small host for each
+// message, and it relays the message to the app. Nothing listens on a network port.
+
 export type Reach = 'ok' | 'closed' | 'update'
 
-let found: number | null = null
-
-/** Anything other than Mergelane holding the port counts as closed. */
-async function ask(port: number): Promise<Reach> {
+/** One message to Mergelane, or null when the host is missing, failed, or took longer than
+ * `timeoutMs`. */
+async function call(message: BridgeMessage, timeoutMs: number): Promise<BridgeReply | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/ping`, {
-      signal: AbortSignal.timeout(1500)
-    })
-    const ping = (await response.json()) as Partial<BridgePing>
-    if (!response.ok || ping.app !== 'mergelane') return 'closed'
-    return ping.api === BRIDGE_API ? 'ok' : 'update'
+    return await Promise.race([
+      api.runtime.sendNativeMessage(NATIVE_HOST, message) as Promise<BridgeReply>,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs, null)
+      })
+    ])
   } catch {
-    return 'closed'
+    return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-export function mergelanePort(): number | null {
-  return found
+function reachOf(reply: BridgeReply | null): Reach {
+  if (!reply || !reply.ok || !('app' in reply) || reply.app !== 'mergelane') {
+    return reply && !reply.ok && 'error' in reply && reply.error === 'unsupported'
+      ? 'update'
+      : 'closed'
+  }
+  return 'api' in reply && reply.api === BRIDGE_API ? 'ok' : 'update'
 }
 
 export async function reach(): Promise<Reach> {
-  const answers = await Promise.all(BRIDGE_PORTS.map(ask))
-  const at = answers.indexOf('ok')
-  found = at >= 0 ? BRIDGE_PORTS[at] : null
-  return at >= 0 ? 'ok' : answers.includes('update') ? 'update' : 'closed'
+  return reachOf(await call({ type: 'ping' }, 3000))
 }
 
-/** Mergelane will take the download once confirmed (see BridgeHandoff). */
+/** Mergelane will take the download once confirmed (see BridgeReply's token). */
 export interface Handoff {
-  port: number
   token: string
 }
 
-/** kept: Mergelane said no, or took too long. */
+/** kept: Mergelane said no, or took too long. closed: Mergelane isn't running. */
 export async function send(request: BridgeAddRequest): Promise<Handoff | 'kept' | 'closed'> {
-  // Asked first every time, so the sign-in only ever goes to a port that has just answered as
-  // Mergelane, never to another app that has since taken it.
-  if ((await reach()) !== 'ok' || found === null) return 'closed'
-  const port = found
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/add`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-      // Past Mergelane's own deadline: Mergelane answers nothing once this has given up.
-      signal: AbortSignal.timeout(BRIDGE_DEADLINE_MS + 2000)
-    })
-    if (!response.ok) return 'kept'
-    const { token } = (await response.json()) as BridgeHandoff
-    return { port, token }
-  } catch (error) {
-    return error instanceof DOMException && error.name === 'TimeoutError' ? 'kept' : 'closed'
-  }
+  // Past Mergelane's own deadline: Mergelane answers nothing once this has given up.
+  const reply = await call({ type: 'add', request }, BRIDGE_DEADLINE_MS + 4000)
+  if (reply === null) return 'kept'
+  if (reply.ok && 'token' in reply) return { token: reply.token }
+  if (!reply.ok && 'error' in reply && reply.error === 'unavailable') return 'closed'
+  return 'kept'
 }
 
-export async function confirm({ port, token }: Handoff): Promise<boolean> {
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-      signal: AbortSignal.timeout(3000)
-    })
-    return response.ok
-  } catch {
-    return false
-  }
+export async function confirm({ token }: Handoff): Promise<boolean> {
+  const reply = await call({ type: 'confirm', token }, 3000)
+  return reply?.ok === true
 }
 
 /** Firefox names its containers and private windows; Chrome's incognito store is "1". */
@@ -147,14 +132,7 @@ function browserName(): string {
   return 'Chrome'
 }
 
-/** Only ever on a click: the browser asks the user whether to open the app. */
+/** Only ever on a click: the host starts Mergelane if it isn't running, and waits for it. */
 export async function wake(): Promise<boolean> {
-  const tab = await api.tabs.create({ url: 'mergelane://open' })
-  let reached = false
-  for (let tries = 0; tries < 20 && !reached; tries++) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    reached = (await reach()) === 'ok'
-  }
-  if (reached && tab.id !== undefined) await api.tabs.remove(tab.id).catch(() => {})
-  return reached
+  return reachOf(await call({ type: 'wake' }, 15_000)) === 'ok'
 }

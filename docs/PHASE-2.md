@@ -1,6 +1,12 @@
 # Phase 2: MVP (proposal)
 
-Status: **proposed, waiting for the owner's approval.** Nothing in this plan has started.
+Status: **approved and started 2026-11-10.**
+- **Done:** M2.1 (PR #5).
+- **Owner choices:**
+  - native messaging;
+  - YouTube reviewed before any code;
+  - CI paused;
+  - the stale branch kept.
 
 Goal, from CLAUDE.md: one installable app with downloads, torrents, Chrome capture, YouTube, system merge on/off,
 failover and a dashboard.

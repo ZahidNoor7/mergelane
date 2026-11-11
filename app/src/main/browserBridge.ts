@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { chmod, lstat, rm } from 'node:fs/promises'
+import { createServer, type Server, type Socket } from 'node:net'
+import { join } from 'node:path'
 import { app } from 'electron'
 import {
   BRIDGE_API,
   BRIDGE_DEADLINE_MS,
-  BRIDGE_PORTS,
+  isOurExtension,
   type BridgeAddRequest,
-  type BridgeHandoff,
-  type BridgeHealth,
-  type BridgePing
+  type BridgeReply
 } from '../shared/browserBridge'
 import type { BrowserContext, ProbeResult } from '../shared/types'
 import { browserContextFrom, requestHeaders } from './download/browserContext'
@@ -16,16 +16,17 @@ import type { DownloadManager } from './download/downloadManager'
 import { probeUrl } from './download/probe'
 import type { Offer } from './openLinks'
 import { loadSettings, saveSettings } from './settings'
+import { testKnobs } from './testKnobs'
 
-// HTTP on 127.0.0.1 works in every browser with nothing to register. There's no pairing: nothing
-// here starts a download without the user, web pages can't get in (see handle), and a program on
-// this computer could already do more.
+// The browser extension reaches Mergelane through native messaging (docs/BROWSER-BRIDGE.md,
+// ADR-0021): the browser starts mergelane-nmhost, which relays each message here over a Unix
+// socket only this user can open. No network port is open, and web pages can't reach it.
 
-const MAX_BODY_BYTES = 64 * 1024
+/** A request line: an extension message (at most 1 MiB, the host's limit) plus the host's small
+ * envelope around it; anything longer is refused. */
+const MAX_LINE_BYTES = 1024 * 1024 + 4096
 // The extension confirms within milliseconds of an answer; an unconfirmed offer is dropped.
 const HANDOFF_MS = 15_000
-// Any extension's origin: Firefox gives each install its own id, so ours can't be pinned.
-const EXTENSION_ORIGIN = /^(chrome|moz)-extension:\/\/[a-z0-9-]+$/i
 
 export interface BridgeHost {
   manager: DownloadManager
@@ -33,135 +34,124 @@ export interface BridgeHost {
 }
 
 let host: BridgeHost | null = null
-let listeningOn: number | null = null
+let server: Server | null = null
 const handoffs = new Map<string, Offer>()
 let extensionUsed = false
 let appReady = false
 
-/** The main window is ready to show; GET /health reports it from now on. */
+/** The main window is ready to show; the health message reports it from now on. */
 export function markAppReady(): void {
   appReady = true
+}
+
+/** Where mergelane-nmhost finds the app: the user's own Application Support folder. */
+export function bridgeSocketPath(): string {
+  return testKnobs.browserSocket ?? join(app.getPath('userData'), 'browser.sock')
 }
 
 /** Once an extension has connected, closing the window keeps Mergelane in the tray, where the
  * browser can still reach it. */
 export function keepsRunningForBrowser(): boolean {
-  return listeningOn !== null && extensionUsed
+  return server !== null && extensionUsed
 }
 
 export async function startBridge(bridgeHost: BridgeHost): Promise<void> {
   host = bridgeHost
   extensionUsed = (await loadSettings()).browserExtensionUsed === true
-  for (const port of BRIDGE_PORTS) {
-    const server = createServer(
-      (req, res) => void handle(req, res, port).catch(() => end(res, 500))
-    )
-    const listened = await new Promise<boolean>((resolve) => {
-      server.once('error', () => resolve(false))
-      server.listen(port, '127.0.0.1', () => resolve(true))
-    })
-    if (listened) {
-      listeningOn = port
-      return
+  const path = bridgeSocketPath()
+  // A socket left by a previous run that didn't exit cleanly; anything else at the path is kept.
+  const existing = await lstat(path).catch(() => null)
+  if (existing?.isSocket()) await rm(path, { force: true })
+  const next = createServer((socket) => serve(socket))
+  await new Promise<void>((resolve, reject) => {
+    next.once('error', reject)
+    next.listen(path, () => resolve())
+  })
+  await chmod(path, 0o600)
+  server = next
+}
+
+export async function stopBridge(): Promise<void> {
+  const current = server
+  server = null
+  if (current) await new Promise<void>((resolve) => current.close(() => resolve()))
+}
+
+function serve(socket: Socket): void {
+  let buffer = ''
+  let answered = false
+  const gone = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+  const answer = (reply: BridgeReply): void => {
+    if (answered || socket.destroyed) return
+    answered = true
+    socket.end(`${JSON.stringify(reply)}\n`)
+  }
+  socket.setEncoding('utf8')
+  socket.on('error', () => {})
+  socket.on('data', (chunk: string) => {
+    if (answered) return
+    buffer += chunk
+    if (Buffer.byteLength(buffer) > MAX_LINE_BYTES)
+      return answer({ ok: false, error: 'bad-message' })
+    const newline = buffer.indexOf('\n')
+    if (newline < 0) return
+    void handle(buffer.slice(0, newline), gone)
+      .catch((): BridgeReply => ({ ok: false, error: 'bad-message' }))
+      .then(answer)
+  })
+}
+
+async function handle(line: string, gone: Promise<void>): Promise<BridgeReply> {
+  let request: unknown
+  try {
+    request = JSON.parse(line)
+  } catch {
+    return { ok: false, error: 'bad-message' }
+  }
+  if (typeof request !== 'object' || request === null || Array.isArray(request)) {
+    return { ok: false, error: 'bad-message' }
+  }
+  const { v, origin, message } = request as Record<string, unknown>
+  if (v !== BRIDGE_API) return { ok: false, error: 'unsupported' }
+  if (typeof message !== 'object' || message === null || Array.isArray(message)) {
+    return { ok: false, error: 'bad-message' }
+  }
+  const body = message as Record<string, unknown>
+
+  // Read-only and harmless: anyone of this user may ask (the packaging test does).
+  if (body.type === 'health') {
+    return { ok: true, app: 'mergelane', version: app.getVersion(), ready: appReady }
+  }
+  if (typeof origin !== 'string' || !isOurExtension(origin))
+    return { ok: false, error: 'forbidden' }
+
+  switch (body.type) {
+    case 'ping':
+    case 'wake':
+      noteExtension()
+      return { ok: true, app: 'mergelane', version: app.getVersion(), api: BRIDGE_API }
+    case 'add': {
+      const parsed = addRequestFrom(body.request)
+      if (!parsed) return { ok: false, error: 'bad-message' }
+      noteExtension()
+      return add(parsed, gone)
     }
+    case 'confirm': {
+      const offer = typeof body.token === 'string' ? handoffs.get(body.token) : undefined
+      if (!host || !offer || typeof body.token !== 'string') return { ok: false }
+      handoffs.delete(body.token)
+      host.offer(offer)
+      return { ok: true }
+    }
+    default:
+      return { ok: false, error: 'unsupported' }
   }
-  console.error(`[mergelane] browser bridge: ports ${BRIDGE_PORTS.join(', ')} are all taken`)
-}
-
-function end(res: ServerResponse, code: number, headers: Record<string, string> = {}): void {
-  if (!res.headersSent) res.writeHead(code, headers)
-  res.end()
-}
-
-function json(
-  res: ServerResponse,
-  code: number,
-  headers: Record<string, string>,
-  body: unknown
-): void {
-  if (res.writableEnded || res.destroyed) return
-  res.writeHead(code, { ...headers, 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(body))
-}
-
-async function handle(req: IncomingMessage, res: ServerResponse, port: number): Promise<void> {
-  const origin = req.headers.origin
-  // Host blocks DNS rebinding: a page whose domain resolves to 127.0.0.1 still sends its own name.
-  // A missing Origin is allowed because a page's POST always sends one, and Firefox may leave it
-  // off an extension's.
-  const local = req.headers.host === `127.0.0.1:${port}` || req.headers.host === `localhost:${port}`
-  if (!local || (origin && !EXTENSION_ORIGIN.test(origin))) {
-    return end(res, 403)
-  }
-  const cors: Record<string, string> = origin
-    ? {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, POST',
-        Vary: 'Origin'
-      }
-    : {}
-  if (req.method === 'OPTIONS') return end(res, 204, cors)
-  const path = new URL(req.url ?? '/', 'http://local').pathname
-
-  // JSON only: a page can't send JSON here without a CORS preflight, which only an extension's
-  // origin passes.
-  if (req.method === 'POST' && !/^application\/json\b/i.test(req.headers['content-type'] ?? '')) {
-    return end(res, 415, cors)
-  }
-  if (req.method === 'GET' && path === '/health') {
-    return json(res, 200, cors, {
-      app: 'mergelane',
-      version: app.getVersion(),
-      ready: appReady
-    } satisfies BridgeHealth)
-  }
-  if (req.method === 'GET' && path === '/ping') {
-    noteExtension()
-    return json(res, 200, cors, {
-      app: 'mergelane',
-      version: app.getVersion(),
-      api: BRIDGE_API
-    } satisfies BridgePing)
-  }
-  if (req.method === 'POST' && path === '/add') {
-    const request = addRequestFrom(await readJson(req))
-    if (!request) return end(res, 400, cors)
-    noteExtension()
-    return add(request, res, cors)
-  }
-  if (req.method === 'POST' && path === '/confirm') {
-    const body = await readJson(req)
-    const token =
-      typeof body === 'object' && body !== null ? (body as Record<string, unknown>).token : null
-    const offer = typeof token === 'string' ? handoffs.get(token) : undefined
-    if (!host || !offer || typeof token !== 'string') return end(res, 410, cors)
-    handoffs.delete(token)
-    host.offer(offer)
-    return json(res, 200, cors, {})
-  }
-  end(res, 404, cors)
 }
 
 function noteExtension(): void {
   if (extensionUsed) return
   extensionUsed = true
   void saveSettings({ browserExtensionUsed: true }).catch(() => {})
-}
-
-async function readJson(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const chunk of req as AsyncIterable<Buffer>) {
-    size += chunk.length
-    if (size > MAX_BODY_BYTES) return null
-    chunks.push(chunk)
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf-8'))
-  } catch {
-    return null
-  }
 }
 
 function addRequestFrom(body: unknown): BridgeAddRequest | null {
@@ -214,34 +204,24 @@ async function checked(
   }
 }
 
-async function add(
-  request: BridgeAddRequest,
-  res: ServerResponse,
-  cors: Record<string, string>
-): Promise<void> {
-  if (!host) return end(res, 503, cors)
-  const keep = (reason: string): void => json(res, 422, cors, { reason })
-  const hold = (offer: Offer): void => {
+async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<BridgeReply> {
+  if (!host) return { ok: false, error: 'unavailable' }
+  const keep = (reason: string): BridgeReply => ({ ok: false, kept: reason })
+  const hold = (offer: Offer): BridgeReply => {
     const token = randomUUID()
     handoffs.set(token, offer)
     setTimeout(() => handoffs.delete(token), HANDOFF_MS).unref()
-    json(res, 200, cors, { token } satisfies BridgeHandoff)
+    return { ok: true, token }
   }
 
   // A magnet link has nothing to check here: New download looks it up.
   if (/^magnet:/i.test(request.url)) return hold({ url: request.url })
 
-  const gone = new Promise<void>((resolve) =>
-    res.once('close', () => !res.writableFinished && resolve())
-  )
   const checkedProbe = await checked(request, gone)
   const probe =
     typeof checkedProbe !== 'string' && checkedProbe.kind === 'http' && request.fileName
       ? { ...checkedProbe, suggestedFileName: request.fileName }
       : checkedProbe
-  // The extension gave up and the browser kept the download: adding it too would make two. From
-  // here on nothing awaits, so the answer can't come after the extension has stopped waiting.
-  if (res.writableEnded || res.destroyed) return
   if (typeof probe === 'string') return keep(probe)
   if (
     probe.kind === 'http' &&
@@ -251,7 +231,7 @@ async function add(
   ) {
     return keep('smaller than the minimum size')
   }
-  hold({
+  return hold({
     url: request.url,
     probe,
     browser: request.browser,

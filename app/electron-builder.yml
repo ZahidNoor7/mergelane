@@ -32,6 +32,9 @@ extraResources:
   # The app installs it once as a LaunchDaemon through an admin prompt (main/daemon/daemon.ts).
   - from: ../daemon/bin/mergelane-daemon
     to: mergelane-daemon
+  # The browser extension's native messaging host (docs/BROWSER-BRIDGE.md, ADR-0021).
+  - from: ../daemon/bin/mergelane-nmhost
+    to: mergelane-nmhost
 mac:
   # Only the zips go by this name: the dmg has its own (dmg.artifactName).
   artifactName: ${productName}-${version}-${arch}-mac.${ext}

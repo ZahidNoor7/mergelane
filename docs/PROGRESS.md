@@ -38,6 +38,28 @@ Last updated: 2026-11-10
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Phase 2 (started 2026-11-10, owner-approved)
+
+**M2.1 browser capture: done, PR #5** (branch `m2.1-browser-capture`). Native messaging, ADR-0021.
+- **Host:** `mergelane-nmhost`, 98.7% coverage.
+- **App:** the 0600 Unix socket bridge, with host manifests for Chrome, Chromium and Firefox.
+- **Extension:** talks through `sendNativeMessage`, with a fixed ID.
+- **Proven locally, end to end in Chromium** (`e2e/extension.spec.ts`):
+  - the fixed extension ID;
+  - extension → host → app;
+  - a clicked download handed over and the browser's copy cancelled.
+- **Smoke suite:** 180 passed.
+- **Not done:**
+  - Firefox is registered but not tested end to end.
+  - Moving the extension to a top-level `extension/` was deferred again: no benefit yet, and it would duplicate
+    the toolchain (ADR-0014).
+  - Publishing the extension needs a Chrome Web Store developer account, which has a one-time fee: owner decision.
+
+**Owner choices for Phase 2:**
+- CI stays paused (ADR-0020).
+- YouTube: review first, no YouTube code until the owner picks an approach.
+- Keep the `m1.4-pinning` branch.
+
 ### Phase 1 closed, pending the owner's approval
 
 The report is `docs/PHASE-1-REPORT.md` and the proposed next phase is `docs/PHASE-2.md`. On 2026-11-10 the owner

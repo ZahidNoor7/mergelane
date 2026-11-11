@@ -4,7 +4,7 @@
 # Installs the DMG the way a user does and checks that the app reaches its ready state:
 #   mount -> copy the app out -> mark it quarantined -> verify every signature and the bundle
 #   metadata -> check Gatekeeper's verdict is "unnotarised" (Open Anyway), not "damaged" ->
-#   remove quarantine (the README's install step) -> open -> poll GET /health until ready -> quit.
+#   remove quarantine (the README's install step) -> open -> ask the bridge socket's health until ready -> quit.
 #
 # usage: scripts/ci/package-test.sh <Mergelane-x.y.z-arm64.dmg> [expected-version]
 set -euo pipefail
@@ -12,7 +12,8 @@ set -euo pipefail
 DMG=${1:?usage: package-test.sh <dmg> [expected-version]}
 EXPECTED_VERSION=${2:-}
 BUNDLE_ID=io.github.zahidnoor7.mergelane
-BRIDGE_PORTS=(19288 19289 19290)
+# The browser bridge's socket (docs/BROWSER-BRIDGE.md); its health message reports readiness.
+BRIDGE_SOCKET="$HOME/Library/Application Support/Mergelane/browser.sock"
 READY_TIMEOUT_S=${READY_TIMEOUT_S:-90}
 
 WORK=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/mergelane-package-test.XXXXXX")
@@ -80,8 +81,11 @@ for f in LICENSE THIRD-PARTY-NOTICES.md; do
   [ -s "$APP/Contents/Resources/$f" ] || fail "Contents/Resources/$f is missing"
 done
 HELPER="$APP/Contents/Resources/mergelane-daemon"
-[ -x "$HELPER" ] || fail "the bundled helper Contents/Resources/mergelane-daemon is missing"
-[ "$(lipo -archs "$HELPER")" = "arm64" ] || fail "the bundled helper is not arm64-only"
+NMHOST="$APP/Contents/Resources/mergelane-nmhost"
+for bin in "$HELPER" "$NMHOST"; do
+  [ -x "$bin" ] || fail "the bundled ${bin##*/} is missing"
+  [ "$(lipo -archs "$bin")" = "arm64" ] || fail "the bundled ${bin##*/} is not arm64-only"
+done
 
 step "Gatekeeper: rejected as unnotarised (so Open Anyway is offered), not as damaged"
 VERDICT=$(spctl --assess --type execute -vv "$APP" 2>&1 || true)
@@ -101,23 +105,25 @@ xattr -dr com.apple.quarantine "$APP"
 helper_version=$("$HELPER" version) || fail "the bundled helper does not run after approval"
 [[ "$helper_version" == "mergelane-daemon $VERSION" ]] || fail "the bundled helper says '$helper_version'"
 echo "bundled helper: $helper_version"
+nmhost_version=$("$NMHOST" --version) || fail "the bundled browser host does not run after approval"
+[[ "$nmhost_version" == "mergelane-nmhost $VERSION" ]] || fail "the bundled browser host says '$nmhost_version'"
+echo "bundled browser host: $nmhost_version"
 open -n "$APP"
 
-step "Wait for GET /health to report ready (up to ${READY_TIMEOUT_S}s)"
+step "Wait for the bridge socket's health message to report ready (up to ${READY_TIMEOUT_S}s)"
 deadline=$((SECONDS + READY_TIMEOUT_S))
 health=""
 while [ $SECONDS -lt $deadline ]; do
-  for port in "${BRIDGE_PORTS[@]}"; do
-    body=$(curl -fsS --max-time 2 "http://127.0.0.1:$port/health" 2>/dev/null || true)
-    if grep -q '"app":"mergelane"' <<<"$body" && grep -q '"ready":true' <<<"$body"; then
-      health="$port $body"
-      break 2
-    fi
-  done
+  body=$(printf '{"v":2,"origin":"","message":{"type":"health"}}\n' | nc -U -w 3 "$BRIDGE_SOCKET" 2>/dev/null || true)
+  if grep -q '"app":"mergelane"' <<<"$body" && grep -q '"ready":true' <<<"$body"; then
+    health=$body
+    break
+  fi
   sleep 1
 done
 [ -n "$health" ] || fail "the app did not report ready within ${READY_TIMEOUT_S}s"
-echo "ready on port $health"
+echo "ready: $health"
+[ "$(stat -f %Lp "$BRIDGE_SOCKET")" = "600" ] || fail "the bridge socket is not private (mode 0600)"
 grep -q "\"version\":\"$VERSION\"" <<<"$health" || fail "the running app reports a different version"
 
 step "Quit"

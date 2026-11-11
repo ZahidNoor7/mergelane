@@ -13,6 +13,7 @@ import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
+import { registerNativeHost } from './nativeHost'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import { startUpdater } from './updater'
@@ -230,6 +231,16 @@ app.whenReady().then(async () => {
     manager: downloadManager,
     offer: (link) => offerLink(link, ensureWindow())
   }).catch((error) => console.error('[mergelane] browser bridge failed to start', error))
+  // The browsers find mergelane-nmhost through a manifest in each profile folder; written on every
+  // start, so it always points at this copy of the app.
+  const nativeHost =
+    testKnobs.nativeHostBinary ??
+    (app.isPackaged ? join(process.resourcesPath, 'mergelane-nmhost') : undefined)
+  if (nativeHost) {
+    void registerNativeHost(nativeHost, testKnobs.nativeHostHome ?? app.getPath('home')).catch(
+      (error) => console.error('[mergelane] browser host registration failed', error)
+    )
+  }
   // Unlike magnet:, mergelane:// is Mergelane's own, so registering it takes nothing from another app. A
   // development build has no fixed path to register.
   if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')

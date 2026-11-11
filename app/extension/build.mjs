@@ -40,7 +40,8 @@ const manifests = {
     background: { service_worker: 'background.js' }
   },
   firefox: {
-    ...base,
+    // The key fixes the Chrome extension's ID (docs/BROWSER-BRIDGE.md); Firefox uses gecko.id.
+    ...Object.fromEntries(Object.entries(base).filter(([name]) => name !== 'key')),
     background: { scripts: ['background.js'] },
     browser_specific_settings: {
       gecko: {

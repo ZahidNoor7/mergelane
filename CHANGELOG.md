@@ -28,6 +28,11 @@ All notable changes to Mergelane are recorded here. The format follows
   an administrator password.
 - A simulated-network test harness, plus acceptance tests for Phase 1's criteria.
 
+- Browser capture through Chrome's native messaging (`mergelane-nmhost`): the extension hands downloads to the app over
+  a private channel. Mergelane registers the host with Chrome, Chromium and Firefox when it starts.
+
 ### Changed
+
+- The browser extension no longer uses a local HTTP port; the old bridge on `127.0.0.1:19288–19290` is gone.
 
 - Automatic updates are off until updates can be checked through the GitHub Releases API (ADR-0010).

@@ -51,7 +51,10 @@ export interface IpcContract {
   /** System-wide merging through mergelane-daemon (main/daemon/daemon.ts). */
   systemMerge: { args: []; result: SystemMergeSnapshot }
   setSystemMerge: { args: [on: boolean]; result: SystemMergeSnapshot }
+  /** Installs the bundled helper, or updates an older one (an administrator password prompt). */
   installSystemMerge: { args: []; result: SystemMergeSnapshot }
+  /** Whether merging turns itself back on after the helper restarts. */
+  setSystemMergeAutoResume: { args: [enabled: boolean]; result: SystemMergeSnapshot }
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }

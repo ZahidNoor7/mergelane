@@ -105,7 +105,7 @@ func (b *Balancer) ListenUDP(ctx context.Context, f Family) (net.PacketConn, err
 			return nil, lastErr
 		}
 		tried[sl.key] = struct{}{}
-		lc := net.ListenConfig{Control: nics.ForceEgress(sl.Index, f == Fam6)}
+		lc := net.ListenConfig{Control: nics.ForceEgress(sl.Index(), f == Fam6)}
 		pc, err := lc.ListenPacket(ctx, network, net.JoinHostPort(sl.ip(f).String(), "0"))
 		b.S.ReleaseFor(sl, f)
 		if err != nil {

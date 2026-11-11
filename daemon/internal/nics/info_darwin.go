@@ -70,6 +70,9 @@ type DefaultRoute struct {
 	GW     net.IP
 	V6     bool
 	Scoped bool // flag I: only used by sockets bound to this interface (IP_BOUND_IF)
+	// Marked is RTF_PROTO2, the marker on every route mergelane-daemon adds (ADR-0006). On a default
+	// route it can only be ours: XNU's other use of the flag is for published ARP/NDP host entries.
+	Marked bool
 }
 
 // DefaultRoutes lists every default route, scoped ones included.
@@ -109,7 +112,10 @@ func DefaultRoutes() ([]DefaultRoute, error) {
 		if err != nil {
 			continue
 		}
-		r := DefaultRoute{Index: rm.Index, Name: ifc.Name, V6: v6, Scoped: rm.Flags&unix.RTF_IFSCOPE != 0}
+		r := DefaultRoute{
+			Index: rm.Index, Name: ifc.Name, V6: v6,
+			Scoped: rm.Flags&unix.RTF_IFSCOPE != 0, Marked: rm.Flags&unix.RTF_PROTO2 != 0,
+		}
 		if len(rm.Addrs) > syscall.RTAX_GATEWAY {
 			switch gw := rm.Addrs[syscall.RTAX_GATEWAY].(type) {
 			case *route.Inet4Addr:

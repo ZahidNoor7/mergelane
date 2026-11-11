@@ -178,3 +178,17 @@ func (c *Client) SetLimit(ctx context.Context, link string, mbps float64) (SetLi
 	err := c.Call(ctx, MethodSetLimit, SetLimitParams{Link: link, Mbps: mbps}, &r)
 	return r, err
 }
+
+// SetAutoResume calls setAutoResume. An older daemon answers UNKNOWN_METHOD.
+func (c *Client) SetAutoResume(ctx context.Context, enabled bool) (Status, error) {
+	var s Status
+	err := c.Call(ctx, MethodSetAutoResume, SetAutoResumeParams{Enabled: enabled}, &s)
+	return s, err
+}
+
+// Events calls events. An older daemon answers UNKNOWN_METHOD.
+func (c *Client) Events(ctx context.Context) (EventsResult, error) {
+	var r EventsResult
+	err := c.Call(ctx, MethodEvents, nil, &r)
+	return r, err
+}

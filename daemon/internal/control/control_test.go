@@ -31,11 +31,27 @@ func (t *fakeTunnel) Off()         { t.mu.Lock(); t.offs++; t.mu.Unlock() }
 func (t *fakeTunnel) Name() string { return t.name }
 
 type fakeEngine struct {
+	mu     sync.Mutex // Resume reads the snapshot from its own goroutine
 	snap   []engine.SlotStats
 	limits map[string]float64
+	events []engine.LinkEvent
+	reads  int // Snapshot calls
 }
 
-func (e *fakeEngine) Snapshot() []engine.SlotStats { return e.snap }
+func (e *fakeEngine) Snapshot() []engine.SlotStats {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.reads++
+	return e.snap
+}
+
+func (e *fakeEngine) setSnap(snap []engine.SlotStats) {
+	e.mu.Lock()
+	e.snap = snap
+	e.mu.Unlock()
+}
+
+func (e *fakeEngine) Events() []engine.LinkEvent { return e.events }
 func (e *fakeEngine) SetLimit(name string, mbps float64) {
 	if mbps <= 0 {
 		delete(e.limits, name)

@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseRequest(t *testing.T) {
@@ -86,15 +87,15 @@ func TestDispatch(t *testing.T) {
 		msg                  string
 	}{
 		{name: "status", method: MethodStatus,
-			want: `{"state":"on","since":"2026-11-10T09:30:00Z","version":"test","protocol":1}`},
+			want: `{"state":"on","since":"2026-11-10T09:30:00Z","version":"test","protocol":1,"autoResume":false}`},
 		{name: "status empty params", method: MethodStatus, params: `{}`,
-			want: `{"state":"on","since":"2026-11-10T09:30:00Z","version":"test","protocol":1}`},
+			want: `{"state":"on","since":"2026-11-10T09:30:00Z","version":"test","protocol":1,"autoResume":false}`},
 		{name: "status unknown param", method: MethodStatus, params: `{"x":1}`, code: CodeBadRequest, msg: `unknown param "x"`},
 		{name: "status params not an object", method: MethodStatus, params: `[1]`, code: CodeBadRequest, msg: "JSON object"},
 		{name: "status protocol is stamped", method: MethodStatus,
 			h:    &fakeHandler{statusFn: func(context.Context) (Status, error) { return Status{State: StateOff, Version: "v", Protocol: 7}, nil }},
-			want: `{"state":"off","version":"v","protocol":1}`},
-		{name: "enable", method: MethodEnable, want: `{"state":"starting","version":"test","protocol":1}`},
+			want: `{"state":"off","version":"v","protocol":1,"autoResume":false}`},
+		{name: "enable", method: MethodEnable, want: `{"state":"starting","version":"test","protocol":1,"autoResume":false}`},
 		{name: "links nil is empty array", method: MethodLinks, want: `{"links":[]}`},
 		{name: "links", method: MethodLinks,
 			h:    &fakeHandler{links: []Link{{Name: "en0", Index: 4, Up: true, State: LinkUp, LimitMbps: 5}}},
@@ -106,11 +107,11 @@ func TestDispatch(t *testing.T) {
 		{name: "stats NaN is internal", method: MethodStats,
 			h:    &fakeHandler{stats: []LinkStats{{Name: "en0", Weight: math.NaN()}}},
 			code: CodeInternal, msg: "encoding the stats result"},
-		{name: "disable", method: MethodDisable, want: `{"state":"off","version":"test","protocol":1}`},
+		{name: "disable", method: MethodDisable, want: `{"state":"off","version":"test","protocol":1,"autoResume":false}`},
 		{name: "disable reason", method: MethodDisable, params: `{"reason":"VPN"}`,
-			want: `{"state":"off","reason":"VPN","version":"test","protocol":1}`},
+			want: `{"state":"off","reason":"VPN","version":"test","protocol":1,"autoResume":false}`},
 		{name: "disable null reason", method: MethodDisable, params: `{"reason":null}`,
-			want: `{"state":"off","version":"test","protocol":1}`},
+			want: `{"state":"off","version":"test","protocol":1,"autoResume":false}`},
 		{name: "disable numeric reason", method: MethodDisable, params: `{"reason":5}`, code: CodeBadRequest, msg: "reason"},
 		{name: "disable unknown param", method: MethodDisable, params: `{"why":"x"}`, code: CodeBadRequest, msg: `unknown param "why"`},
 		{name: "setLimit", method: MethodSetLimit, params: `{"link":"en0","mbps":50}`, want: `{"link":"en0","mbps":50}`},
@@ -126,6 +127,28 @@ func TestDispatch(t *testing.T) {
 		{name: "setLimit null mbps", method: MethodSetLimit, params: `{"link":"en0","mbps":null}`, code: CodeBadRequest, msg: "mbps"},
 		{name: "setLimit string mbps", method: MethodSetLimit, params: `{"link":"en0","mbps":"5"}`, code: CodeBadRequest, msg: "mbps"},
 		{name: "setLimit extra param", method: MethodSetLimit, params: `{"link":"en0","mbps":5,"burst":1}`, code: CodeBadRequest, msg: "burst"},
+		{name: "setAutoResume on", method: MethodSetAutoResume, params: `{"enabled":true}`,
+			want: `{"state":"off","version":"test","protocol":1,"autoResume":true}`},
+		{name: "setAutoResume off", method: MethodSetAutoResume, params: ` { "enabled" : false } `,
+			want: `{"state":"off","version":"test","protocol":1,"autoResume":false}`},
+		{name: "setAutoResume no params", method: MethodSetAutoResume, code: CodeBadRequest, msg: "enabled, a boolean"},
+		{name: "setAutoResume null", method: MethodSetAutoResume, params: `{"enabled":null}`, code: CodeBadRequest, msg: "enabled"},
+		{name: "setAutoResume string", method: MethodSetAutoResume, params: `{"enabled":"true"}`, code: CodeBadRequest, msg: "enabled"},
+		{name: "setAutoResume number", method: MethodSetAutoResume, params: `{"enabled":1}`, code: CodeBadRequest, msg: "enabled"},
+		{name: "setAutoResume extra param", method: MethodSetAutoResume, params: `{"enabled":true,"now":true}`, code: CodeBadRequest, msg: `unknown param "now"`},
+		{name: "setAutoResume params not an object", method: MethodSetAutoResume, params: `true`, code: CodeBadRequest, msg: "JSON object"},
+		{name: "setAutoResume handler error", method: MethodSetAutoResume, params: `{"enabled":true}`,
+			h: &fakeHandler{err: Errorf(CodeInternal, "disk full")}, code: CodeInternal, msg: "disk full"},
+		{name: "events nil is empty array", method: MethodEvents, want: `{"events":[]}`},
+		{name: "events", method: MethodEvents,
+			h: &fakeHandler{events: []LinkEvent{
+				{At: testTime, Link: "en0", From: LinkUp, To: LinkDown, Reason: EventProbeFailed},
+				{At: testTime.Add(time.Second), Link: "en7", From: LinkGone, To: LinkUnknown, Reason: EventReturned},
+			}},
+			want: `{"events":[{"at":"2026-11-10T09:30:00Z","link":"en0","from":"up","to":"down","reason":"probe-failed"},` +
+				`{"at":"2026-11-10T09:30:01Z","link":"en7","from":"gone","to":"unknown","reason":"returned"}]}`},
+		{name: "events unknown param", method: MethodEvents, params: `{"since":"x"}`, code: CodeBadRequest, msg: `unknown param "since"`},
+		{name: "events handler error", method: MethodEvents, h: &fakeHandler{err: errors.New("boom")}, code: CodeInternal, msg: "boom"},
 		{name: "unknown method", method: "reboot", code: CodeUnknownMethod, msg: `"reboot"`},
 		{name: "api error", method: MethodEnable, h: &fakeHandler{err: Errorf(CodeVPNActive, "utun4 has the default route")},
 			code: CodeVPNActive, msg: "utun4 has the default route"},
@@ -170,11 +193,16 @@ func TestDispatchPassesParams(t *testing.T) {
 	ctx := context.Background()
 	Dispatch(ctx, h, Request{V: 1, ID: "1", Method: MethodDisable, Params: json.RawMessage(`{"reason":"bye"}`)})
 	Dispatch(ctx, h, Request{V: 1, ID: "2", Method: MethodSetLimit, Params: json.RawMessage(`{"link":"en7","mbps":12.5}`)})
+	Dispatch(ctx, h, Request{V: 1, ID: "3", Method: MethodSetAutoResume, Params: json.RawMessage(`{"enabled":true}`)})
+	Dispatch(ctx, h, Request{V: 1, ID: "4", Method: MethodSetAutoResume, Params: json.RawMessage(`{"enabled":false}`)})
 	if len(h.disables) != 1 || h.disables[0].Reason != "bye" {
 		t.Fatalf("disable params %+v", h.disables)
 	}
 	if len(h.limits) != 1 || h.limits[0] != (SetLimitParams{Link: "en7", Mbps: 12.5}) {
 		t.Fatalf("setLimit params %+v", h.limits)
+	}
+	if len(h.resumes) != 2 || !h.resumes[0].Enabled || h.resumes[1].Enabled {
+		t.Fatalf("setAutoResume params %+v", h.resumes)
 	}
 }
 
@@ -213,15 +241,17 @@ func TestErrorAndCodes(t *testing.T) {
 	if !CodeNotRoot.Valid() || Code("NOPE").Valid() || Code("").Valid() {
 		t.Fatal("Code.Valid is wrong")
 	}
-	if len(Codes()) != 8 || len(Methods()) != 6 {
-		t.Fatalf("%d codes, %d methods", len(Codes()), len(Methods()))
+	if len(Codes()) != 8 || len(Methods()) != 8 || len(EventReasons()) != 6 {
+		t.Fatalf("%d codes, %d methods, %d event reasons", len(Codes()), len(Methods()), len(EventReasons()))
 	}
 	m := Methods()
 	m[0] = "changed"
 	c := Codes()
 	c[0] = "changed"
-	if Methods()[0] != MethodStatus || Codes()[0] != CodeBadRequest {
-		t.Fatal("Methods/Codes return shared slices")
+	r := EventReasons()
+	r[0] = "changed"
+	if Methods()[0] != MethodStatus || Codes()[0] != CodeBadRequest || EventReasons()[0] != EventFound {
+		t.Fatal("Methods/Codes/EventReasons return shared slices")
 	}
 	for _, code := range Codes() {
 		if !code.Valid() || strings.ToUpper(string(code)) != string(code) {

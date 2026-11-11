@@ -29,6 +29,9 @@ export const testKnobs = {
   daemonSocket: env['MERGELANE_E2E_DAEMON_SOCKET'],
   /** Whether the helper counts as installed: '1' or '0'; unset checks /Library. */
   daemonInstalled: env['MERGELANE_E2E_DAEMON_INSTALLED'],
+  /** The app version to compare with the helper's, so a development build (whose helper says
+   * 'dev') can test the out-of-date banner (daemon.ts). Unset: no comparison. */
+  appVersion: env['MERGELANE_E2E_APP_VERSION'],
   /** Keeps the window off-screen so a test run doesn't pop windows up over the desktop. */
   hideWindow: env['MERGELANE_E2E_HIDE_WINDOW'] === '1',
   blockBytes: positiveNumber('MERGELANE_E2E_BLOCK_BYTES', 8 * 1024 * 1024),

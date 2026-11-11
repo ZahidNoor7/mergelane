@@ -23,8 +23,25 @@ export class DaemonError extends Error {
   }
 }
 
+/** The protocol version a message from the helper claims, when it is a number other than ours:
+ * in the envelope (`v`), or in a status result (`protocol`). */
+function otherProtocol(message: unknown): number | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const { v, result } = message as { v?: unknown; result?: unknown }
+  const protocol =
+    typeof result === 'object' && result !== null
+      ? (result as { protocol?: unknown }).protocol
+      : undefined
+  for (const claimed of [v, protocol]) {
+    if (typeof claimed === 'number' && claimed !== PROTOCOL_VERSION) return claimed
+  }
+  return undefined
+}
+
 /** One request to mergelane-daemon over its control socket (shared/daemon-api.ts, protocol v1).
- * Each call uses its own short connection, so a daemon restart between calls costs nothing. */
+ * Each call uses its own short connection, so a daemon restart between calls costs nothing.
+ * A helper that speaks another protocol version fails with code 'UNSUPPORTED_VERSION', as the
+ * daemon itself answers a request in a version it doesn't speak. */
 export function callDaemon<M extends Method>(
   method: M,
   params: ParamsOf<M> | undefined,
@@ -76,6 +93,16 @@ export function callDaemon<M extends Method>(
           message = JSON.parse(line)
         } catch {
           finish(new DaemonError('PROTOCOL', 'The helper sent something that is not JSON.'))
+          return
+        }
+        const protocol = otherProtocol(message)
+        if (protocol !== undefined) {
+          finish(
+            new DaemonError(
+              'UNSUPPORTED_VERSION',
+              `Mergelane's helper speaks protocol version ${protocol}; this app speaks ${PROTOCOL_VERSION}.`
+            )
+          )
           return
         }
         if (!isResponse(message)) {

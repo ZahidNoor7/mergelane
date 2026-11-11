@@ -4,7 +4,7 @@ Updated at the end of every working session.
 
 ## Phase 1: proof of concept and foundation
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 ### Done
 
@@ -77,6 +77,28 @@ Last updated: 2026-11-10
   - which YouTube approach (it also decides whether to ship Deno);
   - whether the FFmpeg build source is acceptable;
   - whether to attach GPL sources to releases.
+
+**M2.3 dashboard: done, PR #7** (branch `m2.3-dashboard`).
+
+**M2.4 system merge for daily use: done, pending CI** (branch `m2.4-merge-daily`).
+- **Helper:**
+  - an optional "Turn back on after a crash" setting, off by default (ADR-0024);
+  - links that come back are re-probed from scratch, and their scoped routes re-synced (ADR-0025);
+  - a log of the last 50 link changes (`events`);
+  - CLI commands `events` and `auto-resume on|off`.
+  - Go: vet, staticcheck and `go test -race` pass. New and changed code is 100% covered.
+- **App:**
+  - an out-of-date helper is detected (version, protocol, or a missing method) and an **Update** button
+    reinstalls it;
+  - merging that was on before an update is turned back on afterwards;
+  - the auto-resume switch;
+  - a "Recent network dropouts" list from the helper's event log.
+  - Coverage: `snapshot.ts` 100%, `client.ts` 99%. Full smoke suite: 379 passed, 1 skipped (existing).
+- **Not proven yet** (needs root in CI, which is paused, or the owner's Mac):
+  - a real `kill -9`, launchd restart and auto-resume;
+  - how macOS treats the re-synced routes on real interfaces;
+  - unplugging, sleep and wake;
+  - IPv6 capture in the simulator (still open from the M2.4 plan).
 
 **Owner choices for Phase 2:**
 - CI stays paused (ADR-0020).

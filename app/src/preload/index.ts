@@ -49,6 +49,7 @@ const mergelaneApi = {
   systemMerge: () => invoke('systemMerge'),
   setSystemMerge: (on) => invoke('setSystemMerge', on),
   installSystemMerge: () => invoke('installSystemMerge'),
+  setSystemMergeAutoResume: (enabled: boolean) => invoke('setSystemMergeAutoResume', enabled),
   resetNetworkUsage: (id) => invoke('resetNetworkUsage', id),
   freeSpace: (dir: string) => invoke('freeSpace', dir),
   torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),

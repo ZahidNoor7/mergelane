@@ -1,3 +1,5 @@
+import type { LinkEvent } from '../../../shared/daemon-api'
+
 export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'other'
 export type IpFamily = 4 | 6
 
@@ -600,6 +602,24 @@ export interface SystemMergeLink {
   activeFlows: number
 }
 
+/** One change in a link's state, as mergelane-daemon logged it (its `events` method): `at`
+ * (RFC 3339), `link`, `from` and `to` (`gone` while the interface isn't there), and `reason`. */
+export type SystemMergeLinkEvent = LinkEvent
+
+/** A time a link stopped carrying traffic (lost its internet, or disappeared), and when it came
+ * back. Built from the event log (see main/daemon/snapshot.ts). */
+export interface SystemMergeOutage {
+  link: string
+  /** `gone` once the link itself disappeared during the outage. */
+  kind: 'down' | 'gone'
+  /** When it stopped, RFC 3339. */
+  at: string
+  /** When it was up again; absent while it is still out. */
+  backAt?: string
+  /** Why it stopped: the daemon's reason for the first change, e.g. `probe-failed` or `lost`. */
+  reason: LinkEvent['reason']
+}
+
 /** System-wide merging, as the app shows it (see main/daemon/daemon.ts). */
 export interface SystemMergeSnapshot {
   /** The helper is installed in /Library (done once, with an administrator password). */
@@ -612,6 +632,20 @@ export interface SystemMergeSnapshot {
   /** The last request that failed, in words for the user. */
   error?: string
   links: SystemMergeLink[]
+  /** This app's version, which the bundled helper shares. */
+  appVersion: string
+  /** The running helper's version, when it answered. */
+  helperVersion?: string
+  /** The running helper isn't the one this app bundles: another version, another protocol, or
+   * missing a method the app uses. Installing again (the Update button) replaces it. */
+  helperOutdated: boolean
+  /** Whether merging turns itself back on after the helper restarts (ADR-0007's setting); absent
+   * when the helper is too old to have it. */
+  autoResume?: boolean
+  /** The daemon's recent link changes, oldest first; empty when it can't say. */
+  events: SystemMergeLinkEvent[]
+  /** The same log as outages, oldest first: what the failover history shows. */
+  outages: SystemMergeOutage[]
 }
 
 /** Where the app's own update is (see main/updater.ts). `version` is the update's, once one is

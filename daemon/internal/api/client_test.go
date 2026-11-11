@@ -53,11 +53,51 @@ func TestClientMethods(t *testing.T) {
 	if err != nil || lim != (SetLimitResult{Link: "en0"}) {
 		t.Fatalf("setLimit %+v, %v", lim, err)
 	}
+	if st, err = c.SetAutoResume(ctx, true); err != nil || !st.AutoResume || st.Protocol != ProtocolVersion {
+		t.Fatalf("setAutoResume %+v, %v", st, err)
+	}
+	if st, err = c.SetAutoResume(ctx, false); err != nil || st.AutoResume {
+		t.Fatalf("setAutoResume off %+v, %v", st, err)
+	}
+	h.events = []LinkEvent{{At: testTime, Link: "en0", From: LinkUp, To: LinkGone, Reason: EventLost}}
+	ev, err := c.Events(ctx)
+	if err != nil || len(ev.Events) != 1 || ev.Events[0] != h.events[0] {
+		t.Fatalf("events %+v, %v", ev, err)
+	}
 	if err := c.Call(ctx, MethodStatus, nil, nil); err != nil {
 		t.Fatalf("call without result: %v", err)
 	}
 	if len(h.disables) != 2 || h.disables[0].Reason != "bye" || len(h.limits) != 1 || h.limits[0].Link != "en0" {
 		t.Fatalf("handler saw %+v %+v", h.disables, h.limits)
+	}
+	if len(h.resumes) != 2 || !h.resumes[0].Enabled || h.resumes[1].Enabled {
+		t.Fatalf("handler saw setAutoResume %+v", h.resumes)
+	}
+}
+
+// An app newer than the helper may call a method the helper does not have yet. The older daemon
+// answers UNKNOWN_METHOD for that request only, and the connection stays usable.
+func TestClientNewMethodsAgainstAnOlderDaemon(t *testing.T) {
+	c := pipeClient(t, func(req string) string {
+		id := req[strings.Index(req, `"id":"`)+6 : strings.Index(req, `","method"`)]
+		if strings.Contains(req, `"method":"status"`) {
+			return `{"v":1,"id":"` + id + `","ok":true,"result":{"state":"off","version":"0.1.0","protocol":1}}` + "\n"
+		}
+		method := req[strings.Index(req, `"method":"`)+10:]
+		method = method[:strings.Index(method, `"`)]
+		return `{"v":1,"id":"` + id + `","ok":false,"error":{"code":"UNKNOWN_METHOD","message":"unknown method \"` + method + `\""}}` + "\n"
+	})
+	ctx := context.Background()
+	if _, err := c.SetAutoResume(ctx, true); !isCode(err, CodeUnknownMethod) {
+		t.Fatalf("setAutoResume against an older daemon = %v, want UNKNOWN_METHOD", err)
+	}
+	if _, err := c.Events(ctx); !isCode(err, CodeUnknownMethod) {
+		t.Fatalf("events against an older daemon = %v, want UNKNOWN_METHOD", err)
+	}
+	// An older daemon's status has no autoResume: it reads as off.
+	st, err := c.Status(ctx)
+	if err != nil || st.State != StateOff || st.AutoResume || st.Version != "0.1.0" {
+		t.Fatalf("status from an older daemon = %+v, %v", st, err)
 	}
 }
 

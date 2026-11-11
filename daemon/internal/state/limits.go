@@ -58,16 +58,5 @@ func LoadLimits(dir string) (map[string]float64, error) {
 
 // SaveLimits writes the caps atomically, so a crash mid-write cannot leave a broken file.
 func SaveLimits(dir string, limits map[string]float64) error {
-	if err := os.MkdirAll(limitsDir(dir), 0o755); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(limitsFile{Version: limitsVersion, Limits: limits}, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := LimitsPath(dir) + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
-		return err
-	}
-	return replaceFile(tmp, LimitsPath(dir))
+	return writeJSON(LimitsPath(dir), limitsFile{Version: limitsVersion, Limits: limits})
 }

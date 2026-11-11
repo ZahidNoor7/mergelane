@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "state": "on",
+    "reason": "Turned back on after Mergelane's helper restarted.",
+    "since": "2026-11-10T09:31:14.5Z",
+    "version": "0.1.0",
+    "protocol": 1,
+    "autoResume": true
+  }
+}

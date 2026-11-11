@@ -105,6 +105,12 @@ func run(name string, args ...string) error {
 // with a default route also gets a scoped one, kept in step with gateway changes.
 var realName = regexp.MustCompile(`^(en|feth)\d+$`)
 
+// Seams for tests: the default routes the sync reads, and the route(8) commands it runs.
+var (
+	defaultRoutes = nics.DefaultRoutes
+	routeCmd      = func(args ...string) error { return run("/sbin/route", args...) }
+)
+
 type scopedKey struct {
 	name string
 	v6   bool
@@ -115,6 +121,9 @@ var scoped struct {
 	added map[scopedKey]string // scoped defaults we added, with their gateway
 	stop  chan struct{}        // non-nil while capture is on
 }
+
+// scopedEvery is how often the scoped defaults are brought in step with the table (a var for tests).
+var scopedEvery = 3 * time.Second
 
 // scopedArgs builds "-q -n <verb> -inet[6] default <gw>[%<name>] -ifscope <name>" as before; adds now
 // also carry -proto2 (routemark), so cleanup can find them after a crash.
@@ -135,8 +144,9 @@ func startScopedSync() error {
 		stopScopedSync()
 		return fmt.Errorf("scoped routes: %w", err)
 	}
+	every := scopedEvery
 	go func() {
-		t := time.NewTicker(3 * time.Second)
+		t := time.NewTicker(every)
 		defer t.Stop()
 		for {
 			select {
@@ -153,7 +163,7 @@ func startScopedSync() error {
 }
 
 func stopScopedSync() {
-	routes, _ := nics.DefaultRoutes()
+	routes, _ := defaultRoutes()
 	scoped.mu.Lock()
 	defer scoped.mu.Unlock()
 	if scoped.stop != nil {
@@ -170,27 +180,47 @@ func stopScopedSync() {
 		// Only where the adapter is still primary: on one that stopped being primary since the last
 		// sync, macOS needs this route as its own scoped default (see syncScoped).
 		if routes == nil || primary[k] {
-			run("/sbin/route", scopedArgs("delete", k, gw)...)
+			routeCmd(scopedArgs("delete", k, gw)...)
 		}
 	}
 	scoped.added = nil
 }
 
+// syncScoped gives every primary en/feth adapter a scoped default via its gateway, and keeps it there.
+//
+// Mergelane (M2.4, links that come back): the table's scoped defaults are told apart by our marker
+// (DefaultRoute.Marked, ADR-0006) instead of being taken all for macOS's:
+//   - macOS's own scoped default (unmarked) is left alone, as upstream did.
+//   - Ours with the right gateway is adopted even when this sync had forgotten it: after #20 left it
+//     to a non-primary adapter that is primary again, or on an adapter that went away and came back
+//     while the route survived. Unadopted, Off would leave it behind, and the next start would report
+//     a crash that never happened.
+//   - Ours with another gateway is replaced: the adapter came back on another network, and pinned
+//     sockets would otherwise keep sending to the old router.
+//   - An adapter that came back with no scoped default (the kernel removed ours with the old interface,
+//     whatever its index was) gets one again at the next sync.
+//
+// An adapter whose only default is scoped is not primary; macOS owns that route (or ours stands in for
+// it, #20) and the sync does nothing there.
 func syncScoped(stop chan struct{}) error {
-	routes, err := nics.DefaultRoutes()
+	routes, err := defaultRoutes()
 	if err != nil {
 		return err
 	}
-	want := map[scopedKey]string{}
-	have := map[scopedKey]bool{}
+	want := map[scopedKey]string{} // primary adapters, by the gateway of their unscoped default
+	theirs := map[scopedKey]bool{} // scoped defaults someone else made (macOS)
+	mine := map[scopedKey]string{} // scoped defaults carrying our marker, by gateway
 	for _, r := range routes {
 		if !realName.MatchString(r.Name) {
 			continue
 		}
 		k := scopedKey{r.Name, r.V6}
-		if r.Scoped {
-			have[k] = true
-		} else if r.GW != nil {
+		switch {
+		case r.Scoped && r.Marked && r.GW != nil:
+			mine[k] = r.GW.String()
+		case r.Scoped:
+			theirs[k] = true
+		case r.GW != nil:
 			want[k] = r.GW.String()
 		}
 	}
@@ -201,17 +231,19 @@ func syncScoped(stop chan struct{}) error {
 	}
 	var first error
 	for k, gw := range want {
-		old, ours := scoped.added[k]
+		have, present := mine[k]
 		switch {
-		case ours && old == gw && have[k]:
-			continue
-		case !ours && have[k]:
-			continue // macOS keeps its own scoped default here
-		case ours:
-			run("/sbin/route", scopedArgs("delete", k, old)...)
+		case theirs[k]:
 			delete(scoped.added, k)
+			continue // macOS keeps its own scoped default here
+		case present && have == gw:
+			scoped.added[k] = gw
+			continue
+		case present:
+			routeCmd(scopedArgs("delete", k, have)...)
 		}
-		if err := run("/sbin/route", scopedArgs("add", k, gw)...); err != nil && !strings.Contains(err.Error(), "File exists") {
+		delete(scoped.added, k)
+		if err := routeCmd(scopedArgs("add", k, gw)...); err != nil && !strings.Contains(err.Error(), "File exists") {
 			if first == nil {
 				first = err
 			}
@@ -219,14 +251,12 @@ func syncScoped(stop chan struct{}) error {
 		}
 		scoped.added[k] = gw
 	}
-	for k, gw := range scoped.added {
+	for k := range scoped.added {
 		if _, ok := want[k]; !ok {
 			// No longer the primary service (a tether took over): macOS now wants a scoped default
 			// there itself, and ours, already in its place, made its own add fail. Leave the route to
 			// macOS; deleting it would leave the adapter with no default route until it reconnects (#20).
-			if !have[k] {
-				run("/sbin/route", scopedArgs("delete", k, gw)...)
-			}
+			// Or the adapter is gone, and its routes with it.
 			delete(scoped.added, k)
 		}
 	}

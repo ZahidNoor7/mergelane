@@ -11,6 +11,13 @@
 //
 // A connection may carry any number of requests. An error that does not belong to one request (a
 // peer that is not allowed, a line that is not JSON, a line that is too long) is answered with id "".
+//
+// Versions. "v" is the wire format's version, and a daemon accepts only its own (UNSUPPORTED_VERSION
+// otherwise), so the oldest app protocol a daemon accepts is always the one status reports as protocol.
+// Within v1 changes are additive only: a new method, a new optional param, a new result field. An app
+// that uses a newer method must expect UNKNOWN_METHOD from an older daemon (setAutoResume and events
+// arrived in M2.4) and should read status.version, the daemon's build version (-X main.version), to
+// offer a helper update. Anything that is not additive needs protocol v2.
 package api
 
 import (
@@ -39,17 +46,23 @@ const MaxLineBytes = 64 << 10
 // engine and limits.json accept.
 const MaxLimitMbps = 1e6
 
-// The methods of protocol v1.
+// The methods of protocol v1. setAutoResume and events were added in M2.4; an older daemon answers
+// them with UNKNOWN_METHOD.
 const (
-	MethodStatus   = "status"
-	MethodEnable   = "enable"
-	MethodDisable  = "disable"
-	MethodLinks    = "links"
-	MethodStats    = "stats"
-	MethodSetLimit = "setLimit"
+	MethodStatus        = "status"
+	MethodEnable        = "enable"
+	MethodDisable       = "disable"
+	MethodLinks         = "links"
+	MethodStats         = "stats"
+	MethodSetLimit      = "setLimit"
+	MethodSetAutoResume = "setAutoResume"
+	MethodEvents        = "events"
 )
 
-var methods = [...]string{MethodStatus, MethodEnable, MethodDisable, MethodLinks, MethodStats, MethodSetLimit}
+var methods = [...]string{
+	MethodStatus, MethodEnable, MethodDisable, MethodLinks, MethodStats, MethodSetLimit,
+	MethodSetAutoResume, MethodEvents,
+}
 
 // Methods lists every method of protocol v1.
 func Methods() []string { return slices.Clone(methods[:]) }
@@ -135,18 +148,22 @@ const (
 	StateStopping State = "stopping"
 )
 
-// Status is the result of status, enable and disable.
+// Status is the result of status, enable, disable and setAutoResume.
 type Status struct {
 	State State `json:"state"`
 	// Reason says why merging is off when it did not go off on request, for example a VPN
-	// conflict or the restart after a crash. Empty otherwise.
+	// conflict or the restart after a crash, or that it came back on by itself after a crash.
+	// Empty otherwise.
 	Reason string `json:"reason,omitempty"`
 	// Since is when State last changed; zero if unknown. Sent as RFC 3339.
 	Since time.Time `json:"since,omitzero"`
-	// Version is the daemon's build version.
+	// Version is the daemon's build version (-X main.version at build time, "dev" otherwise).
 	Version string `json:"version"`
 	// Protocol is always ProtocolVersion; Dispatch fills it in.
 	Protocol int `json:"protocol"`
+	// AutoResume is the "turn system merge back on after a crash" setting (setAutoResume). Always
+	// sent since M2.4; older daemons leave it out.
+	AutoResume bool `json:"autoResume"`
 }
 
 // DisableParams are disable's params.
@@ -232,6 +249,56 @@ type SetLimitResult struct {
 	Mbps float64 `json:"mbps"`
 }
 
+// SetAutoResumeParams are setAutoResume's params.
+type SetAutoResumeParams struct {
+	// Enabled turns "turn system merge back on after a crash" on or off. It is saved, and takes
+	// effect at the daemon's next start after a crash.
+	Enabled bool `json:"enabled"`
+}
+
+// LinkGone is a link's state in events while its interface is not there (unplugged, asleep, or
+// without an address or default route). links never reports it: a gone link is not listed.
+const LinkGone LinkState = "gone"
+
+// LinkEventReason says why a link's state changed. Like the error codes, the set is closed within a
+// protocol version: the app's guard refuses a reason it does not know, so a new one means protocol v2.
+type LinkEventReason string
+
+// The link event reasons.
+const (
+	EventFound       LinkEventReason = "found"        // a link the daemon had not seen appeared
+	EventLost        LinkEventReason = "lost"         // the interface, its address or its default route went away
+	EventReturned    LinkEventReason = "returned"     // a link that had gone came back, perhaps with a new index
+	EventAddress     LinkEventReason = "address"      // its address changed, so it is checked again
+	EventProbeOK     LinkEventReason = "probe-ok"     // the internet check through it passed
+	EventProbeFailed LinkEventReason = "probe-failed" // the internet check through it failed
+)
+
+var eventReasons = [...]LinkEventReason{EventFound, EventLost, EventReturned, EventAddress, EventProbeOK, EventProbeFailed}
+
+// EventReasons lists every link event reason.
+func EventReasons() []LinkEventReason { return slices.Clone(eventReasons[:]) }
+
+// LinkEvent is one change in a link's state, for the failover history.
+type LinkEvent struct {
+	At   time.Time `json:"at"`   // RFC 3339
+	Link string    `json:"link"` // BSD name, e.g. "en0"
+	// From and To are LinkUp, LinkUnknown, LinkDown or LinkGone. The state is the one links reports:
+	// the IPv4 internet check, or the IPv6 one on a link without IPv4.
+	From   LinkState       `json:"from"`
+	To     LinkState       `json:"to"`
+	Reason LinkEventReason `json:"reason"`
+}
+
+// MaxEvents is how many link events the daemon keeps; older ones are dropped.
+const MaxEvents = 50
+
+// EventsResult is the result of events: the most recent link changes, oldest first, at most
+// MaxEvents. The daemon keeps them in memory only, so they start empty at every daemon start.
+type EventsResult struct {
+	Events []LinkEvent `json:"events"`
+}
+
 // Handler carries out the methods. The daemon's controller implements it. ctx is cancelled when the
 // server closes. A returned *Error (also wrapped) reaches the client with its code; any other error
 // is sent as INTERNAL.
@@ -242,6 +309,8 @@ type Handler interface {
 	Links(ctx context.Context) (LinksResult, error)
 	Stats(ctx context.Context) (Stats, error)
 	SetLimit(ctx context.Context, p SetLimitParams) (SetLimitResult, error)
+	SetAutoResume(ctx context.Context, p SetAutoResumeParams) (Status, error)
+	Events(ctx context.Context) (EventsResult, error)
 }
 
 // wireRequest is a request as sent, before its fields are checked.
@@ -366,7 +435,7 @@ func Dispatch(ctx context.Context, h Handler, req Request) Response {
 
 func call(ctx context.Context, h Handler, req Request) (any, error) {
 	switch req.Method {
-	case MethodStatus, MethodEnable, MethodLinks, MethodStats:
+	case MethodStatus, MethodEnable, MethodLinks, MethodStats, MethodEvents:
 		if _, err := paramFields(req.Params); err != nil {
 			return nil, err
 		}
@@ -400,6 +469,18 @@ func call(ctx context.Context, h Handler, req Request) (any, error) {
 			return nil, err
 		}
 		return h.SetLimit(ctx, p)
+	case MethodSetAutoResume:
+		p, err := parseSetAutoResume(req.Params)
+		if err != nil {
+			return nil, err
+		}
+		return withProtocol(h.SetAutoResume(ctx, p))
+	case MethodEvents:
+		res, err := h.Events(ctx)
+		if res.Events == nil {
+			res.Events = []LinkEvent{}
+		}
+		return res, err
 	}
 	return nil, Errorf(CodeUnknownMethod, "unknown method %q", req.Method)
 }
@@ -459,6 +540,19 @@ func parseSetLimit(raw json.RawMessage) (SetLimitParams, error) {
 	return p, p.Validate()
 }
 
+func parseSetAutoResume(raw json.RawMessage) (SetAutoResumeParams, error) {
+	var p SetAutoResumeParams
+	f, err := paramFields(raw, "enabled")
+	if err != nil {
+		return p, err
+	}
+	if !isBool(f["enabled"]) {
+		return p, Errorf(CodeBadRequest, "setAutoResume needs enabled, a boolean")
+	}
+	_ = json.Unmarshal(f["enabled"], &p.Enabled) // cannot fail: a JSON true or false
+	return p, nil
+}
+
 // isNull reports whether raw is absent or the JSON null literal.
 func isNull(raw []byte) bool {
 	t := bytes.TrimSpace(raw)
@@ -474,4 +568,10 @@ func isObject(raw []byte) bool {
 func isString(raw []byte) bool {
 	t := bytes.TrimSpace(raw)
 	return len(t) > 0 && t[0] == '"'
+}
+
+// isBool reports whether raw is the JSON true or false literal.
+func isBool(raw []byte) bool {
+	t := string(bytes.TrimSpace(raw))
+	return t == "true" || t == "false"
 }

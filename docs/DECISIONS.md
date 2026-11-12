@@ -1220,7 +1220,9 @@ until the owner overrides it.
       download lasts long enough to measure on fast Ethernet, and the data stays near 200 MB plus about 50 MB per
       network unplugged. The run states this before it starts.
   - **Safety:**
-    - It never runs sudo by itself. The crash check is optional and names its command first.
+    - It never runs sudo. The crash check is optional: the owner runs the `sudo kill -9` it shows in a second
+      Terminal window. Running sudo from inside the script (the first version) let the script's prompt and sudo
+      read the keyboard at once, which echoed a password on screen.
     - Any failure in the preflight stops before anything changes.
     - Ctrl-C ends the prompt or wait in progress.
     - A `finally` always restores the limits and sticky sites, turns merging off unless it was on, and checks that

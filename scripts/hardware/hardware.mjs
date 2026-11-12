@@ -6,8 +6,9 @@
 // can see. Whatever happens (Ctrl-C included), it turns system merge off again, puts the helper's settings
 // back and checks that no routes are left behind.
 //
-// It never runs sudo by itself: the one step that needs it (a helper crash) is optional, says the exact
-// command first, and the owner types the password. The report goes to local-ci-logs/hardware-<time>/.
+// It never runs sudo: the one step that needs it (a helper crash) is optional, and the owner runs the command it
+// shows in a second Terminal window, where sudo has the keyboard to itself. The report goes to
+// local-ci-logs/hardware-<time>/.
 //
 // Data: every download counts against a phone's data plan. The intro says how much the run uses.
 
@@ -47,7 +48,9 @@ export const FILES = {
   cloudflare: { site: 'cloudflare.com', url: `https://speed.cloudflare.com/__down?bytes=${CHUNK}` },
   ovh: { site: 'ovh.net', url: 'https://proof.ovh.net/files/100Mb.dat', range: true },
   hetznerAsh: { site: 'hetzner.com', url: 'https://ash-speed.hetzner.com/100MB.bin', range: true },
-  hetznerNbg: { site: 'hetzner.com', url: 'https://nbg1-speed.hetzner.com/100MB.bin', range: true }
+  hetznerNbg: { site: 'hetzner.com', url: 'https://nbg1-speed.hetzner.com/100MB.bin', range: true },
+  /** "Does the internet work": 100 kB, small enough to get through a capped, busy network. */
+  probe: { site: 'cloudflare.com', url: 'https://speed.cloudflare.com/__down?bytes=100000' }
 }
 
 /** How many CHUNK downloads each check makes, to state the data it uses up front. */
@@ -60,9 +63,11 @@ export const DOWNLOADS = {
   perLinkBack: 2
 }
 
-/** The data a run uses, in MB, for `links` links tested for unplugging. */
-export function dataEstimateMB(links) {
-  const fixed = DOWNLOADS.spread + DOWNLOADS.sticky + DOWNLOADS.sameSite + DOWNLOADS.sites
+/** The data a run uses, in MB, for `links` links tested for unplugging, with or without the site checks. */
+export function dataEstimateMB(links, sites = true) {
+  const fixed = sites
+    ? DOWNLOADS.spread + DOWNLOADS.sticky + DOWNLOADS.sameSite + DOWNLOADS.sites
+    : 0
   return Math.round(((fixed + links * (DOWNLOADS.failover + DOWNLOADS.perLinkBack)) * CHUNK) / 1e6)
 }
 
@@ -335,7 +340,7 @@ const repeat = (file, n) => Array.from({ length: n }, () => file)
 
 /**
  * Runs the suite on `mac`. Options: `links` limits the unplug checks to these names; `skip` lists checks to
- * leave out (unplug, sleep, vpn, crash, app). Returns { results, facts }.
+ * leave out (sites, unplug, sleep, vpn, crash, app). Returns { results, facts }.
  */
 export async function runSuite(mac, options = {}) {
   const results = []
@@ -352,8 +357,33 @@ export async function runSuite(mac, options = {}) {
     mac.say(`  ${status.padEnd(4)}  ${name}${note ? ` — ${note}` : ''}`)
     return r
   }
-  const internetWorks = async () =>
-    (await mac.download(FILES.cloudflare, { seconds: 20, bytes: 1_000_000 })).ok
+  /**
+   * Whether a new connection gets through, trying for up to `ms`: right after a network goes, macOS and the
+   * helper take a moment to move new connections over. Says how long it took, or the last error.
+   */
+  const internet = async (ms = 15_000) => {
+    const begun = mac.now()
+    let last = { ok: false, error: 'not tried' }
+    for (;;) {
+      last = await mac.download(FILES.probe, { seconds: 10 })
+      const seconds = Math.round((mac.now() - begun) / 1000)
+      if (last.ok)
+        return {
+          ok: true,
+          seconds,
+          note: seconds > 1 ? `internet works (after ${seconds} s)` : 'internet works'
+        }
+      if (mac.now() - begun >= ms || mac.aborted?.()) {
+        return {
+          ok: false,
+          seconds,
+          note: `internet broken for ${seconds} s (${last.error ?? 'no answer'})`
+        }
+      }
+      await mac.wait(1000)
+    }
+  }
+  const internetWorks = async () => (await internet()).ok
 
   // Preflight: what is here, and is it safe to go on.
   const sw = await mac.run('sw_vers', ['-productVersion'])
@@ -416,7 +446,7 @@ export async function runSuite(mac, options = {}) {
   const unplug = skip.has('unplug')
     ? []
     : up.filter((l) => !options.links || options.links.includes(l.name))
-  facts.dataMB = dataEstimateMB(unplug.length)
+  facts.dataMB = dataEstimateMB(unplug.length, !skip.has('sites'))
   mac.say(
     `\nThis run downloads about ${facts.dataMB} MB in all, over every network, including any phone's data plan.`
   )
@@ -468,54 +498,59 @@ export async function runSuite(mac, options = {}) {
     for (const name of Object.keys(limits))
       await mac.helper('setLimit', { link: name, mbps: TEST_MBPS })
 
-    // Spread: with sticky off, one site's connections go over every network.
-    started = mac.now()
-    await setSticky(false)
-    let run1 = await measured(mac, repeat(FILES.cloudflare, DOWNLOADS.spread))
-    let used = linksUsed(run1.bytes)
-    record(
-      'One site, sticky off: its connections spread',
-      used.length >= 2 && run1.results.every((r) => r.ok) ? 'PASS' : 'FAIL',
-      describeShares(run1.bytes),
-      started
-    )
-
-    // Sticky: one site stays on one network, also across its hosts; different sites still spread.
-    if (!hasSticky) {
-      record('Sticky per site', 'SKIP', 'this helper has no sticky-per-site; update it')
+    // The site checks (`--skip sites` leaves them out, to repeat only the rest).
+    if (skip.has('sites')) {
+      record('Spreading and sticky sites', 'SKIP', 'left out (--skip sites)')
     } else {
+      // Spread: with sticky off, one site's connections go over every network.
       started = mac.now()
-      await setSticky(true)
-      run1 = await measured(mac, repeat(FILES.cloudflare, DOWNLOADS.sticky))
-      used = linksUsed(run1.bytes, 0.15)
+      await setSticky(false)
+      let run1 = await measured(mac, repeat(FILES.cloudflare, DOWNLOADS.spread))
+      let used = linksUsed(run1.bytes)
       record(
-        'One site, sticky on: it stays on one network',
-        used.length === 1 ? 'PASS' : 'FAIL',
+        'One site, sticky off: its connections spread',
+        used.length >= 2 && run1.results.every((r) => r.ok) ? 'PASS' : 'FAIL',
         describeShares(run1.bytes),
         started
       )
-      started = mac.now()
-      const half = DOWNLOADS.sameSite / 2
-      run1 = await measured(mac, [
-        ...repeat(FILES.hetznerAsh, half),
-        ...repeat(FILES.hetznerNbg, half)
-      ])
-      used = linksUsed(run1.bytes, 0.15)
-      record(
-        'Two hosts of one site stay on one network',
-        used.length === 1 ? 'PASS' : 'FAIL',
-        describeShares(run1.bytes),
-        started
-      )
-      started = mac.now()
-      run1 = await measured(mac, [FILES.cloudflare, FILES.ovh, FILES.hetznerAsh])
-      used = linksUsed(run1.bytes)
-      record(
-        'Different sites still spread',
-        used.length >= 2 ? 'PASS' : 'FAIL',
-        describeShares(run1.bytes),
-        started
-      )
+
+      // Sticky: one site stays on one network, also across its hosts; different sites still spread.
+      if (!hasSticky) {
+        record('Sticky per site', 'SKIP', 'this helper has no sticky-per-site; update it')
+      } else {
+        started = mac.now()
+        await setSticky(true)
+        run1 = await measured(mac, repeat(FILES.cloudflare, DOWNLOADS.sticky))
+        used = linksUsed(run1.bytes, 0.15)
+        record(
+          'One site, sticky on: it stays on one network',
+          used.length === 1 ? 'PASS' : 'FAIL',
+          describeShares(run1.bytes),
+          started
+        )
+        started = mac.now()
+        const half = DOWNLOADS.sameSite / 2
+        run1 = await measured(mac, [
+          ...repeat(FILES.hetznerAsh, half),
+          ...repeat(FILES.hetznerNbg, half)
+        ])
+        used = linksUsed(run1.bytes, 0.15)
+        record(
+          'Two hosts of one site stay on one network',
+          used.length === 1 ? 'PASS' : 'FAIL',
+          describeShares(run1.bytes),
+          started
+        )
+        started = mac.now()
+        run1 = await measured(mac, [FILES.cloudflare, FILES.ovh, FILES.hetznerAsh])
+        used = linksUsed(run1.bytes)
+        record(
+          'Different sites still spread',
+          used.length >= 2 ? 'PASS' : 'FAIL',
+          describeShares(run1.bytes),
+          started
+        )
+      }
     }
 
     // Mergelane's own downloads pin each connection to its network (IP_BOUND_IF) while system merge is on.
@@ -561,7 +596,8 @@ export async function runSuite(mac, options = {}) {
         30_000
       )
       const stillOn = (await mac.helper('status')).state === 'on'
-      const works = await internetWorks()
+      const net = await internet(30_000)
+      const works = net.ok
       // Downloads on the unplugged network break, as any connection would; the rest finish.
       const finished = (await running).filter((r) => r.ok).length
       await capAll(TEST_MBPS)
@@ -571,7 +607,7 @@ export async function runSuite(mac, options = {}) {
         [
           gone ? 'seen gone' : 'never seen gone',
           stillOn ? 'merge stayed on' : 'merge went off',
-          works ? 'internet works' : 'internet broke',
+          net.note,
           `${finished}/${DOWNLOADS.failover} downloads finished`
         ].join(', '),
         started
@@ -663,20 +699,24 @@ export async function runSuite(mac, options = {}) {
       record('With the VPN off, merging turns on again', back ? 'PASS' : 'FAIL', '', started)
     }
 
-    // A helper crash: launchd restarts it, the routes are gone and the internet works.
+    // A helper crash: launchd restarts it, the routes are gone and the internet works. The owner stops it
+    // from a second Terminal window: sudo must have the keyboard to itself (this script reads it too, and an
+    // early version that ran sudo itself echoed what was typed at the password prompt).
     if (!skip.has('crash')) {
       const pid = (await mac.run('pgrep', ['-x', LABEL])).stdout.trim().split('\n')[0]
       if (
         pid &&
         yes(
           await mac.ask(
-            `\nTest a helper crash? This runs "sudo kill -9 ${pid}" and asks for your password. [y/N]`
+            '\nTest a helper crash? You stop it yourself in another Terminal window. [y/N]'
           ),
           false
         )
       ) {
+        await mac.ask(
+          `Open a second Terminal window (⌘N) and run:\n  sudo kill -9 ${pid}\nType your password there, not here. Then come back and press Enter.`
+        )
         started = mac.now()
-        const killed = await mac.run('sudo', ['kill', '-9', pid], { timeoutMs: 300_000 })
         const restarted = await until(
           mac,
           async () => {
@@ -686,14 +726,14 @@ export async function runSuite(mac, options = {}) {
           30_000
         )
         const ours = captureRoutes((await mac.run('netstat', ['-rn'])).stdout)
-        const works = await internetWorks()
+        const net = await internet()
         const fine = restarted && (restarted.state === 'off' ? ours.count === 0 : ours.once)
         record(
           'A helper crash leaves the internet working',
-          killed.code === 0 && fine && works ? 'PASS' : 'FAIL',
-          killed.code !== 0
-            ? 'kill didn’t run'
-            : `restarted ${restarted ? `(${restarted.state})` : 'no'}, our routes ${ours.count}, internet ${works ? 'works' : 'broken'}`,
+          fine && net.ok ? 'PASS' : 'FAIL',
+          restarted
+            ? `restarted (${restarted.state}), our routes ${ours.count}, ${net.note}`
+            : `the helper (process ${pid}) wasn't stopped, or didn't come back within 30 s`,
           started
         )
       } else {
@@ -751,7 +791,7 @@ export function writeReport(
   return dir
 }
 
-/** The command line: `node scripts/hardware/hardware.mjs [--links en0,en7] [--skip unplug,sleep,vpn,crash,app]`. */
+/** The command line: `node scripts/hardware/hardware.mjs [--links en0,en7] [--skip sites,unplug,sleep,vpn,crash,app]`. */
 export async function main(argv = process.argv.slice(2), mac = realMac(), root = ROOT) {
   const option = (name) => {
     const i = argv.indexOf(name)

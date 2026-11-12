@@ -20,11 +20,14 @@ helper crash. You run it yourself, in your own Terminal, on your own Mac (docs/D
 node scripts/hardware/hardware.mjs
 ```
 
-Options: `--links en0,en7` tests unplugging only those networks; `--skip unplug,sleep,vpn,crash,app` leaves those
-checks out.
+Options:
+- `--links en0,en7` tests unplugging only those networks.
+- `--skip sites,unplug,sleep,vpn,crash,app` leaves those checks out. `sites` is the four spreading and sticky
+  checks, which use most of the data, so you can repeat just the rest.
 
-It never runs `sudo` by itself. The crash check is optional, shows the exact command (`sudo kill -9 <pid>`) and
-asks for your password.
+It never runs `sudo`. The crash check is optional. It shows a command (`sudo kill -9 <pid>`) for you to run in a
+**second Terminal window**, where `sudo` has the keyboard to itself. Never type your password at the script's own
+prompts.
 
 ## What it checks
 
@@ -37,11 +40,11 @@ asks for your password.
 | Two hosts of one site stay on one network | Hetzner's two hosts (one site, hetzner.com); only one network carries 15% or more. |
 | Different sites still spread | Cloudflare, OVH and Hetzner at once; at least two networks carry 10% or more. |
 | Mergelane's own download uses every network | You start a download in Mergelane and say whether its networks all show traffic (the downloader pins each connection with `IP_BOUND_IF`). |
-| Unplug a network: the others carry on | Downloads run while you unplug it. The helper sees it go within 30 s, merging stays on, a new download works, and at least one running download finishes. |
+| Unplug a network: the others carry on | Downloads run while you unplug it. The helper sees it go within 30 s, merging stays on, a new 100 kB download gets through within 30 s (the note says how long it took, or the last error), and at least one running download finishes. |
 | Reconnect it: it is used again | It is back up within 2 minutes and carries 5% or more of new downloads. |
 | Sleep and wake | Afterwards the helper answers, two networks are up, merging is on, its routes are there once, and the internet works. |
 | A VPN turns merging off | Merging goes off with a reason naming the VPN, enabling is refused with `VPN_ACTIVE`, and none of Mergelane's routes remain. With the VPN off, merging turns on again. |
-| A helper crash leaves the internet working | After `kill -9`, launchd starts a new helper, the routes match its state (none if off), and the internet works. |
+| A helper crash leaves the internet working | After you run `sudo kill -9` in another window, launchd starts a new helper within 30 s, the routes match its state (none if off), and the internet works. |
 | Put back as it was | Merging off (unless it was on before), sticky sites and every network's limit as they were, no routes left, the internet works. |
 
 The shares come from the helper's `stats`, sampled every half second. To make downloads last long enough to

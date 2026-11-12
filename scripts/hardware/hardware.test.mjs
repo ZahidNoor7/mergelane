@@ -80,6 +80,11 @@ function fakeMac(answers = [], world = {}) {
   const said = []
   const queue = [...answers]
   let crashed = false
+  /** The owner's `sudo kill -9` in another window: launchd starts a new helper, off unless it resumes. */
+  w.crash = () => {
+    crashed = true
+    if (!w.autoResumeAfterCrash) w.state = 'off'
+  }
   const status = () => ({
     state: w.state,
     version: w.version,
@@ -138,7 +143,9 @@ function fakeMac(answers = [], world = {}) {
       }
       throw new Error(`unexpected ${method}`)
     },
+    ran: [],
     async run(command, args = []) {
+      mac.ran.push(command)
       const out = (stdout, code = 0) => ({ code, stdout, stderr: '' })
       switch (command) {
         case 'sw_vers':
@@ -159,10 +166,6 @@ function fakeMac(answers = [], world = {}) {
           return out(w.vpnOn ? '* (Connected) 1234 VPN (com.example) "Work"\n' : '')
         case 'pgrep':
           return out(w.noPid ? '' : crashed ? '222\n' : '111\n')
-        case 'sudo':
-          crashed = true
-          if (!w.autoResumeAfterCrash) w.state = 'off'
-          return out('', w.killFails ? 1 : 0)
       }
       return out('', 1)
     },
@@ -171,7 +174,17 @@ function fakeMac(answers = [], world = {}) {
       await tick()
       await tick()
       w.inFlight.splice(w.inFlight.indexOf(file.site), 1)
-      return { ok: !w.offline, bytes: CHUNK, ms: 10 }
+      // The internet check can be made to fail a few times first, as right after a network goes.
+      if (file === FILES.probe && w.probeFailures > 0) {
+        w.probeFailures -= 1
+        return { ok: false, bytes: 0, ms: 10, error: 'curl: (6) Could not resolve host' }
+      }
+      return {
+        ok: !w.offline,
+        bytes: CHUNK,
+        ms: 10,
+        ...(w.offline ? { error: 'curl: (7) Failed to connect' } : {})
+      }
     },
     say: (text) => said.push(text),
     async ask(question) {
@@ -209,7 +222,8 @@ function everything(world) {
     'y',
     (w) => ((w.vpnOn = true), (w.state = 'off'), (w.reason = 'Another VPN (utun5) is on.'), ''),
     (w) => ((w.vpnOn = false), ''),
-    'y'
+    'y',
+    (w) => (w.crash(), '')
   )
   return answers
 }
@@ -257,6 +271,7 @@ describe('the pure parts', () => {
   it('says how much data a run uses, and how to put the limits back', () => {
     assert.equal(dataEstimateMB(0), Math.round((23 * CHUNK) / 1e6))
     assert.equal(dataEstimateMB(3), Math.round(((23 + 3 * 6) * CHUNK) / 1e6))
+    assert.equal(dataEstimateMB(2, false), Math.round((2 * 6 * CHUNK) / 1e6))
     assert.equal(
       restoreCommands([{ name: 'en0' }, { name: 'en1', limitMbps: 50 }]),
       `${HELPER} limit en0 0 ; ${HELPER} limit en1 50`
@@ -443,6 +458,37 @@ describe('the suite', () => {
     assert.equal(s["Mergelane's own download uses every network"], 'FAIL')
   })
 
+  it('gives the internet a moment after a network goes, and says how long it took', async () => {
+    const answers = [
+      'y',
+      'y',
+      '',
+      (w) => (w.unplugged.add('en0'), (w.probeFailures = 3), ''),
+      (w) => (w.unplugged.delete('en0'), '')
+    ]
+    const mac = fakeMac(answers, { links: fakeMac().world.links.slice(0, 2) })
+    const { results } = await runSuite(mac, { links: ['en0'], skip: ['sleep', 'vpn', 'crash'] })
+    const unplug = results.find((r) => r.name.startsWith('Unplug Ethernet'))
+    assert.equal(unplug.status, 'PASS')
+    assert.match(unplug.note, /internet works \(after \d+ s\)/)
+    // Never back within 30 s: broken, with the last error.
+    const never = fakeMac(
+      [
+        'y',
+        'y',
+        '',
+        (w) => (w.unplugged.add('en0'), (w.probeFailures = 1000), ''),
+        (w) => (w.unplugged.delete('en0'), (w.probeFailures = 0), '')
+      ],
+      { links: fakeMac().world.links.slice(0, 2) }
+    )
+    const broken = (
+      await runSuite(never, { links: ['en0'], skip: ['sleep', 'vpn', 'crash'] })
+    ).results.find((r) => r.name.startsWith('Unplug Ethernet'))
+    assert.equal(broken.status, 'FAIL')
+    assert.match(broken.note, /internet broken for 3\d s \(curl: \(6\) Could not resolve host\)/)
+  })
+
   it('fails an unplug that is never seen, and a link that never comes back', async () => {
     const mac = fakeMac(['y', 'y', '', '', '', 'n', 'n', 'n'], {
       links: fakeMac().world.links.slice(0, 2)
@@ -457,6 +503,14 @@ describe('the suite', () => {
     assert.equal(s['Unplug Ethernet (en0): the others carry on'], 'FAIL')
     assert.equal(s['Reconnect Ethernet (en0): it is used again'], 'FAIL')
     assert.match(results.find((r) => r.name.startsWith('Reconnect')).note, /never came back/)
+  })
+
+  it('leaves the site checks out with --skip sites, using no data for them', async () => {
+    const mac = fakeMac(['y', 's', 'n', 'n'])
+    const { results } = await runSuite(mac, { skip: ['sites', 'unplug', 'vpn'] })
+    assert.equal(statuses(results)['Spreading and sticky sites'], 'SKIP')
+    assert.equal(statuses(results)['One site, sticky on: it stays on one network'], undefined)
+    assert.ok(!mac.calls.includes('stats'))
   })
 
   it('lets the owner skip each optional check', async () => {
@@ -474,17 +528,23 @@ describe('the suite', () => {
   })
 
   it('fails a VPN that doesn’t stop merging, and a crash that breaks things', async () => {
-    const answers = ['y', 'y', 'n', 'y', '', '', 'y']
-    const mac = fakeMac(answers, { killFails: true })
+    // The owner says yes to the crash, then presses Enter without stopping the helper.
+    const answers = ['y', 'y', 'n', 'y', '', '', 'y', '']
+    const mac = fakeMac(answers)
     const { results } = await runSuite(mac, { skip: ['unplug'] })
     const s = statuses(results)
     assert.equal(s['A VPN turns merging off, and enabling is refused'], 'FAIL')
     assert.equal(s['A helper crash leaves the internet working'], 'FAIL')
-    assert.match(results.find((r) => r.name.startsWith('A helper crash')).note, /kill didn’t run/)
+    assert.match(results.find((r) => r.name.startsWith('A helper crash')).note, /wasn't stopped/)
+    // It never runs sudo itself, and shows the command to run in another window.
+    assert.ok(!mac.ran.includes('sudo'))
+    assert.ok(mac.said.some((t) => /second Terminal window[\s\S]*sudo kill -9 111/.test(t)))
   })
 
   it('accepts a crash that auto-resume turns back on', async () => {
-    const mac = fakeMac(['y', 'y', 'n', 'n', 'y'], { autoResumeAfterCrash: true })
+    const mac = fakeMac(['y', 'y', 'n', 'n', 'y', (w) => (w.crash(), '')], {
+      autoResumeAfterCrash: true
+    })
     const { results } = await runSuite(mac, { skip: ['unplug'] })
     assert.equal(statuses(results)['A helper crash leaves the internet working'], 'PASS')
   })

@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog'
+import { onWindows, words } from '../platformWords'
 
 // Settings › Browser extensions, from the final design (prototype.html, ExtensionSettings and
 // BrowserRow), for an extension loaded by hand (docs/DECISIONS.md ADR-0038): without a Chrome Web
@@ -43,9 +44,14 @@ import {
 const when = (time: number): string =>
   formatWhen(time, Date.now()).replace(/^(Just now|Today|Yesterday)/, (word) => word.toLowerCase())
 
+/** What scanning says while it looks: in Applications, or on Windows in the program folders. */
+function looking(): string {
+  return onWindows() ? 'Looking in your program folders…' : 'Looking in Applications…'
+}
+
 function status(browser: BrowserState, shipped: string | null): string {
   if (browser.notYet) return browser.notYet
-  if (!browser.found) return 'Not on this Mac. Install it, then scan again.'
+  if (!browser.found) return `Not on ${words().thisComputer}. Install it, then scan again.`
   const { contact } = browser
   if (contact) {
     const version = contact.extension ? `, extension ${contact.extension}` : ''
@@ -166,7 +172,7 @@ function InstallGuide({
               <DialogDescription>
                 {browser.kind === 'firefox'
                   ? 'Firefox only keeps an extension that Mozilla hasn’t signed until it quits.'
-                  : `Until the extension is in the Chrome Web Store, ${browser.short} takes it from a folder on your Mac. Mergelane keeps that folder up to date.`}
+                  : `Until the extension is in the Chrome Web Store, ${browser.short} takes it from a folder on your ${words().computer}. Mergelane keeps that folder up to date.`}
               </DialogDescription>
             </DialogHeader>
             {!guide.saved.ok ? (
@@ -199,7 +205,7 @@ function InstallGuide({
                             onClick={() => void window.mergelane.revealExtension(browser.id)}
                           >
                             <FolderOpen aria-hidden />
-                            Show in Finder
+                            {words().revealLabel}
                           </Button>
                         </div>
                       </div>
@@ -234,8 +240,9 @@ function InstallGuide({
                           {copied === 'path' ? 'Copied' : 'Copy path'}
                         </Button>
                         <p className="text-[12.5px] leading-[1.5] text-ink-2">
-                          To go straight to it in the window that opens, press ⌘⇧G, paste the path
-                          and press Return.
+                          {onWindows()
+                            ? 'To go straight to it in the window that opens, click its address bar, paste the path and press Enter.'
+                            : 'To go straight to it in the window that opens, press ⌘⇧G, paste the path and press Return.'}
                         </p>
                       </div>
                     )}
@@ -296,13 +303,13 @@ export function ExtensionSettings(): React.JSX.Element {
   }
 
   const browsers = report?.browsers ?? []
-  const onMac = browsers.filter((each) => each.found && !each.notYet)
+  const installed = browsers.filter((each) => each.found && !each.notYet)
   const elsewhere = browsers.filter((each) => !each.found || each.notYet)
 
   return (
     <>
       <SettingsGroup
-        title="Browsers on this Mac"
+        title={`Browsers on ${words().thisComputer}`}
         description="The Mergelane extension hands downloads from your browser to Mergelane, so they use every network."
         aside={
           <Button variant="secondary" size="sm" disabled={scanning} onClick={scan}>
@@ -331,9 +338,9 @@ export function ExtensionSettings(): React.JSX.Element {
             </Button>
           </SettingRow>
         )}
-        {onMac.length > 0 ? (
-          <ul aria-label="Browsers on this Mac" className="flex flex-col">
-            {onMac.map((browser) => (
+        {installed.length > 0 ? (
+          <ul aria-label={`Browsers on ${words().thisComputer}`} className="flex flex-col">
+            {installed.map((browser) => (
               <BrowserRow
                 key={browser.id}
                 browser={browser}
@@ -344,11 +351,11 @@ export function ExtensionSettings(): React.JSX.Element {
           </ul>
         ) : (
           <p className="py-3 text-[12.5px] text-ink-2">
-            {scanning ? 'Looking in Applications…' : 'No supported browser is on this Mac.'}
+            {scanning ? looking() : `No supported browser is on ${words().thisComputer}.`}
           </p>
         )}
         <p role="status" className="border-t border-rule py-2.5 text-[12px] text-ink-3">
-          {scanning || !report ? 'Looking in Applications…' : scannedText(report)}
+          {scanning || !report ? looking() : scannedText(report)}
         </p>
       </SettingsGroup>
 

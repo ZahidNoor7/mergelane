@@ -45,6 +45,9 @@ jobs:
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/hardware/hardware.mjs' --test-coverage-lines=90 scripts/hardware/hardware.test.mjs
       - name: Test the Deno notices generator
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' --test-coverage-lines=90 scripts/media-tools/deno-notices.test.mjs
+      # A stand-in for go, git and zip, and static checks of test-kit.ps1, which runs only on Windows.
+      - name: Test the Windows test kit's builder and report reader, the helpers' build, and the build check (ADR-0054, ADR-0058)
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/windows/kit.mjs' --test-coverage-include='scripts/windows/report.mjs' --test-coverage-include='scripts/windows/build-helpers.mjs' --test-coverage-include='scripts/windows/check-build.mjs' --test-coverage-lines=90 scripts/windows/kit.test.mjs scripts/windows/report.test.mjs scripts/windows/build-helpers.test.mjs scripts/windows/check-build.test.mjs
 
   app-checks:
     runs-on: xcode-27
@@ -177,6 +180,18 @@ jobs:
       - name: Coverage by package
         run: go tool cover -func=coverage.out | tail -1 && rm coverage.out
       - run: go build -trimpath -o mergelane-daemon ./cmd/mergelane-daemon && file mergelane-daemon
+      # Windows (ADR-0053): every package builds, vets and passes staticcheck for both chips. staticcheck is
+      # built for this Mac into a temporary folder, then pointed at Windows with GOOS.
+      - name: Build, vet and staticcheck for Windows
+        run: |
+          bin="$(mktemp -d)"
+          GOBIN="$bin" go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          for arch in amd64 arm64; do
+            GOOS=windows GOARCH=$arch go build ./...
+            GOOS=windows GOARCH=$arch go vet ./...
+            GOOS=windows GOARCH=$arch "$bin/staticcheck" ./...
+          done
+          rm -rf "$bin"
 
   # Phase 1 M1.5: the simulated-network harness proves itself and its leak detection.
   netsim:

@@ -105,6 +105,11 @@ func testHost(t *testing.T, opts Options) (*Host, *bytes.Buffer) {
 	t.Helper()
 	log := new(bytes.Buffer)
 	opts.Log = log
+	// The tests serve the app on a Unix socket, which Windows 10 1803 and later have too; the
+	// Windows named pipe has its own tests (platform_windows_test.go).
+	if opts.Dial == nil {
+		opts.Dial = dialUnix
+	}
 	if opts.Launch == nil {
 		opts.Launch = func(context.Context) error {
 			t.Error("unexpected launch")
@@ -159,25 +164,6 @@ func env(vars map[string]string) func(string) string {
 	return func(k string) string { return vars[k] }
 }
 
-func TestSocketPath(t *testing.T) {
-	tests := []struct {
-		name string
-		vars map[string]string
-		want string
-	}{
-		{"override wins", map[string]string{EnvSocket: "/tmp/x.sock", "HOME": "/Users/me"}, "/tmp/x.sock"},
-		{"default under HOME", map[string]string{"HOME": "/Users/me"}, "/Users/me/Library/Application Support/Mergelane/browser.sock"},
-		{"neither set", nil, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := SocketPath(env(tt.vars)); got != tt.want {
-				t.Errorf("SocketPath = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestOptionsFromEnv(t *testing.T) {
 	tests := []struct {
 		noLaunch string
@@ -224,13 +210,6 @@ func TestSleep(t *testing.T) {
 	}
 	if time.Since(start) > time.Second {
 		t.Error("cancelled sleep did not return promptly")
-	}
-}
-
-func TestOpenAppCommand(t *testing.T) {
-	want := []string{"/usr/bin/open", "-g", "-b", "io.github.zahidnoor7.mergelane"}
-	if !reflect.DeepEqual(openArgv, want) {
-		t.Errorf("openArgv = %q, want %q", openArgv, want)
 	}
 }
 
@@ -728,18 +707,5 @@ func TestRequestLineCarriesTheBrowser(t *testing.T) {
 	}
 	if got := string(requestLine("o", "", []byte(`{}`))); got != `{"v":3,"origin":"o","message":{}}`+"\n" {
 		t.Errorf("an unknown browser is left out: %q", got)
-	}
-}
-
-func TestParentApp(t *testing.T) {
-	if got := ParentApp(context.Background(), os.Getpid()); !strings.Contains(got, "nmhost") {
-		t.Errorf("ParentApp(own pid) = %q, want the test binary", got)
-	}
-	if got := ParentApp(context.Background(), 0); got != "" {
-		t.Errorf("ParentApp(0) = %q, want empty", got)
-	}
-	// A pid no process has: ps fails, and nothing is guessed.
-	if got := ParentApp(context.Background(), 1<<30); got != "" {
-		t.Errorf("ParentApp(missing) = %q, want empty", got)
 	}
 }

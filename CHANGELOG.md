@@ -5,9 +5,36 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
+Mergelane now runs on Windows too. This first Windows version is a preview: it was built and tested on a Mac,
+but hasn't been tried on a Windows PC yet, so please report anything that doesn't work. The Mac app works as before.
+
+### Added
+
+- **Mergelane for Windows (preview).** For Windows 10 and 11, on Intel or AMD PCs (x64) and Arm PCs (arm64), with
+  one installer for each kind of PC. It installs just for you and needs no administrator password. The installer
+  isn't signed yet, so Windows warns you before it runs it: the install steps below say what to click.
+  - Downloads use every network the PC has, as on the Mac: Wi-Fi, Ethernet and a phone, with each connection kept
+    on its own network. VPNs and virtual adapters aren't counted as networks.
+  - Videos, torrents and NZB files download as on the Mac. Mergelane is offered in **Open with** for `.torrent` and
+    `.nzb` files, and never takes over as the default.
+  - The browser extension works with Chrome, Edge and Firefox on Windows.
+  - **System merge** combines your networks for every app. It installs a helper after Windows asks for an
+    administrator's permission. It won't turn on while another VPN is on, and it cleans up after itself if it stops
+    unexpectedly.
+  - It looks like a Windows 11 app: Mica behind every theme, a Windows title bar, a navigation pane on the left, and
+    Windows' own corners, switches and buttons. Liquid Glass stays a Mac theme.
+  - Mergelane sits in the notification area as its blue mark. Point at it to see the merged speed. Click it to see
+    each network's speed, with **Open Mergelane** and **Pause all**. Right-click it for its menu. Closing the window
+    keeps Mergelane running there; Settings › General can change that.
+  - **Start with Windows**, Windows notifications when a download finishes, and updates from Settings › Updates.
+  - Uninstalling removes what Mergelane added to Windows for you. Your downloads and settings stay.
+
 ### Changed
 
-- The README is up to date: what Mergelane does today, installing and updating, and building it from source.
+- The README is up to date: what Mergelane does today, installing and updating on a Mac or a Windows PC, and
+  building it from source.
 
 ## [0.3.5] - 2026-11-12
 

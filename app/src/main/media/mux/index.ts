@@ -38,7 +38,9 @@ export { MuxError, type MuxErrorCode } from './errors'
 export {
   TOOL_PATH_ENV,
   TOOL_PROGRAM,
+  WINDOWS_TOOL_PROGRAM,
   resolveToolPath,
+  toolProgram,
   type MediaTool,
   type ToolLocations,
   type ToolResolution,

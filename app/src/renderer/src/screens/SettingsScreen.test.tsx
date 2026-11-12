@@ -1,3 +1,4 @@
+import { THEMES } from '@shared/themes'
 import type { NetworkInterfaceInfo } from '@shared/types'
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -289,5 +290,46 @@ describe('Settings, Liquid Glass', () => {
     rerender()
     expect(root.hasAttribute('data-glass')).toBe(false)
     expect(root.hasAttribute('data-solid')).toBe(false)
+  })
+})
+
+describe('Settings on Windows', () => {
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+    delete (window.mergelane as { systemVersion?: string }).systemVersion
+  })
+
+  it('speaks of Windows, not the Mac', async () => {
+    window.mergelane.platform = 'win32'
+    useAppStore.setState({ settingsSection: 'appearance', themeSource: 'light' })
+    show()
+    expect(screen.getByText('Always light, whatever Windows uses.')).toBeTruthy()
+    cleanup()
+    useAppStore.setState({ settingsSection: 'general', speedUnit: 'bytes' })
+    show()
+    expect(screen.getByText('Megabytes per second, dropping to KB/s below 1 MB/s.')).toBeTruthy()
+    cleanup()
+    useAppStore.setState({ settingsSection: 'downloads' })
+    show()
+    expect(screen.queryByText(/macOS may ask/)).toBeNull()
+  })
+
+  it('offers every theme but Liquid Glass, a macOS look, and says every theme sits on Mica', () => {
+    window.mergelane.platform = 'win32'
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'porcelain' })
+    show()
+    const themes = screen.getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)
+    expect(themes).toEqual(THEMES.filter((theme) => theme.id !== 'liquid').map((theme) => theme.id))
+    expect(screen.getByText(/Liquid Glass is macOS’s design language/)).toBeTruthy()
+    expect(screen.getByText(/On Windows every theme sits on Mica/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Liquid Glass' })).toBeNull()
+  })
+
+  it('never shows the glass settings on Windows, even for a Liquid Glass choice saved on a Mac', () => {
+    window.mergelane.platform = 'win32'
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
+    show()
+    expect(screen.queryByRole('region', { name: 'Liquid Glass' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Liquid Glass/ })).toBeNull()
   })
 })

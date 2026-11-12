@@ -15,7 +15,6 @@ import (
 	"github.com/ZahidNoor7/mergelane/daemon/internal/api"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/control"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
-	"github.com/ZahidNoor7/mergelane/daemon/internal/launchd"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/nics"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/platform"
 	"github.com/ZahidNoor7/mergelane/daemon/internal/rib"
@@ -25,7 +24,8 @@ import (
 	"github.com/ZahidNoor7/mergelane/daemon/internal/vpnguard"
 )
 
-const usage = `mergelane-daemon: merges every internet link the Mac has, system-wide.
+// usage is the command's help; Windows replaces it (usage_windows.go).
+var usage = `mergelane-daemon: merges every internet link the Mac has, system-wide.
 
   mergelane-daemon run --allowed-uid <uid>   serve the control socket, merging off until asked (root; launchd runs this)
   mergelane-daemon install --uid <uid> [--source <binary>]   install as a LaunchDaemon (root)
@@ -79,10 +79,11 @@ func dispatch(cmd string, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// requireRoot fails unless isRoot (platform.IsAdmin) says this process runs as root.
+// requireRoot fails unless isRoot (platform.IsAdmin) says this process runs as root (on Windows,
+// elevated: adminWord).
 func requireRoot(what string, isRoot func() bool) error {
 	if !isRoot() {
-		return fmt.Errorf("%s must run as root", what)
+		return fmt.Errorf("%s must run as %s", what, adminWord)
 	}
 	return nil
 }
@@ -124,7 +125,7 @@ func (c *engineFlags) register(fs *flag.FlagSet) {
 	fs.DurationVar(&c.rescan, "rescan", 3*time.Second, "link re-scan interval")
 	fs.BoolVar(&c.auto, "auto-weight", true, "weight links by measured throughput (off when -weight is given)")
 	fs.StringVar(&c.ipv6, "ipv6", "auto", "auto: IPv6 only if every link has it; on: always; off: never")
-	fs.IntVar(&c.mtu, "mtu", tun.DefaultMTU, "MTU of the utun (1280-65535)")
+	fs.IntVar(&c.mtu, "mtu", tun.DefaultMTU, "MTU of the system merge adapter (1280-65535)")
 	fs.StringVar(&c.probes, "probe-targets", "", "comma-separated host:port reachability targets; bracketed IPv6 ones ([::1]:443) replace the IPv6 targets "+
 		"(default 1.1.1.1:443,8.8.8.8:443 and [2606:4700:4700::1111]:443,[2001:4860:4860::8888]:443)")
 	fs.StringVar(&c.logFile, "log", "", "write output to this file")
@@ -223,39 +224,12 @@ func cmdCleanup(out io.Writer) error {
 	return nil
 }
 
-func cmdInstall(args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("install", flag.ContinueOnError)
-	uid := fs.Int("uid", 0, "the console user's uid (the app passes its own)")
-	source := fs.String("source", "", "binary to install (default: this one)")
-	if err := fs.Parse(args); err != nil {
-		return err
+// installSource is install's --source, or this program when it is empty.
+func installSource(source string) (string, error) {
+	if source != "" {
+		return source, nil
 	}
-	if *source == "" {
-		self, err := os.Executable()
-		if err != nil {
-			return err
-		}
-		*source = self
-	}
-	if err := launchd.Install(context.Background(), launchd.Options{Source: *source, UID: *uid}); err != nil {
-		return err
-	}
-	fmt.Fprintln(out, "installed", launchd.Label)
-	return nil
-}
-
-func cmdUninstall(_ []string, out io.Writer) error {
-	res, err := launchd.Uninstall(context.Background(), launchd.Options{
-		Cleanup: func(context.Context, []string) error { tun.CleanupStale(); return nil },
-	})
-	if err != nil {
-		return err
-	}
-	if res.Hint != "" {
-		fmt.Fprintln(out, res.Hint)
-	}
-	fmt.Fprintln(out, "uninstalled", launchd.Label)
-	return nil
+	return os.Executable()
 }
 
 // cmdClient drives a running daemon through the control socket.

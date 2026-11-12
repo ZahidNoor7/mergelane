@@ -41,6 +41,14 @@ import {
 } from '../daemon/daemon'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { pendingLink, pendingLinks, releaseLink } from '../openLinks'
+import { testKnobs } from '../testKnobs'
+import {
+  closeTrayFlyout,
+  openFromTray,
+  publishTrayStatus,
+  resizeTrayFlyout,
+  trayStatus
+} from '../notificationArea'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
@@ -191,6 +199,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
           new Promise<boolean>((resolve) => setTimeout(resolve, DESTINATION_CHECK_MS, false))
         ]))
       event.returnValue = {
+        ...(testKnobs.rendererPlatform ? { rendererPlatform: testKnobs.rendererPlatform } : {}),
         downloadSchedule: settings.downloadSchedule,
         homeDir: getHomeDir(),
         downloadsDir: getDefaultDownloadsDir(),
@@ -337,6 +346,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('pauseDownload', async (_event, id) => {
     await manager.pause(id)
   })
+  handle('pauseAllDownloads', async () => {
+    await manager.pauseAll()
+  })
+
+  // The notification-area flyout on Windows (notificationArea.ts, ADR-0061).
+  handle('openMainWindow', () => openFromTray())
+  handle('publishTrayStatus', (_event, status) => publishTrayStatus(status))
+  handle('trayStatus', () => trayStatus())
+  handle('resizeTrayFlyout', (_event, height) => resizeTrayFlyout(height))
+  handle('closeTrayFlyout', () => closeTrayFlyout())
 
   handle('resumeDownload', async (_event, id) => {
     manager.resume(id)

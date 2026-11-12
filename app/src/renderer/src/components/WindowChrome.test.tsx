@@ -9,7 +9,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store/useAppStore'
-import { CompactBar, Sidebar } from './WindowChrome'
+import { CompactBar, NAV_PITCH, NavPill, Sidebar, WinTitleBar } from './WindowChrome'
 import { TooltipProvider } from './ui/tooltip'
 
 const MB = 1024 * 1024
@@ -261,5 +261,111 @@ describe('CompactBar', () => {
       .setup()
       .click(screen.getByRole('button', { name: 'Settings, update available' }))
     expect(useAppStore.getState()).toMatchObject({ screen: 'settings', settingsSection: 'updates' })
+  })
+})
+
+// The design's Windows 11 study (ADR-0060): the same places, as a NavigationView pane on the window's Mica.
+describe('on Windows', () => {
+  beforeEach(() => {
+    window.mergelane.platform = 'win32'
+  })
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+  })
+
+  it('draws the 32px title bar: the window icon, then the app name in caption text, and is dragged by it', () => {
+    renderIn(<WinTitleBar />)
+    const name = screen.getByText('Mergelane')
+    const bar = name.parentElement!
+    expect(bar.className).toMatch(/\bml-titlebar\b/)
+    expect(bar.className).toMatch(/\bh-8\b/)
+    expect(bar.className).toMatch(/\bwindow-drag\b/)
+    expect(name.className).toMatch(/text-\[12px\]/)
+    const icon = bar.querySelector('img')!
+    expect(icon.getAttribute('aria-hidden')).toBe('true')
+    expect(icon.className).toMatch(/\bsize-4\b/)
+  })
+
+  it('dims the title bar while another window has the focus, and brings it back with the focus', () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    try {
+      renderIn(<WinTitleBar />)
+      const bar = screen.getByText('Mergelane').parentElement!
+      expect(bar.hasAttribute('data-inactive')).toBe(true)
+      expect(bar.className).toMatch(/data-\[inactive\]:opacity-50/)
+      act(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      expect(bar.hasAttribute('data-inactive')).toBe(false)
+      act(() => {
+        window.dispatchEvent(new Event('blur'))
+      })
+      expect(bar.hasAttribute('data-inactive')).toBe(true)
+    } finally {
+      hasFocus.mockRestore()
+    }
+  })
+
+  it('starts as active when the window has the focus', () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    try {
+      renderIn(<WinTitleBar />)
+      expect(screen.getByText('Mergelane').parentElement!.hasAttribute('data-inactive')).toBe(false)
+    } finally {
+      hasFocus.mockRestore()
+    }
+  })
+
+  it('marks the current place with a backplate and one sliding pill, centred on its 36px row', async () => {
+    renderIn(<Sidebar />)
+    const places = screen.getByRole('navigation', { name: 'Mergelane' })
+    const pill = within(places).getByTestId('nav-pill')
+    // Downloads is the second place.
+    expect(pill.style.translate).toBe(`0px ${NAV_PITCH + 10}px`)
+    const downloads = within(places).getByRole('button', { name: 'Downloads, 3 in progress' })
+    expect(downloads.className).toMatch(/rounded-\[4px\]/)
+    expect(downloads.className).toMatch(/\bh-9\b/)
+    const user = userEvent.setup()
+    await user.click(within(places).getByRole('button', { name: 'Networks' }))
+    expect(within(places).getByTestId('nav-pill').style.translate).toBe(
+      `0px ${2 * NAV_PITCH + 10}px`
+    )
+    // The pane sits on the window's Mica: no card, and no macOS window-button strip.
+    expect(document.querySelector('.ml-surface')).toBeNull()
+    expect(document.querySelector('.window-drag')).toBeNull()
+  })
+
+  it("moves the pill to Settings at the pane's foot", async () => {
+    useAppStore.setState({ screen: 'settings' })
+    renderIn(<Sidebar />)
+    const pills = screen.getAllByTestId('nav-pill')
+    expect(pills).toHaveLength(1)
+    expect(pills[0].className).toMatch(/top-\[16px\]/)
+    expect(screen.getByRole('button', { name: /Settings/ }).getAttribute('aria-current')).toBe(
+      'page'
+    )
+    expect(screen.getByText('Ctrl+,')).toBeTruthy()
+  })
+
+  it('draws no pill when no listed place is current', () => {
+    const { container } = render(<NavPill index={-1} />)
+    expect(container.firstChild).toBeNull()
+  })
+
+  it("keeps the compact bar clear of macOS's window buttons, on the content layer", () => {
+    renderIn(<CompactBar />)
+    const bar = document.querySelector('.ml-compactbar')!
+    expect(bar.className).toMatch(/\bbg-background\b/)
+    expect(bar.className).not.toMatch(/window-drag|ml-surface/)
+    expect(bar.querySelector('.w-\\[64px\\]')).toBeNull()
+  })
+})
+
+describe('on the Mac, as before', () => {
+  it('keeps the sidebar card, its window-button strip and no pill', () => {
+    renderIn(<Sidebar />)
+    expect(document.querySelector('.ml-surface')).not.toBeNull()
+    expect(document.querySelector('.window-drag')).not.toBeNull()
+    expect(screen.queryByTestId('nav-pill')).toBeNull()
   })
 })

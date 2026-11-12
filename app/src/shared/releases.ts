@@ -28,7 +28,8 @@ export interface Release {
   /** The release's page on GitHub. */
   pageUrl: string
   notes: ReleaseNotes
-  /** The Apple silicon disk image, which the update downloads; null when the release has none. */
+  /** The file the update downloads, for this computer: the Apple silicon disk image, or on Windows the
+   * installer for this PC's chip (W4, ADR-0058); null when the release has none. */
   dmg: { name: string; size: number; url: string } | null
   /** The release's SHA256SUMS, which the download is checked against; null when it has none. */
   checksumsUrl: string | null
@@ -163,8 +164,24 @@ export function parseChecksums(text: string): Map<string, string> {
   return sums
 }
 
+/** Which build an update is for: the platform and chip of the running app. */
+export interface UpdateTarget {
+  platform: string
+  arch: string
+}
+
+/** The release asset that updates `target`: the Mac's disk image, or the Windows installer for the chip
+ * (electron-builder.yml nsis.artifactName). */
+export function updateAssetName(version: string, target: UpdateTarget): string {
+  return target.platform === 'win32'
+    ? `Mergelane-${version}-${target.arch === 'arm64' ? 'arm64' : 'x64'}-setup.exe`
+    : `Mergelane-${version}-arm64.dmg`
+}
+
+const MAC: UpdateTarget = { platform: 'darwin', arch: 'arm64' }
+
 /** One release from GitHub's answer, or null when it is a draft or isn't a usable release. */
-export function releaseFromGitHub(raw: unknown): Release | null {
+export function releaseFromGitHub(raw: unknown, target: UpdateTarget = MAC): Release | null {
   if (!isRecord(raw) || raw.draft !== false || typeof raw.tag_name !== 'string') return null
   const parsed = parseVersion(raw.tag_name)
   if (!parsed || !httpsUrl(raw.html_url)) return null
@@ -172,7 +189,7 @@ export function releaseFromGitHub(raw: unknown): Release | null {
   const assets = Array.isArray(raw.assets) ? raw.assets.filter(isRecord) : []
   const asset = (name: string): Record<string, unknown> | undefined =>
     assets.find((each) => each.name === name && downloadableUrl(each.browser_download_url))
-  const dmg = asset(`Mergelane-${version}-arm64.dmg`)
+  const dmg = asset(updateAssetName(version, target))
   const sums = asset('SHA256SUMS')
   const published = typeof raw.published_at === 'string' ? Date.parse(raw.published_at) : NaN
   return {
@@ -196,12 +213,17 @@ export function releaseFromGitHub(raw: unknown): Release | null {
  */
 export function newestUpdate(
   answer: unknown,
-  { current, channel, skipped }: { current: string; channel: UpdateChannel; skipped: string | null }
+  {
+    current,
+    channel,
+    skipped,
+    target = MAC
+  }: { current: string; channel: UpdateChannel; skipped: string | null; target?: UpdateTarget }
 ): Release | null {
   if (!Array.isArray(answer)) throw new Error('GitHub’s answer isn’t a list of releases')
   let newest: Release | null = null
   for (const raw of answer) {
-    const release = releaseFromGitHub(raw)
+    const release = releaseFromGitHub(raw, target)
     if (!release || (channel === 'stable' && release.prerelease)) continue
     if (!newest || compareVersions(release.version, newest.version) > 0) newest = release
   }

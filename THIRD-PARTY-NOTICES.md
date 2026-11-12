@@ -317,6 +317,42 @@ MIT-licensed code.
   programs were built from, with FFmpeg's build script (ADR-0027).
 - See `docs/MEDIA-TOOLS.md`.
 
+### On Windows (W3)
+
+The Windows builds ship the same versions, for x64 and arm64, from `scripts/media-tools/tools-windows-x64.json` and
+`tools-windows-arm64.json`, next to `Mergelane.exe` in the install folder's `resources\`:
+
+- **yt-dlp:** the official unpacked Windows builds, `yt-dlp_win.zip` (x64, SHA-256
+  `fd51b212cf8380c7a52ee08c0d6be7f3c59b2f2c832eaf7b45acfae6eab57419`) and `yt-dlp_win_arm64.zip` (arm64, SHA-256
+  `5eaa4c61f3c09189f3a551bf1855c13aad61fb865cc33f06012a6c2dbe287a45`), shipped unchanged as the folder `yt-dlp\`.
+  Their own list of bundled components, which differs from the macOS build's (Microsoft's Visual C++ runtime among
+  them), is `licenses/yt-dlp/THIRD_PARTY_LICENSES.txt` in the Windows app (`licenses/yt-dlp-windows/` here).
+- **FFmpeg:** built by Mergelane from the same source release with `scripts/media-tools/build-ffmpeg-windows.sh`: the
+  same configuration as on macOS, cross-compiled with llvm-mingw 20261020 (the compiler; nothing of it ships beyond
+  the code every program gets from its compiler), and with **zlib 1.3.2** (https://github.com/madler/zlib, zlib
+  licence, Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler) built from its source release (SHA-256
+  `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) and linked in. LGPL 2.1 or later, as on macOS.
+  zlib's licence text ships as `licenses/ffmpeg/zlib-LICENSE.txt` next to FFmpeg's. Its source is attached to the release
+  with the Windows build script.
+- **Deno:** the official `deno-x86_64-pc-windows-msvc.zip` (program SHA-256
+  `924397800533d3eb0ed0c889b20ad70e18b970d93acd8135bc043f425e528266`) and `deno-aarch64-pc-windows-msvc.zip` (program
+  SHA-256 `40d161bc35657cc7432a2e3832290922939cd63fddd29f66db2261d291e42478`), shipped as `deno.exe`, with the same
+  licence and notices as on macOS.
+
+### Wintun 0.14.1 (on Windows, W5)
+
+- What: `wintun.dll`, the signed driver library from https://www.wintun.net that the Windows system-wide helper uses
+  for its network adapter (ADR-0059), for x64 and arm64. It ships unmodified next to `mergelane-daemon.exe` in the
+  install folder's `resources\`, and the helper's install copies it into `Program Files\Mergelane`.
+- Download: `wintun-0.14.1.zip` (SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`, the
+  checksum wintun.net publishes), fetched at build time by `scripts/windows/build-helpers.mjs` and never committed.
+- Licence: WireGuard LLC's "Prebuilt Binaries License", which is not an open-source licence. It allows the
+  unmodified DLL to be distributed alongside software that uses it only through the API in `wintun.h`, as
+  Mergelane's helper does (through `golang.zx2c4.com/wintun`, MIT). Its text ships as `licenses/wintun/LICENSE.txt`.
+
+The Windows helper also compiles in `github.com/Microsoft/go-winio` v0.6.2 for its control pipe: MIT licence,
+Copyright (c) 2015 Microsoft.
+
 ### yt-dlp 2026.10.26
 
 - Program: the official unpacked macOS build, `yt-dlp_macos.zip` from

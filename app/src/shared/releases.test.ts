@@ -6,7 +6,8 @@ import {
   newestUpdate,
   parseVersion,
   releaseFromGitHub,
-  releaseNotes
+  releaseNotes,
+  updateAssetName
 } from './releases'
 
 // The shape scripts/release/notes.mjs writes: the CHANGELOG section first, then the rest.
@@ -229,5 +230,61 @@ describe('parseChecksums', () => {
       ['Mergelane-0.3.0-arm64.dmg', 'a'.repeat(64)],
       ['SHA file.zip', b]
     ])
+  })
+})
+
+describe('updates on Windows (W4)', () => {
+  const asset = (name: string, size = 100): Record<string, unknown> => ({
+    name,
+    size,
+    browser_download_url: `https://github.com/ZahidNoor7/mergelane/releases/download/v0.4.0/${name}`
+  })
+  const raw = {
+    draft: false,
+    prerelease: false,
+    tag_name: 'v0.4.0',
+    html_url: 'https://github.com/ZahidNoor7/mergelane/releases/tag/v0.4.0',
+    published_at: '2026-11-20T10:00:00Z',
+    body: '',
+    assets: [
+      asset('Mergelane-0.4.0-arm64.dmg', 1),
+      asset('Mergelane-0.4.0-x64-setup.exe', 2),
+      asset('Mergelane-0.4.0-arm64-setup.exe', 3),
+      asset('SHA256SUMS')
+    ]
+  }
+
+  it('names the file each computer updates from', () => {
+    expect(updateAssetName('0.4.0', { platform: 'darwin', arch: 'arm64' })).toBe(
+      'Mergelane-0.4.0-arm64.dmg'
+    )
+    expect(updateAssetName('0.4.0', { platform: 'win32', arch: 'x64' })).toBe(
+      'Mergelane-0.4.0-x64-setup.exe'
+    )
+    expect(updateAssetName('0.4.0', { platform: 'win32', arch: 'arm64' })).toBe(
+      'Mergelane-0.4.0-arm64-setup.exe'
+    )
+    // Any other chip Windows reports falls back to x64, which Windows on Arm can also run.
+    expect(updateAssetName('0.4.0', { platform: 'win32', arch: 'ia32' })).toBe(
+      'Mergelane-0.4.0-x64-setup.exe'
+    )
+  })
+
+  it('a Windows PC downloads its own chip’s installer, a Mac its disk image', () => {
+    expect(releaseFromGitHub(raw, { platform: 'win32', arch: 'arm64' })?.dmg?.size).toBe(3)
+    expect(releaseFromGitHub(raw, { platform: 'win32', arch: 'x64' })?.dmg?.size).toBe(2)
+    expect(releaseFromGitHub(raw)?.dmg?.size).toBe(1)
+    const update = newestUpdate([raw], {
+      current: '0.3.5',
+      channel: 'stable',
+      skipped: null,
+      target: { platform: 'win32', arch: 'x64' }
+    })
+    expect(update?.dmg?.name).toBe('Mergelane-0.4.0-x64-setup.exe')
+  })
+
+  it('a release without the Windows installer offers the release page instead', () => {
+    const macOnly = { ...raw, assets: [asset('Mergelane-0.4.0-arm64.dmg'), asset('SHA256SUMS')] }
+    expect(releaseFromGitHub(macOnly, { platform: 'win32', arch: 'x64' })?.dmg).toBeNull()
   })
 })

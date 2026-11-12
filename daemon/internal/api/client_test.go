@@ -305,7 +305,7 @@ func TestClientWriteFailsWithoutPendingResponse(t *testing.T) {
 }
 
 func TestDialMissingSocket(t *testing.T) {
-	if _, err := Dial(sockPath(t)); err == nil {
+	if _, err := Dial(missingPath(t)); err == nil {
 		t.Fatal("dialled a socket that does not exist")
 	}
 }

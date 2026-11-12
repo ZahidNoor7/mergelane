@@ -11,10 +11,12 @@ files:
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  # koffi ships prebuilds for every OS; Mergelane is macOS arm64 only and loads it there
-  # (network/deviceBinding.ts pins per-link sockets with IP_BOUND_IF).
+  # koffi ships prebuilds for every OS; each build keeps only the one it loads (network/deviceBinding.ts pins
+  # per-link sockets with IP_BOUND_IF on macOS, IP_UNICAST_IF on Windows). ${os} is "mac" or "win", so the
+  # second name is win32_x64 or win32_arm64 on Windows and matches nothing on macOS, which keeps
+  # darwin_arm64 alone. electron-builder.win.yml drops darwin_arm64 from Windows builds.
   - '!node_modules/koffi/{src,vendor,doc}/**'
-  - '!node_modules/koffi/build/koffi/!(darwin_arm64)/**'
+  - '!node_modules/koffi/build/koffi/!(darwin_arm64|${os}32_${arch})/**'
   # Mergelane uses TCP peers only. simple-peer is patched to use browser globals instead of loading
   # the native WebRTC polyfill; don't ship its unused native binaries.
   - '!node_modules/node-datachannel/**'
@@ -22,6 +24,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # yt-dlp, FFmpeg and Deno ship through extraResources below, not inside app.asar.
   - '!resources/bin/**'
+  - '!resources/bin-win/**'
 asarUnpack:
   - resources/**
 # Licences ship inside the bundle (Contents/Resources), as CLAUDE.md requires.
@@ -30,36 +33,37 @@ extraResources:
     to: LICENSE
   - from: ../THIRD-PARTY-NOTICES.md
     to: THIRD-PARTY-NOTICES.md
-  # The system-wide merge helper, built from ../daemon before packaging (see the CI package job).
-  # The app installs it once as a LaunchDaemon through an admin prompt (main/daemon/daemon.ts).
-  - from: ../daemon/bin/mergelane-daemon
-    to: mergelane-daemon
-  # The browser extension's native messaging host (docs/BROWSER-BRIDGE.md, ADR-0021).
-  - from: ../daemon/bin/mergelane-nmhost
-    to: mergelane-nmhost
   # The browser extension itself, built by `npm run build:extension` before packaging. Settings ›
   # Browser extensions copies it into Mergelane's folder for the user to load (ADR-0038).
   - from: extension/dist/chrome
     to: browser-extension/chrome
   - from: extension/dist/firefox
     to: browser-extension/firefox
-  # yt-dlp and FFmpeg, put in resources/bin by ../scripts/media-tools/fetch.mjs before packaging
-  # (docs/MEDIA-TOOLS.md), with their licence texts. yt-dlp is a folder, its unpacked macOS build
-  # (ADR-0031): yt-dlp_macos and its _internal files, copied whole (links kept) to
-  # Contents/Resources/yt-dlp/, where every Mach-O file inside is re-signed. FFmpeg is Mergelane's
-  # own LGPL build from FFmpeg's pinned source release (ADR-0028).
-  - from: resources/bin/yt-dlp
-    to: yt-dlp
-  - from: resources/bin/ffmpeg
-    to: ffmpeg
-  # Deno, the JavaScript runtime yt-dlp runs YouTube's player challenges in (ADR-0026). Fetched the
-  # same way; the app itself can't act as Node (ADR-0016). Re-signed with the hardened runtime and
-  # entitlementsInherit, whose allow-jit V8 needs.
-  - from: resources/bin/deno
-    to: deno
-  - from: resources/bin/licenses
-    to: licenses
 mac:
+  extraResources:
+    # The system-wide merge helper, built from ../daemon before packaging (see the CI package job).
+    # The app installs it once as a LaunchDaemon through an admin prompt (main/daemon/daemon.ts).
+    - from: ../daemon/bin/mergelane-daemon
+      to: mergelane-daemon
+    # The browser extension's native messaging host (docs/BROWSER-BRIDGE.md, ADR-0021).
+    - from: ../daemon/bin/mergelane-nmhost
+      to: mergelane-nmhost
+    # yt-dlp and FFmpeg, put in resources/bin by ../scripts/media-tools/fetch.mjs before packaging
+    # (docs/MEDIA-TOOLS.md), with their licence texts. yt-dlp is a folder, its unpacked macOS build
+    # (ADR-0031): yt-dlp_macos and its _internal files, copied whole (links kept) to
+    # Contents/Resources/yt-dlp/, where every Mach-O file inside is re-signed. FFmpeg is Mergelane's
+    # own LGPL build from FFmpeg's pinned source release (ADR-0028).
+    - from: resources/bin/yt-dlp
+      to: yt-dlp
+    - from: resources/bin/ffmpeg
+      to: ffmpeg
+    # Deno, the JavaScript runtime yt-dlp runs YouTube's player challenges in (ADR-0026). Fetched the
+    # same way; the app itself can't act as Node (ADR-0016). Re-signed with the hardened runtime and
+    # entitlementsInherit, whose allow-jit V8 needs.
+    - from: resources/bin/deno
+      to: deno
+    - from: resources/bin/licenses
+      to: licenses
   # Only the zips go by this name: the dmg has its own (dmg.artifactName).
   artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:
@@ -99,6 +103,49 @@ mac:
           CFBundleTypeExtensions: [nzb]
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
+# The Windows installer (W4, ADR-0058): one per chip, built one chip at a time (the release script and
+# `npm run build:win`), so each download carries only what its PC runs; the updater picks it by this name
+# (shared/releases.ts updateAssetName). One-click, per user: it installs into the user's own programs folder with
+# no administrator rights, and starts Mergelane after a normal install. build/installer.nsh cleans up on uninstall.
+nsis:
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+  oneClick: true
+  perMachine: false
+  # The elevate helper is for electron-updater and per-machine installs, which Mergelane doesn't use.
+  packElevateHelper: false
+  include: build/installer.nsh
+# Windows 10 and 11, x64 and arm64 (ADR-0053), built on the Mac with electron-builder.win.yml, which adds the
+# Windows-only file rules (docs/WINDOWS-PLAN.md). Unsigned for now: free signing is switched on later by config
+# only.
+win:
+  executableName: Mergelane
+  # The chip comes from the command line (--x64, --arm64), one build per chip, so each installer holds one chip and
+  # is named for it. A chip list here would override that and pack both chips into one installer.
+  target: nsis
+  extraResources:
+    # Built by scripts/windows/build-helpers.mjs for each chip.
+    - from: ../daemon/bin/win-${arch}/mergelane-daemon.exe
+      to: mergelane-daemon.exe
+    - from: ../daemon/bin/win-${arch}/mergelane-nmhost.exe
+      to: mergelane-nmhost.exe
+    # Wintun's signed DLL for this chip, which the system-wide helper loads from its own folder, and its licence
+    # (ADR-0059). The helper's install copies both into Program Files.
+    - from: ../daemon/bin/win-${arch}/wintun.dll
+      to: wintun.dll
+    - from: ../daemon/bin/win-${arch}/wintun-LICENSE.txt
+      to: licenses/wintun/LICENSE.txt
+    # The Windows media tools for this chip, from scripts/media-tools/tools-windows-${arch}.json (W3, ADR-0057):
+    # yt-dlp's unpacked Windows build (yt-dlp.exe beside _internal), Mergelane's own LGPL FFmpeg built on the
+    # Mac with llvm-mingw, Deno, and their licence texts. app/src/main/media/mux/tools.ts WINDOWS_TOOL_PROGRAM
+    # names them.
+    - from: resources/bin-win/${arch}/yt-dlp
+      to: yt-dlp
+    - from: resources/bin-win/${arch}/ffmpeg.exe
+      to: ffmpeg.exe
+    - from: resources/bin-win/${arch}/deno.exe
+      to: deno.exe
+    - from: resources/bin-win/${arch}/licenses
+      to: licenses
 npmRebuild: false
 # Electron fuses, flipped at package time, before signing. An REA audit of the first build found them
 # all at Electron's defaults; with runAsNode on, anyone could run the signed app as a plain Node.js

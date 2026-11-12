@@ -1290,3 +1290,419 @@ until the owner overrides it.
   - Plugging in a phone speeds up what's already downloading, with no clicks.
   - Someone who wants a download to stay off a network switches that network off for it once.
 
+
+## ADR-0053: Mergelane for Windows, on its own branch
+
+- Status: Owner (2026-11-12). The owner asked for a Windows version. Asked what is needed, they chose:
+  - support for Windows 10 and Windows 11, alongside the Apple-silicon Mac;
+  - PCs with Intel/AMD (x64) and with ARM (arm64) chips;
+  - free tools and services only;
+  - CI paused for both the macOS and the Windows checks;
+  - start Windows now, ahead of the Safari extension;
+  - all of it on a separate branch.
+- Context:
+  - CLAUDE.md said "no Windows". Both upstreams ran on Windows: Plexo had Windows builds and an NSIS installer, and
+    Net Merge had Wintun-based Windows files (`tun_windows.go`, `nics/*_windows.go`, `platform_windows.go`,
+    `state/replace_windows.go`, `scripts/fetch-wintun.ps1`). Mergelane removed them (`docs/UPSTREAM.md`).
+  - Electron supports Windows 10 and later, with x64 and arm64 binaries (Electron's README, "Platform support").
+  - Microsoft's docs:
+    - SmartScreen shows "Windows protected your PC" for an unsigned app, and the user can choose "Run anyway".
+    - With Smart App Control in enforcement mode (Windows 11), an app that isn't signed by a trusted CA and isn't
+      known to Microsoft is blocked, with no way round it. Turning Smart App Control off is one-way in Settings.
+    - Code signing that Windows trusts costs money (Azure Artifact Signing about $9.99 a month, for individuals
+      in the US or Canada only; or a certificate at $150–300 a year). The free routes are SignPath Foundation's
+      open-source program (its terms ask for automated builds from the public repository) and the Microsoft Store
+      (free registration for individuals).
+    - Windows 10 reached end of support on 14 October 2025. Consumer Extended Security Updates ended on
+      13 October 2026.
+  - Winsock's `IP_UNICAST_IF` / `IPV6_UNICAST_IF` set a socket's outgoing interface on computers with several
+    networks. They are the Windows counterpart of `IP_BOUND_IF`.
+  - Wintun is a TUN driver for Windows, shipped by its authors as prebuilt, signed DLLs for AMD64, x86, ARM64 and
+    ARM that may be distributed with other software (wintun.net). Its source is GPL-2.0, and the prebuilt DLLs
+    have their own licence inside the ZIP.
+- Decision:
+  - **Platforms:** Windows 10 and 11, x64 and arm64, plus macOS 27 on Apple silicon as before. Windows 10 22H2 is
+    the oldest version tested, because it is the last Windows 10 release.
+  - **Branch:** all Windows work is on the long-lived `windows` branch, made from `main` at 0.3.5 + #73. Work there
+    in milestone branches made from `windows`, with pull requests into `windows`. `main` keeps receiving Mac fixes,
+    and `windows` merges `main` in regularly. Merging `windows` into `main` is the owner's decision.
+  - **Signing:** free only. Windows builds are unsigned until a free route is approved (SignPath Foundation needs
+    CI; the Microsoft Store needs research on the helper). The README states Smart App Control's block plainly.
+  - **CI:** paused for macOS and Windows (ADR-0020 still holds).
+  - **Where (owner, 2026-11-12):** Claude builds everything on the owner's Mac, in a separate `mergelane-windows`
+    worktree on the `windows` branch. The owner installs the builds on their Windows laptop and runs the Windows
+    test kit there (`docs/WINDOWS-PLAN.md`, "How Windows is tested"). Claude never runs on the laptop.
+  - **Safari:** postponed, not dropped. Phase 3 is otherwise complete.
+  - **Order:** the plan in `docs/WINDOWS-PLAN.md`, W1 to W6. In-app merging, the extension, the media tools, the
+    installer and updates come first. The system-wide helper comes last, because it is the largest and riskiest
+    part.
+- Consequences:
+  - CLAUDE.md on the `windows` branch is updated: platforms, free-only signing, the Windows architecture, the
+    `IP_UNICAST_IF` rule, Windows tests, and the safety rules for the owner's Windows laptop.
+  - Every macOS test must keep passing on the `windows` branch. Platform code goes behind `process.platform`
+    checks and Go build tags.
+  - Windows 10 users get no more security updates from Microsoft. Mergelane still runs there, but the README says
+    Windows 11 is recommended.
+  - Users whose Smart App Control is On can't run unsigned builds, until free signing is in place.
+
+## ADR-0054: The Windows test kit: built on the Mac, run by the owner on the laptop, read back here (W1)
+
+- Status: Proposed with W1's first pull request (2026-11-12). It fills in `docs/WINDOWS-PLAN.md`, "How Windows is
+  tested", including how the kit's PowerShell is tested.
+- Context:
+  - Claude works only on the owner's Mac; the owner runs Windows builds on their laptop (ADR-0053). CI is paused.
+  - The laptop must need no installs. Windows 10 and 11 come with Windows PowerShell 5.1.
+  - Windows' default execution policy on client PCs is Restricted, which runs no scripts. `powershell.exe
+    -ExecutionPolicy Bypass` sets the policy for that session only: it isn't stored, and it ends with the session.
+    A Group Policy setting overrides it. (Microsoft Learn, `about_Execution_Policies`, PowerShell 5.1.)
+  - Windows PowerShell reads a script without a byte-order mark in the ANSI code page, so non-ASCII text is garbled
+    (`about_Character_Encoding`).
+  - Smart App Control's mode is the registry value `VerifiedAndReputablePolicyState` under
+    `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`: 0 Off, 1 On, 2 Evaluation (Microsoft Learn, "Test your
+    app's signature with Smart App Control"). The chip is `Win32_Processor.Architecture` (9 x64, 12 ARM64). The
+    Downloads folder is the `{374DE290-123F-4565-9164-39C4925E467B}` value under `HKCU\...\Explorer\User Shell
+    Folders` (FOLDERID_Downloads), `%USERPROFILE%\Downloads` by default.
+  - Windows 11 on Arm runs x64 programs through emulation; Windows 10 on Arm doesn't (Microsoft Learn, "How
+    emulation works on Arm").
+  - `go test -c -o <file>` compiles a package's tests into a program without running it; flags to that program
+    need the `test.` prefix; a package with no test files for the platform produces no program (`go help test`,
+    `go help testflag`, Go 1.27.3).
+- Decision:
+  - **The kit** is a folder and a zip of it, built by `node scripts/windows/kit.mjs` into `dist/` (ignored by
+    git). It holds `test-kit.ps1`, `Run test kit.cmd`, `README.txt`, `kit.json` and the Go test programs.
+  - **Starting it:** the owner double-clicks `Run test kit.cmd`, which runs
+    `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+    test-kit.ps1` and then waits for a key. No setting changes.
+  - **The script** (`scripts/windows/test-kit.ps1`) targets Windows PowerShell 5.1 and stays ASCII; `kit.mjs`
+    refuses to build a kit otherwise. It:
+    - stops if it has administrator rights;
+    - reads the Windows version, the chip and Smart App Control (read only), and whether Windows marked the kit
+      as downloaded (the `Zone.Identifier` stream);
+    - lists the names, sizes and dates in Downloads before and after, and reports any change;
+    - checks each program's SHA-256, then runs the ones this PC's chip can run (`Start-Process -Wait`, output
+      redirected into the kit's `results` folder);
+    - writes `report.txt` in the kit folder and copies it to the clipboard. The user's profile path is replaced
+      with `%USERPROFILE%`.
+  - **Go test programs:** `GOOS=windows GOARCH=amd64|arm64 CGO_ENABLED=0 go test -c -cover -trimpath`, one per
+    package listed in `kit.mjs`'s `GO_PACKAGES`. Without cgo there is no `-race` on Windows; `go test -race` keeps
+    running on the Mac. Each program writes a coverage profile; the report carries back the lines for
+    `*_windows.go` files, so the coverage of Windows-only code is measured where it runs. A package can carry
+    `until: "W<n>"`: before that milestone its failures are reported as "not yet" and don't fail the run.
+  - **The report** is JSON between two marker lines, so it survives being pasted into a chat.
+    `node scripts/windows/report.mjs [file]` (or standard input) says what it shows, lists per-file coverage of
+    the Windows-only files, and exits 1 if something that must pass failed or Downloads changed.
+  - **How the PowerShell is tested:** everything that can run anywhere lives in Node (`kit.mjs`, `report.mjs`),
+    tested on the Mac with `node --test` to at least 90% of lines. The script stays thin, and its tests on the Mac
+    are static (`kit.test.mjs`): ASCII only; the same report markers as `report.mjs`; it reads the `kit.json`
+    fields `kit.mjs` writes; it contains no command that changes the system (registry writes, execution policy,
+    services, routes, firewall, Defender, downloads, elevation); it writes only inside the kit folder. Its first
+    real run is the owner's. Parsing and linting it on the Mac (PSScriptAnalyzer, Pester) would need PowerShell 7
+    installed here, which is the owner's decision.
+- Consequences:
+  - The owner needs nothing installed on the laptop, and no setting changes there.
+  - With Smart App Control On, Windows may refuse the unsigned test programs; the report shows it.
+  - A Group Policy that fixes the execution policy would stop the kit; the owner would see PowerShell's message.
+  - Later milestones add steps to the same kit: the unpacked app (W1), the extension (W2), media (W3), the
+    installer (W4) and, after a warning, the administrator steps (W5).
+
+## ADR-0055: On Windows, a download socket is pinned by its source address (W1)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W1 (`docs/WINDOWS-PLAN.md`, pull request d).
+
+### Context
+
+On macOS, Mergelane makes each download socket itself (libc through koffi), sets `IP_BOUND_IF` on it, and hands
+it to Node as a file descriptor, because binding the source address alone doesn't keep a socket off system
+merge's capture routes there (CLAUDE.md). The Windows plan asked first whether Node on Windows can take a socket
+made outside it, and to decide the design from the answer.
+
+What the documentation says:
+
+- **Node:** `net.Socket`'s `fd` option wraps "an existing socket with the given file descriptor". On Windows a
+  Winsock socket is a `SOCKET` handle, not a C runtime file descriptor, and Node's documentation doesn't say that
+  it can wrap one. Not verified either way; it would need a Windows run.
+- **Microsoft Learn, `MIB_IPINTERFACE_ROW` (Remarks):** Windows Vista and later use the strong host model by
+  default (`WeakHostSend` is false). "With the strong host mode, a unicast packet can be sent out a specific
+  interface that does not have the lowest metric for a route by binding the socket to the source address of the
+  specific interface." `IP_UNICAST_IF` exists too (IPPROTO_IP socket options), but needs the socket's handle,
+  which Node doesn't expose on Windows.
+
+### Decision
+
+- On Windows, a download socket is pinned by binding it to its network's own address (`localAddress`), which
+  Node supports everywhere. `deviceBindingSupported()` is true on Windows without loading anything, so the app
+  no longer warns that combining is unavailable there.
+- The macOS path (`IP_BOUND_IF` through koffi) is unchanged.
+- CLAUDE.md's Windows pinning rule now says this instead of `IP_UNICAST_IF` through koffi. The system-wide helper
+  (W5) still uses `IP_UNICAST_IF` for its own sockets: Go can set it directly (`nics/egress_windows.go`).
+
+### Consequences
+
+- **The weak host model breaks it.** An adapter with weak host send or forwarding turned on (Mobile Hotspot,
+  Internet Connection Sharing, Hyper-V and some VPNs turn these on) routes by destination only, ignoring the
+  bound address, as upstream Net Merge found. In-app downloads then follow the routing table on that adapter.
+  W5's helper turns these off on the adapters it merges while it runs, and puts them back after, as upstream did.
+- No native code runs for downloads on Windows, so nothing there can fail to load.
+- Proven only on the laptop: the kit's checklist downloads over two networks and watches both carry traffic.
+
+## ADR-0056: The browser bridge on Windows: a named pipe and per-user registry keys (W2)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W2.
+
+### Context
+
+On macOS the native messaging host reaches the app over a 0600 Unix socket in the app's folder, and each browser
+finds the host through a manifest file in its own profile folder. On Windows, Node serves a local server as a named
+pipe ("On Windows, the local domain is implemented using a named pipe"), Go's net package can't dial one, and the
+browsers find hosts through the registry.
+
+### Decision
+
+- **Transport:** the app listens on `\\.\pipe\mergelane-browser-<hash>`, the hash being the first 16 hex digits of
+  the SHA-256 of the app folder's path (A-Z lowercased). One pipe per folder keeps a test profile away from the
+  user's Mergelane, and keeps account names out of the system's pipe list. The default named-pipe security gives
+  other users read access only (Microsoft Learn), so no chmod-like step is needed. The host opens the pipe with
+  `CreateFile(… FILE_FLAG_OVERLAPPED …)` and `os.NewFile`, which Go makes pollable, so deadlines work.
+- **Registration:** two manifests in the app's folder and one `HKCU` key per installed browser that documents one
+  (Chrome, Edge, Firefox), written with `reg.exe` on every start. Chromium, Brave and Vivaldi are "not supported
+  yet" on Windows, as Brave and Vivaldi are on macOS.
+- **Wake:** `Mergelane.exe` is started with `CREATE_BREAKAWAY_FROM_JOB`, as MDN asks of any process a host starts
+  to outlive it, falling back to a start inside the job.
+- **Test runs** with their own `--user-data-dir` register nothing, as with `mergelane://`.
+
+### Consequences
+
+- The uninstaller (W4) must delete the three keys and the manifests.
+- A user whose Group Policy turns off user-level hosts (Edge's NativeMessagingUserLevelHosts) can't use the
+  extension; nothing Mergelane can do without administrator rights.
+- The test kit checks the pipe's health answer after the window opens, which proves the app side on the laptop.
+  Loading the extension in a browser stays on the kit's checklist.
+
+## ADR-0057: The media tools on Windows, fetched and built on the Mac (W3)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W3.
+
+### Context
+
+Windows needs yt-dlp, Deno and FFmpeg for x64 and arm64. yt-dlp and Deno publish official Windows builds for both
+chips in the pinned releases. FFmpeg must stay Mergelane's own minimal LGPL build from the signed source (ADR-0028),
+built on the Mac like everything else (ADR-0053).
+
+### Decision
+
+- **One manifest per chip** (`tools-windows-x64.json`, `tools-windows-arm64.json`), with the same versions as
+  `tools.json`. `fetch.mjs` learns a manifest's target (`platform`, `arch`): Windows programs are named `.exe` and
+  their chip is read from the PE header.
+- **yt-dlp:** the unpacked Windows builds, shipped unchanged, with their own third-party licence list.
+- **Deno:** the official Windows zips.
+- **FFmpeg:** cross-compiled with llvm-mingw 20261020 (macOS universal build), with zlib 1.3.2 built from source
+  and linked in statically, so the program needs only Windows' own DLLs. Both archives are pinned by SHA-256 and
+  passed to the build script by `fetch.mjs` (`buildInputs`), with the chip (`buildArgs`). The LGPL guard reads
+  `config.h`. x64 is built without hand-written assembly (no nasm), which stream copy doesn't need.
+- **Pins:** the newest llvm-mingw and zlib were about a week old, so the previous ones were pinned. Their SHA-256s
+  were taken from the downloads over GitHub's TLS. zlib's PGP signature was not checked here: that would mean
+  importing its author's key.
+
+### Consequences
+
+- Each Windows FFmpeg build takes about a minute and a half on the Mac and downloads the 124 MB toolchain once per
+  build. The stamps keep it from rebuilding until something pinned changes.
+- Every release attaches zlib's source and the Windows build script next to FFmpeg's (W4's release script).
+- The Windows programs are proven on the laptop: the kit's checklist downloads a video, which runs yt-dlp, Deno and
+  FFmpeg.
+
+## ADR-0058: The Windows installer, updates and releases (W4)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W4.
+
+### Context
+
+Windows users need an installer that asks for no administrator password, updates from Settings › Updates as on the
+Mac, and the same draft release as the Mac files. CI is paused (ADR-0020), so the release is built on the Mac, and
+the builds stay unsigned until free signing is set up (ADR-0053).
+
+### Decision
+
+- **Installer:** electron-builder's NSIS target, one-click and per user (`perMachine: false`), so it installs into
+  the user's own programs folder without administrator rights and opens Mergelane afterwards. **One installer per
+  chip**, `Mergelane-<version>-<x64|arm64>-setup.exe`, each built alone with `--x64` or `--arm64`: a chip list under
+  `win.target` overrides those flags and packs both chips into one installer (seen on the first W4 build). The
+  elevate helper is left out (`packElevateHelper: false`): it serves per-machine installs and electron-updater,
+  which Mergelane doesn't use.
+- **Open with, never the default:** `build/installer.nsh` gives `.torrent` and `.nzb` Mergelane's own ProgIDs under
+  `HKCU\Software\Classes` and lists them in each extension's `OpenWithProgids`, which adds Mergelane to Open with
+  without changing the default app (Microsoft Learn, "How to Include an Application in the Open With Dialog Box";
+  "File Types" for the `SHChangeNotify` call). This matches the Mac's `LSHandlerRank: Alternate`.
+- **No `magnet:` handler yet.** Microsoft documents the "a choice, not the default" registration for protocols
+  (Default Programs, `RegisteredApplications`) only under `HKEY_LOCAL_MACHINE`, which needs administrator rights.
+  A per-user `HKCU\Software\Classes\magnet` key would take magnet links from a torrent app installed for all users.
+  Magnet links still reach Mergelane by pasting, the clipboard offer and the browser extension. An opt-in setting
+  can come later.
+- **Uninstall:** on a real uninstall (not the one an update runs, `${isUpdated}`), the hook removes what Mergelane
+  wrote for the user: the Open with entries, the browsers' native messaging keys and their manifests (ADR-0056),
+  `mergelane://`, and the Open at login entry. Settings and downloads stay, as the one-click uninstaller leaves app
+  data by default.
+- **Updates:** Settings › Updates picks the installer for this PC's chip by name (`shared/releases.ts`,
+  `updateAssetName`), checks its SHA-256 against `SHA256SUMS` as on the Mac (ADR-0036), starts it and quits. The
+  installer replaces the old version and opens the new one.
+- **Releases:** `scripts/release/local-release.mjs` and `release.yml` build, after the Mac app, the Windows helpers,
+  the Windows media tools, both installers, and run `scripts/windows/check-build.mjs`. The release attaches the
+  installers and the Windows sources (zlib and the Windows FFmpeg build script, ADR-0057), lists them in
+  `SHA256SUMS`, and the notes gain an "Install on Windows" section. `--mac-only` leaves Windows out of a dry run
+  only: a published release without the installers would offer Windows users an update they can't install.
+- **Checks:** on the Mac, `check-build.mjs` reads what can't be run there: each installer exists, every program in
+  each chip's app is built for that chip (PE header), the app's `package.json` says the version, and
+  `Mergelane.exe`'s Electron fuses match `electron-builder.yml` (read with `@electron/fuses`). On the laptop, the
+  test kit installs each installer silently into its own folder, opens the app, checks the window, the browser
+  bridge, the helpers' versions and the Open with entries, uninstalls it and checks nothing is left.
+
+### Consequences
+
+- **Unsigned:** SmartScreen may stop the installer until the user clicks **More info › Run anyway**. Smart App
+  Control **On** blocks it with no way round it. The README and the release notes say so and never tell users to
+  turn Smart App Control off.
+- The helpers' version stamp can't be checked on the Mac: `go version -m` shows no `-ldflags` for these `-trimpath`
+  builds, and a Windows program can't run here. The kit runs the helpers on the laptop instead.
+- A release takes about ten minutes more (two Windows FFmpeg builds and two installers).
+- Only the laptop can prove the install, SmartScreen's prompt, Open with, the uninstall and the update itself (which
+  needs two Windows releases).
+
+## ADR-0059: The system-wide helper on Windows: a LocalSystem service, a named pipe, Wintun (W5)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W5.
+
+### Context
+
+System merge needs a privileged helper on Windows as on macOS (ADR-0005): a virtual adapter, capture routes and a
+control API the app drives. Net Merge's Windows engine is an elevated tray program with no service and no API, so
+only its adapter and route code carries over. The app has no Apple-style password prompt on Windows, and Node.js
+can't speak Unix sockets there. CLAUDE.md: no Network Extension equivalent, crash safety, coexist with VPNs.
+
+### Decision
+
+- **Engine:** Net Merge's `tun_windows.go` (2b333a3) re-imported: a Wintun adapter named `mergelane` (type
+  `Mergelane`, its own fixed GUID), its address and MTU set with `netsh`, and two `/1` capture routes added with
+  `route` without `-p`, so they never outlive a restart. Both tools run by their System32 path. While capture is
+  on, weak host send and forwarding are turned off on the links (Windows ignores a pinned socket there) and put
+  back on off, after a crash, or by `cleanup`; the record of what to put back lives in the state folder.
+- **Wintun:** the official signed `wintun.dll` 0.14.1 per chip, pinned by the SHA-256 wintun.net publishes, fetched
+  by `build-helpers.mjs`, shipped beside the helper with its licence (WireGuard LLC's Prebuilt Binaries License:
+  redistribution allowed alongside software that uses only `wintun.h`'s API; not open source).
+- **Service:** `mergelane-daemon.exe install` copies the program and `wintun.dll` into `%ProgramFiles%\Mergelane`
+  (only administrators may change it: the app's own folder is the user's, and a SYSTEM service must never run a file
+  a user can replace), then registers the service `mergelane-daemon`: automatic start, LocalSystem, and recovery
+  that restarts it after 1, 5 and 30 seconds, also when it ends with an error. An installed helper is stopped
+  before its files are replaced. `uninstall` stops and deletes the service, cleans up, and removes the program.
+  The state folder, `%ProgramData%\Mergelane\daemon` (prefs, limits, log), is owned by Administrators with
+  full control for SYSTEM and Administrators and read for users, nothing inherited, set every time the helper
+  starts.
+- **Control API:** the same protocol (`shared/daemon-api.ts`) over the named pipe `\\.\pipe\mergelane-daemon`
+  (go-winio 0.6.2, already in the module graph through tun2socks). Its security descriptor allows SYSTEM,
+  Administrators and the one user the app installed it for, so Windows refuses everyone else before a connection
+  exists; that replaces macOS's `LOCAL_PEERCRED` check. Only a user account's SID is accepted (`S-1-5-21-…`,
+  `S-1-12-1-…`), never a group such as Everyone.
+- **Install from the app:** Windows' administrator prompt (User Account Control) through PowerShell's
+  `Start-Process -Verb RunAs`, with the script passed as `-EncodedCommand` and every argument quoted for
+  `CommandLineToArgvW`. The app passes its own user's SID (from `whoami /user`). An elevated program's output
+  can't be read back, so the helper writes "ok" or its error to a new `--report` file the app names; a declined
+  prompt is exit code 1223 (ERROR_CANCELLED).
+- **VPN guard:** the routing table is read with `GetIpForwardTable2`. A route counts as a tunnel's when its adapter
+  isn't network hardware (by IANA ifType) or when it is a `/1` half (OpenVPN's TAP adapter calls itself Ethernet,
+  but only a VPN splits the default route). Windows' own VPN connections that are up (PPP adapters) count as on, as
+  macOS's network services do.
+
+### Consequences
+
+- Wintun's docs don't promise the adapter disappears if the helper is killed, so crash safety rests on the
+  service restarting at once and cleaning up first (routes on the `mergelane` adapter, strong-host settings), on
+  `cleanup`, and on the routes not surviving a restart. The laptop's System merge test kills the helper to prove it.
+- The kit's Go tests now run the API over the pipe and the daemon command's tests on Windows; nothing waits for W5.
+- The System merge test is the one part of the kit that changes the PC: opt-in, as administrator, after the owner
+  types YES, refusing next to an installed helper, and always removing the helper again.
+- The app speaks of "an administrator's permission" on Windows where macOS asks for a password.
+
+## ADR-0060: The Windows 11 look: Mica, a Windows title bar and navigation pane, Windows geometry (W7)
+
+**Status:** accepted, 2026-11-13. **Milestone:** W7. **Changes:** the "Liquid Glass on Windows" part of W1f
+(`docs/WINDOWS-PLAN.md`, Windows habits).
+
+### Context
+
+The owner's redesign prototype (`design-system/mergelane/redesign/prototype.html`, its "Windows 11" study) shows
+how the same window should look on Windows 11. W1f had only swapped the Mac's traffic lights for Windows' caption
+buttons and offered Liquid Glass on Windows 11 as acrylic. The study asks for more, and for less: Liquid Glass is
+macOS's design language, so Windows gets Windows' own material and shapes instead.
+
+### Decision
+
+- **Material:** Mica behind every theme on Windows 11 22H2 (build 22621) and later, through Electron's
+  `backgroundMaterial: 'mica'` (BrowserWindow docs: Windows 11 22H2 and later). The page is clear where the title
+  bar and the navigation pane sit, so Mica shows through; the content sits on its own layer with a hairline top
+  edge and an 8px top-left corner. Reduced transparency, or an older Windows, gives the ground the study
+  draws: the theme's window colour with 7% of its accent (`shared/themes.ts` `windowsGround`).
+- **Liquid Glass is the Mac's only.** Settings › Appearance doesn't offer it on Windows and says why. A Liquid
+  Glass choice saved on a Mac (settings can be copied) opens as Porcelain on Windows and stays saved, so the Mac
+  still shows it (`themeOnPlatform`).
+- **Title bar:** Microsoft's standard title bar (Learn, "Title bar design"): 32px, the 16px window icon 16px from
+  the left edge, the title 16px after it in Segoe UI Variable at caption size (12px), dimmed while another window
+  has the focus. Windows draws the caption buttons (`titleBarOverlay`, 32px), so snap layouts work.
+- **Navigation pane:** NavigationView's left pane: 248px, 36px items on a 4px backplate, and one 3×16px accent pill
+  that slides to the current place.
+- **Geometry** (Learn, "Geometry in Windows"): 8px for dialogs, menus and flyouts; 4px for everything in the page
+  (buttons, fields, cards, lists) and for tooltips; 6px for a segmented control's track.
+- **Controls:** buttons dim when pressed instead of shrinking, with a hairline that is darker along the bottom;
+  a focused text field gets a 2px accent line along its bottom edge; toggle switches are Fluent's (40×20, outlined
+  when off, the knob growing on hover and stretching when pressed). The app's own type stays Archivo, which ships
+  inside the app.
+- **Words:** "Start with Windows", Task Manager's way of counting CPU, and Windows' administrator approval.
+- **Testing:** `MERGELANE_E2E_RENDERER_PLATFORM=win32` (ignored by packaged builds) renders the Windows look on
+  the Mac, so `e2e/windowsLook.spec.ts` checks the real stylesheet in Chromium. What Windows draws itself (Mica,
+  the caption buttons) is on the laptop checklist.
+
+### Consequences
+
+- Windows 10 and Windows 11 before 22H2 get the solid ground: same layout, no Mica.
+- The notification-area icon and its flyout and menu from the study are ADR-0061.
+
+## ADR-0061: Mergelane in Windows' notification area: the mark, a flyout and a menu (W7)
+
+**Status:** accepted, 2026-11-13. **Milestone:** W7.
+
+### Context
+
+W1 gave Windows a notification-area icon that was the app's full icon, opened the window on a click and had a two-item
+menu. The redesign's Windows 11 study draws more: the blue mark alone, a flyout on a click with the merged speed, each
+network, Open and Pause all, and a menu on a right-click. Microsoft's notification-area guidance (Learn, "Notification
+Area") agrees: an icon with 16, 20 and 24px versions; a tooltip; a left click shows what people most want, near the
+icon, gone when they click elsewhere; a right-click shows the menu with the default command first; items that don't
+apply are removed, not greyed.
+
+### Decision
+
+- **Icon:** `app/resources/tray.ico`, the mark alone at 16, 20, 24, 32, 40, 48 and 64px, rendered from
+  `brand/svg/mark.svg` by `design-system/mergelane/redesign/brand/tray/render.mjs`. ICO, as Electron's Tray docs
+  recommend on Windows. It is loaded from its unpacked copy (`?asset&asarUnpack`), a real file for Windows' icon
+  loader, and `check-build.mjs` checks that copy is there and is an ICO.
+- **Tooltip:** "Mergelane", or "Mergelane: 4.2 MB/s merged" while bytes move.
+- **Flyout (a click):** a small frameless window of the app's own page (`#tray`, `TrayFlyout.tsx`), 300px wide and as
+  tall as its content, centred on the icon just clear of the taskbar on whichever edge it is, inside the work area
+  (`shared/trayFlyout.ts flyoutBounds`). Windows 11 rounds it. It closes on a second click, on Esc, on Open Mergelane,
+  or when anything else takes the focus. The window publishes what its sidebar shows (names, colours, speeds), the
+  units and the theme (`useTrayStatus`), so the two never disagree; main passes it on.
+- **Menu (a right-click):** Open Mergelane; Pause all downloads (only while something downloads or waits); Merge for
+  every app with a check mark (only while the helper is installed, answering and current); Settings; Exit. A refused
+  Merge opens the window on Networks, which says why. Electron menus can't put the default command in bold, so Open
+  comes first. A double-click opens the window.
+- **Pause all:** new `DownloadManager.pauseAll`, the user's own Pause for each download downloading or waiting, the
+  waiting ones first so none starts in a paused one's place.
+- **Closing the window:** Settings › General's switch on Windows is now "Keep running in the notification area when I
+  close the window" (the same `menuBarSpeed` setting). On, closing the window keeps Mergelane there. Off, closing it
+  quits, unless downloads run or a browser needs Mergelane (as before).
+- **Testing:** the test knob (ADR-0060) also gives a test run on the Mac the Windows shell, with a stand-in for the icon
+  that a test clicks, right-clicks and chooses from; the flyout is the real window.
+
+### Consequences
+
+- What Windows draws (the icon at each scale, the menu, the flyout's corners and place) is on the laptop checklist.
+- On Windows, Settings no longer has a separate "show the merged speed" switch: the tooltip always shows it while the
+  icon is there.

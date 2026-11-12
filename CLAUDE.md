@@ -1,28 +1,40 @@
 # Mergelane — project rules for Claude Code
 
-Mergelane is a free, open-source (MIT) macOS app that combines:
+Mergelane is a free, open-source (MIT) app for macOS and Windows that combines:
 
 1. An IDM-style download manager: segmented multi-connection downloads, queues, scheduling,
    browser capture, video (YouTube, HLS, DASH) and torrents.
-2. Multi-network merging: it uses every internet connection the Mac has (Wi-Fi, Ethernet, iPhone/Android
+2. Multi-network merging: it uses every internet connection the computer has (Wi-Fi, Ethernet, iPhone/Android
    tethering) at once, both inside the downloader and system-wide for all apps.
+
+The Windows version is being built on the long-lived `windows` branch (owner, 2026-11-12, ADR-0053). Its plan is
+`docs/WINDOWS-PLAN.md`. `main` stays the Mac release line until the owner decides to merge.
 
 Read this file at the start of every session. Keep `docs/PROGRESS.md` up to date at the end of every session.
 
 ## Hard constraints (do not change without the owner's explicit approval)
 
-- **Platform:** macOS 27 and later, Apple Silicon only (arm64). No Intel/x64, no Windows, no Linux builds.
+- **Platform (owner, 2026-11-12, ADR-0053):**
+  - **macOS:** macOS 27 and later, Apple Silicon only (arm64). No Intel Mac builds.
+  - **Windows:** Windows 10 and Windows 11, on both x64 (Intel/AMD) and arm64 (Snapdragon and other ARM) PCs.
+  - No Linux builds.
 - **No Apple Developer account yet.** Every build is ad-hoc signed (`codesign --sign -`). Users must be
   able to install from the DMG with a one-time "Open Anyway" in System Settings › Privacy & Security.
   Therefore: **no Network Extension, no System Extension, no `SMAppService` daemon, no Mac App Store
   entitlements.** Design so Developer ID signing and notarization can be switched on later by config only.
-- **No servers, no paid services, no telemetry, no accounts.** Everything runs on the user's Mac.
+- **Windows signing: free only (owner, 2026-11-12, ADR-0053).** No paid certificate or paid signing service, ever.
+  Windows builds are unsigned for now: users click **More info › Run anyway** on SmartScreen's "Windows protected
+  your PC". Windows 11's Smart App Control, when **On**, blocks unsigned apps with no way round it; say so honestly
+  in the README and installer notes, and never tell users to turn a security feature off. The only signing route
+  allowed is a free one (SignPath Foundation's open-source program, or the free Microsoft Store), and only with the
+  owner's approval; SignPath needs CI builds, which are paused. Design so signing can be switched on by config only.
+- **No servers, no paid services, no telemetry, no accounts.** Everything runs on the user's computer.
   Update checks may only query the public GitHub Releases API.
 - **Coexist with VPNs.** Mergelane must never install its routes over another VPN's routes. If a
   user VPN is active, system-wide merging refuses to turn on (or turns itself off) and says why.
   In-app multi-link downloads keep working where possible.
-- **Crash safety.** If any Mergelane process dies, the Mac's internet must keep working: no leftover
-  routes, and a `mergelane-daemon cleanup` command must exist.
+- **Crash safety.** If any Mergelane process dies, the computer's internet must keep working: no leftover
+  routes, and a `mergelane-daemon cleanup` command must exist, on macOS and on Windows.
 - **Legal.** No DRM circumvention. No private or sign-in-only media beyond what the user's own browser
   session legitimately provides. Never use "IDM" or other trademarks in names or marketing.
 - **YouTube (owner, 2026-11-11, ADR-0026).** yt-dlp only. No cookies, and no PO tokens, captured or generated.
@@ -33,6 +45,8 @@ Read this file at the start of every session. Keep `docs/PROGRESS.md` up to date
   fetched at build time with pinned SHA-256 checksums. FFmpeg is our own minimal LGPL build, compiled at build
   time from FFmpeg's signed source release, pinned by SHA-256 (ADR-0028). Their licences go in
   `THIRD-PARTY-NOTICES.md` and the app bundle, and every GitHub release attaches their source (ADR-0027).
+  The same holds for the Windows builds of these tools. Wintun (the Windows virtual network adapter) ships only
+  as its authors' prebuilt, signed DLL; read the licence inside its ZIP and record it before bundling it.
 
 ## Upstream sources (all MIT)
 
@@ -67,6 +81,26 @@ mergelane-daemon (root, launchd LaunchDaemon)
    caller's uid with LOCAL_PEERCRED; versioned protocol
 ```
 
+On Windows (`docs/WINDOWS-PLAN.md`):
+
+```
+Mergelane (Electron; NSIS installer, x64 and arm64)
+├─ the same main process and renderer as on macOS
+└─ resources\
+   ├─ mergelane-daemon.exe   (Go; installed as a Windows service with one UAC prompt)
+   ├─ mergelane-nmhost.exe   (browser bridge; registered under HKCU ...\NativeMessagingHosts)
+   ├─ wintun.dll             (Wintun's prebuilt signed DLL, per architecture)
+   ├─ yt-dlp.exe, deno.exe   (official Windows binaries, pinned)
+   └─ ffmpeg.exe             (our own LGPL Windows build from pinned source)
+
+mergelane-daemon (LocalSystem Windows service)
+├─ net-merge engine: Wintun adapter + capture routes, gVisor stack, per-flow balancing,
+│  IP_UNICAST_IF / IPV6_UNICAST_IF egress
+├─ VPN detection and a route-conflict guard; marked routes that cleanup can find and remove
+└─ local control API: the same versioned JSON protocol over a named pipe whose ACL allows only
+   the installing user, SYSTEM and administrators (as root is allowed on macOS; ADR-0059)
+```
+
 Rules:
 
 - The daemon and the app are independent: either one can run, crash or update without the other.
@@ -75,14 +109,21 @@ Rules:
 - **The downloader's per-link sockets must stay on their link while system merging is on.** On macOS,
   pin them with `IP_BOUND_IF` / `IPV6_BOUND_IF` (via koffi `setsockopt`, following Plexo's
   `deviceBinding.ts` pattern), not just `localAddress`. Plexo currently relies on `localAddress` on macOS,
-  so this is a required change. Cover it with tests.
+  so this is a required change. Cover it with tests. On Windows, bind them to the network's own address
+  (`localAddress`): Windows' default strong host model then sends them out of that network (ADR-0055).
+- Platform code lives behind the existing seams (`process.platform` checks in the main process, Go build tags
+  `_darwin.go` / `_windows.go` in the daemon). The macOS behaviour must not change on the `windows` branch: every
+  macOS test keeps passing.
 - Keep upstream structure and naming where it already works. Prefer the upstream patterns over new
   abstractions (the owner prefers staying within established patterns).
 - TypeScript strict mode, ESLint and Prettier as in Plexo. Go: `go vet`, `staticcheck`, `-race` in tests.
 
 ## Testing (required; the owner relies on e2e tests, not manual checks)
 
-A feature is done only when its tests exist and pass in CI. Never mark a task complete with failing,
+A feature is done only when its tests exist and pass. CI is paused for both macOS and Windows (owner,
+2026-11-12; ADR-0020, ADR-0053). Never trigger GitHub workflows. Claude works only on the owner's Mac: Windows
+builds are cross-built there, and the owner installs them on the Windows laptop and runs the Windows test kit
+there (`docs/WINDOWS-PLAN.md`, "How Windows is tested"). Never mark a task complete with failing,
 skipped or missing tests. Never weaken or delete a test to make it pass without explaining why in the PR.
 
 Test layers:
@@ -102,6 +143,11 @@ Test layers:
    for real Wi-Fi + iPhone USB + Ethernet, unplug/sleep/wake and VPN on/off. These jobs must be opt-in
    and must never run on pull requests from forks.
 7. **Safari:** a manual checklist in `docs/SAFARI-CHECKLIST.md`, run per release.
+8. **Windows:** platform logic is unit-tested on the Mac through seams and recorded Windows data. Go packages
+   are also cross-compiled into Windows test programs (`GOOS=windows go test -c`). The owner runs these, the
+   installer and a guided check on the Windows laptop with the Windows test kit (a PowerShell script, no
+   installs needed), and pastes its report back. Simulated networks on Windows need their own approach
+   (`docs/WINDOWS-PLAN.md`).
 
 ## Safety when running on the owner's Mac
 
@@ -109,6 +155,18 @@ Test layers:
   `/Library`, uses `sudo`, or modifies the keychain. Prefer running these in CI.
 - Before testing routes locally, make sure `mergelane-daemon cleanup` works and explain how to recover.
 - Never commit secrets, cookies, signed media URLs or browser profiles.
+
+## Safety for the owner's Windows laptop
+
+Claude never runs on the laptop. These rules apply to what the Windows test kit, the installer and Mergelane do
+there, and to any command Claude asks the owner to run.
+
+- **Ask before** any command that needs administrator rights, installs or changes a Windows service or driver,
+  creates network adapters, changes routes, DNS or the firewall, writes under `HKLM`, or changes Windows Security
+  settings (SmartScreen, Smart App Control, Defender). Writing Mergelane's own keys under `HKCU` is fine.
+- Before testing routes, make sure `mergelane-daemon cleanup` works on Windows and explain how to recover
+  (including `route print` and removing the Wintun adapter).
+- Tests must never write to the owner's real Downloads folder; check its contents before and after.
 
 ## Workflow
 
@@ -126,6 +184,7 @@ Test layers:
 | 2. MVP | One installable app: downloads, torrents, Chrome capture, YouTube, system merge on/off, failover, dashboard | DMG installs and works on a clean Mac; full CI suite green. Proposed plan: `docs/PHASE-2.md` |
 | 3. Everyday | Safari extension, clipboard monitor, link priorities and cost rules, sticky-per-site routing option, diagnostics bundle, auto-update via GitHub Releases | Hardware suite green on the owner's Mac |
 | 4. Production | Security hardening (IPC fuzzing, threat model), performance targets, accessibility, docs, stable 1.0 | Release checklist complete |
+| W. Windows | Windows 10 and 11, x64 and arm64: the app, the extension bridge, the media tools, the installer and updates, then the system-wide helper. Branch `windows`; plan `docs/WINDOWS-PLAN.md` | Installer works on the owner's Windows laptop; the Windows hardware run passes |
 | Later | Developer ID signing and notarization, `SMAppService`, Homebrew cask, per-app routing via Network Extension, App Store edition | Needs an Apple Developer account |
 
 Known product limits (show these honestly in the UI and README): one single connection always uses

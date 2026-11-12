@@ -28,16 +28,18 @@ const (
 	maxAcceptBackoff = time.Second
 )
 
-// acceptor is the part of *net.UnixListener the server uses; tests substitute failing ones.
+// acceptor is the part of a net.Listener the server uses; tests substitute failing ones.
 type acceptor interface {
-	AcceptUnix() (*net.UnixConn, error)
+	Accept() (net.Conn, error)
 	Close() error
 }
 
-// Server serves the control API on a Unix socket. Create one with Listen and stop it with Close.
+// Server serves the control API on a Unix socket (Listen) or, on Windows, a named pipe (ListenPipe).
+// Stop it with Close.
 type Server struct {
 	path      string
 	ln        acceptor
+	identify  func(net.Conn) (uint32, error) // the peer's uid, for authorize
 	authorize func(uid uint32) bool
 	h         Handler
 
@@ -46,7 +48,7 @@ type Server struct {
 	wg     sync.WaitGroup
 
 	mu     sync.Mutex
-	conns  map[*net.UnixConn]struct{}
+	conns  map[net.Conn]struct{}
 	closed bool
 
 	closeOnce sync.Once
@@ -87,15 +89,24 @@ func Listen(path string, mode os.FileMode, authorize func(uid uint32) bool, h Ha
 		ln.Close()
 		return nil, fmt.Errorf("api: %w", err)
 	}
-	return serve(path, ln, authorize, h), nil
+	return serve(path, ln, unixPeerUID, authorize, h), nil
 }
 
-func serve(path string, ln acceptor, authorize func(uint32) bool, h Handler) *Server {
+// unixPeerUID is a Unix-socket connection's peer uid (peerUID); anything else has none.
+func unixPeerUID(c net.Conn) (uint32, error) {
+	uc, ok := c.(*net.UnixConn)
+	if !ok {
+		return 0, fmt.Errorf("api: %T is not a Unix socket connection", c)
+	}
+	return peerUID(uc)
+}
+
+func serve(path string, ln acceptor, identify func(net.Conn) (uint32, error), authorize func(uint32) bool, h Handler) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		path: path, ln: ln, authorize: authorize, h: h,
+		path: path, ln: ln, identify: identify, authorize: authorize, h: h,
 		ctx: ctx, cancel: cancel,
-		conns: make(map[*net.UnixConn]struct{}),
+		conns: make(map[net.Conn]struct{}),
 	}
 	s.wg.Add(1)
 	go s.acceptLoop()
@@ -127,7 +138,7 @@ func (s *Server) acceptLoop() {
 	defer s.wg.Done()
 	var backoff time.Duration
 	for {
-		c, err := s.ln.AcceptUnix()
+		c, err := s.ln.Accept()
 		if err != nil {
 			if s.ctx.Err() != nil {
 				return // closed
@@ -152,7 +163,7 @@ func (s *Server) acceptLoop() {
 }
 
 // track registers c and counts its goroutine, unless the server is closing.
-func (s *Server) track(c *net.UnixConn) bool {
+func (s *Server) track(c net.Conn) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -163,18 +174,18 @@ func (s *Server) track(c *net.UnixConn) bool {
 	return true
 }
 
-func (s *Server) untrack(c *net.UnixConn) {
+func (s *Server) untrack(c net.Conn) {
 	s.mu.Lock()
 	delete(s.conns, c)
 	s.mu.Unlock()
 	c.Close()
 }
 
-func (s *Server) serveConn(c *net.UnixConn) {
+func (s *Server) serveConn(c net.Conn) {
 	defer s.wg.Done()
 	defer s.untrack(c)
 
-	uid, err := peerUID(c)
+	uid, err := s.identify(c)
 	if err != nil || !s.authorize(uid) {
 		s.write(c, ErrorResponse("", Errorf(CodeNotAuthorized,
 			"this user is not allowed to control mergelane-daemon")))
@@ -210,7 +221,7 @@ func (s *Server) handle(line []byte) Response {
 	return Dispatch(s.ctx, s.h, req)
 }
 
-func (s *Server) write(c *net.UnixConn, resp Response) error {
+func (s *Server) write(c net.Conn, resp Response) error {
 	b, err := EncodeResponse(resp)
 	if err != nil {
 		return err

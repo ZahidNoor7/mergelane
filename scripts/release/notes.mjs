@@ -37,7 +37,8 @@ export const DEFAULTS = {
 export const USAGE = [
   'usage: node scripts/release/notes.mjs --version <x.y.z> --check',
   '       node scripts/release/notes.mjs --version <x.y.z> --checksums <SHA256SUMS> [--out <file>]',
-  'options: --changelog <file> --readme <file> --manifest <tools.json> --package <package.json>'
+  'options: --changelog <file> --readme <file> --manifest <tools.json> --windows-manifest <tools-windows-x64.json>',
+  '         --package <package.json>'
 ].join('\n')
 
 /** A Semantic Versioning version without build metadata: 1.2.3 or 1.2.3-beta.1. */
@@ -51,6 +52,14 @@ export function assetNames(version) {
   return {
     dmg: `Mergelane-${version}-arm64.dmg`,
     zip: `Mergelane-${version}-arm64-mac.zip`
+  }
+}
+
+/** The Windows installers a release carries, one per chip (W4, ADR-0058; electron-builder.yml nsis). */
+export function windowsAssetNames(version) {
+  return {
+    x64: `Mergelane-${version}-x64-setup.exe`,
+    arm64: `Mergelane-${version}-arm64-setup.exe`
   }
 }
 
@@ -157,11 +166,14 @@ export function parseChecksums(text) {
  * The files the notes point to that the checksum file doesn't list: the DMG and the zip, and, given
  * the media-tools manifest, every source archive and build script the notes say are attached.
  */
-export function missingAssets(entries, version, manifest) {
+export function missingAssets(entries, version, manifest, windowsManifest) {
   const listed = new Set(entries.map(({ file }) => file))
   const expected = Object.values(assetNames(version))
   if (manifest !== undefined) expected.push(...sourceAssets(manifest))
-  return expected.filter((file) => !listed.has(file))
+  if (windowsManifest !== undefined) {
+    expected.push(...Object.values(windowsAssetNames(version)), ...sourceAssets(windowsManifest))
+  }
+  return [...new Set(expected)].filter((file) => !listed.has(file))
 }
 
 export function checksumTable(entries) {
@@ -187,7 +199,7 @@ function toolsOf(manifest) {
 export function sourceAssets(manifest) {
   return toolsOf(manifest).flatMap((tool) => {
     const names = releaseSourceNames(tool)
-    return names === null ? [] : [names.source, names.buildScript].filter(Boolean)
+    return names === null ? [] : [names.source, names.buildScript, ...names.inputs].filter(Boolean)
   })
 }
 
@@ -259,14 +271,32 @@ asks for your administrator password once to install it. To remove it, with its 
 \`sudo /Library/PrivilegedHelperTools/io.github.zahidnoor7.mergelane.daemon uninstall\` in Terminal.`
 }
 
+/** The Windows install section, for a release that carries the Windows installers. */
+export function windowsInstallSection(version) {
+  const { x64, arm64 } = windowsAssetNames(version)
+  return `## Install on Windows
+
+Windows 10 or 11, on an Intel or AMD PC (x64) or an Arm PC (arm64). Settings › System › About shows which:
+"System type".
+
+1. Download \`${x64}\` (Intel or AMD) or \`${arm64}\` (Arm) from the files below.
+2. Open it. Mergelane isn't signed yet, so Windows may say it protected your PC: click **More info**, then
+   **Run anyway**. It installs for you only, with no administrator password, and opens Mergelane.
+3. If Smart App Control is On (Windows Security › App & browser control), Windows blocks unsigned apps such as
+   this one, and there is no way round it.
+
+Later versions install from inside the app (Settings › Updates). To remove Mergelane, search the Start menu for
+**Add or remove programs** and uninstall it there.`
+}
+
 /** The complete release notes, as Markdown. */
-export function buildNotes({ version, changes, limits, checksums, manifest }) {
+export function buildNotes({ version, changes, limits, checksums, manifest, windows = false }) {
   return `## What's new
 
 ${changes}
 
 ${installSection(version)}
-
+${windows ? `\n${windowsInstallSection(version)}\n` : ''}
 ## What to expect (honest limits)
 
 ${limits}
@@ -275,17 +305,27 @@ ${limits}
 
 ${checksumTable(checksums)}
 
-To check a download, run \`shasum -a 256 <file>\` in Terminal and compare the result with this table.
+To check a download, run \`shasum -a 256 <file>\` in Terminal and compare the result with this table.${
+    windows
+      ? '\nOn Windows, run \`Get-FileHash <file>\` in PowerShell (it uses SHA-256 unless told otherwise).'
+      : ''
+  }
 The same list is attached as \`SHA256SUMS\`.
 
 ## Open-source programs inside the app
 
 Mergelane's own code is MIT-licensed. For video, the app also contains these programs, each shipped as
 a separate executable under its own licence. Their licence texts are inside the app in
-\`Mergelane.app/Contents/Resources/licenses/\`, and \`THIRD-PARTY-NOTICES.md\` lists every notice.
+\`Mergelane.app/Contents/Resources/licenses/\`${
+    windows ? " (on Windows, in the app's \`resources\\licenses\\\` folder)" : ''
+  }, and \`THIRD-PARTY-NOTICES.md\` lists every notice.
 The source code of each program under the GPL or the LGPL is attached to this release, exactly as it
 went into the app, with the script that built it where Mergelane builds the program itself. The
-upstream links are given as well.
+upstream links are given as well.${
+    windows
+      ? "\nThe Windows FFmpeg is built from the same source by its own script, with zlib linked in; that script\nand zlib's source are attached too."
+      : ''
+  }
 
 ${bundledPrograms(manifest)}
 `
@@ -322,6 +362,7 @@ function parseCli(argv) {
         changelog: { type: 'string' },
         readme: { type: 'string' },
         manifest: { type: 'string' },
+        'windows-manifest': { type: 'string' },
         package: { type: 'string' }
       }
     })
@@ -356,7 +397,10 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
 
     const checksums = parseChecksums(readText(options.checksums, 'the checksum file'))
     const manifest = readJson(options.manifest, 'the media-tools manifest')
-    const missing = missingAssets(checksums, version, manifest)
+    const windowsManifest = options['windows-manifest']
+      ? readJson(options['windows-manifest'], 'the Windows media-tools manifest')
+      : undefined
+    const missing = missingAssets(checksums, version, manifest, windowsManifest)
     if (missing.length > 0) throw new Error(`the checksum file does not list ${missing.join(' or ')}`)
     const limits = honestLimits(readText(options.readme, 'the README'))
     if (!limits) throw new Error('README.md has no "## ... (honest limits)" section to copy')
@@ -365,7 +409,8 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
       changes: changelogSection(changelog, version),
       limits,
       checksums,
-      manifest
+      manifest,
+      windows: windowsManifest !== undefined
     })
     if (options.out) {
       writeFileSync(options.out, notes)

@@ -27,6 +27,7 @@ import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
 import { SpeedUnitToggle } from '../components/SpeedUnitToggle'
 import { DiagnosticsSettings } from '../components/DiagnosticsSettings'
+import { onWindows, words } from '../platformWords'
 import { ExtensionSettings } from '../components/ExtensionSettings'
 import { OnThisMacSettings } from '../components/OnThisMacSettings'
 import { SettingRow, SettingsGroup } from '../components/settingsParts'
@@ -165,7 +166,9 @@ function GeneralSettings(): React.JSX.Element {
           hint={
             speedUnit === 'bits'
               ? 'Megabits per second, the way internet providers quote speeds. 8 Mbps is 1 MB/s.'
-              : 'Megabytes per second, dropping to KB/s below 1 MB/s. Matches the sizes Finder shows.'
+              : onWindows()
+                ? 'Megabytes per second, dropping to KB/s below 1 MB/s.'
+                : 'Megabytes per second, dropping to KB/s below 1 MB/s. Matches the sizes Finder shows.'
           }
         >
           <SpeedUnitToggle />
@@ -337,6 +340,8 @@ function AppearanceSettings(): React.JSX.Element {
   const macDark = usePrefersDark()
   const dark = themeSource === 'dark' || (themeSource === 'system' && macDark)
   const titleId = useId()
+  // Liquid Glass is macOS's design language: Windows doesn't offer it (the design's Windows 11 study).
+  const themes = onWindows() ? THEMES.filter((theme) => theme.id !== 'liquid') : THEMES
   return (
     <>
       <SettingsGroup title="Light or dark">
@@ -344,8 +349,8 @@ function AppearanceSettings(): React.JSX.Element {
           label="Appearance"
           hint={
             themeSource === 'system'
-              ? `Follows your Mac, which is ${macDark ? 'dark' : 'light'} right now.`
-              : `Always ${themeSource}, whatever your Mac uses.`
+              ? `Follows ${words().appearanceSource}, which is ${macDark ? 'dark' : 'light'} right now.`
+              : `Always ${themeSource}, whatever ${words().appearanceSource} uses.`
           }
         >
           <ToggleGroup
@@ -381,7 +386,7 @@ function AppearanceSettings(): React.JSX.Element {
           aria-labelledby={titleId}
           className="grid grid-cols-1 gap-3 @min-[448px]:grid-cols-2 @min-[768px]:grid-cols-3"
         >
-          {THEMES.map((theme) => {
+          {themes.map((theme) => {
             const on = appearanceTheme === theme.id
             return (
               <label
@@ -425,7 +430,14 @@ function AppearanceSettings(): React.JSX.Element {
         </div>
       </section>
 
-      {appearanceTheme === 'liquid' && <GlassSettings />}
+      {onWindows() ? (
+        <p className="max-w-[64ch] px-1 text-[12.5px] leading-[1.5] text-ink-3">
+          Liquid Glass is macOS’s design language, so it’s only offered on the Mac. On Windows every
+          theme sits on Mica, the material Windows 11 uses behind app windows.
+        </p>
+      ) : (
+        appearanceTheme === 'liquid' && <GlassSettings />
+      )}
 
       <SettingsGroup
         title="Network colours in this theme"
@@ -457,7 +469,8 @@ function AppearanceSettings(): React.JSX.Element {
   )
 }
 
-/** Whether the Mac has Reduce Transparency on (System Settings › Accessibility › Display). */
+/** Whether the system asks for less transparency: the Mac's Reduce Transparency (System Settings ›
+ * Accessibility › Display), or Windows' Transparency effects turned off. */
 function useSystemReducedTransparency(): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -579,7 +592,7 @@ function DownloadSettings(): React.JSX.Element {
         <SettingRow
           label="Offer links I copy"
           htmlFor={offerId}
-          hint="When you switch to Mergelane, a link you copied in another app is offered for download. Mergelane looks at what you copied only then. macOS may ask once to allow it."
+          hint={`When you switch to Mergelane, a link you copied in another app is offered for download. Mergelane looks at what you copied only then.${onWindows() ? '' : ' macOS may ask once to allow it.'}`}
         >
           <Switch id={offerId} checked={offerCopiedLinks} onCheckedChange={setOfferCopiedLinks} />
         </SettingRow>

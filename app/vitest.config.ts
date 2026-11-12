@@ -10,6 +10,20 @@ import { defineConfig } from 'vitest/config'
 // the list in the pull request that changes it, so new and reworked code is held to the floor
 // while untouched upstream files are not counted against it.
 export const COVERED = [
+  // Windows (W1): which adapters are networks, and of what kind.
+  'src/shared/windowsAdapters.ts',
+  'src/shared/loginItem.ts',
+  'src/shared/windowMaterial.ts',
+  'src/renderer/src/platformWords.ts',
+  // Windows (W2): the browser bridge's pipe, and the browsers on Windows.
+  'src/shared/browserPipe.ts',
+  'src/shared/browsers.ts',
+  // Windows (W5): the system-wide helper's install through the administrator prompt.
+  'src/shared/windowsHelper.ts',
+  // Windows (W7): the notification-area icon's flyout and menu (ADR-0061).
+  'src/shared/trayFlyout.ts',
+  'src/renderer/src/components/TrayFlyout.tsx',
+  'src/renderer/src/hooks/useTrayStatus.ts',
   'src/renderer/src/theme.ts',
   'src/renderer/src/components/ui/switch.tsx',
   'src/shared/themes.ts',

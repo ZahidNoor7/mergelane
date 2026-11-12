@@ -27,6 +27,25 @@ export const TOOL_PROGRAM: Readonly<Record<MediaTool, string>> = {
   deno: 'deno'
 }
 
+/** The same on Windows (W3), by chip: `.exe` programs, and yt-dlp's unpacked Windows build, its
+ * program beside its `_internal` folder (named yt-dlp_arm64.exe in the arm64 build). Keep these in
+ * step with scripts/media-tools/tools-windows-<chip>.json and the win section of
+ * app/electron-builder.yml. */
+export const WINDOWS_TOOL_PROGRAM: Readonly<Record<'x64' | 'arm64', Record<MediaTool, string>>> = {
+  x64: { ffmpeg: 'ffmpeg.exe', 'yt-dlp': 'yt-dlp/yt-dlp.exe', deno: 'deno.exe' },
+  arm64: { ffmpeg: 'ffmpeg.exe', 'yt-dlp': 'yt-dlp/yt-dlp_arm64.exe', deno: 'deno.exe' }
+}
+
+/** A tool's program for a platform and chip. */
+export function toolProgram(
+  tool: MediaTool,
+  platform: string = process.platform,
+  arch: string = process.arch
+): string {
+  if (platform !== 'win32') return TOOL_PROGRAM[tool]
+  return WINDOWS_TOOL_PROGRAM[arch === 'arm64' ? 'arm64' : 'x64'][tool]
+}
+
 const TOOL_LABEL: Readonly<Record<MediaTool, string>> = {
   ffmpeg: 'FFmpeg',
   'yt-dlp': 'yt-dlp',
@@ -46,6 +65,10 @@ export interface ToolLocations {
   appRoot: string
   /** Defaults to `process.env`. Never read when packaged. */
   env?: NodeJS.ProcessEnv
+  /** Defaults to `process.platform` and `process.arch`: which program names to look for
+   * ({@link toolProgram}). */
+  platform?: string
+  arch?: string
 }
 
 /** Which rule picked the path: the environment override, the app bundle, or the development
@@ -69,6 +92,7 @@ async function problemWith(path: string): Promise<string | null> {
   try {
     await access(path, constants.X_OK)
   } catch {
+    // On Windows X_OK is checked as F_OK (Node's fs.access), so this is macOS only.
     return `at ${path} is not executable`
   }
   return null
@@ -112,10 +136,15 @@ export async function resolveToolPath(
     }
   } else if (where.isPackaged) {
     source = 'packaged'
-    candidate = join(where.resourcesPath, TOOL_PROGRAM[tool])
+    candidate = join(where.resourcesPath, toolProgram(tool, where.platform, where.arch))
   } else {
     source = 'development'
-    candidate = join(where.appRoot, 'resources', 'bin', TOOL_PROGRAM[tool])
+    candidate = join(
+      where.appRoot,
+      'resources',
+      'bin',
+      toolProgram(tool, where.platform, where.arch)
+    )
   }
 
   const problem = await problemWith(candidate)

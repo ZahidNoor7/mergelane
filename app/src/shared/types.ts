@@ -732,6 +732,9 @@ export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
 export interface InitialState {
+  /** The platform the window is drawn for, when a test run asks for another (main/testKnobs.ts
+   * rendererPlatform); absent, it is this computer's. */
+  rendererPlatform?: string
   downloadSchedule?: DownloadSchedule
   homeDir: string
   downloadsDir: string

@@ -1,16 +1,18 @@
 import { execFile } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { cpus, homedir, machine, release, totalmem, userInfo } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { app, dialog, shell, type BrowserWindow } from 'electron'
 import {
   buildDiagnostics,
   diagnosticsFileName,
-  diagnosticsReadme,
-  redactLog,
   type DiagnosticsInput,
-  type RedactionContext
+  diagnosticsReadme,
+  helperLogPath,
+  type RedactionContext,
+  redactLog,
+  zipCommand
 } from '../shared/diagnostics'
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { DownloadUpdate } from '../shared/types'
@@ -39,7 +41,7 @@ export function registerDiagnostics(given: Sources): void {
   sources = given
 }
 
-const HELPER_LOG = '/Library/Logs/Mergelane/daemon.log'
+const HELPER_LOG = helperLogPath(process.platform, process.env['ProgramData'])
 /** The most of the helper's log read: its end, which holds the newest lines. */
 const LOG_TAIL_BYTES = 64 * 1024
 
@@ -116,9 +118,9 @@ async function gather(now: number): Promise<DiagnosticsInput> {
   }
 }
 
-/** Builds the bundle and writes it to `target` as a zip: a folder of files is zipped by macOS's
- * own ditto in a temporary folder, then copied into place, so a failure leaves nothing half
- * written where the user asked for it. */
+/** Builds the bundle and writes it to `target` as a zip: a folder of files is zipped by the
+ * system's own tool (shared/diagnostics.ts zipCommand) in a temporary folder, then copied into
+ * place, so a failure leaves nothing half written where the user asked for it. */
 export async function writeDiagnostics(target: string, now = Date.now()): Promise<void> {
   const context = redactionContext()
   const [input, log] = await Promise.all([gather(now), helperLogTail()])
@@ -127,21 +129,22 @@ export async function writeDiagnostics(target: string, now = Date.now()): Promis
   try {
     const folder = join(work, diagnosticsFileName(now).replace(/\.zip$/, ''))
     await mkdir(folder)
-    await writeFile(join(folder, 'README.txt'), diagnosticsReadme(now, log !== null))
+    await writeFile(
+      join(folder, 'README.txt'),
+      diagnosticsReadme(now, log !== null, process.platform)
+    )
     await writeFile(join(folder, 'diagnostics.json'), `${JSON.stringify(report, null, 2)}\n`)
     if (log !== null)
       await writeFile(join(folder, 'helper-log.txt'), `${redactLog(log, context)}\n`)
     const zip = join(work, 'bundle.zip')
-    // -c -k: a PKZip archive; --norsrc: no resource forks or extended attributes; --keepParent:
-    // the folder itself at the archive's root (man ditto).
-    await promisify(execFile)('/usr/bin/ditto', [
-      '-c',
-      '-k',
-      '--norsrc',
-      '--keepParent',
-      folder,
-      zip
-    ])
+    const [zipper, args] = zipCommand(
+      process.platform,
+      work,
+      basename(folder),
+      zip,
+      process.env['SystemRoot']
+    )
+    await promisify(execFile)(zipper, args, { windowsHide: true })
     await copyFile(zip, target)
   } finally {
     await rm(work, { recursive: true, force: true })

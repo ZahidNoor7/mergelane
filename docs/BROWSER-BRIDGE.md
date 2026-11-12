@@ -42,6 +42,33 @@ Uses Chrome's native messaging, verified against
   - It then retries the connection every 250 ms for up to 10 s.
   - `MERGELANE_NMHOST_NO_LAUNCH=1` disables the launch, for tests.
 
+## On Windows (W2, ADR-0056)
+
+The protocol is the same; how the three find each other differs.
+
+- **Registration:** the app keeps two manifests, `NativeMessagingHosts\chrome.json` and `firefox.json`, in its own
+  folder (`%APPDATA%\Mergelane`). For each installed browser whose maker documents a key, it writes
+  `HKCU\<key>\io.github.zahidnoor7.mergelane` with the manifest's path as the default value, on every start, as
+  the browsers' docs give it (`reg add … /ve /t REG_SZ /d <manifest> /f`):
+  - Chrome: `Software\Google\Chrome\NativeMessagingHosts` (developer.chrome.com);
+  - Edge: `Software\Microsoft\Edge\NativeMessagingHosts` (learn.microsoft.com);
+  - Firefox: `Software\Mozilla\NativeMessagingHosts` (developer.mozilla.org).
+  - Chromium, Brave and Vivaldi document no Windows key, so they aren't supported there yet.
+  - A run with its own `--user-data-dir` (the test kit) registers nothing. The uninstaller removes the keys and the manifests
+    (`app/build/installer.nsh`, ADR-0058).
+- **Arguments:** Chrome and Edge also pass `--parent-window=<handle>` after the origin. The host ignores it.
+- **The pipe:** the app serves the bridge on a named pipe, `\\.\pipe\mergelane-browser-<16 hex digits>`: the
+  SHA-256 of its folder's path with A-Z lowercased (`app/src/shared/browserPipe.ts`, `daemon/internal/nmhost/pipe.go`
+  and the test kit, all tested against `shared/fixtures/browser-pipe.json`). The default security of a named pipe
+  gives other users read access only, so they can't send a request (Microsoft Learn, "Named Pipe Security and
+  Access Rights"). The host opens the pipe as an overlapped file, which Go makes pollable, so the reply timeout
+  works (`go doc os.NewFile`).
+- **Browser:** `browser` is the full path of the parent process (`QueryFullProcessImageName`). Edge may start the
+  host through `cmd.exe`, which then shows instead.
+- **Wake:** the host starts `Mergelane.exe` from the folder above its own (`<install>\resources\..`), with
+  `CREATE_BREAKAWAY_FROM_JOB`: the browser puts the host in a job object and ends the job (MDN, "Native
+  messaging"). If the job forbids breaking away, it starts it inside the job instead.
+
 ## Messages (extension → app) and answers
 
 | Message | Answer |

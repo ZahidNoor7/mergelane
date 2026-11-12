@@ -4,6 +4,7 @@ import type { IpcContract } from '../shared/ipc-contract'
 import type { BrowserId } from '../shared/browsers'
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { UpdateChannel } from '../shared/releases'
+import type { TrayStatus } from '../shared/trayFlyout'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -24,10 +25,15 @@ function invoke<K extends keyof IpcContract>(
   return ipcRenderer.invoke(IpcChannels[channel], ...args)
 }
 
+// Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
+const initialState = ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState
+
 const mergelaneApi = {
-  platform: process.platform,
-  // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
-  initialState: ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
+  // The window is drawn for this platform: this computer's, unless a test run asks for Windows'.
+  platform: initialState.rendererPlatform ?? process.platform,
+  /** "10.0.22631" on Windows: which system backdrops it can draw (shared/windowMaterial.ts). */
+  systemVersion: process.getSystemVersion(),
+  initialState,
 
   listInterfaces: () => invoke('listInterfaces'),
   deviceBindingSupported: () => invoke('deviceBindingSupported'),
@@ -99,6 +105,27 @@ const mergelaneApi = {
   networkActivity: () => invoke('networkActivity'),
   saveDiagnostics: () => invoke('saveDiagnostics'),
   revealDiagnostics: () => invoke('revealDiagnostics'),
+  pauseAllDownloads: () => invoke('pauseAllDownloads'),
+  openMainWindow: () => invoke('openMainWindow'),
+  publishTrayStatus: (status: TrayStatus) => invoke('publishTrayStatus', status),
+  trayStatus: () => invoke('trayStatus'),
+  resizeTrayFlyout: (height: number) => invoke('resizeTrayFlyout', height),
+  closeTrayFlyout: () => invoke('closeTrayFlyout'),
+
+  /** The notification area's menu: show Settings, or the Networks place. */
+  onShowPlace: (callback: (place: 'settings' | 'networks') => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, place: 'settings' | 'networks'): void =>
+      callback(place)
+    ipcRenderer.on(IpcChannels.showPlace, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.showPlace, listener)
+  },
+
+  /** The flyout's content changed (the window published a new status). */
+  onTrayStatus: (callback: (status: TrayStatus) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, status: TrayStatus): void => callback(status)
+    ipcRenderer.on(IpcChannels.trayStatusChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.trayStatusChanged, listener)
+  },
 
   /** A network dropped or came back, or the day's fastest merged speed rose. */
   onNetworkActivity: (callback: (activity: NetworkActivity) => void): (() => void) => {

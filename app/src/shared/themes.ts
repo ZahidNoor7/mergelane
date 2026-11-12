@@ -1,3 +1,4 @@
+import { formatHex, mix, parseHex } from './colour'
 /**
  * The app's themes (ADR-0034), as in the owner's final design
  * (design-system/mergelane/redesign/prototype.html, ML_THEMES). Each theme is a handful of seed colours for
@@ -333,6 +334,26 @@ export function themeById(id: unknown): (typeof THEMES)[number] {
 export function windowBackground(themeId: unknown, dark: boolean): string {
   const theme = themeById(themeId)
   return dark ? theme.dark.bg : theme.light.bg
+}
+
+/** Liquid Glass is macOS's design language, so Windows doesn't offer it: a saved choice of it shows as
+ * Porcelain there (the design's Windows 11 study, ADR-0060). Every other theme is the same on both. */
+export function themeOnPlatform(id: ThemeId, platform: string): ThemeId {
+  return platform === 'win32' && id === 'liquid' ? DEFAULT_THEME_ID : id
+}
+
+/** The window's ground on Windows, behind the title bar and the navigation pane, where Windows 11 has no
+ * Mica to draw: the theme's window colour with a hint of its accent, as Mica tints toward the wallpaper
+ * (color-mix(in oklab, window 93%, accent), as the design draws it). */
+export function windowsGround(themeId: unknown, dark: boolean): string {
+  const seeds = dark ? themeById(themeId).dark : themeById(themeId).light
+  return formatHex(mix(parseHex(seeds.window), 93, parseHex(seeds.accent)))
+}
+
+/** The theme's ink for the mode: the colour Windows draws its window buttons' symbols in. */
+export function windowInk(themeId: unknown, dark: boolean): string {
+  const theme = themeById(themeId)
+  return dark ? theme.dark.text : theme.light.text
 }
 
 /** Colours a user can pick for a network (renderer theme.ts NETWORK_COLOR_SWATCHES), the same in

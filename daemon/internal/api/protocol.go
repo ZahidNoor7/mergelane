@@ -34,9 +34,6 @@ import (
 // ProtocolVersion is the "v" every message carries.
 const ProtocolVersion = 1
 
-// SocketPath is where the daemon listens (ADR-0005).
-const SocketPath = "/var/run/mergelane/daemon.sock"
-
 // MaxLineBytes is the longest request line the daemon reads, not counting the newline. A longer
 // line is answered with BAD_REQUEST and the connection is closed, because the stream can no longer
 // be split into messages reliably.

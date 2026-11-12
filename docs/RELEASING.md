@@ -35,17 +35,22 @@ test take about 10 minutes in all.
    3. builds both helpers stamped with the version, fetches yt-dlp and Deno and builds FFmpeg, and builds the DMG and
       the zip into a fresh `app/dist`;
    4. audits the Electron fuses, runs the packaging test in its local mode (below), and checks the app in the zip;
-   5. collects the bundled programs' sources into `app/dist/sources`, writes `app/dist/SHA256SUMS` and
-      `app/dist/release-notes.md`;
-   6. lists what it would upload, with sizes and SHA-256s, and the exact `gh` command.
+   5. builds the Windows installers on this Mac (ADR-0058): the Windows helpers for x64 and arm64, the Windows media
+      tools (yt-dlp, Deno, and FFmpeg built for each chip), one installer per chip, and `check-build.mjs`, which
+      reads them without running them (each program's chip, the version, the fuses);
+   6. collects the bundled programs' sources (the Windows ones too) into `app/dist/sources`, writes
+      `app/dist/SHA256SUMS` and `app/dist/release-notes.md`;
+   7. lists what it would upload, with sizes and SHA-256s, and the exact `gh` command.
 4. If you're happy, run it again with `--upload`. It repeats every check and step, then runs
-   `gh release create v1.2.3 --draft --target <commit> ...` with the DMG, the zip, `SHA256SUMS` and the sources.
+   `gh release create v1.2.3 --draft --target <commit> ...` with the DMG, the zip, the two Windows installers,
+   `SHA256SUMS` and the sources.
 5. Review the draft and publish it by hand (steps 5 and 6 below).
 
 **A dry run on any branch.** `--skip-branch-checks` skips the two branch checks (on `main` at `origin/main`, nothing
 uncommitted), and `--changelog <file>` reads another changelog (for example one with a section for a version that
-`CHANGELOG.md` doesn't have yet). Both exist only to try the build before a release; they are refused together with
-`--upload`, and the output says DRY RUN. A build made that way must not be released.
+`CHANGELOG.md` doesn't have yet). `--mac-only` leaves the Windows installers out, for a quicker try. All three exist
+only to try the build before a release; they are refused together with `--upload`, and the output says DRY RUN. A
+build made that way must not be released.
 
 The tests (no build, no upload): `node --test --experimental-test-coverage
 --test-coverage-include='scripts/release/local-release.mjs' scripts/release/local-release.test.mjs`. They also fail when
@@ -127,12 +132,15 @@ on GitHub's macOS 27 runner (`xcode-27`) and:
 5. audits the Electron fuses with REA (ADR-0016);
 6. installs the DMG the way a user does, launches it and waits until it reports ready (`scripts/ci/package-test.sh`,
    ADR-0013), then checks the app inside the zip as well;
-7. collects the source code the bundled programs' licences ask us to offer (ADR-0027) with
-   `scripts/media-tools/sources.mjs`: yt-dlp's source tarball, FFmpeg's source tarball and FFmpeg's build script, each
-   checked against its pinned SHA-256;
-8. computes `SHA256SUMS` for the DMG, the zip and those source files;
-9. writes the release notes with `scripts/release/notes.mjs`;
-10. creates the release `v<version>` with the DMG, the zip, `SHA256SUMS` and the source files attached.
+7. builds the Windows helpers, the Windows media tools and the two Windows installers, and checks them with
+   `scripts/windows/check-build.mjs` (ADR-0058);
+8. collects the source code the bundled programs' licences ask us to offer (ADR-0027) with
+   `scripts/media-tools/sources.mjs`: yt-dlp's source tarball, FFmpeg's source tarball and FFmpeg's build scripts
+   (macOS and Windows), and zlib's source (linked into the Windows FFmpeg), each checked against its pinned SHA-256;
+9. computes `SHA256SUMS` for the DMG, the zip, the Windows installers and those source files;
+10. writes the release notes with `scripts/release/notes.mjs`, with the Windows install steps;
+11. creates the release `v<version>` with the DMG, the zip, the Windows installers, `SHA256SUMS` and the source files
+    attached.
 
 If any step fails, nothing is uploaded.
 
@@ -213,10 +221,13 @@ shows the release notes once they're written.
 Open the repository's **Releases** page. The draft `v1.2.3` is visible only to people with write access. Check:
 
 - the notes read well, and the install steps and checksums are there;
-- six files are attached: `Mergelane-1.2.3-arm64.dmg`, `Mergelane-1.2.3-arm64-mac.zip`, `SHA256SUMS`, and the source
-  files: `yt-dlp-<version>-source.tar.gz`, `ffmpeg-<version>-source.tar.xz` and `ffmpeg-<version>-build-ffmpeg.sh`
-  (with the versions in `tools.json`, for example `ffmpeg-9.0.2-source.tar.xz`);
-- ideally, download the DMG and install it on your own Mac following the notes, to see what users will see.
+- ten files are attached: `Mergelane-1.2.3-arm64.dmg`, `Mergelane-1.2.3-arm64-mac.zip`,
+  `Mergelane-1.2.3-x64-setup.exe`, `Mergelane-1.2.3-arm64-setup.exe`, `SHA256SUMS`, and the source files:
+  `yt-dlp-<version>-source.tar.gz`, `ffmpeg-<version>-source.tar.xz`, `ffmpeg-<version>-build-ffmpeg.sh`,
+  `ffmpeg-<version>-build-ffmpeg-windows.sh` and `zlib-<version>.tar.gz` (with the versions in the manifests, for
+  example `ffmpeg-9.0.2-source.tar.xz`);
+- ideally, download the DMG and install it on your own Mac following the notes, to see what users will see, and
+  install the Windows installer on a Windows PC the same way.
 
 You can edit the notes in the draft directly.
 

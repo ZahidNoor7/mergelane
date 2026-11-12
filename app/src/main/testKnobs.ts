@@ -68,6 +68,9 @@ export const testKnobs = {
   loginItemStatus: env['MERGELANE_E2E_LOGIN_ITEM'],
   /** How long after launch the daily update check first looks whether a check is due. */
   updateFirstCheckMs: positiveNumber('MERGELANE_E2E_UPDATE_FIRST_CHECK_MS', 10_000),
+  /** `MERGELANE_E2E_RENDERER_PLATFORM=win32` draws the window as on Windows (the renderer's platform only;
+   * main still runs as on this Mac), so the Windows 11 look is tested here (e2e/windowsLook.spec.ts). */
+  rendererPlatform: env['MERGELANE_E2E_RENDERER_PLATFORM'] === 'win32' ? 'win32' : undefined,
   /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */
   torrentDht: env['MERGELANE_E2E_DHT'] !== '0',
   /** `MERGELANE_E2E_DHT_BOOTSTRAP=127.0.0.1:9` starts the DHT from these nodes instead of the

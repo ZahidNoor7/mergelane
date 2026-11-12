@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -51,23 +50,6 @@ func (fakeHandler) Events(context.Context) (api.EventsResult, error) {
 	return api.EventsResult{Events: []api.LinkEvent{
 		{At: time.Date(2026, 11, 10, 9, 41, 7, 0, time.Local), Link: "en0", From: api.LinkUp, To: api.LinkDown, Reason: api.EventProbeFailed},
 	}}, nil
-}
-
-// serve starts the control API on a short temp socket path (sun_path is 104 bytes on macOS).
-func serve(t *testing.T, h api.Handler) string {
-	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "mld")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	path := filepath.Join(dir, "s")
-	srv, err := api.Listen(path, 0o600, func(uint32) bool { return true }, h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { srv.Close() })
-	return path
 }
 
 func run(cmd string, args ...string) (int, string, string) {

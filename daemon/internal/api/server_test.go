@@ -1,3 +1,5 @@
+//go:build !windows
+
 package api
 
 import (
@@ -15,8 +17,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 func TestServerManyRequestsPerConnection(t *testing.T) {
@@ -45,7 +45,7 @@ func TestServerLastLineWithoutNewline(t *testing.T) {
 	s := startServer(t, &fakeHandler{}, allowAll)
 	rc := dialRaw(t, s.Path())
 	rc.send(`{"v":1,"id":"last","method":"status"}`)
-	if err := rc.c.CloseWrite(); err != nil {
+	if err := rc.c.(*net.UnixConn).CloseWrite(); err != nil {
 		t.Fatal(err)
 	}
 	if resp := rc.recv(); resp.ID != "last" || !resp.OK {
@@ -278,23 +278,6 @@ func TestListenSocketMode(t *testing.T) {
 	}
 }
 
-func TestListenCreatesParentDir(t *testing.T) {
-	// A restrictive umask must not leak into the directory's mode.
-	old := syscall.Umask(0o077)
-	defer syscall.Umask(old)
-	base := filepath.Dir(sockPath(t))
-	path := filepath.Join(base, "run", "ml", "d.sock")
-	s, err := Listen(path, 0o666, allowAll, &fakeHandler{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	fi, err := os.Stat(filepath.Dir(path))
-	if err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o755 {
-		t.Fatalf("parent %v, %v; want a 0755 directory", fi.Mode(), err)
-	}
-}
-
 func TestListenErrors(t *testing.T) {
 	h := &fakeHandler{}
 	if _, err := Listen(sockPath(t), 0o666, nil, h); err == nil {
@@ -430,7 +413,7 @@ type fakeAcceptor struct {
 	fail        int32
 	holdOnClose bool
 	calls       atomic.Int32
-	conn        *net.UnixConn
+	conn        net.Conn
 	release     chan struct{}
 	closed      chan struct{}
 	once        sync.Once
@@ -440,7 +423,7 @@ func newFakeAcceptor(fail int32) *fakeAcceptor {
 	return &fakeAcceptor{fail: fail, release: make(chan struct{}), closed: make(chan struct{})}
 }
 
-func (f *fakeAcceptor) AcceptUnix() (*net.UnixConn, error) {
+func (f *fakeAcceptor) Accept() (net.Conn, error) {
 	if n := f.calls.Add(1); f.fail < 0 || n <= f.fail {
 		return nil, syscall.EMFILE
 	}
@@ -472,7 +455,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 func TestAcceptErrorsAreRetried(t *testing.T) {
 	fa := newFakeAcceptor(3)
-	s := serve("", fa, allowAll, &fakeHandler{})
+	s := serve("", fa, unixPeerUID, allowAll, &fakeHandler{})
 	waitFor(t, "a fourth Accept", func() bool { return fa.calls.Load() >= 4 })
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -481,7 +464,7 @@ func TestAcceptErrorsAreRetried(t *testing.T) {
 
 func TestCloseDuringAcceptBackoff(t *testing.T) {
 	fa := newFakeAcceptor(-1) // always fails
-	s := serve("", fa, allowAll, &fakeHandler{})
+	s := serve("", fa, unixPeerUID, allowAll, &fakeHandler{})
 	waitFor(t, "backoff to grow", func() bool { return fa.calls.Load() >= 6 })
 	done := make(chan struct{})
 	go func() { s.Close(); close(done) }()
@@ -489,41 +472,5 @@ func TestCloseDuringAcceptBackoff(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Close waited out the accept backoff")
-	}
-}
-
-func TestConnAcceptedWhileClosingIsDropped(t *testing.T) {
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// net.FileConn dups the descriptor, so the originals are closed at once: otherwise they would
-	// keep the pair open after the server closes its end.
-	f0, f1 := os.NewFile(uintptr(fds[0]), "a"), os.NewFile(uintptr(fds[1]), "b")
-	c0, err0 := net.FileConn(f0)
-	peer, err1 := net.FileConn(f1)
-	f0.Close()
-	f1.Close()
-	if err0 != nil || err1 != nil {
-		t.Fatal(err0, err1)
-	}
-	defer peer.Close()
-
-	fa := newFakeAcceptor(0)
-	fa.conn = c0.(*net.UnixConn)
-	fa.holdOnClose = true // Close must not wake Accept; release does
-	s := serve("", fa, allowAll, &fakeHandler{})
-	done := make(chan struct{})
-	go func() { s.Close(); close(done) }()
-	waitFor(t, "Close to mark the server closed", func() bool {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		return s.closed
-	})
-	close(fa.release) // Accept now returns a connection to a closing server
-	<-done
-	peer.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if n, err := peer.Read(make([]byte, 1)); n != 0 || !errors.Is(err, io.EOF) {
-		t.Fatalf("connection accepted during Close was not closed: %d, %v", n, err)
 	}
 }

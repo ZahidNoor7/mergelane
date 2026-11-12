@@ -19,6 +19,8 @@ import {
   MuxError,
   TEMP_SUFFIX,
   TOOL_PROGRAM,
+  WINDOWS_TOOL_PROGRAM,
+  toolProgram,
   containerForCodecs,
   muxVideoAudio,
   remux,
@@ -223,7 +225,8 @@ test.describe('FFmpeg mux module @smoke', () => {
     })
 
     test('yt-dlp is its unpacked build: the program inside its folder, as fetch and packaging install it', async () => {
-      // tools.json says how fetch.mjs installs each tool, electron-builder.yml where it goes.
+      // tools.json says how fetch.mjs installs each tool, electron-builder.yml (its mac: section, where the
+      // Mac's own builds of the tools ship) where it goes.
       const manifest = JSON.parse(
         await readFile(join(__dirname, '..', '..', 'scripts', 'media-tools', 'tools.json'), 'utf8')
       ) as { tools: { name: string; install: string; executable?: string }[] }
@@ -231,9 +234,38 @@ test.describe('FFmpeg mux module @smoke', () => {
       for (const { name, install, executable } of manifest.tools) {
         const tool = name as keyof typeof TOOL_PROGRAM
         expect(TOOL_PROGRAM[tool], name).toBe(install === 'folder' ? `${name}/${executable}` : name)
-        expect(builder, name).toContain(`- from: resources/bin/${name}\n    to: ${name}\n`)
+        expect(builder, name).toContain(`    - from: resources/bin/${name}\n      to: ${name}\n`)
       }
       expect(TOOL_PROGRAM['yt-dlp']).toBe('yt-dlp/yt-dlp_macos')
+
+      // Windows (W3): each chip's manifest installs what WINDOWS_TOOL_PROGRAM names, and the win: section ships it.
+      const builderWin = builder.slice(builder.indexOf('\nwin:'))
+      for (const arch of ['x64', 'arm64']) {
+        const windows = JSON.parse(
+          await readFile(
+            join(__dirname, '..', '..', 'scripts', 'media-tools', `tools-windows-${arch}.json`),
+            'utf8'
+          )
+        ) as {
+          platform: string
+          arch: string
+          tools: { name: string; install: string; executable?: string }[]
+        }
+        expect([windows.platform, windows.arch]).toEqual(['win32', arch])
+        for (const { name, install, executable } of windows.tools) {
+          const tool = name as keyof (typeof WINDOWS_TOOL_PROGRAM)['x64']
+          const shipped = install === 'folder' ? name : `${name}.exe`
+          expect(WINDOWS_TOOL_PROGRAM[arch as 'x64' | 'arm64'][tool], name).toBe(
+            install === 'folder' ? `${name}/${executable}` : shipped
+          )
+          expect(builderWin, name).toContain(
+            `    - from: resources/bin-win/\${arch}/${shipped}\n      to: ${shipped}\n`
+          )
+        }
+      }
+      expect(toolProgram('yt-dlp', 'win32', 'x64')).toBe('yt-dlp/yt-dlp.exe')
+      expect(toolProgram('yt-dlp', 'win32', 'arm64')).toBe('yt-dlp/yt-dlp_arm64.exe')
+      expect(toolProgram('ffmpeg', 'darwin')).toBe('ffmpeg')
 
       // The single program an older fetch left in its place is not taken for it.
       const { resources, appDir, bin } = await layout()

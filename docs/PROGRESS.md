@@ -631,10 +631,201 @@ Last updated: 2026-11-11
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
 - **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **Windows version started** (branch `windows`, owner's go-ahead 2026-11-12, ADR-0053). Windows 10 and 11, x64 and
+  arm64, free tools only, CI paused for both platforms, Safari postponed. W0 done on the branch: CLAUDE.md's
+  platform, signing, architecture, testing and laptop-safety rules; ADR-0053; `docs/WINDOWS-PLAN.md` (W1 app and
+  in-app merging, W2 extension bridge, W3 media tools, W4 installer and updates, W5 system-wide helper, W6 hardware).
+  The daemon cross-compiles for Windows except for the removed Windows files; `mergelane-nmhost` already builds.
+- **W1, pull request a: the Windows test kit** (branch `w1-test-kit`, 2026-11-12; W1's seven pull requests are listed
+  in `docs/WINDOWS-PLAN.md`).
+  - **macOS baseline on `windows`** (this Mac, the `mergelane-windows` worktree after its own `npm ci`): lint,
+    typecheck and format clean; Vitest 407 passed (lines 99.21%); daemon `go vet`, staticcheck and `go test -race`
+    all ok; e2e smoke 710 passed, 1 skipped (a Windows-only test), 0 failed. A shell started from VS Code carries
+    `ELECTRON_RUN_AS_NODE=1`, which makes every e2e launch fail; run Playwright without it (`scripts/ci/local.mjs`
+    already removes it).
+  - **The kit** (ADR-0054, `docs/WINDOWS-TESTING.md`): `node scripts/windows/kit.mjs` cross-builds the Go test
+    programs (`go test -c -cover -trimpath`, x64 and arm64) and writes `dist/windows-kit/` and its zip, with
+    `test-kit.ps1` (Windows PowerShell 5.1, ASCII only), `Run test kit.cmd` (`-ExecutionPolicy Bypass` for that
+    run only) and `kit.json` (SHA-256s). On the laptop the script reads Windows, the chip and Smart App Control,
+    guards Downloads, runs the programs and writes a report; `node scripts/windows/report.mjs` reads it here. Its
+    first kit holds the browser-bridge helper's two packages (they already build for Windows), marked "not yet"
+    until W2.
+  - **Tests:** `scripts/windows/kit.test.mjs` and `report.test.mjs`, 45 passed; lines `kit.mjs` 99.2%,
+    `report.mjs` 98.9%. They include static safety checks of `test-kit.ps1`.
+  - **Not proven:** the PowerShell script has not run anywhere yet; its first run is on the owner's laptop.
+  - **Next:** the owner runs the kit and pastes the report (it answers the chip and Smart App Control questions);
+    then W1b, the daemon building for Windows.
+- **W1, pull request b: the daemon builds for Windows** (branch `w1-daemon-builds`, 2026-11-12).
+  - **Builds and checks:** `go build`, `go vet` and staticcheck pass for `windows/amd64`, `windows/arm64` and macOS.
+  - **From Net Merge `2b333a3`:** `nics/{counters,egress,info}_windows.go` (adapters from `GetAdaptersAddresses`,
+    byte counters, `IP_UNICAST_IF` egress), `state/replace_windows.go`, and `platform_windows.go` without its
+    tray-only helpers. Recorded in `docs/UPSTREAM.md`.
+  - **Not yet on Windows (W5):** the Wintun engine. `tun_windows.go` refuses before any adapter or route exists;
+    the routing-table and VPN reads fail, so the guard refuses; `run`, `install` and `uninstall` say "System merge is
+    not available on Windows yet". `cleanup` stays.
+  - **Mac-only tests behind build tags, none removed:** `routemark` and `vpnguard` tests (`darwin`), and two `api`
+    tests that need umask and socketpair (`!windows`, in `server_unix_test.go`). `cmd/fakevpn` is `darwin`-only.
+  - **Tests:** on the Mac, the platform gate in `tun` and the command gate in `dispatch`; `go test -race ./...` all ok,
+    total 82.5%. Windows-only tests for every new Windows file, run by the kit, which now holds 12 packages per chip
+    (24 programs). Their coverage comes back in the kit's report.
+  - **Next:** the owner runs the kit; failures in packages without "not yet" get fixed in this pull request.
+- **W1, pull request g: the Windows app builds on the Mac** (branch `w1-unpacked-build`, 2026-11-12).
+  - `npm run build:win` / `build:win:dir` (in `app/`) package Mergelane for Windows x64 and arm64 on this Mac, with
+    no extra tools. `electron-builder.win.yml` extends `electron-builder.yml` with the Windows-only file rules:
+    electron-builder replaces the shared `files` list with a platform's own one, but `extends` adds to it.
+  - **Native modules:** koffi keeps only `win32_<arch>`; bufferutil, utf-8-validate, utp-native and
+    fs-native-extensions use their Windows prebuilds, not this Mac's `build/Release`. Arm64 has no prebuild for
+    the first three; their callers fall back to JavaScript (checked: ws, webtorrent's `lib/utp.cjs`).
+  - **The Mac app is unchanged:** a `--mac --dir` build has the same native files as before (koffi `darwin_arm64`
+    only). The shared koffi rule uses `${os}32_${arch}`, which matches nothing on macOS.
+  - `scripts/windows/build-helpers.mjs` builds `mergelane-daemon.exe` and `mergelane-nmhost.exe` per chip into
+    `daemon/bin/win-<arch>/`, which `win.extraResources` ships.
+  - **Kit:** it now carries the unpacked app per chip and opens it once with a throwaway profile
+    (`--user-data-dir` in its `results` folder), waits for the window and closes it. A run with its own
+    `--user-data-dir` no longer registers `mergelane://`.
+  - **Tests:** `build-helpers.test.mjs` (new), kit and report tests: 59 passed; lines `build-helpers.mjs` 97.6%,
+    `kit.mjs` 99.3%, `report.mjs` 99.0%.
+- **W1, pull requests c to f: the app on Windows** (branch `w1-app-on-windows`, 2026-11-12). One pull request for
+  the four, since each is small and they touch the same files.
+  - **Networks (c):** `shared/windowsAdapters.ts` hides virtual adapters (Get-NetAdapter's `Virtual`,
+    `HardwareInterface`, and VPN or hypervisor drivers by description) and reads each adapter's kind from its
+    physical medium; tethered iPhones (Apple Mobile Device Ethernet) and Android phones (RNDIS, NCM) are `usb`.
+  - **Pinning (d), ADR-0055:** on Windows a download socket is pinned by its source address, which Windows'
+    default strong host model honours (Microsoft Learn, `MIB_IPINTERFACE_ROW`); `deviceBindingSupported()` is true
+    there with nothing loaded. CLAUDE.md's Windows rule now says so.
+  - **Paths (e):** `sanitizeFileName` takes the platform, and Windows' reserved characters, device names and
+    trailing dots are tested on the Mac (`e2e/windowsFileNames.spec.ts`). Plexo's sparse-file module was already
+    there.
+  - **Windows habits (f):**
+    - the notification-area icon with the merged speed in its tooltip; a click opens the window, and closing the
+      window with downloads running doesn't add a second icon;
+    - Open at login in the user's Run key, with `--opened-at-login` telling a login launch apart
+      (`shared/loginItem.ts`);
+    - the window buttons in the theme's colours, and each content header kept clear of them with the Window
+      Controls Overlay variables;
+    - Liquid Glass as acrylic from Windows 11 22H2 (build 22621), solid before (`shared/windowMaterial.ts`), and
+      Settings says which;
+    - "this PC", File Explorer, the notification area, Ctrl+, and Windows' Settings paths in the interface
+      (`platformWords.ts`).
+  - **Diagnostics:** zipped with Windows' own `tar.exe`, the helper log from ProgramData, and Windows paths
+    hidden like macOS ones (`C:\Users\name\…`, other disks).
+- **W2: the browser bridge on Windows** (branch `w2-browser-bridge`, 2026-11-12, ADR-0056).
+  - **Pipe:** the app serves the bridge on `\\.\pipe\mergelane-browser-<hash of its folder>`; the host dials it as an
+    overlapped file (deadlines work). The app, the host and the kit compute the same name, tested against
+    `shared/fixtures/browser-pipe.json`.
+  - **Registration:** manifests in `%APPDATA%\Mergelane\NativeMessagingHosts` and an `HKCU` key per installed Chrome,
+    Edge or Firefox (`reg add`, as their docs give it); none for a test run. Chromium, Brave and Vivaldi document no
+    Windows key: "not supported yet" there.
+  - **Host on Windows:** the browser's path from `QueryFullProcessImageName`; wake starts `Mergelane.exe` with
+    `CREATE_BREAKAWAY_FROM_JOB` (MDN), falling back to a start inside the job.
+  - **Settings › Browser extensions:** finds the browsers in the program folders, opens them, and speaks of this PC
+    and File Explorer.
+  - **Kit:** the browser-bridge packages now must pass (no "not yet"); after the window opens, the kit asks the
+    bridge's pipe for its health, as the Mac's package test does.
+  - **Tests:** Go `nmhost` 98.8% (macOS), with Windows tests for the pipe, the browser's path and the launch; Vitest
+    `browserPipe.ts` and `browsers.ts` 100%; Playwright `nativeHost.spec.ts` (Windows registration, 7 passed).
+- **W3: video and media tools on Windows** (branch `w3-media-tools`, 2026-11-12, ADR-0057).
+  - `tools-windows-x64.json` / `tools-windows-arm64.json`: yt-dlp's unpacked Windows builds, Deno's Windows zips,
+    and FFmpeg built here with llvm-mingw 20261020 and zlib 1.3.2, all pinned by SHA-256, the same versions as on
+    macOS. `npm run fetch:media-tools:win` fetches and builds both chips into `app/resources/bin-win/`.
+  - `fetch.mjs`: a manifest's target (`platform`, `arch`); `.exe` names and the PE header's chip on Windows; a
+    build's pinned `buildInputs` and `buildArgs`, part of its stamp.
+  - FFmpeg for Windows: the macOS build's component lists word for word, the LGPL guard from `config.h`, only
+    Windows' own DLLs imported (checked); x64 without hand-written assembly (no nasm). About 1.5 minutes per chip.
+  - The Windows app ships them (`win:` extraResources); `tools.ts` `WINDOWS_TOOL_PROGRAM` finds them.
+  - Licences: yt-dlp's Windows third-party list and zlib's licence added; THIRD-PARTY-NOTICES.md has an "On
+    Windows" section.
+  - **Tests:** `fetch.test.mjs` 71 passed, `fetch.mjs` 99.4% lines; `e2e/mux.spec.ts` checks the Windows manifests
+    against `WINDOWS_TOOL_PROGRAM` and the `win:` section.
+- **W4: the Windows installer, updates and releases** (branch `w4-installer`, 2026-11-12, ADR-0058).
+  - **Installer:** one per-user NSIS installer per chip, `Mergelane-<version>-<x64|arm64>-setup.exe`, no
+    administrator password, opens Mergelane afterwards. A chip list under `win.target` packed both chips into one
+    installer, so the chip now comes only from `--x64` / `--arm64` (`npm run build:win` builds both, one at a time).
+  - **Open with:** `build/installer.nsh` adds Mergelane to Open with for `.torrent` and `.nzb` (per-user ProgIDs and
+    `OpenWithProgids`, never the default). No `magnet:` handler: Microsoft documents the non-default registration
+    only machine-wide (ADR-0058).
+  - **Uninstall:** removes the Open with entries, the browsers' host keys and manifests, `mergelane://` and the Open
+    at login entry; skipped during an update.
+  - **Updates:** Settings › Updates picks the installer for the PC's chip, checks its SHA-256, starts it and quits.
+  - **Releases:** `local-release.mjs` and `release.yml` build the Windows helpers, media tools and installers after
+    the Mac app, check them with the new `scripts/windows/check-build.mjs` (each program's chip, the version, the
+    fuses), and attach the installers and the Windows sources; the notes gain "Install on Windows".
+    `--mac-only` is for dry runs only.
+  - **Kit:** installs each installer silently into its own folder, checks the window, the bridge, both helpers'
+    versions (the Mac can't read them: no `-ldflags` in `-trimpath` build info) and Open with, uninstalls, and
+    checks nothing is left.
+  - **Tests:** repo-checks 406 passed (`check-build.mjs` 98.8%, `local-release.mjs` 99.7%, `notes.mjs` 99.5%,
+    `sources.mjs` 97.9%, `kit.mjs` 99.4%, `report.mjs` 99.1%); Vitest 444 passed (`releases.ts` 100% lines);
+    lint, typecheck and format clean; both installers built here and passed `check-build.mjs`.
+  - **Proven only on the laptop:** the install, SmartScreen's prompt, Open with, the uninstall, and an update
+    (which needs two Windows releases).
+- **W5: System merge on Windows** (branch `w5-system-helper`, 2026-11-12, ADR-0059).
+  - **Engine:** Net Merge's Wintun engine re-imported (`internal/tun/tun_windows.go`): the `mergelane` adapter with
+    its own GUID, `/1` capture routes that never outlive a restart, the strong-host fix kept in the state folder.
+    `wintun.dll` 0.14.1 per chip, pinned by wintun.net's SHA-256 (`build-helpers.mjs`), shipped with its licence.
+  - **Service:** `install` copies the helper and `wintun.dll` to `Program Files\Mergelane` and registers the
+    LocalSystem service `mergelane-daemon` with restarts after a crash (`internal/winsvc`); `uninstall` removes it
+    all. State and log in `ProgramData\Mergelane\daemon`, locked to SYSTEM and Administrators.
+  - **API:** the same protocol over `\\.\pipe\mergelane-daemon` (go-winio), open only to SYSTEM, Administrators and
+    the installing user. The API server now serves any connection type; its tests run over the pipe on Windows.
+  - **VPN guard:** the routing table from `GetIpForwardTable2`; tunnels told by adapter type or a `/1` split;
+    Windows' own VPN connections count as on.
+  - **App:** install and removal through Windows' administrator prompt (PowerShell `Start-Process -Verb RunAs`),
+    with the user's SID and a `--report` file for the result; Windows wording for the prompt.
+  - **Kit:** every daemon package counts on Windows now; an opt-in System merge test (administrator, after YES)
+    installs the helper, merges, kills it to check the restart and cleanup, and always removes it again.
+  - **Tests:** Go `-race` all packages pass; staticcheck clean for macOS and both Windows chips; 26 Windows test
+    programs compile; `rib/windows.go`, `tun/weakhost.go`, `api/pipesddl.go` 100%, `winsvc` 96%; Vitest 450 passed
+    (`windowsHelper.ts` 100%); e2e smoke 724 passed (`windowsAdmin.spec.ts` 6); repo-checks 415, daemon job 638.
+  - **Proven only on the laptop:** the service, the pipe, the adapter, the routes, the crash restart and the
+    administrator prompt (the kit's System merge test).
+- **W6 prepared: the hardware run and the accessibility checklist** (branch `w6-hardware-prep`, 2026-11-12).
+  - `scripts/windows/hardware-test.ps1` (in the kit, with `Run hardware test.cmd`): the Mac suite's checks on
+    Windows, over the helper's pipe, as the owner: spread and sticky shares, unplug and reconnect, sleep, a VPN, a
+    crash (one administrator command it shows), and everything put back.
+  - `docs/WINDOWS-ACCESSIBILITY.md`: Narrator, keyboard only, contrast themes, transparency and animation off, text
+    size and display scale.
+  - **Tests:** `kit.test.mjs` checks the script ships, needs no administrator rights, writes only its report, asks
+    before each optional step and puts the helper's settings back in its `finally` block.
+- **W7a: the Windows 11 look** (branch `w7-windows-window`, 2026-11-13, ADR-0060; the owner asked for the
+  redesign's Windows study to be fully in the code).
+  - Mica behind every theme from Windows 11 22H2 (`backgroundMaterial: 'mica'`), the study's ground without it;
+    Liquid Glass only on the Mac (a saved choice opens as Porcelain on Windows and stays saved).
+  - The 32px Windows title bar (icon, "Mergelane" in Segoe UI Variable, dimmed while inactive; Windows draws the
+    caption buttons), the navigation pane with a 4px backplate and a sliding 3×16px accent pill, the content on its
+    own layer.
+  - Windows geometry (8px overlays, 4px in the page and tooltips, 6px segmented tracks), Fluent switches, buttons
+    that dim when pressed, an accent underline on a focused field (the Downloads search box is a field now).
+  - Words: "Start with Windows", Task Manager's CPU note, Windows' administrator approval for an update.
+  - Test knob `MERGELANE_E2E_RENDERER_PLATFORM=win32` renders the Windows look on the Mac.
+  - **Tests:** Vitest 461 passed, every file in `COVERED` at 90% or more (WindowChrome, themes, windowMaterial,
+    SettingsScreen, OnThisMacSettings at 100%; UsagePanel 96%; colour 97%). New `e2e/windowsLook.spec.ts`
+    (5 tests: the real stylesheet in Chromium). Smoke: 729 passed, 1 skipped; ~/Downloads untouched.
+  - **Proven only on the laptop:** Mica, the caption buttons and snap layouts (`docs/WINDOWS-TESTING.md`, "The
+    Windows look").
+- **W7b: Mergelane in Windows' notification area** (branch `w7-windows-tray`, 2026-11-13, ADR-0061; the rest of the
+  redesign's Windows study).
+  - The icon is the blue mark alone (`resources/tray.ico`, 16–64px, from `brand/tray/render.mjs`), loaded from its
+    unpacked copy; `check-build.mjs` checks it ships.
+  - Tooltip "Mergelane: … merged"; a click opens the flyout (merged speed, each network as the sidebar shows it, Open
+    Mergelane, Pause all) beside the icon; a right-click opens the menu (Open, Pause all downloads while something
+    runs, Merge for every app with the helper, Settings, Exit); a double-click opens the window.
+  - New: `DownloadManager.pauseAll`; Settings' Windows switch "Keep running in the notification area when I close
+    the window" (closing the window keeps Mergelane there; off, it quits unless something runs, as before).
+  - Fixed before merge: the flyout's hidden window could have kept Mergelane running after the switch was turned off.
+  - **Tests:** Vitest 482 passed; `trayFlyout.ts`, `TrayFlyout.tsx` and `useTrayStatus.ts` join `COVERED`
+    (100%, 100% and 100% of lines). New `e2e/notificationArea.spec.ts` (6 tests: tooltip, flyout, Pause all, menu,
+    Merge for every app against the fake helper, closing the window); with `windowsLook` and `onThisMac`, 30 of 30
+    over two repeats. Smoke: 735 passed, 1 skipped; nothing new in ~/Downloads. Windows scripts: 95 passed,
+    `check-build.mjs` 98.9%.
+  - **Proven only on the laptop:** the icon at each display scale, the real menu, the flyout's place and corners
+    (`docs/WINDOWS-TESTING.md`, "The Windows look").
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon
   and Archivo; `render.mjs` there redraws it). GitHub has no API for it: the owner uploads it in Settings.
+- **0.4.0** (2026-11-13, owner's go-ahead to merge everything and publish once all is green): the first release with
+  Windows, as a preview not yet tried on a Windows PC. `windows` (W1–W7, PRs #74–#84) merged into `main`.
 - **0.3.5** (2026-11-12, owner's go-ahead): PRs #70 and #71.
 - **0.3.4** (2026-11-12, owner's go-ahead): PR #66, the helper update offered at launch.
 - **0.3.3** (2026-11-12, owner's go-ahead): PR #63, the sticky first-burst fix, for the second M3.8 run.

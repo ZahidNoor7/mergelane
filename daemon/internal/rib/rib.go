@@ -1,5 +1,6 @@
-// Package rib is a read-only view of the macOS routing table: the Route type that the VPN guard
-// (vpnguard) and the route marker (routemark) share, and Read, which dumps the table.
+// Package rib is a read-only view of the routing table: the Route type that the VPN guard (vpnguard)
+// and the route marker (routemark) share, and Read, which dumps the table (macOS: read_darwin.go;
+// Windows: read_windows.go, through windows.go).
 //
 // It is its own package so that both users get the same Route and the same reader, while their logic
 // stays pure and testable against recorded tables.
@@ -26,8 +27,11 @@ const (
 type Route struct {
 	Dst     netip.Prefix // destination; Bits() == 0 for a default route, the full length for a host entry
 	Gateway string       // next hop: an IP ("192.168.1.1", "fe80::1%en0"), "link#N", or a link-layer address
-	Iface   string       // outgoing interface, e.g. "en0", "utun4"
-	Flags   uint         // RTF_* bits; see the Flag constants
+	Iface   string       // outgoing interface, e.g. "en0", "utun4"; on Windows the adapter's alias, e.g. "Wi-Fi"
+	Flags   uint         // RTF_* bits; see the Flag constants (always 0 on Windows)
+	// Tunnel says the route belongs to a tunnel or VPN where the interface's name can't say so: on
+	// Windows, set by FromWindows. On macOS the VPN guard tells tunnels by their names.
+	Tunnel bool
 }
 
 // Scoped reports whether the route only serves sockets bound to its interface (RTF_IFSCOPE, netstat's I).

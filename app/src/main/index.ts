@@ -12,10 +12,12 @@ import {
 } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
+// The unpacked copy (electron-builder.yml asarUnpack): a real file for Windows' own icon loader.
+import trayIcon from '../../resources/tray.ico?asset&asarUnpack'
 import { registerIpcHandlers } from './ipc/handlers'
 import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
-import { registerNativeHost } from './nativeHost'
-import { refreshExtensionCopies } from './browsers'
+import { registerNativeHost, registerNativeHostWindows } from './nativeHost'
+import { installedWindowsHosts, refreshExtensionCopies } from './browsers'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import {
@@ -23,11 +25,16 @@ import {
   CLEAR,
   currentWindowBackground,
   glassWindow,
+  micaWindow,
   setSolidGlass,
-  setWindowTheme
+  setWindowTheme,
+  titleBarOverlay
 } from './windowBackground'
 import { openedAtLogin } from './loginItem'
-import { startMenuBar } from './menuBar'
+import { startMenuBar, statusItemShown } from './menuBar'
+import { windowsShell } from './notificationArea'
+import { setSystemMerge, systemMergeSnapshot } from './daemon/daemon'
+import { IpcChannels } from '../shared/ipc-channels'
 import { startClipboardOffers } from './clipboardOffers'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
@@ -55,9 +62,19 @@ let hasShownTrayNotification = false
 /** The first window waits to be asked for when macOS opened Mergelane at login (ADR-0037). */
 let startHidden = false
 
-function ensureTray(): Tray {
-  if (tray && !tray.isDestroyed()) return tray
-  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
+/** A tray icon while the window is closed and Mergelane keeps running. Windows already has the
+ * notification-area icon (menuBar.ts) unless Settings turned it off; then this one is the same mark,
+ * there only while downloads run or a browser needs Mergelane. */
+function ensureTray(): void {
+  if (windowsShell() && statusItemShown()) return
+  // A test run never puts an icon on the Mac's menu bar.
+  if (testKnobs.userDataDir) return
+  if (tray && !tray.isDestroyed()) return
+  tray = new Tray(
+    process.platform === 'win32'
+      ? trayIcon
+      : nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  )
   tray.setToolTip('Mergelane')
   tray.on('click', () => bringForward(ensureWindow()))
   tray.on('double-click', () => bringForward(ensureWindow()))
@@ -66,7 +83,7 @@ function ensureTray(): Tray {
       { label: 'Open Mergelane', click: () => bringForward(ensureWindow()) },
       { type: 'separator' },
       {
-        label: 'Quit Mergelane',
+        label: process.platform === 'win32' ? 'Exit' : 'Quit Mergelane',
         click: () => {
           isQuitting = true
           app.quit()
@@ -74,13 +91,24 @@ function ensureTray(): Tray {
       }
     ])
   )
-  return tray
 }
 
 /** Only once the app is ready. */
 function ensureWindow(): BrowserWindow {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   return mainWindow as BrowserWindow
+}
+
+/** The window, brought forward on one of its places: the notification area's Settings, or Networks when
+ * System merge was refused there (notificationArea.ts). A window opened just now hears it once loaded. */
+function showPlace(place: 'settings' | 'networks'): void {
+  const window = ensureWindow()
+  bringForward(window)
+  const send = (): void => {
+    if (!window.isDestroyed()) window.webContents.send(IpcChannels.showPlace, place)
+  }
+  if (window.webContents.isLoading()) window.webContents.once('did-finish-load', send)
+  else send()
 }
 
 /** A link the OS handed over goes to the window's link field (see openLinks.ts). */
@@ -110,17 +138,6 @@ app.on('open-file', (event, path) => {
 const launchLink = linkFromArgs(process.argv)
 if (launchLink) offer(launchLink)
 
-/** The Windows/Linux window controls, in the title bar's colors (main.css's --bg-secondary and
- * --text) for the theme in use, at its height. */
-function titleBarOverlay(): Electron.TitleBarOverlayOptions {
-  const dark = nativeTheme.shouldUseDarkColors
-  return {
-    color: dark ? '#202325' : '#fafafa',
-    symbolColor: dark ? '#eae7e2' : '#1d1d1f',
-    height: 44
-  }
-}
-
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     // The final design's window, where a download's details sit beside the list, fitted to the
@@ -134,12 +151,13 @@ function createWindow(): void {
     title: 'Mergelane',
     // The theme's ground in the current mode, so a live window resize (which briefly exposes the
     // raw window background) and the first frame don't flash another colour.
-    backgroundColor: glassWindow() ? CLEAR : currentWindowBackground(),
+    backgroundColor: glassWindow() || micaWindow() ? CLEAR : currentWindowBackground(),
     ...(glassWindow() ? { vibrancy: 'under-window' as const } : {}),
+    ...(micaWindow() ? { backgroundMaterial: 'mica' as const } : {}),
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // No title bar: the renderer's sidebar (or compact bar) holds macOS's window buttons at its top
-    // left, on a strip the window is dragged by (components/WindowChrome.tsx). Windows and Linux
-    // draw their controls over the top right instead.
+    // left, on a strip the window is dragged by (components/WindowChrome.tsx). On Windows the renderer
+    // draws a 32px title bar and Windows its window buttons at that bar's right (WinTitleBar).
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
       ? // Inside the sidebar's 40px top strip (its panel is inset 8px from the window's edge).
@@ -167,12 +185,15 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
-    if (isQuitting || process.platform === 'darwin') return
+    if (isQuitting || (process.platform === 'darwin' && !windowsShell())) return
 
     const activeCount = downloadManager?.activeDownloadCount() ?? 0
     const runsForBrowser = keepsRunningForBrowser()
+    // On Windows, Settings' "Keep running in the notification area when I close the window" (the
+    // notification-area icon's switch, ADR-0061) keeps Mergelane there whatever is running.
+    const keepsRunning = windowsShell() && statusItemShown()
 
-    if (activeCount > 0 || runsForBrowser) {
+    if (keepsRunning || activeCount > 0 || runsForBrowser) {
       event.preventDefault()
       mainWindow?.hide()
       ensureTray()
@@ -181,7 +202,9 @@ function createWindow(): void {
         if (!testKnobs.userDataDir && Notification.isSupported()) {
           new Notification({
             title: 'Mergelane is still downloading',
-            body: 'Downloads will continue in the background. Open Mergelane again, or use its tray icon, to quit.'
+            body: windowsShell()
+              ? 'Downloads carry on. Right-click the Mergelane icon in the notification area to exit.'
+              : 'Downloads will continue in the background. Open Mergelane again, or use its tray icon, to quit.'
           }).show()
         }
       }
@@ -259,8 +282,20 @@ app.whenReady().then(async () => {
   // start, so it always points at this copy of the app.
   const nativeHost =
     testKnobs.nativeHostBinary ??
-    (app.isPackaged ? join(process.resourcesPath, 'mergelane-nmhost') : undefined)
-  if (nativeHost) {
+    (app.isPackaged
+      ? join(process.resourcesPath, `mergelane-nmhost${process.platform === 'win32' ? '.exe' : ''}`)
+      : undefined)
+  if (nativeHost && process.platform === 'win32') {
+    // Windows: per-user registry keys. A run with its own --user-data-dir is a test, whose copy of the
+    // app must not take the browsers over (as with mergelane:// below).
+    if (!app.commandLine.hasSwitch('user-data-dir')) {
+      void registerNativeHostWindows(
+        nativeHost,
+        app.getPath('userData'),
+        installedWindowsHosts()
+      ).catch((error) => console.error('[mergelane] browser host registration failed', error))
+    }
+  } else if (nativeHost) {
     void registerNativeHost(nativeHost, testKnobs.nativeHostHome ?? app.getPath('home')).catch(
       (error) => console.error('[mergelane] browser host registration failed', error)
     )
@@ -271,12 +306,14 @@ app.whenReady().then(async () => {
     console.error('[mergelane] couldn’t update the saved extension folders', error)
   )
   // Unlike magnet:, mergelane:// is Mergelane's own, so registering it takes nothing from another app. A
-  // development build has no fixed path to register.
-  if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')
+  // development build has no fixed path to register, and a run with its own --user-data-dir is a test (the
+  // package test, the Windows test kit) whose copy of the app must not take the links over.
+  if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir'))
+    app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
+    // On Windows this also recolours the window buttons for the new mode.
     applyWindowMaterial(mainWindow)
-    if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 
   createWindow()
@@ -291,7 +328,14 @@ app.whenReady().then(async () => {
       quit: () => {
         isQuitting = true
         app.quit()
-      }
+      },
+      activeCount: () => downloadManager?.activeDownloadCount() ?? 0,
+      pauseAll: async () => {
+        await downloadManager?.pauseAll()
+      },
+      showPlace,
+      systemMerge: () => systemMergeSnapshot(),
+      setSystemMerge: (on) => setSystemMerge(on)
     },
     settings
   )
@@ -326,7 +370,7 @@ app.on('before-quit', (event) => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform === 'darwin') return
+  if (process.platform === 'darwin' && !windowsShell()) return
   const activeCount = downloadManager?.activeDownloadCount() ?? 0
   if (!keepsRunningForBrowser() && activeCount === 0) return app.quit()
   ensureTray()

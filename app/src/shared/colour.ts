@@ -39,6 +39,18 @@ function fromOklab([L, A, B]: Rgb): Rgb {
   ].map((c) => Math.min(1, Math.max(0, fromLinear(c)))) as Rgb
 }
 
+/** "#rrggbb" for a colour, each channel rounded to the nearest of 0–255. */
+export function formatHex(rgb: Rgb): string {
+  return `#${rgb
+    .map((c) =>
+      Math.round(Math.min(1, Math.max(0, c)) * 255)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')
+    .toUpperCase()}`
+}
+
 /** color-mix(in oklab, a <percent>%, b). */
 export function mix(a: Rgb, percent: number, b: Rgb): Rgb {
   const x = toOklab(a)

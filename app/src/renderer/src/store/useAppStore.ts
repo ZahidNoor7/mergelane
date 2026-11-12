@@ -19,7 +19,7 @@ import type {
 import { create } from 'zustand'
 import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
 import type { CaptureRules } from '@shared/captureRules'
-import type { ThemeId } from '@shared/themes'
+import { themeOnPlatform, type ThemeId } from '@shared/themes'
 import { fadeTheme } from '../theme/appearance'
 import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
 
@@ -220,7 +220,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   networkPreferences: initial.networkPreferences,
   themeSource: initial.themeSource,
-  appearanceTheme: initial.appearanceTheme,
+  appearanceTheme: themeOnPlatform(initial.appearanceTheme, window.mergelane.platform),
 
   homeDir: initial.homeDir,
   downloadsDir: initial.downloadsDir,

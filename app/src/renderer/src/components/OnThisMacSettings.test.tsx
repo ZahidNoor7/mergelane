@@ -32,7 +32,11 @@ async function show(): Promise<void> {
   render(<OnThisMacSettings />)
   await act(async () => {})
 }
-const loginSwitch = (): HTMLElement => screen.getByRole('switch', { name: 'Open at login' })
+// "Open at login" on a Mac, "Start with Windows" on a PC (the design's Windows 11 study).
+const loginSwitch = (): HTMLElement =>
+  screen.getByRole('switch', {
+    name: window.mergelane.platform === 'win32' ? 'Start with Windows' : 'Open at login'
+  })
 const hint = (): string => loginSwitch().closest('div.border-b')!.querySelector('p')!.textContent!
 
 describe('On this Mac', () => {
@@ -119,5 +123,50 @@ describe('On this Mac', () => {
     await user.click(notify)
     expect(updateSettings).toHaveBeenCalledWith({ menuBarSpeed: undefined })
     expect(updateSettings).toHaveBeenCalledWith({ notifyWhenDone: undefined })
+  })
+})
+
+describe('On this PC (Windows)', () => {
+  beforeEach(() => {
+    window.mergelane.platform = 'win32'
+  })
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+  })
+
+  it('speaks of the PC and the notification area, and where Windows lists startup apps', async () => {
+    await show()
+    expect(screen.getByRole('region', { name: 'On this PC' })).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: /Show the merged speed/ })).toBeNull()
+    expect(hint()).toBe('Starts in the notification area, so scheduled downloads begin on time.')
+    expect(screen.queryByRole('switch', { name: 'Open at login' })).toBeNull()
+    expect(screen.getByText(/Uses Windows notifications/)).toBeTruthy()
+    cleanup()
+    login = { on: true, status: 'enabled' }
+    await show()
+    expect(hint()).toBe(
+      'Starts in the notification area, so scheduled downloads begin on time. Windows lists it in Settings › Apps › Startup.'
+    )
+  })
+
+  it('keeps Mergelane in the notification area when the window closes, the menu bar switch’s setting', async () => {
+    const user = userEvent.setup()
+    await show()
+    const keep = screen.getByRole('switch', {
+      name: 'Keep running in the notification area when I close the window'
+    })
+    expect(keep.getAttribute('aria-checked')).toBe('true')
+    expect(keep.closest('div.border-b')!.querySelector('p')!.textContent).toBe(
+      'Downloads carry on. Point at the Mergelane icon to see the merged speed; right-click it to exit.'
+    )
+    await user.click(keep)
+    expect(updateSettings).toHaveBeenCalledWith({ menuBarSpeed: false })
+    expect(useAppStore.getState().menuBarSpeed).toBe(false)
+  })
+
+  it('says only the installed app can open at login', async () => {
+    login = { on: false, status: 'unavailable' }
+    await show()
+    expect(hint()).toBe('Only Mergelane installed with its installer can open at login.')
   })
 })

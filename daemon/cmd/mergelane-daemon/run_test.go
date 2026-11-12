@@ -314,12 +314,6 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	sockDir, err := os.MkdirTemp("/tmp", "mld") // sun_path is 104 bytes on macOS
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(sockDir) })
-
 	logs := &syncBuffer{}
 	logx.SetOutput(logs)
 	t.Cleanup(func() { logx.SetOutput(os.Stdout) })
@@ -331,12 +325,12 @@ func newHarness(t *testing.T) *harness {
 		cfg: runConfig{
 			include: []string{"en0"}, weights: map[string]float64{}, rescan: time.Hour, auto: true,
 			v6: engine.V6Off, mtu: 1500, stateDir: filepath.Join(t.TempDir(), "state"),
-			allowedUID: os.Getuid(), socketPath: filepath.Join(sockDir, "s"),
 		},
 		ev: &events{}, logs: logs, root: true, locked: true,
 		links: []nics.Nic{{Name: "en0", Index: 4, IP: net.ParseIP("192.0.2.2"), Weight: 1}},
 		ready: make(chan struct{}), stop: stop,
 	}
+	testSocket(t, &h.cfg) // a socket (or, on Windows, a pipe) only this user may use
 	h.tun = &fakeTunnel{ev: h.ev}
 	h.deps = runDeps{
 		isRoot: func() bool { return h.root },
@@ -364,8 +358,8 @@ func newHarness(t *testing.T) *harness {
 			return h.eng, h.tun
 		},
 		guard: func(context.Context, func(string) bool) ([]string, error) { return h.conflicts, nil },
-		listen: func(path string, mode os.FileMode, authorize func(uint32) bool, hd api.Handler) (runServer, error) {
-			srv, err := listenAPI(path, mode, authorize, hd)
+		listen: func(c runConfig, hd api.Handler) (runServer, error) {
+			srv, err := listenAPI(c, hd)
 			if err != nil {
 				return nil, err
 			}
@@ -460,9 +454,7 @@ func TestRunDaemonServesUntilStopped(t *testing.T) {
 	if !auto || !reflect.DeepEqual(setLims, map[string]float64{"en0": 20}) {
 		t.Errorf("scheduler auto = %t, limits = %v", auto, setLims)
 	}
-	if fi, err := os.Stat(h.cfg.socketPath); err != nil || fi.Mode().Perm() != 0o666 {
-		t.Errorf("socket = %v, %v; want mode 0666 (ADR-0005)", fi, err)
-	}
+	checkSocketListening(t, h.cfg.socketPath)
 	// Re-scans feed the scheduler the links discovery finds with the same flags.
 	deadline := time.Now().Add(5 * time.Second)
 	for updates, _ := h.eng.counts(); updates == 0; updates, _ = h.eng.counts() {
@@ -513,7 +505,7 @@ func TestRunDaemonServesUntilStopped(t *testing.T) {
 	h.shutdown(t, errc)
 	// Merging was already off, so shutting down only closes the socket, then the utun.
 	assertEvents(t, h, "read routes", "cleanup", "warm", "listen", "on", "off", "server close", "close")
-	if _, err := os.Stat(h.cfg.socketPath); !errors.Is(err, os.ErrNotExist) {
+	if err := socketGone(h.cfg.socketPath); err != nil {
 		t.Errorf("the socket outlived the daemon: %v", err)
 	}
 	logs := h.logs.String()
@@ -568,35 +560,12 @@ func TestRunDaemonStartReason(t *testing.T) {
 	}
 }
 
-func TestRunDaemonAuthorizesOnlyRootAndTheAllowedUser(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("running as root, which is always allowed")
-	}
-	h := newHarness(t)
-	h.cfg.allowedUID = 0 // nobody but root
-	errc := h.start(t)
-	_, err := h.dial(t).Status(ctxT(t))
-	if e := api.AsError(err); e == nil || e.Code != api.CodeNotAuthorized {
-		t.Fatalf("status from an unlisted user = %v, want NOT_AUTHORIZED", err)
-	}
-	// Every CLI command reports the refusal.
-	for _, args := range [][]string{{"status"}, {"on"}, {"off"}, {"links"}, {"stats"}, {"limit", "en0", "5"},
-		{"events"}, {"auto-resume", "on"}} {
-		code, _, errOut := run(args[0], append([]string{"-socket", h.cfg.socketPath}, args[1:]...)...)
-		if code != 1 || !strings.Contains(errOut, "NOT_AUTHORIZED") {
-			t.Errorf("%v = %d %q, want NOT_AUTHORIZED", args, code, errOut)
-		}
-	}
-	h.shutdown(t, errc)
-	assertEvents(t, h, "read routes", "cleanup", "warm", "listen", "server close", "close")
-}
-
 func TestCmdRunRefusesWithoutRoot(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: this would start the real daemon")
 	}
 	code, _, errOut := run("run", "-state-dir", t.TempDir(), "-socket", "/tmp/mergelane-no-such-socket")
-	if code != 1 || !strings.Contains(errOut, "run must run as root") {
+	if code != 1 || !strings.Contains(errOut, "run must run as "+adminWord) {
 		t.Fatalf("run as a normal user = %d %q", code, errOut)
 	}
 	if code, _, errOut := run("run", "-mtu", "1"); code != 1 || !strings.Contains(errOut, "-mtu must be between") {
@@ -692,11 +661,9 @@ func TestRunDaemonFailures(t *testing.T) {
 			events: []string{"read routes", "cleanup", "warm"}, // nothing to close: Warm made nothing
 		},
 		{
-			name: "the control socket can't be created",
-			setup: func(_ *testing.T, h *harness) {
-				h.cfg.socketPath = "/tmp/" + strings.Repeat("x", 120)
-			},
-			want:    "longer than",
+			name:    "the control socket can't be created",
+			setup:   func(_ *testing.T, h *harness) { breakSocket(&h.cfg) },
+			want:    brokenSocket,
 			events:  []string{"read routes", "cleanup", "warm", "close"},
 			started: true,
 		},

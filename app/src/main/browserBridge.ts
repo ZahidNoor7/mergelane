@@ -11,6 +11,7 @@ import {
   type BridgeReply
 } from '../shared/browserBridge'
 import { browserOfExecutable, type BrowserContact, type BrowserId } from '../shared/browsers'
+import { browserPipePath } from '../shared/browserPipe'
 import { keptBy, sanitizeCaptureRules, type CaptureRules } from '../shared/captureRules'
 import type { BrowserContext, ProbeResult } from '../shared/types'
 import { browserContextFrom, requestHeaders } from './download/browserContext'
@@ -47,9 +48,12 @@ export function markAppReady(): void {
   appReady = true
 }
 
-/** Where mergelane-nmhost finds the app: the user's own Application Support folder. */
+/** Where mergelane-nmhost finds the app: a socket in the user's own Application Support folder, or on
+ * Windows a named pipe named after that folder (shared/browserPipe.ts). */
 export function bridgeSocketPath(): string {
-  return testKnobs.browserSocket ?? join(app.getPath('userData'), 'browser.sock')
+  if (testKnobs.browserSocket) return testKnobs.browserSocket
+  const userData = app.getPath('userData')
+  return process.platform === 'win32' ? browserPipePath(userData) : join(userData, 'browser.sock')
 }
 
 /** Once an extension has connected, closing the window keeps Mergelane in the tray, where the
@@ -62,15 +66,20 @@ export async function startBridge(bridgeHost: BridgeHost): Promise<void> {
   host = bridgeHost
   extensionUsed = (await loadSettings()).browserExtensionUsed === true
   const path = bridgeSocketPath()
-  // A socket left by a previous run that didn't exit cleanly; anything else at the path is kept.
-  const existing = await lstat(path).catch(() => null)
+  const pipe = path.startsWith('\\\\.\\pipe\\')
+  // A socket left by a previous run that didn't exit cleanly; anything else at the path is kept. A
+  // Windows pipe goes with the process that made it.
+  const existing = pipe ? null : await lstat(path).catch(() => null)
   if (existing?.isSocket()) await rm(path, { force: true })
   const next = createServer((socket) => serve(socket))
   await new Promise<void>((resolve, reject) => {
     next.once('error', reject)
     next.listen(path, () => resolve())
   })
-  await chmod(path, 0o600)
+  // Only this user may talk to it: the socket is 0600. A pipe's default security already gives other
+  // users read access only, so they can't send a request (Microsoft Learn, "Named Pipe Security and
+  // Access Rights").
+  if (!pipe) await chmod(path, 0o600)
   server = next
 }
 

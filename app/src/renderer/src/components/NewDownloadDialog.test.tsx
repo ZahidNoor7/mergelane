@@ -169,8 +169,19 @@ describe('New download, a link', () => {
     expect(document.activeElement).toBe(link)
     const user = userEvent.setup()
     await user.type(link, 'https://example.com/a.zip')
-    expect(await screen.findByText('Checking the link…')).toBeTruthy()
+    // The preview's place, kept while the link is checked: a busy status, its tile turning and its
+    // name glowing, both only where motion is welcome.
+    const checking = await screen.findByRole('status')
+    expect(checking.textContent).toBe('Checking the link…')
+    expect(checking.getAttribute('aria-busy')).toBe('true')
+    expect(checking.querySelector('svg')!.getAttribute('class')).toContain(
+      'motion-safe:animate-spin'
+    )
+    expect(checking.querySelector('[data-placeholder="name"]')!.className).toContain(
+      'motion-safe:animate-[mergelane-glow'
+    )
     expect(await screen.findByText('10.0 MB, resumable', {}, { timeout: 2000 })).toBeTruthy()
+    expect(screen.queryByText('Checking the link…')).toBeNull()
     expect((screen.getByRole('textbox', { name: 'File name' }) as HTMLInputElement).value).toBe(
       'a.zip'
     )

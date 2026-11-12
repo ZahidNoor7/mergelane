@@ -630,6 +630,21 @@ Last updated: 2026-11-11
     covered by `e2e/dashboardModel.spec.ts`, so it isn't in `COVERED`). Full Vitest run: 363 passed.
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
+- **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **New download: the quality list and the wait for a link** (branch `fix-quality-list`, owner's screenshot).
+  - **Quality list side by side:** `ui/toggle-group.tsx` never passed `orientation` to Base UI and styled
+    `data-vertical`, which Base UI doesn't set (it sets `data-orientation`, per its 1.8.0 types). Vertical groups
+    rendered as a row and pushed the dialog body sideways. The wrapper now passes `orientation` (arrow keys follow
+    it) and styles `data-[orientation=…]`. The quality list uses a 2px gap instead of `spacing={0}`, whose joined
+    segment styles the design doesn't have.
+  - **Checking a link:** the preview's place shows a placeholder card (a `role="status"` region that is
+    `aria-busy`): its tile's icon spins and its name line glows (`mergelane-glow`), both `motion-safe`, above the
+    message.
+  - **Tests:** `e2e/streamDownload.spec.ts` checks that the qualities stack, that nothing in the dialog scrolls
+    sideways, and that the down arrow moves between them (it fails without the fix). Vitest
+    `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
+    its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
+    `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

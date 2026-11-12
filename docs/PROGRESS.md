@@ -631,6 +631,12 @@ Last updated: 2026-11-11
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
 - **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **Windows version started** (branch `windows`, owner's go-ahead 2026-11-12, ADR-0053). Windows 10 and 11, x64 and
+  arm64, free tools only, CI paused for both platforms, Safari postponed. W0 done on the branch: CLAUDE.md's
+  platform, signing, architecture, testing and laptop-safety rules; ADR-0053; `docs/WINDOWS-PLAN.md` (W1 app and
+  in-app merging, W2 extension bridge, W3 media tools, W4 installer and updates, W5 system-wide helper, W6 hardware).
+  The daemon cross-compiles for Windows except for the removed Windows files; `mergelane-nmhost` already builds.
+  **Next:** W1 on the owner's Windows laptop.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

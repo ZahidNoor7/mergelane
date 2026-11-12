@@ -1290,3 +1290,54 @@ until the owner overrides it.
   - Plugging in a phone speeds up what's already downloading, with no clicks.
   - Someone who wants a download to stay off a network switches that network off for it once.
 
+
+## ADR-0053: Mergelane for Windows, on its own branch
+
+- Status: Owner (2026-11-12). The owner asked for a Windows version. Asked what is needed, they chose:
+  - support for Windows 10 and Windows 11, alongside the Apple-silicon Mac;
+  - PCs with Intel/AMD (x64) and with ARM (arm64) chips;
+  - free tools and services only;
+  - CI paused for both the macOS and the Windows checks;
+  - start Windows now, ahead of the Safari extension;
+  - all of it on a separate branch.
+- Context:
+  - CLAUDE.md said "no Windows". Both upstreams ran on Windows: Plexo had Windows builds and an NSIS installer, and
+    Net Merge had Wintun-based Windows files (`tun_windows.go`, `nics/*_windows.go`, `platform_windows.go`,
+    `state/replace_windows.go`, `scripts/fetch-wintun.ps1`). Mergelane removed them (`docs/UPSTREAM.md`).
+  - Electron supports Windows 10 and later, with x64 and arm64 binaries (Electron's README, "Platform support").
+  - Microsoft's docs:
+    - SmartScreen shows "Windows protected your PC" for an unsigned app, and the user can choose "Run anyway".
+    - With Smart App Control in enforcement mode (Windows 11), an app that isn't signed by a trusted CA and isn't
+      known to Microsoft is blocked, with no way round it. Turning Smart App Control off is one-way in Settings.
+    - Code signing that Windows trusts costs money (Azure Artifact Signing about $9.99 a month, for individuals
+      in the US or Canada only; or a certificate at $150–300 a year). The free routes are SignPath Foundation's
+      open-source program (its terms ask for automated builds from the public repository) and the Microsoft Store
+      (free registration for individuals).
+    - Windows 10 reached end of support on 14 October 2025. Consumer Extended Security Updates ended on
+      13 October 2026.
+  - Winsock's `IP_UNICAST_IF` / `IPV6_UNICAST_IF` set a socket's outgoing interface on computers with several
+    networks. They are the Windows counterpart of `IP_BOUND_IF`.
+  - Wintun is a TUN driver for Windows, shipped by its authors as prebuilt, signed DLLs for AMD64, x86, ARM64 and
+    ARM that may be distributed with other software (wintun.net). Its source is GPL-2.0, and the prebuilt DLLs
+    have their own licence inside the ZIP.
+- Decision:
+  - **Platforms:** Windows 10 and 11, x64 and arm64, plus macOS 27 on Apple silicon as before. Windows 10 22H2 is
+    the oldest version tested, because it is the last Windows 10 release.
+  - **Branch:** all Windows work is on the long-lived `windows` branch, made from `main` at 0.3.5 + #73. Work there
+    in milestone branches made from `windows`, with pull requests into `windows`. `main` keeps receiving Mac fixes,
+    and `windows` merges `main` in regularly. Merging `windows` into `main` is the owner's decision.
+  - **Signing:** free only. Windows builds are unsigned until a free route is approved (SignPath Foundation needs
+    CI; the Microsoft Store needs research on the helper). The README states Smart App Control's block plainly.
+  - **CI:** paused for macOS and Windows (ADR-0020 still holds). Windows checks run on the owner's Windows laptop.
+  - **Safari:** postponed, not dropped. Phase 3 is otherwise complete.
+  - **Order:** the plan in `docs/WINDOWS-PLAN.md`, W1 to W6. In-app merging, the extension, the media tools, the
+    installer and updates come first. The system-wide helper comes last, because it is the largest and riskiest
+    part.
+- Consequences:
+  - CLAUDE.md on the `windows` branch is updated: platforms, free-only signing, the Windows architecture, the
+    `IP_UNICAST_IF` rule, Windows tests, and the safety rules for the owner's Windows laptop.
+  - Every macOS test must keep passing on the `windows` branch. Platform code goes behind `process.platform`
+    checks and Go build tags.
+  - Windows 10 users get no more security updates from Microsoft. Mergelane still runs there, but the README says
+    Windows 11 is recommended.
+  - Users whose Smart App Control is On can't run unsigned builds, until free signing is in place.

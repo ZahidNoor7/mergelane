@@ -91,11 +91,24 @@ export function describeApp(app) {
   if (app.status === 'skipped') return `${head}: skipped, ${app.reason}`
   if (app.status === 'error') return `${head}: could not start: ${app.reason}`
   const stopped = app.leftRunning ? `; ${app.leftRunning} of its processes had to be stopped afterwards` : ''
+  const installed = typeof app.installSeconds === 'number' ? `installed in ${app.installSeconds} s, ` : ''
+  // Only an installer that got as far as uninstalling has leftovers to report.
+  const uninstalled = Array.isArray(app.leftovers)
+    ? app.leftovers.length
+      ? `; after uninstalling: ${app.leftovers.join('; ')}`
+      : ', uninstalled cleanly'
+    : ''
   if (app.status === 'ready') {
     const bridge = app.bridge === 'ready' ? ', the browser bridge answered' : ''
-    return `${head}: window opened after ${app.seconds} s${bridge}, then closed${stopped}`
+    // An older kit doesn't check the helpers, so it says nothing about them.
+    const helpers = Array.isArray(app.helpers) && app.version ? `, both helpers say ${app.version}` : ''
+    const openWith =
+      Array.isArray(app.openWithMissing) && app.openWithMissing.length === 0 ? ', Open with lists it for .torrent and .nzb' : ''
+    const closed = app.kind === 'installer' ? '' : ', then closed'
+    return `${head}: ${installed}window opened after ${app.seconds} s${bridge}${helpers}${openWith}${closed}${uninstalled}${stopped}`
   }
-  return `${head}: FAILED after ${app.seconds} s: ${app.reason}${stopped}`
+  const after = typeof app.seconds === 'number' ? ` after ${app.seconds} s` : ''
+  return `${head}: FAILED${after}: ${installed}${app.reason}${uninstalled}${stopped}`
 }
 
 const SMART_APP_CONTROL = {

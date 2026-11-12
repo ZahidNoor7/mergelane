@@ -18,6 +18,8 @@ import {
   KIT_VERSION,
   UsageError,
   addApp,
+  addInstaller,
+  installerName,
   assertAscii,
   buildKit,
   buildProgram,
@@ -325,7 +327,7 @@ describe('main', () => {
     const stdout = capture()
     const root = fakeRoot()
     fakeApps(root, ['x64'])
-    const code = await main(['--out', out, '--arch', 'x64'], {
+    const code = await main(['--out', out, '--arch', 'x64', '--unpacked'], {
       stdout: stdout.stream,
       root,
       runner: fakeRunner({ dirty: true }).runner
@@ -430,7 +432,7 @@ describe('test-kit.ps1 (static checks; it runs only on Windows)', () => {
     const registryLines = SCRIPT.split('\n').filter((line) => /HK(LM|CU):/.test(line))
     assert.ok(registryLines.length >= 2)
     for (const line of SCRIPT.split('\n').filter((l) => /\$key\b/.test(l) && !/^\s*\$key =/.test(l))) {
-      assert.match(line, /Test-Path -LiteralPath \$key|Get-ItemProperty -LiteralPath \$key/, line)
+      assert.match(line, /Test-Path -LiteralPath \$key|Get-ItemProperty -LiteralPath \$key|Get-ChildItem -LiteralPath \$key/, line)
     }
   })
 
@@ -449,6 +451,8 @@ describe('test-kit.ps1 (static checks; it runs only on Windows)', () => {
 
 /** Puts a stand-in unpacked app for each chip where `npm run build:win:dir` writes it. */
 function fakeApps(root, arches = Object.keys(ARCHES)) {
+  mkdirSync(join(root, 'app'), { recursive: true })
+  writeFileSync(join(root, 'app', 'package.json'), JSON.stringify({ version: '0.4.0' }))
   for (const arch of arches) {
     const folder = join(root, 'app', 'dist', APP_FOLDERS[arch])
     mkdirSync(join(folder, 'resources'), { recursive: true })
@@ -463,13 +467,14 @@ describe('the app in the kit', () => {
     fakeApps(root)
     const out = freshDir('kit')
     const { runner } = fakeRunner()
-    const { kit } = await buildKit({ root, out, zip: false, apps: true, runner })
+    const { kit } = await buildKit({ root, out, zip: false, apps: 'folder', runner })
     assert.deepEqual(
       kit.apps.map((a) => a.path),
       ['app/x64/Mergelane.exe', 'app/arm64/Mergelane.exe']
     )
     for (const app of kit.apps) {
       assert.equal(app.kind, 'folder')
+      assert.equal(app.version, '0.4.0')
       assert.equal(app.sha256, sha256(join(out, app.path)))
       assert.equal(readFileSync(join(out, 'app', app.arch, 'resources', 'app.asar'), 'utf8'), 'asar')
     }
@@ -486,14 +491,13 @@ describe('the app in the kit', () => {
 
   it('leaves the app out with --no-app, and by default when called as a function', async () => {
     assert.equal(parseArgs(['--no-app']).apps, false)
-    assert.equal(parseArgs([]).apps, true)
     const { runner } = fakeRunner()
     const { kit } = await buildKit({ root: fakeRoot(), out: freshDir('kit'), zip: false, runner })
     assert.deepEqual(kit.apps, [])
   })
 
   it('the script opens the app with its own profile, waits for its window, and closes it', () => {
-    assert.match(SCRIPT, /--user-data-dir=`"\$profileDir`"/)
+    assert.match(SCRIPT, /--user-data-dir=`"\$ProfileDir`"/)
     assert.match(SCRIPT, /\$profileDir = Join-Path \$ResultsDir /)
     assert.match(SCRIPT, /MainWindowTitle -like 'Mergelane\*'/)
     assert.match(SCRIPT, /CloseMainWindow\(\)/)
@@ -510,8 +514,81 @@ describe('the app in the kit', () => {
     assert.match(SCRIPT, /\[regex\]::Replace\(\$Folder, '\[A-Z\]'/)
     assert.match(SCRIPT, /SHA256\]::Create\(\)/)
     assert.match(SCRIPT, /'mergelane-browser-' \+ \$hex\.Substring\(0, 16\)/)
-    assert.match(SCRIPT, /Get-BridgePipeName \$profileDir/)
+    assert.match(SCRIPT, /Get-BridgePipeName \$ProfileDir/)
     assert.match(SCRIPT, /'\{"v":3,"origin":"","message":\{"type":"health"\}\}'/)
     assert.match(SCRIPT, /'"ready":true'/)
+  })
+})
+
+describe('the installer in the kit (W4)', () => {
+  function fakeInstallers(root, version = '0.4.0', arches = Object.keys(ARCHES)) {
+    mkdirSync(join(root, 'app', 'dist'), { recursive: true })
+    writeFileSync(join(root, 'app', 'package.json'), JSON.stringify({ version }))
+    for (const arch of arches) writeFileSync(join(root, 'app', 'dist', installerName(version, arch)), `setup ${arch}`)
+  }
+
+  it('is the default: each chip\'s installer, with its SHA-256', async () => {
+    assert.equal(parseArgs([]).apps, 'installer')
+    assert.equal(parseArgs(['--unpacked']).apps, 'folder')
+    const root = fakeRoot()
+    fakeInstallers(root)
+    const out = freshDir('kit')
+    const { runner } = fakeRunner()
+    const { kit } = await buildKit({ root, out, zip: false, apps: 'installer', runner })
+    assert.deepEqual(
+      kit.apps.map((a) => [a.kind, a.path]),
+      [
+        ['installer', 'app/x64/Mergelane-0.4.0-x64-setup.exe'],
+        ['installer', 'app/arm64/Mergelane-0.4.0-arm64-setup.exe']
+      ]
+    )
+    for (const app of kit.apps) {
+      assert.equal(app.sha256, sha256(join(out, app.path)))
+      assert.equal(app.version, '0.4.0')
+    }
+  })
+
+  it('the script checks that both helpers inside the app say its version, as package-test.sh does', () => {
+    assert.match(SCRIPT, /@\('mergelane-daemon', 'version'\), @\('mergelane-nmhost', '--version'\)/)
+    assert.match(SCRIPT, /\$expected = "\$\(\$helper\[0\]\) \$Version"/)
+    // Both the unpacked app and the installed one, before the uninstaller runs.
+    assert.match(SCRIPT, /Test-HelperVersions \$result \(Split-Path -Parent \$file\) \(Get-Value \$App 'version'\)/)
+    const installed = SCRIPT.indexOf("Test-HelperVersions $result $installDir (Get-Value $App 'version')")
+    assert.ok(installed > 0 && installed < SCRIPT.indexOf("'Uninstall Mergelane.exe'"))
+  })
+
+  it('the script checks the installer\'s Open with entries for .torrent and .nzb, and that the uninstall removes them', () => {
+    assert.ok(SCRIPT.includes('"HKCU:\\Software\\Classes\\$progId\\shell\\open\\command"'))
+    assert.ok(SCRIPT.includes('"HKCU:\\Software\\Classes\\.$Ext\\OpenWithProgids" -Name $progId'))
+    assert.ok(SCRIPT.includes('the installer did not add Mergelane to Open with for'))
+    assert.ok(SCRIPT.includes('Open with still lists Mergelane for .$ext'))
+    // The same names as build/installer.nsh writes and removes.
+    const nsh = readFileSync(join(HERE, '..', '..', 'app', 'build', 'installer.nsh'), 'utf8')
+    assert.ok(nsh.includes('"Software\\Classes\\Mergelane.${EXT}\\shell\\open\\command" "" \'"$appExe" "%1"\''))
+    assert.ok(nsh.includes('"Software\\Classes\\.${EXT}\\OpenWithProgids" "Mergelane.${EXT}" ""'))
+    for (const ext of ['torrent', 'nzb']) {
+      assert.ok(nsh.includes(`DeleteRegValue HKCU "Software\\Classes\\.${ext}\\OpenWithProgids" "Mergelane.${ext}"`), ext)
+      assert.ok(nsh.includes(`DeleteRegKey HKCU "Software\\Classes\\Mergelane.${ext}"`), ext)
+    }
+  })
+
+  it('refuses when an installer is missing, and says how to build one', () => {
+    const root = fakeRoot()
+    fakeInstallers(root, '0.4.0', ['x64'])
+    assert.throws(
+      () => addInstaller({ root, out: freshDir('kit'), arch: 'arm64' }),
+      (error) => error instanceof UsageError && /npm run build:win/.test(error.message)
+    )
+  })
+
+  it('the script installs into the results folder, never over an installed Mergelane, and checks the uninstall', () => {
+    assert.match(SCRIPT, /\$installDir = Join-Path \$ResultsDir "install-/)
+    assert.match(SCRIPT, /-ArgumentList '\/S', "\/D=\$installDir"/)
+    assert.match(SCRIPT, /if \(Get-InstalledMergelane\) \{\s+\$result\.status = 'skipped'/)
+    assert.match(SCRIPT, /'Uninstall Mergelane\.exe'/)
+    assert.match(SCRIPT, /\$uninstaller -ArgumentList '\/S'/)
+    for (const leftover of ['still in its folder', 'Settings > Apps', 'a shortcut is left in']) {
+      assert.ok(SCRIPT.includes(leftover), leftover)
+    }
   })
 })

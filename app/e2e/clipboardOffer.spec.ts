@@ -152,6 +152,9 @@ test.describe('Offer links I copy @smoke', () => {
       const copies: Electron.ClipboardItem[] = []
       const formats: Array<{ type: string; size: number }> = []
       for (const item of await clipboard.read()) {
+        // An empty clipboard reads as an item with no formats, which ClipboardItem refuses. There is
+        // nothing of it to put back: with no copies, the clipboard is cleared again below.
+        if (item.types.length === 0) continue
         const data: Record<string, Blob | Electron.ClipboardBookmark> = {}
         // HTML written back as text/html gains a <meta charset='utf-8'> in front, one more on every
         // run (seen on macOS 27, Electron 44). The same bytes, raw, as the Mac's own pasteboard type

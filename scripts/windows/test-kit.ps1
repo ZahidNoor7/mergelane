@@ -6,14 +6,18 @@
 #   - lists the names, sizes and dates in the Downloads folder before and after, to prove the tests never write
 #     there (it opens nothing);
 #   - runs the Go test programs listed in kit.json that this PC's chip can run, after checking each SHA-256;
-#   - opens Mergelane from the kit folder once, with a throwaway profile in the results folder (--user-data-dir),
-#     waits for its window, and closes it;
+#   - installs Mergelane from the kit's installer into the results folder, opens it once with a throwaway profile
+#     (--user-data-dir), checks its window, its browser bridge, its helpers' versions and its Open with entries for
+#     .torrent and .nzb, and uninstalls it, checking nothing is left (an unpacked app, built with --unpacked, is only
+#     opened and checked);
 #   - writes report.txt in the kit folder and copies it to the clipboard, for the owner to paste into the chat,
 #     where scripts/windows/report.mjs reads it.
 #
 # Safety (CLAUDE.md, "Safety for the owner's Windows laptop"): it needs no administrator rights and stops if it has
 # them. It changes no settings and writes nothing outside the kit folder; the test programs use the TEMP folder and
-# remove what they make. kit.test.mjs checks this file for commands that would change the system.
+# remove what they make. Mergelane's own per-user installer adds a Start menu entry, a desktop shortcut, an Apps
+# list entry and Open with entries for .torrent and .nzb while it is installed, and its uninstaller removes them; the
+# kit checks that. It never installs over a Mergelane already installed. kit.test.mjs checks this file for commands that would change the system.
 #
 # Keep this file ASCII: Windows PowerShell reads a script without a byte-order mark in the ANSI code page
 # (about_Character_Encoding). kit.mjs refuses to build a kit otherwise.
@@ -268,42 +272,32 @@ function Get-BridgeHealth([string]$PipeName) {
     }
 }
 
-# Starts the app once with its own profile inside the results folder (Electron's --user-data-dir, so it reaches
-# no other Mergelane and keeps its settings there), waits for its window ("Mergelane", app/src/renderer/index.html),
-# then closes it the way a user does. Anything from the kit's app folder still running afterwards is stopped.
-function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
-    $result = [ordered]@{
-        arch = [string]$App.arch
-        kind = [string]$App.kind
+# Mergelane installed for this user, as Windows lists it in Settings > Apps (read only): the entry's key name, or
+# $null.
+function Get-InstalledMergelane {
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+    if (-not (Test-Path -LiteralPath $key)) { return $null }
+    foreach ($entry in @(Get-ChildItem -LiteralPath $key -ErrorAction SilentlyContinue)) {
+        $values = Get-ItemProperty -LiteralPath $entry.PSPath -ErrorAction SilentlyContinue
+        if ((Get-Value $values 'DisplayName') -eq 'Mergelane') { return $entry.PSChildName }
     }
-    if (-not (Test-CanRun $result.arch $Chip $Build)) {
-        $result.status = 'skipped'
-        $result.reason = "this PC ($Chip) can't run $($result.arch) programs"
-        return $result
-    }
-    $exe = Join-Path $KitDir (([string]$App.path) -replace '/', '\')
-    if (-not (Test-Path -LiteralPath $exe)) {
-        $result.status = 'error'
-        $result.reason = 'the app is missing from the kit folder (an antivirus may have removed it)'
-        return $result
-    }
-    $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($hash -ne ([string]$App.sha256).ToLowerInvariant()) {
-        $result.status = 'error'
-        $result.reason = 'Mergelane.exe differs from the one built (SHA-256); copy the kit again'
-        return $result
-    }
-    $appDir = Split-Path -Parent $exe
-    $profileDir = Join-Path $ResultsDir "profile-$($result.arch)"
+    return $null
+}
 
+# Starts the app once with its own profile inside the results folder (Electron's --user-data-dir, so it reaches
+# no other Mergelane and keeps its settings there), waits for its window ("Mergelane", app/src/renderer/index.html)
+# and for its browser bridge's answer, then closes it the way a user does. Anything still running from the app's
+# folder afterwards is stopped.
+function Test-AppWindow($Result, [string]$Exe, [string]$ProfileDir) {
+    $appDir = Split-Path -Parent $Exe
     $watch = [Diagnostics.Stopwatch]::StartNew()
     try {
-        $process = Start-Process -FilePath $exe -ArgumentList "--user-data-dir=`"$profileDir`"" `
+        $process = Start-Process -FilePath $Exe -ArgumentList "--user-data-dir=`"$ProfileDir`"" `
             -WorkingDirectory $appDir -PassThru
     } catch {
-        $result.status = 'error'
-        $result.reason = Hide-Profile $_.Exception.Message
-        return $result
+        $Result.status = 'error'
+        $Result.reason = Hide-Profile $_.Exception.Message
+        return
     }
     # Reading Handle now keeps the exit code readable after the process ends.
     $null = $process.Handle
@@ -317,34 +311,34 @@ function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
             break
         }
     }
-    $result.seconds = [math]::Round($watch.Elapsed.TotalSeconds, 1)
+    $Result.seconds = [math]::Round($watch.Elapsed.TotalSeconds, 1)
     # With the window up, the browser bridge must answer on its pipe (W2): up to 30 seconds more.
-    $result.bridge = 'not asked'
+    $Result.bridge = 'not asked'
     if ($title) {
-        $pipeName = Get-BridgePipeName $profileDir
-        $result.bridge = 'no answer'
+        $pipeName = Get-BridgePipeName $ProfileDir
+        $Result.bridge = 'no answer'
         $asked = [Diagnostics.Stopwatch]::StartNew()
         while ($asked.Elapsed.TotalSeconds -lt 30 -and -not $process.HasExited) {
             $answer = Get-BridgeHealth $pipeName
             if ($answer -and $answer -match '"ready":true') {
-                $result.bridge = 'ready'
+                $Result.bridge = 'ready'
                 break
             }
             Start-Sleep -Milliseconds 500
             $process.Refresh()
         }
     }
-    if ($title -and $result.bridge -eq 'ready') {
-        $result.status = 'ready'
+    if ($title -and $Result.bridge -eq 'ready') {
+        $Result.status = 'ready'
     } elseif ($title) {
-        $result.status = 'failed'
-        $result.reason = 'the window opened, but the browser bridge did not answer on its pipe'
+        $Result.status = 'failed'
+        $Result.reason = 'the window opened, but the browser bridge did not answer on its pipe'
     } elseif ($process.HasExited) {
-        $result.status = 'failed'
-        $result.reason = "it closed by itself (exit code $($process.ExitCode))"
+        $Result.status = 'failed'
+        $Result.reason = "it closed by itself (exit code $($process.ExitCode))"
     } else {
-        $result.status = 'failed'
-        $result.reason = "no window within $AppReadySeconds seconds"
+        $Result.status = 'failed'
+        $Result.reason = "no window within $AppReadySeconds seconds"
     }
 
     if (-not $process.HasExited) {
@@ -357,7 +351,145 @@ function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
             $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
         })
     foreach ($leftover in $left) { Stop-Process -Id $leftover.Id -Force -ErrorAction SilentlyContinue }
-    $result.leftRunning = $left.Count
+    $Result.leftRunning = $left.Count
+}
+
+# The two helpers inside the app must say the app's version, as the Mac's package test checks
+# (scripts/ci/package-test.sh): "mergelane-daemon <version>" and "mergelane-nmhost <version>". Each only prints one
+# line and exits. Their problems go into $Result.helpers (none: an empty list); a kit.json without the app's version
+# skips this.
+function Test-HelperVersions($Result, [string]$AppDir, $Version) {
+    if (-not $Version) { return }
+    $Result.version = [string]$Version
+    $problems = @()
+    foreach ($helper in @(@('mergelane-daemon', 'version'), @('mergelane-nmhost', '--version'))) {
+        $exe = Join-Path $AppDir "resources\$($helper[0]).exe"
+        $expected = "$($helper[0]) $Version"
+        try {
+            $said = [string](& $exe $helper[1] | Select-Object -First 1)
+        } catch {
+            $said = 'nothing: it did not run: ' + (Hide-Profile $_.Exception.Message)
+        }
+        if ($said.Trim() -ne $expected) {
+            $problems += "$($helper[0]).exe says '$(Limit-Line $said.Trim())', expected '$expected'"
+        }
+    }
+    $Result.helpers = $problems
+    if ($problems.Count -gt 0 -and $Result.status -eq 'ready') {
+        $Result.status = 'failed'
+        $Result.reason = $problems -join '; '
+    }
+}
+
+# Mergelane's Open with entry for a file type, as build/installer.nsh writes it (read only): the command of its
+# ProgID, Mergelane.<ext>, and whether the extension's OpenWithProgids list names that ProgID.
+function Get-OpenWithState([string]$Ext) {
+    $progId = "Mergelane.$Ext"
+    $command = Get-ItemProperty -LiteralPath "HKCU:\Software\Classes\$progId\shell\open\command" `
+        -ErrorAction SilentlyContinue
+    $listed = Get-ItemProperty -LiteralPath "HKCU:\Software\Classes\.$Ext\OpenWithProgids" -Name $progId `
+        -ErrorAction SilentlyContinue
+    return @{ command = [string](Get-Value $command '(default)'); listed = ($null -ne $listed) }
+}
+
+# Checks one chip's app. An installer (W4) is installed silently into the results folder (NSIS: /S, and /D= the
+# folder, last and unquoted), opened as above, then uninstalled silently; the kit then looks for what the uninstaller
+# should have taken away. It never installs over a Mergelane that is already installed for this user. An unpacked app
+# is only opened.
+function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
+    $result = [ordered]@{
+        arch = [string]$App.arch
+        kind = [string]$App.kind
+    }
+    if (-not (Test-CanRun $result.arch $Chip $Build)) {
+        $result.status = 'skipped'
+        $result.reason = "this PC ($Chip) can't run $($result.arch) programs"
+        return $result
+    }
+    $file = Join-Path $KitDir (([string]$App.path) -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $file)) {
+        $result.status = 'error'
+        $result.reason = 'the app is missing from the kit folder (an antivirus may have removed it)'
+        return $result
+    }
+    $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($hash -ne ([string]$App.sha256).ToLowerInvariant()) {
+        $result.status = 'error'
+        $result.reason = "$(Split-Path -Leaf $file) differs from the one built (SHA-256); copy the kit again"
+        return $result
+    }
+    $profileDir = Join-Path $ResultsDir "profile-$($result.arch)"
+    if ($result.kind -ne 'installer') {
+        Test-AppWindow $result $file $profileDir
+        Test-HelperVersions $result (Split-Path -Parent $file) (Get-Value $App 'version')
+        return $result
+    }
+
+    if (Get-InstalledMergelane) {
+        $result.status = 'skipped'
+        $result.reason = 'Mergelane is already installed for you, so the kit does not install over it'
+        return $result
+    }
+    $installDir = Join-Path $ResultsDir "install-$($result.arch)"
+    $installed = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $setup = Start-Process -FilePath $file -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+    } catch {
+        $result.status = 'error'
+        $result.reason = Hide-Profile $_.Exception.Message
+        return $result
+    }
+    $result.installSeconds = [math]::Round($installed.Elapsed.TotalSeconds, 1)
+    $exe = Join-Path $installDir 'Mergelane.exe'
+    if ($setup.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $exe)) {
+        $result.status = 'failed'
+        $result.reason = "the installer ended with code $($setup.ExitCode) and Mergelane.exe is not in its folder"
+        return $result
+    }
+
+    # The installer adds Mergelane to Open with for .torrent and .nzb, pointing at the program it installed.
+    $missing = @()
+    foreach ($ext in @('torrent', 'nzb')) {
+        $state = Get-OpenWithState $ext
+        if (-not $state.listed -or $state.command.IndexOf($exe, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            $missing += ".$ext"
+        }
+    }
+    $result.openWithMissing = $missing
+
+    Test-AppWindow $result $exe $profileDir
+    Test-HelperVersions $result $installDir (Get-Value $App 'version')
+    if ($missing.Count -gt 0 -and $result.status -eq 'ready') {
+        $result.status = 'failed'
+        $result.reason = "the installer did not add Mergelane to Open with for $($missing -join ' and ')"
+    }
+
+    # The uninstaller copies itself elsewhere and returns at once, so wait for the program to go (up to a minute).
+    $uninstaller = Join-Path $installDir 'Uninstall Mergelane.exe'
+    try {
+        Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait | Out-Null
+    } catch {
+        $result.uninstall = Hide-Profile $_.Exception.Message
+    }
+    $gone = [Diagnostics.Stopwatch]::StartNew()
+    while ((Test-Path -LiteralPath $exe) -and $gone.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 500 }
+    Start-Sleep -Seconds 2
+    $leftovers = @()
+    if (Test-Path -LiteralPath $exe) { $leftovers += 'Mergelane.exe is still in its folder' }
+    if (Get-InstalledMergelane) { $leftovers += 'Windows still lists Mergelane in Settings > Apps' }
+    foreach ($place in @('Programs', 'Desktop')) {
+        $link = Join-Path ([Environment]::GetFolderPath($place)) 'Mergelane.lnk'
+        if (Test-Path -LiteralPath $link) { $leftovers += "a shortcut is left in $place" }
+    }
+    foreach ($ext in @('torrent', 'nzb')) {
+        $state = Get-OpenWithState $ext
+        if ($state.listed -or $state.command) { $leftovers += "Open with still lists Mergelane for .$ext" }
+    }
+    $result.leftovers = $leftovers
+    if ($leftovers.Count -gt 0 -and $result.status -eq 'ready') {
+        $result.status = 'failed'
+        $result.reason = 'the uninstaller left something behind'
+    }
     return $result
 }
 
@@ -406,7 +538,7 @@ foreach ($program in @($Kit.programs)) {
 $apps = @()
 foreach ($app in @(Get-Value $Kit 'apps')) {
     if ($null -eq $app) { continue }
-    Write-Host "Opening Mergelane ($($app.arch)) with a test profile, then closing it ..."
+    Write-Host "Installing, opening and uninstalling Mergelane ($($app.arch)) ..."
     $outcome = Invoke-AppCheck $app $chip.arch $build
     Write-Host "  $($outcome.status)"
     $apps += , $outcome

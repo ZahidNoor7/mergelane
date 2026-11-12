@@ -39,7 +39,8 @@
         {
           "name": "zlib-1.3.2.tar.gz",
           "url": "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz",
-          "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+          "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
+          "source": true
         }
       ],
       "license": "LGPL-2.1-or-later (built by Mergelane from FFmpeg's source release, without --enable-gpl, --enable-version3 or --enable-nonfree); zlib (zlib licence) linked in statically",

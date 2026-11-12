@@ -100,6 +100,24 @@ The helper can also be driven from Terminal. It is installed as
 After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
 an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.
 
+## Windows (in development)
+
+A Windows version, for Windows 10 and 11 on Intel, AMD and Arm PCs, is being built on the `windows` branch and isn't
+released yet. Once it is, each release carries two installers: `Mergelane-<version>-x64-setup.exe` (Intel or AMD)
+and `Mergelane-<version>-arm64-setup.exe` (Arm). Settings › System › About shows which one a PC needs, under
+"System type".
+
+1. Open the installer. Mergelane isn't signed yet, so Windows may say it protected your PC: click **More info**,
+   then **Run anyway**. It installs for you only, with no administrator password, and opens Mergelane.
+2. If Smart App Control is On (Windows Security › App & browser control), Windows blocks unsigned apps such as this
+   one, and there is no way round it.
+
+The first Windows version has Mergelane's own downloads over every network, torrents, Usenet, video, the browser
+extension for Chrome, Edge and Firefox, and updates from Settings › Updates. Mergelane appears in **Open with** for
+`.torrent` and `.nzb` files without becoming their default app; magnet links reach it by pasting, the clipboard offer
+or the extension. System-wide merging on Windows comes later. To remove Mergelane, search the Start menu for **Add or
+remove programs**.
+
 ## Browser extension (Chrome, Edge, Chromium, Firefox)
 
 The extension hands downloads you click in your browser to Mergelane. It talks to Mergelane only through the

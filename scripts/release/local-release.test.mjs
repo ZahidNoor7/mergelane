@@ -51,7 +51,9 @@ describe('parseCli', () => {
     assert.equal(options.changelog, null)
     assert.equal(options.root, ROOT)
     assert.equal(options.logs, join(ROOT, 'local-ci-logs'))
+    assert.equal(options.windows, true)
     assert.equal(parseCli(['--version', '1.2.3-beta.1', '--upload']).upload, true)
+    assert.equal(parseCli(['--version', '0.1.0', '--mac-only']).windows, false)
   })
 
   for (const [args, message] of [
@@ -59,7 +61,8 @@ describe('parseCli', () => {
     [['--version', 'v1.2.3'], /not a version/],
     [['--version', '1.2.3', '--nope'], /Unknown option/],
     [['--version', '1.2.3', '--upload', '--skip-branch-checks'], /dry run only/],
-    [['--version', '1.2.3', '--upload', '--changelog', 'x.md'], /dry run only/]
+    [['--version', '1.2.3', '--upload', '--changelog', 'x.md'], /dry run only/],
+    [['--version', '1.2.3', '--upload', '--mac-only'], /dry run only; a release carries the Windows/]
   ]) {
     test(`refuses ${args.join(' ') || 'no arguments'}`, () => {
       assert.throws(
@@ -131,11 +134,13 @@ describe('the checks', () => {
 })
 
 describe('the release files', () => {
-  test('SHA256SUMS lists the DMG, the zip and the sources as shasum does, and notes.mjs reads it', async () => {
+  test('SHA256SUMS lists the DMG, the zip, the installers and the sources as shasum does, and notes.mjs reads it', async () => {
     const dist = fresh('dist')
     mkdirSync(join(dist, 'sources'))
     writeFileSync(join(dist, 'Mergelane-1.0.0-arm64.dmg'), 'dmg')
     writeFileSync(join(dist, 'Mergelane-1.0.0-arm64-mac.zip'), 'zip')
+    writeFileSync(join(dist, 'Mergelane-1.0.0-x64-setup.exe'), 'x64')
+    writeFileSync(join(dist, 'Mergelane-1.0.0-arm64-setup.exe'), 'arm64')
     writeFileSync(join(dist, 'sources', 'b-source.tar.gz'), 'b')
     writeFileSync(join(dist, 'sources', 'a-build.sh'), 'a')
     writeFileSync(join(dist, 'sources', '.DS_Store'), '')
@@ -145,9 +150,17 @@ describe('the release files', () => {
     assert.deepEqual(files, [
       'Mergelane-1.0.0-arm64.dmg',
       'Mergelane-1.0.0-arm64-mac.zip',
+      'Mergelane-1.0.0-x64-setup.exe',
+      'Mergelane-1.0.0-arm64-setup.exe',
       'a-build.sh',
       'b-source.tar.gz'
     ])
+    // A --mac-only dry run lists no installers.
+    const macOnly = parseChecksums((await checksums(dist, '1.0.0', { windows: false })).text)
+    assert.deepEqual(
+      macOnly.map(({ file }) => file).filter((file) => file.endsWith('.exe')),
+      []
+    )
     const shasum = spawnSync('shasum', ['-a', '256', 'Mergelane-1.0.0-arm64.dmg'], {
       cwd: dist,
       encoding: 'utf8'
@@ -176,9 +189,20 @@ describe('the release files', () => {
       '/n.md',
       '/d/Mergelane-1.0.0-arm64.dmg',
       '/d/Mergelane-1.0.0-arm64-mac.zip',
+      '/d/Mergelane-1.0.0-x64-setup.exe',
+      '/d/Mergelane-1.0.0-arm64-setup.exe',
       '/d/SHA256SUMS',
       '/d/sources/s1'
     ])
+    const macOnly = releaseArgs({
+      version: '1.0.0',
+      sha: 'abc',
+      notes: '/n.md',
+      dist: '/d',
+      sources: [],
+      windows: false
+    })
+    assert.ok(!macOnly.some((arg) => arg.endsWith('-setup.exe')))
     assert.ok(
       releaseArgs({
         version: '1.0.0-beta.1',
@@ -237,8 +261,13 @@ function fakeRepo({ version = '1.0.0', answers = {}, zipVersion = version, fail 
     if (fail && key === fail) throw new Error(`${command} ${args.join(' ')} exited with 1`)
     if (command === 'npx' && args[0] === 'electron-builder') {
       mkdirSync(dist, { recursive: true })
-      writeFileSync(join(dist, `Mergelane-${version}-arm64.dmg`), 'dmg')
-      writeFileSync(join(dist, `Mergelane-${version}-arm64-mac.zip`), 'zip')
+      if (args.includes('--win')) {
+        const arch = args.includes('--arm64') ? 'arm64' : 'x64'
+        writeFileSync(join(dist, `Mergelane-${version}-${arch}-setup.exe`), `setup ${arch}`)
+      } else {
+        writeFileSync(join(dist, `Mergelane-${version}-arm64.dmg`), 'dmg')
+        writeFileSync(join(dist, `Mergelane-${version}-arm64-mac.zip`), 'zip')
+      }
     }
     if (command === 'node' && args[0] === 'scripts/media-tools/sources.mjs') {
       mkdirSync(args[1], { recursive: true })
@@ -308,14 +337,32 @@ describe('release', () => {
     assert.ok(commands.some((line) => line.startsWith('codesign --verify --deep --strict')))
     assert.ok(commands.at(-1).includes('--changelog /c.md'))
     assert.ok(!commands.some((line) => line.startsWith('gh release')))
+    // The Windows installers, after the Mac app's checks and before the sources, in this order.
+    const windows = [
+      'node scripts/windows/build-helpers.mjs',
+      'npm run fetch:media-tools:win',
+      'npx electron-builder --win --x64 --config electron-builder.win.yml --publish never',
+      'npx electron-builder --win --arm64 --config electron-builder.win.yml --publish never',
+      'node scripts/windows/check-build.mjs --version 1.0.0',
+      `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')}`,
+      `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')} --manifest scripts/media-tools/tools-windows-x64.json`,
+      `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')} --manifest scripts/media-tools/tools-windows-arm64.json`
+    ].map((line) => commands.indexOf(line))
+    assert.ok(windows.every((at) => at > 0), String(windows))
+    assert.deepEqual([...windows].sort((a, b) => a - b), windows)
+    assert.ok(commands.findIndex((line) => line.startsWith('codesign --verify')) < windows[0])
+    assert.match(commands.at(-1), /--windows-manifest scripts\/media-tools\/tools-windows-x64\.json/)
     // A fresh app/dist: nothing from an earlier build is left to upload by mistake.
     assert.deepEqual(readdirSync(repo.dist).sort(), [
       'Mergelane-1.0.0-arm64-mac.zip',
+      'Mergelane-1.0.0-arm64-setup.exe',
       'Mergelane-1.0.0-arm64.dmg',
+      'Mergelane-1.0.0-x64-setup.exe',
       'SHA256SUMS',
       'release-notes.md',
       'sources'
     ])
+    assert.match(readFileSync(join(repo.dist, 'SHA256SUMS'), 'utf8'), /  Mergelane-1\.0\.0-arm64-setup\.exe\n/)
     const text = printed.join('\n')
     assert.match(text, /DRY RUN: --skip-branch-checks/)
     assert.match(text, /DRY RUN finished/)
@@ -327,6 +374,19 @@ describe('release', () => {
       text,
       /sources\/ffmpeg-9\.0\.2-source\.tar\.xz +3\.0 KB|sources\/ffmpeg-9\.0\.2-source\.tar\.xz +0\.0 KB/
     )
+  })
+
+  test('a --mac-only dry run leaves every Windows step and file out', async () => {
+    const repo = fakeRepo()
+    const printed = []
+    const options = optionsFor(repo.root, { windows: false })
+    assert.equal(await release(options, { run: repo.run, print: (line) => printed.push(line) }), 0)
+    const commands = repo.calls.map(({ command, args }) => `${command} ${args.join(' ')}`)
+    for (const windows of ['scripts/windows/', '--win', 'fetch:media-tools:win', 'tools-windows-']) {
+      assert.ok(!commands.some((line) => line.includes(windows)), windows)
+    }
+    assert.ok(!readdirSync(repo.dist).some((name) => name.endsWith('-setup.exe')))
+    assert.match(printed.join('\n'), /DRY RUN: --mac-only: the Windows installers are left out/)
   })
 
   test('a release checks the branch and the tree, then creates a draft with --upload', async () => {
@@ -344,6 +404,8 @@ describe('release', () => {
     assert.equal(create.command, 'gh')
     assert.deepEqual(create.args.slice(0, 4), ['release', 'create', 'v1.0.0', '--draft'])
     assert.deepEqual(create.options.extraEnv, { GH_REPO: 'o/r' })
+    assert.ok(create.args.includes(join(repo.dist, 'Mergelane-1.0.0-x64-setup.exe')))
+    assert.ok(create.args.includes(join(repo.dist, 'Mergelane-1.0.0-arm64-setup.exe')))
     assert.match(printed.join('\n'), /created the DRAFT release v1\.0\.0 on o\/r/)
     // Without --upload and without skips, the same checks pass and it stops before gh.
     const again = fakeRepo()

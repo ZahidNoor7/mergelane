@@ -20,6 +20,7 @@ import { SettingRow, SettingsGroup } from './settingsParts'
 import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
+import { onWindows } from '../platformWords'
 
 // Settings › Updates, from the final design (design-system/mergelane/redesign/prototype.html,
 // UpdateSettings), checked against GitHub's releases (docs/DECISIONS.md ADR-0036). A found update's
@@ -87,7 +88,9 @@ function describe(update: UpdateState): { title: string; body: string; accent: b
     case 'ready':
       return {
         title: `${latest?.version} is ready to install`,
-        body: 'Mergelane quits and opens the disk image: drag Mergelane to Applications to replace this version. Running downloads pause and pick up where they left off.',
+        body: onWindows()
+          ? 'Mergelane quits and the installer replaces this version, then opens the new one. Running downloads pause and pick up where they left off.'
+          : 'Mergelane quits and opens the disk image: drag Mergelane to Applications to replace this version. Running downloads pause and pick up where they left off.',
         accent: true
       }
     case 'current':
@@ -352,9 +355,10 @@ export function UpdateSettings(): React.JSX.Element {
         <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-2" />
         <p className="max-w-[64ch] text-[12.5px] leading-[1.6] text-ink-2">
           Updates come from Mergelane’s GitHub releases, and each one is checked against the SHA-256
-          published with it before it opens. Mergelane isn’t signed by Apple yet, so the first time
-          a new version opens, macOS may ask you to confirm in System Settings › Privacy &amp;
-          Security.
+          published with it before it opens.{' '}
+          {onWindows()
+            ? 'Mergelane isn’t signed yet, so Windows may warn before the installer runs: choose “More info”, then “Run anyway”.'
+            : 'Mergelane isn’t signed by Apple yet, so the first time a new version opens, macOS may ask you to confirm in System Settings › Privacy & Security.'}
         </p>
       </aside>
     </>

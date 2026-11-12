@@ -17,31 +17,51 @@ Claude builds everything on the owner's Mac and can't run Windows code. So Windo
   write there. It opens nothing.
 - Runs Mergelane's Go test programs that the PC's chip can run, after checking that each one is the file that was
   built (SHA-256).
-- Opens Mergelane once from the kit folder for each chip the PC can run, with a throwaway profile in the kit's
-  `results` folder (Electron's `--user-data-dir`), waits up to 90 seconds for its window, and closes it. Anything
-  still running from the kit's app folder afterwards is stopped. A run with its own `--user-data-dir` doesn't
-  register `mergelane://` links (`app/src/main/index.ts`), so the test copy never takes them over.
+- For each chip the PC can run, installs Mergelane from the kit's installer (W4), silently and into the kit's
+  `results` folder, and then:
+  - checks that the installer added Mergelane to **Open with** for `.torrent` and `.nzb`, pointing at the program it
+    installed;
+  - opens Mergelane once with a throwaway profile in the `results` folder (Electron's `--user-data-dir`), waits up
+    to 90 seconds for its window, then up to 30 seconds for the browser bridge to answer on its pipe, and closes
+    it. Anything still running from the app's folder afterwards is stopped;
+  - runs both helpers inside the app (`mergelane-daemon.exe version`, `mergelane-nmhost.exe --version`) and checks
+    that they say the app's version, as the Mac's packaging test does. The Mac can't read that stamp itself;
+  - uninstalls it silently and checks that nothing is left: the program, the Apps list entry, the Start menu and
+    desktop shortcuts, and the Open with entries.
+
+  It never installs over a Mergelane already installed for the user: it skips the step and says why. A run with its
+  own `--user-data-dir` doesn't register `mergelane://` links or the browser host (`app/src/main/index.ts`), so the
+  test copy never takes them over. A kit built with `--unpacked` carries the unpacked app instead, which is only
+  opened and checked, not installed.
 - Writes `report.txt` in the kit folder and copies it to the clipboard.
 
-What it never does: it needs no administrator rights (it stops if it has them), changes no settings, installs
-nothing, and writes nothing outside its own folder. The test programs use the TEMP folder and clean up after
-themselves. `scripts/windows/kit.test.mjs` checks the script for commands that would change the system.
+What it never does: it needs no administrator rights (it stops if it has them), changes no settings, and writes
+nothing outside its own folder. The one exception is Mergelane's own per-user installer: while the test copy is
+installed, it adds a Start menu entry, a desktop shortcut, an Apps list entry and the Open with entries, all for the
+current user only, and its uninstaller removes them (the kit checks). The test programs use the TEMP folder and clean
+up after themselves. `scripts/windows/kit.test.mjs` checks the script for commands that would change the system.
 
 ### Build it (on the Mac)
 
 ```sh
 node scripts/windows/build-helpers.mjs     # mergelane-daemon.exe and mergelane-nmhost.exe, both chips
-cd app && npm run build:win:dir && cd ..   # the unpacked Windows app, both chips, in app/dist
+cd app && npm run fetch:media-tools:win    # yt-dlp, Deno and FFmpeg for Windows, both chips (ADR-0057)
+npm run build:win && cd ..                 # the two installers, one per chip, in app/dist
+node scripts/windows/check-build.mjs --version "$(node -p 'require("./app/package.json").version')"
 node scripts/windows/kit.mjs
 ```
+
+`check-build.mjs` reads the build without running it: each installer is there, every program in each chip's app is
+built for that chip, the app says the right version, and its Electron fuses are the ones `electron-builder.yml`
+asks for. For a kit with the unpacked app instead, build with `npm run build:win:dir` and pass `--unpacked`.
 
 The Windows app is built with `electron-builder.win.yml`, which extends `electron-builder.yml` with the file
 rules only Windows needs (Windows' own native-module builds instead of the Mac's). Plain `electron-builder --win`
 without it would pack the Mac's native modules, so always use `npm run build:win` or `build:win:dir`.
 
 The kit builder writes `dist/windows-kit/` and `dist/mergelane-windows-kit.zip` (both ignored by git). Options:
-`--arch x64` or `--arch arm64` to build one chip only, `--out <dir>` for another folder, `--no-zip`, `--no-app`
-(Go test programs only). The builder replaces only a folder that is empty or an earlier kit.
+`--arch x64` or `--arch arm64` to build one chip only, `--out <dir>` for another folder, `--no-zip`, `--unpacked`
+(the unpacked app instead of the installer), `--no-app` (Go test programs only). The builder replaces only a folder that is empty or an earlier kit.
 
 ### Run it (on the laptop)
 
@@ -64,7 +84,8 @@ pbpaste | node scripts/windows/report.mjs
 ```
 
 It prints, in plain words: the Windows version and chip, Smart App Control, whether Downloads stayed unchanged,
-each test program's result, and the coverage of the Windows-only Go files (`*_windows.go`). Exit code 0 means
+each test program's result, the coverage of the Windows-only Go files (`*_windows.go`), and for each chip's app how
+the install, the window, the bridge, the helpers, Open with and the uninstall went. Exit code 0 means
 everything that must pass passed; 1 means something failed or Downloads changed; 2 means no readable report.
 
 ### Adding Go packages

@@ -4,7 +4,7 @@
 //
 // usage: node scripts/release/local-release.mjs --version <x.y.z> [--upload]
 //        node scripts/release/local-release.mjs --version <x.y.z> --skip-branch-checks
-//            [--changelog <file>]                         (a dry run on any branch; never uploads)
+//            [--changelog <file>] [--mac-only]            (a dry run on any branch; never uploads)
 //
 // What it does, in release.yml's order:
 //   1. the release-notes script's tests (90% line coverage);
@@ -17,13 +17,19 @@
 //      electron-builder --mac --publish never, into a fresh app/dist;
 //   4. the REA fuse audit, package-test.sh in its local mode (no quarantine; an isolated launch),
 //      and a check of the app in the zip (signature and version);
-//   5. the release files: the bundled programs' sources (sources.mjs), SHA256SUMS of everything
-//      attached, and the notes (notes.mjs);
-//   6. it prints what would be uploaded, and stops. Only with --upload does it run
+//   5. the Windows installers (W4, ADR-0058), built on this Mac for x64 and arm64: the Windows
+//      helpers (build-helpers.mjs), the Windows media tools (fetch.mjs with both Windows manifests),
+//      electron-builder --win for each chip, and check-build.mjs (each program's chip, the version,
+//      the fuses). They can't be opened here: the laptop test kit does that (docs/WINDOWS-TESTING.md);
+//   6. the release files: the bundled programs' sources (sources.mjs, with the Windows manifests too),
+//      SHA256SUMS of everything attached, and the notes (notes.mjs, with the Windows install steps);
+//   7. it prints what would be uploaded, and stops. Only with --upload does it run
 //      `gh release create v<version> --draft --target <commit> ...`, as release.yml does. It never
 //      publishes: a draft is published by hand on GitHub (docs/RELEASING.md).
-// --skip-branch-checks skips the two branch checks (HEAD at origin's main, clean tree) and
-// --changelog reads another changelog; both are for a dry run only and refused with --upload.
+// --skip-branch-checks skips the two branch checks (HEAD at origin's main, clean tree),
+// --changelog reads another changelog, and --mac-only leaves out step 5 (and the Windows files);
+// all three are for a dry run only and refused with --upload: a release without the installers
+// would offer Windows users an update they can't install.
 // Every command's output goes to local-ci-logs/release-<time>.log too.
 // Exit codes: 0 done; 1 a check or step failed; 2 wrong usage.
 import { spawn } from 'node:child_process'
@@ -43,11 +49,13 @@ import { dirname, join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { assetNames, VERSION } from './notes.mjs'
+import { assetNames, VERSION, windowsAssetNames } from './notes.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const ROOT = resolve(HERE, '../..')
 export const DEFAULT_BRANCH = 'main'
+/** The Windows chips a release ships an installer for (ADR-0053). */
+export const WINDOWS_ARCHES = ['x64', 'arm64']
 
 export const USAGE = [
   'usage: node scripts/release/local-release.mjs --version <x.y.z> [--upload]',
@@ -55,6 +63,7 @@ export const USAGE = [
   '  --upload               create the draft release on GitHub after every check and step passed',
   '  --skip-branch-checks   DRY RUN ONLY: build from any branch and an unclean tree; never uploads',
   '  --changelog <file>     DRY RUN ONLY: read this changelog instead of CHANGELOG.md',
+  '  --mac-only             DRY RUN ONLY: leave the Windows installers out (a quicker build)',
   '  --logs <dir>           where the log goes (default: local-ci-logs/)'
 ].join('\n')
 
@@ -78,6 +87,11 @@ export const MIRRORS = {
   'Install from the DMG and reach the ready state':
     'package-test.sh --local (no quarantine; an isolated launch)',
   'Check the app in the zip': 'the same checks',
+  'Build the Windows helpers (x64 and arm64)': 'the same command; left out with --mac-only',
+  'Fetch the Windows media tools, and build FFmpeg for Windows (pinned SHA-256s, docs/MEDIA-TOOLS.md)':
+    'the same command; left out with --mac-only',
+  'Build the Windows installers (x64 and arm64, unsigned)': 'the same commands; left out with --mac-only',
+  'Check the Windows build': 'the same command; left out with --mac-only',
   'Collect the source of the bundled programs': 'the same command',
   'Compute the checksums': 'the same list, computed by this script',
   'Write the release notes': 'the same command, into app/dist/release-notes.md',
@@ -103,6 +117,7 @@ export function parseCli(argv) {
         upload: { type: 'boolean' },
         'skip-branch-checks': { type: 'boolean' },
         changelog: { type: 'string' },
+        'mac-only': { type: 'boolean' },
         logs: { type: 'string' },
         root: { type: 'string' }
       }
@@ -125,12 +140,18 @@ export function parseCli(argv) {
   if (upload && values.changelog) {
     throw new UsageError('--changelog is for a dry run only; a release uses CHANGELOG.md')
   }
+  if (upload && values['mac-only']) {
+    throw new UsageError(
+      '--mac-only is for a dry run only; a release carries the Windows installers too'
+    )
+  }
   const root = resolve(values.root ?? ROOT)
   return {
     version: values.version,
     tag: `v${values.version}`,
     upload,
     skipBranchChecks,
+    windows: !values['mac-only'],
     changelog: values.changelog ? resolve(values.changelog) : null,
     root,
     logs: resolve(values.logs ?? join(root, 'local-ci-logs'))
@@ -217,21 +238,29 @@ export async function sha256Of(path) {
   return hash.digest('hex')
 }
 
-/** SHA256SUMS as `shasum -a 256` prints it: the DMG, the zip, then the sources, by name. */
-export async function checksums(dist, version) {
+/** The files a release attaches from dist, before SHA256SUMS: the DMG, the zip and, unless it is a
+ * --mac-only dry run, the Windows installers (x64, then arm64). */
+export function builtAssets(version, windows) {
   const { dmg, zip } = assetNames(version)
+  const installers = windows ? WINDOWS_ARCHES.map((arch) => windowsAssetNames(version)[arch]) : []
+  return [dmg, zip, ...installers]
+}
+
+/** SHA256SUMS as `shasum -a 256` prints it: the built files, then the sources, by name. */
+export async function checksums(dist, version, { windows = true } = {}) {
   const sources = (await readdir(join(dist, 'sources')))
     .filter((name) => !name.startsWith('.'))
     .sort()
   const lines = []
-  for (const name of [dmg, zip]) lines.push(`${await sha256Of(join(dist, name))}  ${name}`)
+  for (const name of builtAssets(version, windows)) {
+    lines.push(`${await sha256Of(join(dist, name))}  ${name}`)
+  }
   for (const name of sources) lines.push(`${await sha256Of(join(dist, 'sources', name))}  ${name}`)
   return { text: `${lines.join('\n')}\n`, sources }
 }
 
 /** The arguments of release.yml's `gh release create`, always as a draft. */
-export function releaseArgs({ version, sha, notes, dist, sources }) {
-  const { dmg, zip } = assetNames(version)
+export function releaseArgs({ version, sha, notes, dist, sources, windows = true }) {
   return [
     'release',
     'create',
@@ -244,8 +273,7 @@ export function releaseArgs({ version, sha, notes, dist, sources }) {
     `Mergelane ${version}`,
     '--notes-file',
     notes,
-    join(dist, dmg),
-    join(dist, zip),
+    ...builtAssets(version, windows).map((name) => join(dist, name)),
     join(dist, 'SHA256SUMS'),
     ...sources.map((name) => join(dist, 'sources', name))
   ]
@@ -461,11 +489,58 @@ export async function release(options, { run, print }) {
     await rm(unzipped, { recursive: true, force: true })
   }
 
+  if (options.windows) {
+    stepTitle('Build the Windows helpers (x64 and arm64)')
+    await run('node', ['scripts/windows/build-helpers.mjs'], { cwd: root })
+
+    stepTitle(
+      'Fetch the Windows media tools, and build FFmpeg for Windows (pinned SHA-256s, docs/MEDIA-TOOLS.md)'
+    )
+    await run('npm', ['run', 'fetch:media-tools:win'], { cwd: app })
+
+    // electron-vite and the extension were built for the Mac app above; the same output goes in.
+    stepTitle('Build the Windows installers (x64 and arm64, unsigned)')
+    for (const arch of WINDOWS_ARCHES) {
+      await run(
+        'npx',
+        [
+          'electron-builder',
+          '--win',
+          `--${arch}`,
+          '--config',
+          'electron-builder.win.yml',
+          '--publish',
+          'never'
+        ],
+        { cwd: app }
+      )
+    }
+
+    stepTitle('Check the Windows build')
+    await run('node', ['scripts/windows/check-build.mjs', '--version', version], { cwd: root })
+  } else {
+    say('DRY RUN: --mac-only: the Windows installers are left out')
+  }
+
   stepTitle('Collect the source of the bundled programs')
   await run('node', ['scripts/media-tools/sources.mjs', join(dist, 'sources')], { cwd: root })
+  if (options.windows) {
+    for (const arch of WINDOWS_ARCHES) {
+      await run(
+        'node',
+        [
+          'scripts/media-tools/sources.mjs',
+          join(dist, 'sources'),
+          '--manifest',
+          `scripts/media-tools/tools-windows-${arch}.json`
+        ],
+        { cwd: root }
+      )
+    }
+  }
 
   stepTitle('Compute the checksums')
-  const sums = await checksums(dist, version)
+  const sums = await checksums(dist, version, { windows: options.windows })
   writeFileSync(join(dist, 'SHA256SUMS'), sums.text)
   print(sums.text.replace(/\n$/, ''))
 
@@ -481,12 +556,22 @@ export async function release(options, { run, print }) {
       join(dist, 'SHA256SUMS'),
       '--out',
       notes,
+      ...(options.windows
+        ? ['--windows-manifest', 'scripts/media-tools/tools-windows-x64.json']
+        : []),
       ...changelogArgs
     ],
     { cwd: root }
   )
 
-  const args = releaseArgs({ version, sha, notes, dist, sources: sums.sources })
+  const args = releaseArgs({
+    version,
+    sha,
+    notes,
+    dist,
+    sources: sums.sources,
+    windows: options.windows
+  })
   const files = args.slice(args.indexOf(notes) + 1)
   stepTitle(options.upload ? 'Create the draft release on GitHub' : 'What would be uploaded')
   for (const file of files) {

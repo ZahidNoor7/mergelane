@@ -46,8 +46,8 @@ jobs:
       - name: Test the Deno notices generator
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' --test-coverage-lines=90 scripts/media-tools/deno-notices.test.mjs
       # A stand-in for go, git and zip, and static checks of test-kit.ps1, which runs only on Windows.
-      - name: Test the Windows test kit's builder and report reader, and the helpers' build (ADR-0054)
-        run: node --test --experimental-test-coverage --test-coverage-include='scripts/windows/kit.mjs' --test-coverage-include='scripts/windows/report.mjs' --test-coverage-include='scripts/windows/build-helpers.mjs' --test-coverage-lines=90 scripts/windows/kit.test.mjs scripts/windows/report.test.mjs scripts/windows/build-helpers.test.mjs
+      - name: Test the Windows test kit's builder and report reader, the helpers' build, and the build check (ADR-0054, ADR-0058)
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/windows/kit.mjs' --test-coverage-include='scripts/windows/report.mjs' --test-coverage-include='scripts/windows/build-helpers.mjs' --test-coverage-include='scripts/windows/check-build.mjs' --test-coverage-lines=90 scripts/windows/kit.test.mjs scripts/windows/report.test.mjs scripts/windows/build-helpers.test.mjs scripts/windows/check-build.test.mjs
 
   app-checks:
     runs-on: xcode-27

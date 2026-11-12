@@ -10,15 +10,16 @@
 //   - README.txt: the steps, in plain words;
 //   - go/<x64|arm64>/<package>/<name>.test.exe: the daemon's Go tests, cross-compiled for Windows with
 //     `go test -c -cover` (one program per package that has Windows tests);
-//   - app/<x64|arm64>/: the unpacked Windows app (`npm run build:win:dir` in app/), which the script starts once
-//     with a throwaway profile to check that its window opens;
+//   - app/<x64|arm64>/: Mergelane's installer for each chip (`npm run build:win` in app/), which the script
+//     installs into the kit's own folder, opens once with a throwaway profile, and uninstalls again (W4); or, with
+//     --unpacked, the unpacked app (`npm run build:win:dir`), which it only opens;
 //   - kit.json: what to run, with each program's SHA-256, so the script can tell a damaged copy.
 //
 // Text files are written with Windows line endings. test-kit.ps1 must stay ASCII: Windows PowerShell reads a
 // script without a byte-order mark in the ANSI code page (about_Character_Encoding), so anything else would be
 // garbled.
 //
-// usage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app]
+// usage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app | --unpacked]
 // Exit codes: 0 built; 1 a build failed; 2 wrong usage.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -65,14 +66,20 @@ export const CMD_NAME = 'Run test kit.cmd'
 export const APP_FOLDERS = { x64: 'win-unpacked', arm64: 'win-arm64-unpacked' }
 export const APP_EXE = 'Mergelane.exe'
 
+/** A chip's installer in app/dist (electron-builder.yml nsis.artifactName). */
+export function installerName(version, arch) {
+  return `Mergelane-${version}-${arch}-setup.exe`
+}
+
 export class UsageError extends Error {}
 
 export function parseArgs(argv) {
-  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true, apps: true }
+  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true, apps: 'installer' }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--no-zip') options.zip = false
     else if (arg === '--no-app') options.apps = false
+    else if (arg === '--unpacked') options.apps = 'folder'
     else if (arg === '--out' || arg === '--arch') {
       const value = argv[++i]
       if (!value) throw new UsageError(`${arg} needs a value`)
@@ -146,6 +153,19 @@ export async function buildProgram({ root, out, pkg, arch, runner = run }) {
   return existsSync(file) ? relative : null
 }
 
+/** Copies a chip's installer into the kit; returns its kit.json entry. */
+export function addInstaller({ root, out, arch }) {
+  const version = JSON.parse(readFileSync(join(root, 'app', 'package.json'), 'utf8')).version
+  const name = installerName(version, arch)
+  const from = join(root, 'app', 'dist', name)
+  if (!existsSync(from)) {
+    throw new UsageError(`no ${arch} installer at ${from}: run "npm run build:win" in app/, or pass --unpacked or --no-app`)
+  }
+  mkdirSync(join(out, 'app', arch), { recursive: true })
+  cpSync(from, join(out, 'app', arch, name))
+  return { arch, kind: 'installer', version, path: `app/${arch}/${name}`, sha256: sha256(from) }
+}
+
 /** Copies a chip's unpacked app into the kit; returns its kit.json entry. */
 export function addApp({ root, out, arch }) {
   const from = join(root, 'app', 'dist', APP_FOLDERS[arch])
@@ -154,7 +174,8 @@ export function addApp({ root, out, arch }) {
     throw new UsageError(`no ${arch} Windows app in ${from}: run "npm run build:win:dir" in app/, or pass --no-app`)
   }
   cpSync(from, join(out, 'app', arch), { recursive: true })
-  return { arch, kind: 'folder', path: `app/${arch}/${APP_EXE}`, sha256: sha256(exe) }
+  const version = JSON.parse(readFileSync(join(root, 'app', 'package.json'), 'utf8')).version
+  return { arch, kind: 'folder', version, path: `app/${arch}/${APP_EXE}`, sha256: sha256(exe) }
 }
 
 async function commitOf(root, runner) {
@@ -185,13 +206,19 @@ Built from commit ${commit} on ${built.slice(0, 10)}.
 What it does
 - Reads which Windows, which chip and which Smart App Control setting this PC has.
 - Runs Mergelane's own test programs from this folder.
-- Opens Mergelane once from this folder, with a test profile kept in this folder, waits for its window, and
-  closes it again.
+- Installs Mergelane into this folder for a minute (for your user only, no administrator rights), opens it once
+  with a test profile kept in this folder, checks its window, its browser bridge and its two helper programs, and
+  uninstalls it again. While it is installed, Windows also lists it in Settings > Apps, and the installer adds a
+  Start menu entry, a desktop shortcut and "Open with" entries for .torrent and .nzb files (never the default app);
+  the uninstaller removes them, and the kit checks that it did. If Mergelane is already installed for you, the kit
+  leaves it alone and skips this step.
 - Looks at the names of the files in your Downloads folder before and after, to prove the tests never write
   there. It doesn't open them.
 - Writes report.txt in this folder and copies the report to the clipboard.
 
-It needs no administrator rights and changes no settings. Everything it writes stays in this folder.
+It needs no administrator rights and changes no settings. Everything it writes stays in this folder, except the
+Start menu entry, desktop shortcut, Apps list entry and Open with entries that Mergelane's installer adds while it
+is installed, which its uninstaller takes away again.
 
 How to run it
 1. Double-click "${CMD_NAME}" (not "Run as administrator").
@@ -239,8 +266,8 @@ export async function buildKit({
   const appEntries = []
   if (apps) {
     for (const arch of arches) {
-      log(`adding the ${arch} app`)
-      appEntries.push(addApp({ root, out, arch }))
+      log(`adding the ${arch} ${apps === 'folder' ? 'app' : 'installer'}`)
+      appEntries.push(apps === 'folder' ? addApp({ root, out, arch }) : addInstaller({ root, out, arch }))
     }
   }
 
@@ -272,7 +299,7 @@ export async function main(
     options = parseArgs(argv)
   } catch (error) {
     stderr.write(
-      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app]\n`
+      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app | --unpacked]\n`
     )
     return 2
   }

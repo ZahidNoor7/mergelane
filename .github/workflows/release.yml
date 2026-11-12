@@ -8,8 +8,8 @@ name: release
 #   gh workflow run release.yml --ref main -f version=X.Y.Z
 # reviews the draft release it creates, and publishes it by hand. It must run from main.
 #
-# What ships: an ad-hoc-signed arm64 DMG and zip (no Apple Developer ID yet, ADR-0003), and a
-# SHA256SUMS file. Nothing is uploaded unless the REA fuse audit (ADR-0016) and the packaging test
+# What ships: an ad-hoc-signed arm64 DMG and zip (no Apple Developer ID yet, ADR-0003), the unsigned
+# Windows installers for x64 and arm64, built on the same Mac (W4, ADR-0058), and a SHA256SUMS file. Nothing is uploaded unless the REA fuse audit (ADR-0016) and the packaging test
 # (ADR-0013) both pass first.
 on:
   workflow_dispatch:
@@ -36,8 +36,9 @@ jobs:
   release:
     # macOS 27 on Apple silicon, like every CI job (ADR-0004).
     runs-on: xcode-27
-    # ci.yml's package job takes up to 30 minutes; this adds the zip check, the notes and the upload.
-    timeout-minutes: 45
+    # ci.yml's package job takes up to 30 minutes; this adds the zip check, the Windows build (two
+    # FFmpeg builds and two installers, about 10 minutes on this Mac), the notes and the upload.
+    timeout-minutes: 60
     # GitHub's docs: "contents: write allows the action to create a release". Only this job gets it,
     # and nothing else is granted.
     permissions:
@@ -180,13 +181,40 @@ jobs:
           fi
           rm -rf "$unzipped"
 
+      # The Windows helpers for both chips, cross-compiled with cgo off into daemon/bin/win-<chip>/ with the
+      # release version stamped in, as the macOS ones above (electron-builder.yml, win.extraResources).
+      - name: Build the Windows helpers (x64 and arm64)
+        working-directory: .
+        run: node scripts/windows/build-helpers.mjs
+
+      # yt-dlp's and Deno's Windows builds, checked against their pinned SHA-256s, and Mergelane's own LGPL
+      # FFmpeg cross-compiled for each chip with llvm-mingw and zlib from their pinned releases (ADR-0057).
+      - name: Fetch the Windows media tools, and build FFmpeg for Windows (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+        run: npm run fetch:media-tools:win
+
+      # One per-user NSIS installer per chip, from the app built above (ADR-0058). Unsigned: free signing is
+      # switched on later by config only (ADR-0053).
+      - name: Build the Windows installers (x64 and arm64, unsigned)
+        run: |
+          npx electron-builder --win --x64 --config electron-builder.win.yml --publish never
+          npx electron-builder --win --arm64 --config electron-builder.win.yml --publish never
+
+      # A Windows program can't run here, so this reads the files: each program's chip, the app's version
+      # and its Electron fuses. The owner's laptop test kit opens it (docs/WINDOWS-TESTING.md).
+      - name: Check the Windows build
+        working-directory: .
+        run: node scripts/windows/check-build.mjs --version "$VERSION"
+
       # The source code that the bundled programs' licences ask us to offer (ADR-0027): FFmpeg's
       # source release with our build script (LGPL, ADR-0028), and yt-dlp's source (GPL). Each archive
       # is checked against its pinned SHA-256 in tools.json; a GPL-family program without one stops
       # the release. Deno is MIT and needs none.
       - name: Collect the source of the bundled programs
         working-directory: .
-        run: node scripts/media-tools/sources.mjs app/dist/sources
+        run: |
+          node scripts/media-tools/sources.mjs app/dist/sources
+          node scripts/media-tools/sources.mjs app/dist/sources --manifest scripts/media-tools/tools-windows-x64.json
+          node scripts/media-tools/sources.mjs app/dist/sources --manifest scripts/media-tools/tools-windows-arm64.json
 
       # SHA256SUMS lists bare file names (it runs inside dist), so users can check a download with
       # `shasum -a 256` and the notes can show the same values. It is uploaded with the release.
@@ -194,7 +222,8 @@ jobs:
         working-directory: app/dist
         run: |
           {
-            shasum -a 256 "Mergelane-$VERSION-arm64.dmg" "Mergelane-$VERSION-arm64-mac.zip"
+            shasum -a 256 "Mergelane-$VERSION-arm64.dmg" "Mergelane-$VERSION-arm64-mac.zip" \
+              "Mergelane-$VERSION-x64-setup.exe" "Mergelane-$VERSION-arm64-setup.exe"
             (cd sources && shasum -a 256 -- *)
           } | tee SHA256SUMS
 
@@ -205,11 +234,12 @@ jobs:
       # as well, so they can be read before opening the draft.
       - name: Write the release notes
         run: |
-          node ../scripts/release/notes.mjs --version "$VERSION" --checksums dist/SHA256SUMS --out "$RUNNER_TEMP/release-notes.md"
+          node ../scripts/release/notes.mjs --version "$VERSION" --checksums dist/SHA256SUMS \
+            --windows-manifest ../scripts/media-tools/tools-windows-x64.json --out "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
 
-      # Creates the release for tag v<version> and uploads the DMG, the zip, SHA256SUMS and the
-      # source archives.
+      # Creates the release for tag v<version> and uploads the DMG, the zip, the Windows installers,
+      # SHA256SUMS and the source archives.
       # --target is the commit just built and tested: if the tag doesn't exist yet, it is created
       # there, not at the newest commit of the default branch (gh's manual). --draft (the default)
       # keeps the release unpublished until the owner reviews and publishes it. A version with a
@@ -229,5 +259,7 @@ jobs:
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             "dist/Mergelane-$VERSION-arm64.dmg" \
             "dist/Mergelane-$VERSION-arm64-mac.zip" \
+            "dist/Mergelane-$VERSION-x64-setup.exe" \
+            "dist/Mergelane-$VERSION-arm64-setup.exe" \
             dist/SHA256SUMS \
             dist/sources/*

@@ -26,6 +26,8 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- The browser extension uses the new Mergelane icon, in the toolbar, its menu and its options page. It had kept the
+  old one. While it isn't capturing or can't reach Mergelane, the icon is a grey copy of the new one.
 - While New download checks a link, the place where its preview will appear shows a spinning tile and a glowing
   name line above "Checking the link…", so the wait is visible and the window doesn't jump when the answer
   arrives. With Reduce motion on, both stay still.

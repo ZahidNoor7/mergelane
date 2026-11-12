@@ -15,6 +15,12 @@ milestone M3.1 in `docs/PHASE-3.md`.
   - In the app (M3.1 pull request 2): `app/build/icon.icns`, from `icon-default` (all ten iconset sizes, built with
     `iconutil`); `app/build/icon.png` and `app/resources/icon-dark.png` at 512 px; and
     `app/resources/trayTemplate.png` and `trayTemplate@2x.png` (set to 144 dpi) for the menu-bar item in M3.3.
+  - Settings › Updates shows `app/src/renderer/src/assets/brand/icon-128.png`, a copy of `icon-default-128.png`.
+  - The browser extension (2026-11-12): `app/extension/icons/icon-128.png` and `icon-32.png` are copies of
+    `icon-default-128.png` and `icon-default-32.png`; `icon-16.png` and `icon-48.png` are scaled from
+    `icon-default-1024.png` (ImageMagick, Lanczos). `icon-off-16.png` and `icon-off-32.png`, shown while the extension
+    isn't capturing or can't reach Mergelane, are those in grey at 55% opacity.
+  - `app/src/shared/brandIcons.test.ts` keeps all of these on the design's files.
   - The light icon variant is not used yet: macOS's light, dark and tinted app-icon variants need checking against
     Apple's and electron-builder's docs first.
 

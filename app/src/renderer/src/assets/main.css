@@ -337,12 +337,15 @@
    light on its rim: the window, then the sidebar and the content pane, then the cards. No CSS
    backdrop filter: the system already blurs the desktop, and a filter here would only blur the page.
    Tinted makes every layer thicker. Reduce Transparency (the Mac's or Settings', data-solid) and
-   Increase Contrast make them solid; main.css's reduced-motion rule stops every transition. */
+   Increase Contrast make them solid; main.css's reduced-motion rule stops every transition.
+   Clear is thinner than the design's first values (the owner, 2026-11-12: "a little more clear"):
+   window 0.12 → 0.06, sidebar 0.28 → 0.18, pane 0.42 → 0.3, cards 0.5 → 0.42, and in dark mode
+   0.34/0.42/0.5 → 0.24/0.3/0.38. Cards stay the most solid, so text over a busy desktop stays legible. */
 :root[data-palette='liquid'] {
-  --g-window: rgb(255 255 255 / 0.12);
-  --g-side: rgb(255 255 255 / 0.28);
-  --g-pane: rgb(255 255 255 / 0.42);
-  --g-card: rgb(255 255 255 / 0.5);
+  --g-window: rgb(255 255 255 / 0.06);
+  --g-side: rgb(255 255 255 / 0.18);
+  --g-pane: rgb(255 255 255 / 0.3);
+  --g-card: rgb(255 255 255 / 0.42);
   --g-solid-1: #f7f8fb;
   --g-solid-2: #ffffff;
   --g-shadow:
@@ -355,9 +358,9 @@
 }
 @media (prefers-color-scheme: dark) {
   :root[data-palette='liquid'] {
-    --g-window: rgb(8 10 18 / 0.34);
-    --g-side: rgb(14 16 26 / 0.42);
-    --g-pane: rgb(10 12 20 / 0.5);
+    --g-window: rgb(8 10 18 / 0.24);
+    --g-side: rgb(14 16 26 / 0.3);
+    --g-pane: rgb(10 12 20 / 0.38);
     --g-card: rgb(255 255 255 / 0.045);
     --g-solid-1: #0f121b;
     --g-solid-2: #1a1e29;

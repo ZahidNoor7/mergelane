@@ -7,6 +7,8 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- **Liquid Glass's Clear look is clearer.** More of your desktop shows through the window, the sidebar and the
+  content pane. Cards stay a little more solid, so text stays easy to read. Tinted is unchanged.
 - **A network you connect while a download runs now joins it.** Plug in your phone or join Wi-Fi during a download
   and it starts using that network too, without a click. A network you switched off for a download, or left out
   when you started it, stays off, even if it drops out and comes back. A download the server only allows over one

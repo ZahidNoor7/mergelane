@@ -148,6 +148,8 @@ From CLAUDE.md. Offers a copied link in New download.
 The exit criterion: a self-hosted runner, or the local runner, on the owner's Mac. It covers Wi-Fi, iPhone USB and
 Ethernet together, unplugging, sleep and wake, and a VPN on and off.
 
+Built as a guided script the owner runs (ADR-0050, docs/HARDWARE.md): `node scripts/hardware/hardware.mjs`.
+
 ## Owner answers (2026-11-11)
 
 1. **Features the design leaves out are all kept, restyled into the new layout:**

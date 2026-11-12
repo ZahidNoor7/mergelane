@@ -1196,3 +1196,43 @@ until the owner overrides it.
     app's theme would need the app to send it through the native host; that can come later.
   - Porcelain's seeds are written in two places. A change to them in `themes.ts` must be copied to
     `extension/src/ui.css`.
+
+## ADR-0050: The real-hardware suite is a guided script the owner runs (M3.8)
+
+- Status: Owner (2026-11-12): "Guided script in Terminal". CI stays paused (ADR-0020). The owner can connect Wi-Fi,
+  iPhone USB, Ethernet and Android USB at once.
+- Context:
+  - CLAUDE.md asks for real Wi-Fi, iPhone USB and Ethernet, unplugging, sleep and wake, and a VPN on and off,
+    "later" on a self-hosted runner labelled `hardware`.
+  - Most of it needs hands: a runner can't pull a cable or switch a VPN. A runner is also a background service
+    on the owner's Mac, and CI is paused.
+- Decision:
+  - **Script:** `scripts/hardware/hardware.mjs`, run by the owner as `node scripts/hardware/hardware.mjs`
+    (docs/HARDWARE.md).
+    - It drives the installed helper over its control socket, with the shared contract (`shared/daemon-api.ts`).
+    - It reads the routing table and VPN state with the tested `scripts/ci/local-root-lib.mjs`.
+    - It downloads public speed-test files with curl, and asks the owner at the right moments.
+  - **Measuring:**
+    - Per-network shares come from the helper's `stats`, sampled every 0.5 s.
+    - Every network is capped at 16 Mbit/s with the helper's `setLimit` (4 Mbit/s while one is unplugged). So a
+      download lasts long enough to measure on fast Ethernet, and the data stays near 200 MB plus about 50 MB per
+      network unplugged. The run states this before it starts.
+  - **Safety:**
+    - It never runs sudo by itself. The crash check is optional and names its command first.
+    - Any failure in the preflight stops before anything changes.
+    - Ctrl-C ends the prompt or wait in progress.
+    - A `finally` always restores the limits and sticky sites, turns merging off unless it was on, and checks that
+      no capture route is left (or prints the cleanup command).
+    - The commands that restore the limits are printed up front, in case the run is cut off.
+  - **Mergelane's own downloads** (`IP_BOUND_IF` while merging is on) are confirmed by the owner from the
+    download's networks, the one check the script can't see.
+  - **Report:** `local-ci-logs/hardware-<time>/` (ignored by git), with no addresses.
+  - **Tests:** `scripts/hardware/hardware.test.mjs` runs the suite against a stand-in Mac, and `ci.yml`'s
+    repo-checks gains it with the 90% line gate, like the other scripts.
+- Consequences:
+  - The exit criterion ("hardware suite green on the owner's Mac") is met by a passing run's report, which the owner
+    shares.
+  - A self-hosted runner could still run the checks that need no hands, by passing `--skip unplug,sleep,vpn,crash,app`
+    and answering "y" to start. That stays a later choice.
+  - The public test files could move or change. The preflight's 1 MB download and each check's note show it.
+

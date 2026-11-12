@@ -5,6 +5,13 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Mergelane offers to update its helper as soon as it opens** after an update. A note at the foot of the sidebar
+  says the helper needs updating, with an Update button that brings up your Mac's password prompt straight away
+  and a Later button. You no longer need to find Networks › System merge › Update. The note only appears if you use
+  system merge.
+
 ## [0.3.3] - 2026-11-12
 
 Keeping each website on one network now holds from a site's very first connections. Update the helper when

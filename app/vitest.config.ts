@@ -112,7 +112,9 @@ export const COVERED = [
   'src/renderer/src/components/NetworkRoleMenu.tsx',
   // ADR-0046: Remove helper, in the System merge section.
   'src/renderer/src/components/SystemMergeSection.tsx',
-  'src/renderer/src/hooks/useSystemMerge.ts'
+  'src/renderer/src/hooks/useSystemMerge.ts',
+  // ADR-0051: the sidebar offers the helper's update as soon as Mergelane opens.
+  'src/renderer/src/components/HelperUpdateNotice.tsx'
 ]
 
 export default defineConfig({

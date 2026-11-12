@@ -82,7 +82,9 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     freeSpace,
-    updateSettings
+    updateSettings,
+    // The helper update notice asks once; here it never hears back, so it stays out of the way.
+    systemMerge: vi.fn(() => new Promise(() => {}))
   } as unknown as typeof window.mergelane
   useAppStore.setState({
     screen: 'downloads',

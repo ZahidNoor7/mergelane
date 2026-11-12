@@ -1238,3 +1238,30 @@ until the owner overrides it.
     and answering "y" to start. That stays a later choice.
   - The public test files could move or change. The preflight's 1 MB download and each check's note show it.
 
+## ADR-0051: The sidebar offers the helper's update as soon as Mergelane opens
+
+- Status: Owner (2026-11-12). The owner asked why the app and the helper update separately, and chose this
+  over the old flow.
+- Context:
+  - The app updates itself (ADR-0036), but the helper is a root LaunchDaemon in `/Library/PrivilegedHelperTools`
+    and `/Library/LaunchDaemons`. Only an administrator may replace it, so the app can't update it silently.
+    `SMAppService`, which would bundle and update it, needs a Developer ID (CLAUDE.md: later).
+  - Until now the only way was Networks › System merge › Update. After an app update the owner had to know to
+    look there, and the M3.8 run found the owner's helper still at 0.1.0 three app versions later.
+- Decision:
+  - **Notice:** `HelperUpdateNotice` sits in the sidebar's foot under `UpdateNotice`, in the same style. It reads
+    "Update the helper to match Mergelane <version>. System merge needs it. Your Mac asks for your password.",
+    with **Update…** and **Later**.
+  - **When it shows:** the helper is installed and out of date (the snapshot's `helperOutdated`). It is checked at
+    launch and whenever the window comes to the front, so it appears as soon as an updated Mergelane opens.
+    Someone who never installed the helper is never asked.
+  - **Update…** runs the same install as Networks' Update (`installSystemMerge`): one administrator prompt, and
+    merging that was on comes back on. A failure shows its reason in the notice.
+  - **Later** hides it for this launch only.
+  - **On Networks** it is hidden: the System merge section's banner says the same with more.
+- Consequences:
+  - The app and the helper are still two updates with one password prompt between them. That prompt now comes up
+    by itself instead of being found.
+  - A real update needs the packaged app. Tests run the prompt through the test seam (ADR-0046) or a development
+    build, which says it needs the packaged app.
+

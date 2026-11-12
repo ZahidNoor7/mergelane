@@ -1328,7 +1328,10 @@ until the owner overrides it.
     and `windows` merges `main` in regularly. Merging `windows` into `main` is the owner's decision.
   - **Signing:** free only. Windows builds are unsigned until a free route is approved (SignPath Foundation needs
     CI; the Microsoft Store needs research on the helper). The README states Smart App Control's block plainly.
-  - **CI:** paused for macOS and Windows (ADR-0020 still holds). Windows checks run on the owner's Windows laptop.
+  - **CI:** paused for macOS and Windows (ADR-0020 still holds).
+  - **Where (owner, 2026-11-12):** Claude builds everything on the owner's Mac, in a separate `mergelane-windows`
+    worktree on the `windows` branch. The owner installs the builds on their Windows laptop and runs the Windows
+    test kit there (`docs/WINDOWS-PLAN.md`, "How Windows is tested"). Claude never runs on the laptop.
   - **Safari:** postponed, not dropped. Phase 3 is otherwise complete.
   - **Order:** the plan in `docs/WINDOWS-PLAN.md`, W1 to W6. In-app merging, the extension, the media tools, the
     installer and updates come first. The system-wide helper comes last, because it is the largest and riskiest

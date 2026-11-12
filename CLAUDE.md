@@ -121,8 +121,9 @@ Rules:
 ## Testing (required; the owner relies on e2e tests, not manual checks)
 
 A feature is done only when its tests exist and pass. CI is paused for both macOS and Windows (owner,
-2026-11-12; ADR-0020, ADR-0053): tests run locally, on the owner's Mac for macOS and on the owner's Windows laptop
-for Windows. Never trigger GitHub workflows. Never mark a task complete with failing,
+2026-11-12; ADR-0020, ADR-0053). Never trigger GitHub workflows. Claude works only on the owner's Mac: Windows
+builds are cross-built there, and the owner installs them on the Windows laptop and runs the Windows test kit
+there (`docs/WINDOWS-PLAN.md`, "How Windows is tested"). Never mark a task complete with failing,
 skipped or missing tests. Never weaken or delete a test to make it pass without explaining why in the PR.
 
 Test layers:
@@ -142,9 +143,11 @@ Test layers:
    for real Wi-Fi + iPhone USB + Ethernet, unplug/sleep/wake and VPN on/off. These jobs must be opt-in
    and must never run on pull requests from forks.
 7. **Safari:** a manual checklist in `docs/SAFARI-CHECKLIST.md`, run per release.
-8. **Windows:** the same layers, run on the owner's Windows laptop: Go and Vitest unit tests, Playwright for
-   Electron, a packaging test of the NSIS installer, and a Windows version of the real-hardware script. Simulated
-   networks on Windows need their own approach (`docs/WINDOWS-PLAN.md`).
+8. **Windows:** platform logic is unit-tested on the Mac through seams and recorded Windows data. Go packages
+   are also cross-compiled into Windows test programs (`GOOS=windows go test -c`). The owner runs these, the
+   installer and a guided check on the Windows laptop with the Windows test kit (a PowerShell script, no
+   installs needed), and pastes its report back. Simulated networks on Windows need their own approach
+   (`docs/WINDOWS-PLAN.md`).
 
 ## Safety when running on the owner's Mac
 
@@ -153,7 +156,10 @@ Test layers:
 - Before testing routes locally, make sure `mergelane-daemon cleanup` works and explain how to recover.
 - Never commit secrets, cookies, signed media URLs or browser profiles.
 
-## Safety when running on the owner's Windows laptop
+## Safety for the owner's Windows laptop
+
+Claude never runs on the laptop. These rules apply to what the Windows test kit, the installer and Mergelane do
+there, and to any command Claude asks the owner to run.
 
 - **Ask before** any command that needs administrator rights, installs or changes a Windows service or driver,
   creates network adapters, changes routes, DNS or the firewall, writes under `HKLM`, or changes Windows Security

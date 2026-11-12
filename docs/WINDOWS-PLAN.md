@@ -16,8 +16,10 @@ Owner decisions of 2026-11-12 (ADR-0053):
     `windows`. The owner says "merge" for each one.
   - `windows` takes `main` in regularly (`git merge main`), so Mac fixes reach it.
   - Merging `windows` into `main` is the owner's decision, made once Windows is ready to release.
-- **Where:** Windows code is written and tested on the owner's Windows laptop. Cross-platform code (TypeScript
-  logic, Go packages behind build tags) is also tested on the Mac. Every macOS test must keep passing.
+- **Where:** everything is written and built on the owner's Mac, in the `mergelane-windows` worktree (a separate
+  folder on the `windows` branch, so it never disturbs the Mac release work in `mergelane`). The owner installs the
+  builds on their Windows laptop and tests them there. Claude never runs on the laptop. Every macOS test must keep
+  passing.
 - **CI is paused:** never trigger a GitHub workflow. Each pull request lists the commands it ran locally, on which
   computer, and their results.
 - **Tests:** the same rules as on macOS (CLAUDE.md, "Testing"):
@@ -30,6 +32,45 @@ Owner decisions of 2026-11-12 (ADR-0053):
   settings. Tests never touch the owner's real Downloads folder.
 - **Verify against official docs** (Microsoft Learn, Electron, electron-builder, Go, Wintun) before each change, and
   name the source in the pull request.
+
+## How Windows is tested
+
+Claude can't run Windows code, so each Windows check comes in two parts.
+
+**On the Mac (Claude):**
+
+- Platform logic sits behind small seams, such as "list the adapters", "set a socket option" and "read the
+  registry". It is unit-tested with recorded Windows data and fakes, to the usual 90% line coverage.
+- Go packages build for `windows/amd64` and `windows/arm64`. `go vet` runs for both, and so does `staticcheck`
+  with `GOOS=windows`.
+- Go tests are cross-compiled into Windows test programs: `GOOS=windows GOARCH=<arch> go test -c -o <pkg>.test.exe`.
+
+**On the laptop (the owner), with the Windows test kit:**
+
+- A folder with the installer, the Go test programs and a PowerShell script (`scripts/windows/test-kit.ps1`).
+  It uses Windows PowerShell, which comes with Windows, so nothing has to be installed.
+- The script:
+  - checks the Windows version, the chip and the Smart App Control state;
+  - runs the Go test programs;
+  - installs the build into a test location, launches it and checks that it is ready (the app's existing ready
+    signal);
+  - walks the owner through a short checklist for what needs eyes and hands (the tray icon, a download over two
+    networks, unplugging);
+  - uninstalls the build, and checks that nothing is left behind;
+  - writes a report the owner pastes back into the session.
+- It follows CLAUDE.md's laptop safety rules. A step that needs administrator rights (from W5) says so first and
+  waits for the owner.
+- Keep the script small. Its logic that can run anywhere (reading the report, the steps' order) is tested on the
+  Mac. How to test the PowerShell parts is chosen from Microsoft's docs in W1 and recorded in an ADR.
+
+Playwright for Electron needs Node.js on the machine, so the Windows e2e suite can't run without installing it on
+the laptop. That is the owner's decision. Until then, the kit's checklist and the ready check stand in for it, and
+each pull request says which e2e tests were not run on Windows.
+
+**Building Windows installers on the Mac:** electron-builder 26.16.1 (the version installed) has a macOS path for
+NSIS installers, using helper tools that electron-builder downloads itself (`app-builder-lib`: `NsisTarget`,
+`WineVm`, `toolsets.wine`). It is proven only once W4 builds one. If it fails on Apple silicon, the fallback is
+the owner's decision (for example, building the installer on the laptop).
 
 ## Starting point (measured 2026-11-12, on the Mac)
 
@@ -68,8 +109,9 @@ Owner decisions of 2026-11-12 (ADR-0053):
 
 The most useful part: Mergelane's own downloads use every network, with no helper.
 
-- **Development environment on the laptop:** Node.js 22, Go 1.27, Git, and the Playwright browsers. Document the
-  steps in `docs/WINDOWS-DEV.md`.
+- **Windows test kit, first version:** `scripts/windows/test-kit.ps1` and a way to build the kit folder on the Mac.
+  Before the installer exists (W4), the kit runs the Go test programs and the unpacked app (electron-builder's
+  `--win --dir` output, if it builds on the Mac). Document it in `docs/WINDOWS-TESTING.md`.
 - **Electron and `npm ci`:**
   - `patch-package` and `install-electron` must work on Windows;
   - keep koffi's `win32_x64` and `win32_arm64` prebuilds.
@@ -98,9 +140,9 @@ The most useful part: Mergelane's own downloads use every network, with no helpe
   BrowserWindow docs). Windows 10 and older Windows 11 builds get the solid look. The appearance settings say which
   is in use.
 - **Tests:**
-  - Vitest and `node --test` run on Windows;
-  - the Playwright smoke suite runs on Windows, with mac-only tests marked by platform, never deleted;
-  - a Windows version of `scripts/hardware/hardware.mjs` for in-app merging over Wi-Fi plus a phone.
+  - Vitest and `node --test` on the Mac, with Windows behaviour behind seams and recorded Windows data;
+  - mac-only e2e tests marked by platform, never deleted;
+  - the test kit's checklist on the laptop for in-app merging over Wi-Fi plus a phone.
 
 ### W2: browser extension bridge
 
@@ -116,7 +158,8 @@ The most useful part: Mergelane's own downloads use every network, with no helpe
   - find Chrome, Edge, Chromium, Brave and Firefox on Windows;
   - install steps that show the folder in File Explorer.
 - The extension's own code doesn't change.
-- **Tests:** the `@extension` Playwright suite on Windows, and Go tests for the host.
+- **Tests:** unit tests on the Mac (registry paths, manifests), the host's Go test program in the kit, and a kit
+  step that loads the extension in Chrome or Edge on the laptop and hands over a download.
 
 ### W3: video and media tools
 
@@ -124,11 +167,12 @@ The most useful part: Mergelane's own downloads use every network, with no helpe
   `tools.json`.
 - **FFmpeg:**
   - our own minimal LGPL build for Windows x64 and arm64, from the same pinned, signed source;
-  - choose the build method from FFmpeg's docs (MSYS2 on the laptop, or cross-compiling with mingw-w64), and
-    record it in an ADR;
+  - cross-compile it on the Mac (a mingw-w64 toolchain that targets both x86_64 and aarch64, for example
+    llvm-mingw), chosen from FFmpeg's and the toolchain's docs, and recorded in an ADR;
   - the same configure options and the same "stream copy only" rule as `build-ffmpeg.sh`.
 - The licence texts and release sources are the same as on macOS (ADR-0027).
-- **Tests:** the media and mux tests on Windows, and the yt-dlp fixture tests.
+- **Tests:** the media tests on the Mac, and a kit step that downloads a local HLS fixture and a YouTube link on
+  the laptop.
 
 ### W4: installer, updates, and releases
 
@@ -149,7 +193,7 @@ The most useful part: Mergelane's own downloads use every network, with no helpe
   - it checks the SHA-256 from `SHA256SUMS` and runs the installer (ADR-0036's "download, verify, open",
     Windows-style).
 - **Release script:**
-  - `scripts/release/local-release.mjs` gets a Windows mode, run on the laptop;
+  - `scripts/release/local-release.mjs` gets a Windows mode, run on the Mac;
   - it builds both architectures and attaches the installers, `SHA256SUMS` and the Windows media-tool sources to
     the same draft release as the Mac files.
 - **Packaging test:**
@@ -186,9 +230,10 @@ The most useful part: Mergelane's own downloads use every network, with no helpe
   - refuse to turn on, or turn itself off, and say why.
 - **Sticky sites, limits, probes and events:** the same engine code, behind build tags where the platform differs.
 - **Tests:**
-  - Go unit tests on Windows;
-  - a Windows acceptance script, like `scripts/acceptance/daemon.sh`, run on the laptop with the owner's OK;
-  - the app's System merge e2e tests.
+  - Go unit tests on the Mac, and as Windows test programs in the kit;
+  - a Windows acceptance step in the kit, like `scripts/acceptance/daemon.sh`, run by the owner as administrator
+    after a warning;
+  - the System merge checklist on the laptop.
 
 ### W6: real hardware and the Windows 1.0 checklist
 

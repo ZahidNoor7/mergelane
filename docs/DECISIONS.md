@@ -1477,3 +1477,36 @@ browsers find hosts through the registry.
   extension; nothing Mergelane can do without administrator rights.
 - The test kit checks the pipe's health answer after the window opens, which proves the app side on the laptop.
   Loading the extension in a browser stays on the kit's checklist.
+
+## ADR-0057: The media tools on Windows, fetched and built on the Mac (W3)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W3.
+
+### Context
+
+Windows needs yt-dlp, Deno and FFmpeg for x64 and arm64. yt-dlp and Deno publish official Windows builds for both
+chips in the pinned releases. FFmpeg must stay Mergelane's own minimal LGPL build from the signed source (ADR-0028),
+built on the Mac like everything else (ADR-0053).
+
+### Decision
+
+- **One manifest per chip** (`tools-windows-x64.json`, `tools-windows-arm64.json`), with the same versions as
+  `tools.json`. `fetch.mjs` learns a manifest's target (`platform`, `arch`): Windows programs are named `.exe` and
+  their chip is read from the PE header.
+- **yt-dlp:** the unpacked Windows builds, shipped unchanged, with their own third-party licence list.
+- **Deno:** the official Windows zips.
+- **FFmpeg:** cross-compiled with llvm-mingw 20261020 (macOS universal build), with zlib 1.3.2 built from source
+  and linked in statically, so the program needs only Windows' own DLLs. Both archives are pinned by SHA-256 and
+  passed to the build script by `fetch.mjs` (`buildInputs`), with the chip (`buildArgs`). The LGPL guard reads
+  `config.h`. x64 is built without hand-written assembly (no nasm), which stream copy doesn't need.
+- **Pins:** the newest llvm-mingw and zlib were about a week old, so the previous ones were pinned. Their SHA-256s
+  were taken from the downloads over GitHub's TLS. zlib's PGP signature was not checked here: that would mean
+  importing its author's key.
+
+### Consequences
+
+- Each Windows FFmpeg build takes about a minute and a half on the Mac and downloads the 124 MB toolchain once per
+  build. The stamps keep it from rebuilding until something pinned changes.
+- Every release attaches zlib's source and the Windows build script next to FFmpeg's (W4's release script).
+- The Windows programs are proven on the laptop: the kit's checklist downloads a video, which runs yt-dlp, Deno and
+  FFmpeg.

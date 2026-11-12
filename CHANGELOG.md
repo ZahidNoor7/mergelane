@@ -11,7 +11,8 @@ All notable changes to Mergelane are recorded here. The format follows
   writes a report; the system-wide helper builds for Windows (it doesn't merge there yet); the app packages for
   Windows x64 and arm64, lists Windows' networks without VPNs and virtual adapters, keeps each download connection
   on its network, and has a notification-area icon, Open at login, the Windows title bar and Liquid Glass on
-  Windows 11; the browser extension works with Chrome, Edge and Firefox on Windows. The Mac app doesn't change.
+  Windows 11; the browser extension works with Chrome, Edge and Firefox on Windows; video downloads work on Windows with
+  yt-dlp, Deno and Mergelane's own FFmpeg built for Windows. The Mac app doesn't change.
 
 ### Changed
 

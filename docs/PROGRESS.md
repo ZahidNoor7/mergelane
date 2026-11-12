@@ -724,6 +724,19 @@ Last updated: 2026-11-11
     bridge's pipe for its health, as the Mac's package test does.
   - **Tests:** Go `nmhost` 98.8% (macOS), with Windows tests for the pipe, the browser's path and the launch; Vitest
     `browserPipe.ts` and `browsers.ts` 100%; Playwright `nativeHost.spec.ts` (Windows registration, 7 passed).
+- **W3: video and media tools on Windows** (branch `w3-media-tools`, 2026-11-12, ADR-0057).
+  - `tools-windows-x64.json` / `tools-windows-arm64.json`: yt-dlp's unpacked Windows builds, Deno's Windows zips,
+    and FFmpeg built here with llvm-mingw 20261020 and zlib 1.3.2, all pinned by SHA-256, the same versions as on
+    macOS. `npm run fetch:media-tools:win` fetches and builds both chips into `app/resources/bin-win/`.
+  - `fetch.mjs`: a manifest's target (`platform`, `arch`); `.exe` names and the PE header's chip on Windows; a
+    build's pinned `buildInputs` and `buildArgs`, part of its stamp.
+  - FFmpeg for Windows: the macOS build's component lists word for word, the LGPL guard from `config.h`, only
+    Windows' own DLLs imported (checked); x64 without hand-written assembly (no nasm). About 1.5 minutes per chip.
+  - The Windows app ships them (`win:` extraResources); `tools.ts` `WINDOWS_TOOL_PROGRAM` finds them.
+  - Licences: yt-dlp's Windows third-party list and zlib's licence added; THIRD-PARTY-NOTICES.md has an "On
+    Windows" section.
+  - **Tests:** `fetch.test.mjs` 71 passed, `fetch.mjs` 99.4% lines; `e2e/mux.spec.ts` checks the Windows manifests
+    against `WINDOWS_TOOL_PROGRAM` and the `win:` section.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

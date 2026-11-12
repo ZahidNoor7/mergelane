@@ -35,6 +35,9 @@ import {
   fetchAll,
   fetchTool,
   INSTALL_KINDS,
+  peMachineOf,
+  programName,
+  targetOf,
   isTransient,
   loadManifest,
   main,
@@ -231,6 +234,32 @@ before(async () => {
   ])
   bodies.x86src = readFileSync(join(build, 'x86src.tar.gz'))
 
+  // Windows programs (W3): only their PE header matters to fetch.mjs, so a stub with the header is enough.
+  const pe = (machine) => {
+    const body = Buffer.alloc(0x48)
+    body.write('MZ', 0, 'latin1')
+    body.writeUInt32LE(0x40, 0x3c)
+    body.write('PE\0\0', 0x40, 'latin1')
+    body.writeUInt16LE(machine, 0x44)
+    return body
+  }
+  bodies.peX64 = pe(0x8664)
+  bodies.peArm64 = pe(0xaa64)
+  bodies.peOdd = pe(0x1c4)
+  bodies.mzOnly = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(0x46)])
+  mkdirSync(join(build, 'winsrc', 'pkg', 'bin'), { recursive: true })
+  writeFileSync(join(build, 'winsrc', 'pkg', 'bin', 'tool'), bodies.peX64)
+  execFileSync('/usr/bin/tar', [
+    '-czf',
+    join(build, 'winsrc.tar.gz'),
+    '-C',
+    join(build, 'winsrc'),
+    'pkg'
+  ])
+  bodies.winsrc = readFileSync(join(build, 'winsrc.tar.gz'))
+  bodies.inputA = Buffer.from('cross-compiler\n')
+  bodies.inputB = Buffer.from('zlib\n')
+
   manifestDir = join(root, 'manifest')
   mkdirSync(join(manifestDir, 'licenses', 'tiny'), { recursive: true })
   writeFileSync(join(manifestDir, 'licenses', 'tiny', 'LICENSE'), 'tiny licence text\n')
@@ -263,6 +292,18 @@ before(async () => {
     ].join('\n')
   )
   script('build-nothing.sh', 'echo "nothing to do"')
+  // A Windows build: writes <name>.exe, and notes its arguments after the tarball and out folder.
+  script(
+    'build-win.sh',
+    [
+      'work=$(mktemp -d "$TMPDIR/fake-build.XXXXXX")',
+      'tar -xf "$1" -C "$work"',
+      'mkdir -p "$2"',
+      'cp "$work/pkg/bin/tool" "$2/tiny.exe"',
+      'shift 2',
+      'for arg in "$@"; do echo "$(basename "$arg"):$(cat "$arg" 2>/dev/null || echo -)"; done > "${0%/*}/win-args.log"'
+    ].join('\n')
+  )
   script('build-killed.sh', 'kill -KILL $$')
 
   const routes = {
@@ -282,6 +323,11 @@ before(async () => {
     '/folder-dangling.tar.gz': (res) => res.end(bodies.folderDangling),
     '/folder-fifo.tar.gz': (res) => res.end(bodies.folderFifo),
     '/x86src.tar.gz': (res) => res.end(bodies.x86src),
+    '/pe-x64': (res) => res.end(bodies.peX64),
+    '/pe-arm64': (res) => res.end(bodies.peArm64),
+    '/winsrc.tar.gz': (res) => res.end(bodies.winsrc),
+    '/input-a': (res) => res.end(bodies.inputA),
+    '/input-b': (res) => res.end(bodies.inputB),
     // A relative redirect, then an absolute one, as GitHub's release downloads do.
     '/hop1': (res) => res.writeHead(302, { location: '/hop2' }).end(),
     '/hop2': (res) => res.writeHead(301, { location: `${base}/arm64` }).end(),
@@ -1414,5 +1460,206 @@ describe('fetchAll and main', () => {
     )
     assert.equal(result.status, 1)
     assert.match(result.stderr, /^fetch-media-tools: cannot read the manifest/)
+  })
+})
+
+describe('Windows tools (W3, ADR-0057)', () => {
+  const x64 = { platform: 'win32', arch: 'x64' }
+
+  test('a manifest says what it builds for: macOS arm64 unless it names Windows and a chip', () => {
+    assert.deepEqual(targetOf({}), { platform: 'darwin', arch: 'arm64' })
+    assert.deepEqual(targetOf({ platform: 'win32', arch: 'arm64' }), {
+      platform: 'win32',
+      arch: 'arm64'
+    })
+    assert.equal(programName({ name: 'deno' }, x64), 'deno.exe')
+    assert.equal(programName({ name: 'deno' }, targetOf({})), 'deno')
+    assert.deepEqual(validateManifest({ platform: 'win32', arch: 'x64', tools: [tool()] }), [])
+    assert.deepEqual(validateManifest({ platform: 'linux', tools: [tool()] }), [
+      '"platform" must be one of: darwin, win32'
+    ])
+    assert.deepEqual(validateManifest({ platform: 'win32', arch: 'ia32', tools: [tool()] }), [
+      '"arch" must be one of: x64, arm64 for win32'
+    ])
+    assert.deepEqual(validateManifest({ arch: 'x64', tools: [tool()] }), [
+      '"arch" must be one of: arm64 for darwin'
+    ])
+  })
+
+  test('peMachineOf reads the chip from the PE header, and refuses anything else', async () => {
+    const dir = mkdtempSync(join(root, 'pe-'))
+    const write = (name, body) => {
+      writeFileSync(join(dir, name), body)
+      return join(dir, name)
+    }
+    assert.equal(await peMachineOf(write('x64.exe', bodies.peX64)), 'x64')
+    assert.equal(await peMachineOf(write('arm64.exe', bodies.peArm64)), 'arm64')
+    assert.equal(await peMachineOf(write('odd.exe', bodies.peOdd)), '0x1c4')
+    await assert.rejects(
+      peMachineOf(write('mach.o', bodies.arm64)),
+      /not a Windows program \(no MZ header\)/
+    )
+    await assert.rejects(
+      peMachineOf(write('mz.exe', bodies.mzOnly)),
+      /not a Windows program \(no PE header\)/
+    )
+  })
+
+  test('installs a Windows program as <name>.exe after checking its chip', async () => {
+    const outDir = freshOut()
+    const winTool = tool({ url: `${base}/pe-x64`, sha256: hashOf(bodies.peX64) })
+    const lines = []
+    assert.equal(
+      await fetchTool(winTool, { outDir, manifestDir, target: x64, log: (l) => lines.push(l) }),
+      'installed'
+    )
+    assert.equal(await sha256File(join(outDir, 'tiny.exe')), hashOf(bodies.peX64))
+    assert.equal(existsSync(join(outDir, 'tiny')), false)
+    assert.match(lines.at(-1), /installed .*tiny\.exe .*windows-x64/)
+    // The other chip is refused, and nothing is installed.
+    const armOut = freshOut()
+    await assert.rejects(
+      fetchTool(tool({ url: `${base}/pe-x64`, sha256: hashOf(bodies.peX64) }), {
+        outDir: armOut,
+        manifestDir,
+        target: { platform: 'win32', arch: 'arm64' },
+        ...quiet
+      }),
+      /tiny: built for x64, expected Windows arm64/
+    )
+    assert.equal(existsSync(join(armOut, 'tiny.exe')), false)
+  })
+
+  test('a build gets its pinned inputs and arguments, writes <name>.exe, and builds again when they change', async () => {
+    const outDir = freshOut()
+    const inputs = [
+      { name: 'toolchain.tar.xz', url: `${base}/input-a`, sha256: hashOf(bodies.inputA) },
+      { name: 'zlib.tar.gz', url: `${base}/input-b`, sha256: hashOf(bodies.inputB) }
+    ]
+    const winBuild = buildTool({
+      buildScript: 'build-win.sh',
+      sourceUrl: `${base}/winsrc.tar.gz`,
+      sourceSha256: hashOf(bodies.winsrc),
+      buildArgs: ['x64'],
+      buildInputs: inputs
+    })
+    assert.deepEqual(validateManifest({ platform: 'win32', arch: 'x64', tools: [winBuild] }), [])
+    assert.equal(await fetchTool(winBuild, { outDir, manifestDir, target: x64, ...quiet }), 'built')
+    assert.equal(await sha256File(join(outDir, 'tiny.exe')), hashOf(bodies.peX64))
+    assert.deepEqual(readFileSync(join(manifestDir, 'win-args.log'), 'utf8').trim().split('\n'), [
+      'x64:-',
+      'toolchain.tar.xz:cross-compiler',
+      'zlib.tar.gz:zlib'
+    ])
+    const stamp = await readJson(stampPath(outDir, 'tiny'))
+    assert.equal(
+      stamp.recipe,
+      JSON.stringify({ args: ['x64'], inputs: inputs.map((input) => input.sha256) })
+    )
+    // The same recipe: nothing to do. Another argument: built again.
+    assert.equal(
+      await fetchTool(winBuild, { outDir, manifestDir, target: x64, ...quiet }),
+      'up-to-date'
+    )
+    assert.equal(
+      await fetchTool(
+        { ...winBuild, buildArgs: ['x64', 'again'] },
+        { outDir, manifestDir, target: x64, ...quiet }
+      ),
+      'built'
+    )
+  })
+
+  test('a build input that does not match its pin stops the build before it runs', async () => {
+    const outDir = freshOut()
+    const runs = buildRuns().length
+    const bad = buildTool({
+      buildScript: 'build-win.sh',
+      sourceUrl: `${base}/winsrc.tar.gz`,
+      sourceSha256: hashOf(bodies.winsrc),
+      buildInputs: [
+        { name: 'toolchain.tar.xz', url: `${base}/input-a`, sha256: hashOf(bodies.inputB) }
+      ]
+    })
+    await assert.rejects(
+      fetchTool(bad, { outDir, manifestDir, target: x64, ...quiet }),
+      /SHA-256 mismatch/
+    )
+    assert.equal(buildRuns().length, runs)
+  })
+
+  test('build arguments and inputs are checked', () => {
+    const problems = (overrides) => validateManifest({ tools: [buildTool(overrides)] })
+    assert.deepEqual(problems({ buildArgs: ['x64; rm -rf /'] }), [
+      'tiny: "buildArgs" must be a list of plain words (letters, digits, ".", "_", "-")'
+    ])
+    assert.deepEqual(problems({ buildInputs: [] }), [
+      'tiny: "buildInputs" must be a non-empty list of {name, url, sha256}'
+    ])
+    assert.deepEqual(problems({ buildInputs: [{ name: '../x', url: 'ftp://x', sha256: 'no' }] }), [
+      'tiny: build input ../x: "name" must be a plain file name',
+      'tiny: build input ../x: "sha256" must be 64 lowercase hex characters',
+      'tiny: build input ../x: only https URLs are allowed: ftp://x'
+    ])
+    assert.deepEqual(problems({ buildInputs: [{}] }), [
+      'tiny: build input ?: "name" must be a plain file name',
+      'tiny: build input ?: "sha256" must be 64 lowercase hex characters',
+      'tiny: build input ?: missing "url"'
+    ])
+    assert.deepEqual(validateManifest({ tools: [tool({ buildArgs: ['x'] })] }), [
+      'tiny: "buildArgs" is not used when "install" is "file"'
+    ])
+  })
+})
+
+describe('the Windows manifests (W3)', () => {
+  for (const arch of ['x64', 'arm64']) {
+    test(`tools-windows-${arch}.json is valid, for Windows ${arch}, the same versions as tools.json`, async () => {
+      const windows = await loadManifest(join(HERE, `tools-windows-${arch}.json`))
+      const mac = await loadManifest(DEFAULT_MANIFEST)
+      assert.deepEqual(targetOf(windows), { platform: 'win32', arch })
+      assert.deepEqual(
+        windows.tools.map((t) => `${t.name} ${t.version}`),
+        mac.tools
+          .map((t) => `${t.name} ${t.version}`)
+          .sort(
+            (a, b) =>
+              ['yt-dlp', 'ffmpeg', 'deno'].indexOf(a.split(' ')[0]) -
+              ['yt-dlp', 'ffmpeg', 'deno'].indexOf(b.split(' ')[0])
+          )
+      )
+      for (const t of windows.tools) {
+        for (const file of t.licenseFiles)
+          assert.ok(existsSync(join(HERE, file)), `${t.name}: ${file}`)
+        for (const url of [t.url, t.sourceUrl, ...(t.buildInputs ?? []).map((i) => i.url)].filter(
+          Boolean
+        )) {
+          assert.match(url, /^https:\/\//)
+        }
+      }
+      const ffmpeg = windows.tools.find((t) => t.name === 'ffmpeg')
+      assert.equal(ffmpeg.sourceSha256, mac.tools.find((t) => t.name === 'ffmpeg').sourceSha256)
+      assert.deepEqual(ffmpeg.buildArgs, [arch])
+      assert.equal(ffmpeg.buildScript, 'build-ffmpeg-windows.sh')
+    })
+  }
+
+  test("the Windows FFmpeg build has the macOS build's components, word for word, and no GPL", () => {
+    const lists = (file) =>
+      Object.fromEntries(
+        readFileSync(join(HERE, file), 'utf8')
+          .split('\n')
+          .filter((line) => /^(DEMUXERS|MUXERS|PARSERS|DECODERS|BSFS)=/.test(line))
+          .map((line) => line.split('='))
+      )
+    assert.deepEqual(lists('build-ffmpeg-windows.sh'), lists('build-ffmpeg.sh'))
+    const script = readFileSync(join(HERE, 'build-ffmpeg-windows.sh'), 'utf8')
+    const commands = script
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    assert.doesNotMatch(commands, /--enable-(gpl|version3|nonfree)/)
+    for (const flag of ['CONFIG_GPL', 'CONFIG_VERSION3', 'CONFIG_NONFREE'])
+      assert.match(script, new RegExp(flag))
   })
 })

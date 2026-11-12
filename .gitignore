@@ -21,6 +21,8 @@ coverage.out
 
 # Third-party executables fetched at build time (never committed)
 /app/resources/bin/
+# The Windows media tools, per chip (scripts/media-tools/tools-windows-*.json).
+/app/resources/bin-win/
 
 # Caches
 .eslintcache

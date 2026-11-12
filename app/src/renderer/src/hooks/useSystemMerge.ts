@@ -4,7 +4,8 @@ import type { SystemMergeRemoval, SystemMergeSnapshot } from '../../../shared/ty
 const POLL_MS = 1000
 
 /** What a request from the System merge section does, so only its own control says it's busy. */
-export type SystemMergeAction = 'merge' | 'install' | 'update' | 'autoResume' | 'remove'
+export type SystemMergeAction =
+  'merge' | 'install' | 'update' | 'autoResume' | 'stickySites' | 'remove'
 
 /** What "Remove helper" came to, without the snapshot it brought. */
 export type SystemMergeRemovalNote = Omit<SystemMergeRemoval, 'snapshot'>

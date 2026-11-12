@@ -1,7 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { join } from 'node:path'
-import { isSetAutoResumeParams, PROTOCOL_VERSION, type ErrorCode } from '../../shared/daemon-api'
+import {
+  isSetAutoResumeParams,
+  isSetStickySitesParams,
+  PROTOCOL_VERSION,
+  type ErrorCode
+} from '../../shared/daemon-api'
 
 /** One entry of the fake's `events` answer (shared/daemon-api.ts). */
 export interface FakeLinkEvent {
@@ -21,10 +26,12 @@ export interface FakeDaemon {
   version: string
   /** Turned on and off with setAutoResume, and reported by status. */
   autoResume: boolean
+  /** Turned on and off with setStickySites, and reported by status (on, as a new helper starts). */
+  stickySites: boolean
   /** What `events` answers. */
   events: FakeLinkEvent[]
-  /** A helper from before M2.4: status has no autoResume, and setAutoResume and events are
-   * UNKNOWN_METHOD. */
+  /** A helper from before M2.4: status has no autoResume or stickySites, and setAutoResume, events
+   * and setStickySites are UNKNOWN_METHOD. */
   legacy?: boolean
   /** Methods answered with UNKNOWN_METHOD, as by an older helper. */
   unknownMethods?: string[]
@@ -51,6 +58,7 @@ export async function startFakeDaemon(): Promise<FakeDaemon> {
     state: 'off',
     version: 'fake',
     autoResume: false,
+    stickySites: true,
     events: [],
     close: async () => {}
   }
@@ -77,11 +85,11 @@ export async function startFakeDaemon(): Promise<FakeDaemon> {
           state: fake.state,
           version: fake.version,
           protocol: v,
-          ...(fake.legacy ? {} : { autoResume: fake.autoResume })
+          ...(fake.legacy ? {} : { autoResume: fake.autoResume, stickySites: fake.stickySites })
         })
         const unknown =
           fake.unknownMethods?.includes(request.method) ||
-          (fake.legacy && ['setAutoResume', 'events'].includes(request.method))
+          (fake.legacy && ['setAutoResume', 'events', 'setStickySites'].includes(request.method))
         const refusal = fake.refuse?.[request.method]
         let line: string
         switch (unknown ? '' : refusal ? 'refused' : request.method) {
@@ -120,6 +128,19 @@ export async function startFakeDaemon(): Promise<FakeDaemon> {
               break
             }
             fake.autoResume = request.params.enabled
+            line = ok(status())
+            break
+          case 'setStickySites':
+            if (!isSetStickySitesParams(request.params)) {
+              line = JSON.stringify({
+                v,
+                id: request.id,
+                ok: false,
+                error: { code: 'BAD_REQUEST', message: 'setStickySites needs enabled, a boolean' }
+              })
+              break
+            }
+            fake.stickySites = request.params.enabled
             line = ok(status())
             break
           case 'events':

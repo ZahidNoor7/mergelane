@@ -12,13 +12,18 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 
 	"github.com/xjasonlyu/tun2socks/v2/tunnel"
+
+	"github.com/ZahidNoor7/mergelane/daemon/internal/engine"
 )
 
 // installForwarders replaces tun2socks' TCP/UDP handlers with equivalents that can refuse IPv6
 // flows. The refusal has to happen at the SYN (RST before the handshake completes): once the
 // userland stack has accepted the connection the app believes it is connected, and a browser
 // that "won" the race on IPv6 will not fall back to IPv4 after a later reset.
-func installForwarders(s *stack.Stack, allowV6 func() bool) {
+//
+// While sticky is on, an HTTPS flow's ClientHello is read before the flow is handed on, to learn its
+// site (sniff.go, ADR-0048).
+func installForwarders(s *stack.Stack, allowV6 func() bool, sticky func() bool) {
 	isV6 := func(id stack.TransportEndpointID) bool { return id.LocalAddress.Len() == header.IPv6AddressSize }
 
 	tf := tcp.NewForwarder(s, 0, 2<<10, func(r *tcp.ForwarderRequest) {
@@ -35,7 +40,20 @@ func installForwarders(s *stack.Stack, allowV6 func() bool) {
 		}
 		defer r.Complete(false)
 		setTCPOptions(s, ep)
-		tunnel.T().HandleTCP(&tcpConn{TCPConn: gonet.NewTCPConn(&wq, ep), id: id})
+		conn := &tcpConn{TCPConn: gonet.NewTCPConn(&wq, ep), id: id}
+		if id.LocalPort != httpsPort || !sticky() {
+			tunnel.T().HandleTCP(conn)
+			return
+		}
+		// Not in this callback: the stack runs each in its own goroutine, but counts them against
+		// its in-flight limit until they return.
+		go func() {
+			name, read := engine.SniffServerName(conn, sniffWait)
+			if name != "" {
+				serverNames.Store(keyOfEndpoint(id), name)
+			}
+			tunnel.T().HandleTCP(&replayConn{tcpConn: conn, pending: read})
+		}()
 	})
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tf.HandlePacket)
 

@@ -27,6 +27,7 @@ import {
   readSnapshot,
   switchAutoResume,
   switchMerge,
+  switchStickySites,
   versionMismatch,
   type SnapshotContext
 } from '../src/main/daemon/snapshot'
@@ -367,6 +368,38 @@ test.describe('system merge snapshot @smoke', () => {
       expect(old).not.toHaveProperty('autoResume')
       expect(old.error).toMatch(/Update it first/)
       expect(fake.autoResume).toBe(false)
+    })
+  })
+
+  test('switches sticky sites, and reports a helper without them as out of date', async () => {
+    await withFake(async (fake, context) => {
+      expect((await readSnapshot(context)).stickySites).toBe(true)
+      expect((await switchStickySites(context, false)).stickySites).toBe(false)
+      expect(fake.stickySites).toBe(false)
+      expect((await switchStickySites(context, true)).stickySites).toBe(true)
+
+      const sent = fake.requests.length
+      const notBoolean = await switchStickySites(context, 'yes' as unknown as boolean)
+      expect(notBoolean.error).toBe('That setting needs on or off.')
+      expect(fake.requests.slice(sent).some((r) => r.method === 'setStickySites')).toBe(false)
+
+      fake.refuse = { setStickySites: { code: 'INTERNAL', message: 'saving failed' } }
+      expect((await switchStickySites(context, false)).error).toBe('saving failed')
+
+      fake.refuse = undefined
+      fake.unknownMethods = ['setStickySites']
+      const old = await switchStickySites(context, false)
+      expect(old).toMatchObject({ reachable: true, helperOutdated: true })
+      expect(old).not.toHaveProperty('stickySites')
+      expect(old.error).toMatch(/can't keep a site on one network\. Update it first/)
+      expect(fake.stickySites).toBe(true)
+
+      // A helper whose status has no stickySites predates it: out of date, without the setting.
+      fake.unknownMethods = undefined
+      fake.legacy = true
+      const legacy = await readSnapshot(context)
+      expect(legacy).toMatchObject({ helperOutdated: true })
+      expect(legacy).not.toHaveProperty('stickySites')
     })
   })
 

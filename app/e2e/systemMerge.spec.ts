@@ -144,6 +144,25 @@ test.describe('System merge @smoke', () => {
     expect(fake.state).toBe('off')
   })
 
+  test('keeps each site on one network by default, and turns it off and on', async ({
+    mergelane
+  }) => {
+    const section = await openSection(mergelane)
+    const sticky = section.getByRole('switch', { name: 'Keep each site on one network' })
+    await expect(sticky).toBeChecked()
+    await expect(sticky).toBeEnabled()
+    await expect(section.getByText(/Sign-ins and calls stay steady/)).toBeVisible()
+    await sticky.click()
+    await expect(sticky).not.toBeChecked()
+    expect(fake.stickySites).toBe(false)
+    await sticky.click()
+    await expect(sticky).toBeChecked()
+    expect(fake.requests.filter((r) => r.method === 'setStickySites').map((r) => r.params)).toEqual(
+      [{ enabled: false }, { enabled: true }]
+    )
+    expect(fake.state).toBe('off')
+  })
+
   test('an older helper without auto-resume shows the switch disabled, with a note', async ({
     mergelane
   }) => {
@@ -152,7 +171,10 @@ test.describe('System merge @smoke', () => {
     const autoResume = section.getByRole('switch', { name: 'Turn back on after a crash' })
     await expect(autoResume).toBeDisabled()
     await expect(autoResume).not.toBeChecked()
-    await expect(section.getByText('Needs the updated helper.')).toBeVisible()
+    await expect(section.getByText('Needs the updated helper.')).toHaveCount(2)
+    await expect(
+      section.getByRole('switch', { name: 'Keep each site on one network' })
+    ).toBeDisabled()
     // Missing methods mark it out of date even in a development build.
     await expect(
       section.getByRole('group', { name: "Mergelane's helper is out of date" })

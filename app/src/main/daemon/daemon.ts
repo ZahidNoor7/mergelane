@@ -12,6 +12,7 @@ import {
   mergeIsOn,
   readSnapshot,
   switchAutoResume,
+  switchStickySites,
   switchMerge,
   type SnapshotContext
 } from './snapshot'
@@ -85,6 +86,11 @@ export function setSystemMerge(on: boolean): Promise<SystemMergeSnapshot> {
 /** Turns "back on after a crash" on or off. */
 export function setSystemMergeAutoResume(enabled: boolean): Promise<SystemMergeSnapshot> {
   return switchAutoResume(context(), enabled)
+}
+
+/** Turns "keep each site on one network" on or off. */
+export function setSystemMergeStickySites(enabled: boolean): Promise<SystemMergeSnapshot> {
+  return switchStickySites(context(), enabled)
 }
 
 /** Installs the bundled helper: macOS asks for an administrator password. The same command

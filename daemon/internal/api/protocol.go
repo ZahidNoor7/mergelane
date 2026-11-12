@@ -57,11 +57,13 @@ const (
 	MethodSetLimit      = "setLimit"
 	MethodSetAutoResume = "setAutoResume"
 	MethodEvents        = "events"
+	// MethodSetStickySites was added with ADR-0048; an older daemon answers UNKNOWN_METHOD.
+	MethodSetStickySites = "setStickySites"
 )
 
 var methods = [...]string{
 	MethodStatus, MethodEnable, MethodDisable, MethodLinks, MethodStats, MethodSetLimit,
-	MethodSetAutoResume, MethodEvents,
+	MethodSetAutoResume, MethodEvents, MethodSetStickySites,
 }
 
 // Methods lists every method of protocol v1.
@@ -148,7 +150,7 @@ const (
 	StateStopping State = "stopping"
 )
 
-// Status is the result of status, enable, disable and setAutoResume.
+// Status is the result of status, enable, disable, setAutoResume and setStickySites.
 type Status struct {
 	State State `json:"state"`
 	// Reason says why merging is off when it did not go off on request, for example a VPN
@@ -164,6 +166,9 @@ type Status struct {
 	// AutoResume is the "turn system merge back on after a crash" setting (setAutoResume). Always
 	// sent since M2.4; older daemons leave it out.
 	AutoResume bool `json:"autoResume"`
+	// StickySites is the "keep each site on one network" setting (setStickySites, ADR-0048), on
+	// unless turned off. Always sent since ADR-0048; older daemons leave it out.
+	StickySites bool `json:"stickySites"`
 }
 
 // DisableParams are disable's params.
@@ -256,6 +261,13 @@ type SetAutoResumeParams struct {
 	Enabled bool `json:"enabled"`
 }
 
+// SetStickySitesParams are setStickySites' params.
+type SetStickySitesParams struct {
+	// Enabled turns "keep each site on one network" on or off. It is saved, and takes effect for
+	// the next flows at once.
+	Enabled bool `json:"enabled"`
+}
+
 // LinkGone is a link's state in events while its interface is not there (unplugged, asleep, or
 // without an address or default route). links never reports it: a gone link is not listed.
 const LinkGone LinkState = "gone"
@@ -311,6 +323,7 @@ type Handler interface {
 	SetLimit(ctx context.Context, p SetLimitParams) (SetLimitResult, error)
 	SetAutoResume(ctx context.Context, p SetAutoResumeParams) (Status, error)
 	Events(ctx context.Context) (EventsResult, error)
+	SetStickySites(ctx context.Context, p SetStickySitesParams) (Status, error)
 }
 
 // wireRequest is a request as sent, before its fields are checked.
@@ -475,6 +488,12 @@ func call(ctx context.Context, h Handler, req Request) (any, error) {
 			return nil, err
 		}
 		return withProtocol(h.SetAutoResume(ctx, p))
+	case MethodSetStickySites:
+		p, err := parseSetStickySites(req.Params)
+		if err != nil {
+			return nil, err
+		}
+		return withProtocol(h.SetStickySites(ctx, p))
 	case MethodEvents:
 		res, err := h.Events(ctx)
 		if res.Events == nil {
@@ -548,6 +567,19 @@ func parseSetAutoResume(raw json.RawMessage) (SetAutoResumeParams, error) {
 	}
 	if !isBool(f["enabled"]) {
 		return p, Errorf(CodeBadRequest, "setAutoResume needs enabled, a boolean")
+	}
+	_ = json.Unmarshal(f["enabled"], &p.Enabled) // cannot fail: a JSON true or false
+	return p, nil
+}
+
+func parseSetStickySites(raw json.RawMessage) (SetStickySitesParams, error) {
+	var p SetStickySitesParams
+	f, err := paramFields(raw, "enabled")
+	if err != nil {
+		return p, err
+	}
+	if !isBool(f["enabled"]) {
+		return p, Errorf(CodeBadRequest, "setStickySites needs enabled, a boolean")
 	}
 	_ = json.Unmarshal(f["enabled"], &p.Enabled) // cannot fail: a JSON true or false
 	return p, nil

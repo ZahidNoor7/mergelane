@@ -19,11 +19,17 @@ const prefsVersion = 1
 //   - CleanExit is false while a daemon runs and true once it has stopped on SIGTERM or SIGINT. A start
 //     that finds it false knows the previous run died (crash, kill -9, power loss), or that there was no
 //     previous run with prefs.json (a first start, or a daemon from before M2.4).
+//   - StickySites is the user's "keep each site on one network" setting (ADR-0048). On by default:
+//     a file without it, or no file, means on.
 type Prefs struct {
-	AutoResume bool `json:"autoResume"`
-	WantOn     bool `json:"wantOn"`
-	CleanExit  bool `json:"cleanExit"`
+	AutoResume  bool `json:"autoResume"`
+	WantOn      bool `json:"wantOn"`
+	CleanExit   bool `json:"cleanExit"`
+	StickySites bool `json:"stickySites"`
 }
+
+// DefaultPrefs are the Prefs before anything was saved.
+func DefaultPrefs() Prefs { return Prefs{StickySites: true} }
 
 // prefsFile is prefs.json.
 type prefsFile struct {
@@ -31,6 +37,8 @@ type prefsFile struct {
 	AutoResume bool `json:"autoResume"`
 	WantOn     bool `json:"wantOn"`
 	CleanExit  bool `json:"cleanExit"`
+	// StickySites is a pointer so a file from before ADR-0048, without it, reads as on.
+	StickySites *bool `json:"stickySites,omitempty"`
 }
 
 // PrefsPath is where Prefs live: beside limits.json, so on macOS in Application Support, which
@@ -40,27 +48,30 @@ func PrefsPath(dir string) string {
 }
 
 // LoadPrefs reads the saved Prefs. A missing file (or one that cannot be read, with the error) gives
-// the zero Prefs: auto-resume off, no wish to be on, and no clean exit on record, so the routing table
-// alone decides whether the previous run crashed, as before M2.4 (ADR-0007).
+// DefaultPrefs: auto-resume off, no wish to be on, and no clean exit on record, so the routing table
+// alone decides whether the previous run crashed, as before M2.4 (ADR-0007); and sticky sites on.
 func LoadPrefs(dir string) (Prefs, error) {
 	b, err := os.ReadFile(PrefsPath(dir))
 	if errors.Is(err, os.ErrNotExist) {
-		return Prefs{}, nil
+		return DefaultPrefs(), nil
 	}
 	if err != nil {
-		return Prefs{}, err
+		return DefaultPrefs(), err
 	}
 	var f prefsFile
 	if err := json.Unmarshal(b, &f); err != nil {
-		return Prefs{}, fmt.Errorf("%s: %w", PrefsPath(dir), err)
+		return DefaultPrefs(), fmt.Errorf("%s: %w", PrefsPath(dir), err)
 	}
-	return Prefs{AutoResume: f.AutoResume, WantOn: f.WantOn, CleanExit: f.CleanExit}, nil
+	sticky := f.StickySites == nil || *f.StickySites
+	return Prefs{AutoResume: f.AutoResume, WantOn: f.WantOn, CleanExit: f.CleanExit, StickySites: sticky}, nil
 }
 
 // SavePrefs writes p atomically, like SaveLimits.
 func SavePrefs(dir string, p Prefs) error {
+	sticky := p.StickySites
 	return writeJSON(PrefsPath(dir), prefsFile{
 		Version: prefsVersion, AutoResume: p.AutoResume, WantOn: p.WantOn, CleanExit: p.CleanExit,
+		StickySites: &sticky,
 	})
 }
 

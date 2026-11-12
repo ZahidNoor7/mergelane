@@ -1127,3 +1127,45 @@ until the owner overrides it.
   - One more folder in Downloads. It must stay there while the browser uses it. The Settings row and step 1 say so.
   - Choosing the folder in the browser stays a manual step. It can only go away with a Chrome Web Store listing,
     which needs a paid developer account (ADR-0038).
+
+## ADR-0048: System merge keeps each website on one network (sticky-per-site), on by default
+
+- Status: Owner (2026-11-12): build it as a switch, on by default. It is a Phase 3 item from CLAUDE.md.
+- Context:
+  - System merge balances each new connection over the links (per flow). Each link has its own public
+    address, so one website can see a visitor arrive from several addresses at once. Banks and sign-ins may then
+    sign the user out, sites may ask for a captcha, and calls or carts may break.
+  - Flows reach the helper through the userland TCP/IP stack as bare addresses. The app has already resolved the
+    name, and big sites use many addresses (CDNs). So the address alone isn't the site.
+  - An HTTPS client's first message, its TLS ClientHello, names the server it wants in the server_name extension
+    (RFC 6066 §3; ClientHello layout in RFC 8446 §4.1.2). It is sent before anything else and in the clear.
+- Decision:
+  - **What a site is:** the registrable domain (eTLD+1, from the Public Suffix List via `golang.org/x/net/publicsuffix`,
+    already a dependency) of the server name. So `www.example.com` and `login.example.com` are one site.
+  - **How the name is learnt:** while sticky is on, a TCP flow to port 443 has its ClientHello read before it is
+    dialed (`engine.SniffServerName`, in `tun/forward.go`), for up to 300 ms, then replayed to the real
+    connection. The userland stack completes the client's handshake itself, so a browser's ClientHello arrives at
+    once. Only port 443 is read, because elsewhere a server may speak first. The parser reads one TLS record (at
+    most 16 KiB). A fuzz test covers it, and found one bug before release (a name ending in two dots).
+  - **Flows without a name** (plain HTTP, QUIC on UDP 443, other ports) belong to the site last seen at their
+    address within 10 minutes, or else to the address alone. Other UDP (DNS, torrents) is not kept on one network.
+  - **Keeping it:** a site's first flow is balanced as usual. Its later flows take the same link while that link can
+    carry them: it has the address family, it isn't in a failure cooldown, and it isn't worse than the best link
+    (`Scheduler.AcquireSticky`). A failover moves the site to the link that worked. A site forgets its link after
+    10 minutes without a new flow. At most 4096 sites and addresses are kept; the least recently used go first.
+  - **Setting:** the protocol-1 method `setStickySites {enabled}` and the status field `stickySites`, added the
+    way `setAutoResume` was, with fixtures on both sides. It is saved in `prefs.json`; a file without the field
+    (from before) means on. The CLI command is `mergelane-daemon sticky-sites on|off`. Turning it off forgets
+    every site.
+  - **App:** Networks › System merge › "Keep each site on one network", under "Turn back on after a crash", in the
+    same style. An older helper without the setting shows "Needs the updated helper." and is reported out of date.
+    The diagnostics bundle includes the setting.
+- Consequences:
+  - Other apps get one link's speed per site, while different sites still spread. Mergelane's own downloads
+    bind their sockets to links themselves and are unaffected. README's honest limits say so.
+  - Sites behind Encrypted Client Hello show only the provider's public name, so they share one site key. They
+    stay consistent, just less spread.
+  - A client that sends nothing first on port 443 waits up to 300 ms before it is dialed.
+  - The forwarder lines that call the reader run only with a real utun (root), so the root acceptance and
+    hardware suites cover them. Unit tests cover the reader, the site table, the scheduler, the per-site dial with
+    failover, and the proxy's per-site dialing.

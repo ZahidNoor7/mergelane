@@ -4,7 +4,7 @@ import type {
   SystemMergeOutage,
   SystemMergeSnapshot
 } from '../../shared/types'
-import { isSetAutoResumeParams } from '../../../../shared/daemon-api'
+import { isSetAutoResumeParams, isSetStickySitesParams } from '../../../../shared/daemon-api'
 import { callDaemon, DaemonError } from './client'
 
 // What the System merge section shows, read from mergelane-daemon. Free of Electron, so the e2e
@@ -109,7 +109,7 @@ export async function readSnapshot(
     ])
     const traffic = new Map(stats.links.map((link) => [link.name, link]))
     // A helper without the setting predates it, like one without the event log.
-    const { autoResume } = status
+    const { autoResume, stickySites } = status
     return {
       ...base,
       reachable: true,
@@ -117,8 +117,12 @@ export async function readSnapshot(
       ...(status.reason ? { reason: status.reason } : {}),
       helperVersion: status.version,
       helperOutdated:
-        log === null || autoResume === undefined || versionMismatch(context, status.version),
+        log === null ||
+        autoResume === undefined ||
+        stickySites === undefined ||
+        versionMismatch(context, status.version),
       ...(autoResume === undefined ? {} : { autoResume }),
+      ...(stickySites === undefined ? {} : { stickySites }),
       links: links.links.map((link): SystemMergeLink => ({
         name: link.name,
         state: link.state,
@@ -184,6 +188,28 @@ export async function switchAutoResume(
       "This helper can't turn merging back on by itself. Update it first."
     )
     delete snapshot.autoResume
+    return { ...snapshot, helperOutdated: true }
+  }
+  return readSnapshot(context)
+}
+
+/** Whether system merge keeps each site on one network (on by default, ADR-0048). A helper too old
+ * for the setting is reported as out of date, without the setting. */
+export async function switchStickySites(
+  context: SnapshotContext,
+  enabled: boolean
+): Promise<SystemMergeSnapshot> {
+  const params = { enabled }
+  if (!isSetStickySitesParams(params)) return readSnapshot(context, 'That setting needs on or off.')
+  try {
+    await callDaemon('setStickySites', params, socket(context))
+  } catch (caught) {
+    if (!hasCode(caught, 'UNKNOWN_METHOD')) return readSnapshot(context, message(caught))
+    const snapshot = await readSnapshot(
+      context,
+      "This helper can't keep a site on one network. Update it first."
+    )
+    delete snapshot.stickySites
     return { ...snapshot, helperOutdated: true }
   }
   return readSnapshot(context)

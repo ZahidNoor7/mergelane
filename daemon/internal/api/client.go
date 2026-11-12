@@ -27,15 +27,6 @@ type Client struct {
 	err  error // sticky; set once the connection is unusable
 }
 
-// Dial connects to the daemon's socket at path (normally SocketPath).
-func Dial(path string) (*Client, error) {
-	conn, err := net.Dial("unix", path)
-	if err != nil {
-		return nil, fmt.Errorf("api: %w", err)
-	}
-	return NewClient(conn), nil
-}
-
 // NewClient wraps an open connection.
 func NewClient(conn net.Conn) *Client {
 	return &Client{conn: conn, r: bufio.NewReaderSize(conn, maxResponseBytes)}

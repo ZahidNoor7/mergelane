@@ -759,6 +759,26 @@ Last updated: 2026-11-11
     lint, typecheck and format clean; both installers built here and passed `check-build.mjs`.
   - **Proven only on the laptop:** the install, SmartScreen's prompt, Open with, the uninstall, and an update
     (which needs two Windows releases).
+- **W5: System merge on Windows** (branch `w5-system-helper`, 2026-11-12, ADR-0059).
+  - **Engine:** Net Merge's Wintun engine re-imported (`internal/tun/tun_windows.go`): the `mergelane` adapter with
+    its own GUID, `/1` capture routes that never outlive a restart, the strong-host fix kept in the state folder.
+    `wintun.dll` 0.14.1 per chip, pinned by wintun.net's SHA-256 (`build-helpers.mjs`), shipped with its licence.
+  - **Service:** `install` copies the helper and `wintun.dll` to `Program Files\Mergelane` and registers the
+    LocalSystem service `mergelane-daemon` with restarts after a crash (`internal/winsvc`); `uninstall` removes it
+    all. State and log in `ProgramData\Mergelane\daemon`, locked to SYSTEM and Administrators.
+  - **API:** the same protocol over `\\.\pipe\mergelane-daemon` (go-winio), open only to SYSTEM, Administrators and
+    the installing user. The API server now serves any connection type; its tests run over the pipe on Windows.
+  - **VPN guard:** the routing table from `GetIpForwardTable2`; tunnels told by adapter type or a `/1` split;
+    Windows' own VPN connections count as on.
+  - **App:** install and removal through Windows' administrator prompt (PowerShell `Start-Process -Verb RunAs`),
+    with the user's SID and a `--report` file for the result; Windows wording for the prompt.
+  - **Kit:** every daemon package counts on Windows now; an opt-in System merge test (administrator, after YES)
+    installs the helper, merges, kills it to check the restart and cleanup, and always removes it again.
+  - **Tests:** Go `-race` all packages pass; staticcheck clean for macOS and both Windows chips; 26 Windows test
+    programs compile; `rib/windows.go`, `tun/weakhost.go`, `api/pipesddl.go` 100%, `winsvc` 96%; Vitest 450 passed
+    (`windowsHelper.ts` 100%); e2e smoke 724 passed (`windowsAdmin.spec.ts` 6); repo-checks 415, daemon job 638.
+  - **Proven only on the laptop:** the service, the pipe, the adapter, the routes, the crash restart and the
+    administrator prompt (the kit's System merge test).
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

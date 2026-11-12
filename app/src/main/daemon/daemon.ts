@@ -1,12 +1,22 @@
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { SystemMergeRemoval, SystemMergeSnapshot } from '../../shared/types'
+import { windowsHelperBinary } from '../../shared/windowsHelper'
 import { testDaemonInstalled, testKnobs, testRecord } from '../testKnobs'
 import { installCommand } from './installCommand'
 import { removeHelper, simulatedAdminPrompt } from './removal'
+import {
+  ElevationError,
+  elevationFailure,
+  installOnWindows,
+  runProgram,
+  uninstallOnWindows,
+  type WindowsAdminContext
+} from './windowsAdmin'
 import {
   afterInstall,
   mergeIsOn,
@@ -20,15 +30,26 @@ import {
 // System-wide merging is mergelane-daemon's job (CLAUDE.md architecture); the app only shows its
 // state, switches it on and off, and installs it with an administrator password: once, and again
 // whenever the running helper isn't the one this app bundles (M2.4). It removes it again the same
-// way (ADR-0046).
+// way (ADR-0046). On Windows the helper is a service, installed and removed through Windows'
+// administrator prompt (windowsAdmin.ts, ADR-0059).
 
 const LABEL = 'io.github.zahidnoor7.mergelane.daemon'
 const PLIST = `/Library/LaunchDaemons/${LABEL}.plist`
+const WINDOWS = process.platform === 'win32'
 
 function installed(): boolean {
   const claimed = testDaemonInstalled()
   if (claimed !== undefined) return claimed === '1'
-  return existsSync(PLIST)
+  return existsSync(WINDOWS ? windowsHelperBinary(process.env['ProgramFiles']) : PLIST)
+}
+
+/** Windows' folder, and the temporary folder the helper's --report file goes in. */
+function windowsAdmin(): WindowsAdminContext {
+  return {
+    run: runProgram,
+    systemRoot: process.env['SystemRoot'] ?? 'C:\\Windows',
+    tempDir: tmpdir()
+  }
 }
 
 /** The bundled helper is built with the app's version, so a packaged app expects the running
@@ -57,7 +78,7 @@ function message(error: unknown): string {
 
 /** The helper inside the app bundle, which installs and removes itself. */
 function bundledHelper(): string {
-  return join(process.resourcesPath, 'mergelane-daemon')
+  return join(process.resourcesPath, WINDOWS ? 'mergelane-daemon.exe' : 'mergelane-daemon')
 }
 
 /** Runs an AppleScript with osascript(1), whose `-e` gives the script as one line: here, the
@@ -93,9 +114,9 @@ export function setSystemMergeStickySites(enabled: boolean): Promise<SystemMerge
   return switchStickySites(context(), enabled)
 }
 
-/** Installs the bundled helper: macOS asks for an administrator password. The same command
- * updates an older helper, since the helper's install boots out the one already running; merging
- * that was on then comes back on once the new helper answers. */
+/** Installs the bundled helper: macOS asks for an administrator password, Windows for an
+ * administrator's permission. The same command updates an older helper, since the helper's install
+ * stops the one already running; merging that was on then comes back on once the new helper answers. */
 export async function installSystemMerge(): Promise<SystemMergeSnapshot> {
   if (!app.isPackaged) {
     return systemMergeSnapshot('Installing the helper needs the packaged app.')
@@ -103,11 +124,16 @@ export async function installSystemMerge(): Promise<SystemMergeSnapshot> {
   const binary = bundledHelper()
   const wasOn = await mergeIsOn(context())
   try {
-    await runAsAdmin(installCommand(binary, process.getuid?.() ?? 0))
+    if (WINDOWS) await installOnWindows(binary, windowsAdmin())
+    else await runAsAdmin(installCommand(binary, process.getuid?.() ?? 0))
     return await afterInstall(context(), wasOn)
   } catch (caught) {
-    // osascript exits with -128 ("User canceled") when the password prompt is dismissed.
-    const canceled = /-128|User canceled/i.test(message(caught))
+    // osascript exits with -128 ("User canceled") when the password prompt is dismissed; on Windows
+    // the prompt's No is an ElevationError that says so.
+    const canceled =
+      caught instanceof ElevationError
+        ? caught.outcome.canceled
+        : /-128|User canceled/i.test(message(caught))
     return systemMergeSnapshot(
       canceled ? 'Installation was canceled.' : `Couldn't install the helper: ${message(caught)}`
     )
@@ -124,6 +150,13 @@ export async function removeSystemMerge(): Promise<SystemMergeRemoval> {
       message: 'Removing the helper needs the packaged app.',
       snapshot: await systemMergeSnapshot()
     }
+  }
+  if (WINDOWS && testKnobs.adminPrompt === undefined) {
+    const admin = windowsAdmin()
+    return removeHelper(context, bundledHelper(), (binary) => uninstallOnWindows(binary, admin), {
+      command: (binary) => binary,
+      failure: elevationFailure
+    })
   }
   return removeHelper(context, bundledHelper(), runAsAdmin)
 }

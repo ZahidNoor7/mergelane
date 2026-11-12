@@ -14,8 +14,10 @@ All notable changes to Mergelane are recorded here. The format follows
   Windows 11; the browser extension works with Chrome, Edge and Firefox on Windows; video downloads work on Windows with
   yt-dlp, Deno and Mergelane's own FFmpeg built for Windows; a per-user installer for each chip that needs no
   administrator password, puts Mergelane in Open with for `.torrent` and `.nzb` files (never as the default), and
-  uninstalls cleanly; updates on Windows from Settings › Updates; and releases that carry the Windows installers
-  next to the Mac files. The Mac app doesn't change.
+  uninstalls cleanly; updates on Windows from Settings › Updates; releases that carry the Windows installers
+  next to the Mac files; and System merge on Windows, with a helper service installed after Windows asks for an
+  administrator's permission, which refuses to start next to a VPN and cleans up after a crash. The Mac app doesn't
+  change.
 
 ### Changed
 

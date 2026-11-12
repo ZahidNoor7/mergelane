@@ -115,8 +115,12 @@ and `Mergelane-<version>-arm64-setup.exe` (Arm). Settings › System › About s
 The first Windows version has Mergelane's own downloads over every network, torrents, Usenet, video, the browser
 extension for Chrome, Edge and Firefox, and updates from Settings › Updates. Mergelane appears in **Open with** for
 `.torrent` and `.nzb` files without becoming their default app; magnet links reach it by pasting, the clipboard offer
-or the extension. System-wide merging on Windows comes later. To remove Mergelane, search the Start menu for **Add or
-remove programs**.
+or the extension. To remove Mergelane, search the Start menu for **Add or remove programs**.
+
+System merge works on Windows too, with the same limits as on the Mac. It needs a small helper that runs as a
+Windows service: when you install it, Windows asks for an administrator's permission once, and Mergelane copies the
+helper into `Program Files\Mergelane`. **Remove helper…** in the app takes it away again, or, in PowerShell as
+administrator, `& "$env:ProgramFiles\Mergelane\mergelane-daemon.exe" uninstall`. Its routes never outlive a restart.
 
 ## Browser extension (Chrome, Edge, Chromium, Firefox)
 

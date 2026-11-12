@@ -55,7 +55,7 @@ func TestConnAcceptedWhileClosingIsDropped(t *testing.T) {
 	fa := newFakeAcceptor(0)
 	fa.conn = c0.(*net.UnixConn)
 	fa.holdOnClose = true // Close must not wake Accept; release does
-	s := serve("", fa, allowAll, &fakeHandler{})
+	s := serve("", fa, unixPeerUID, allowAll, &fakeHandler{})
 	done := make(chan struct{})
 	go func() { s.Close(); close(done) }()
 	waitFor(t, "Close to mark the server closed", func() bool {

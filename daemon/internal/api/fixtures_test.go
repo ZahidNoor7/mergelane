@@ -282,9 +282,12 @@ func TestServerMatchesErrorFixtures(t *testing.T) {
 		}
 	}
 
-	refused := startServer(t, &fakeHandler{}, func(uint32) bool { return false })
-	if got := dialRaw(t, refused.Path()).line(); !jsonEqual(t, got, fixtures["error.not-authorized.response.json"]) {
-		t.Errorf("refusal %s differs from its fixture", got)
+	// On Windows the pipe's security descriptor refuses before the daemon answers (PipeSDDL).
+	if refusesByUID {
+		refused := startServer(t, &fakeHandler{}, func(uint32) bool { return false })
+		if got := dialRaw(t, refused.Path()).line(); !jsonEqual(t, got, fixtures["error.not-authorized.response.json"]) {
+			t.Errorf("refusal %s differs from its fixture", got)
+		}
 	}
 }
 

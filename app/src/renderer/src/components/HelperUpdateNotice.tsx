@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from './ui/button'
+import { words } from '../platformWords'
 
 // The sidebar's word that the helper is older than the app (docs/DECISIONS.md ADR-0051). Updating the
 // app can't update the helper: it is a root service in /Library, which only an administrator may
@@ -50,7 +51,7 @@ export function HelperUpdateNotice(): React.JSX.Element | null {
         />
         <span>
           <span className="font-[640]">Update the helper</span> to match Mergelane{' '}
-          {snapshot.appVersion}. System merge needs it. Your Mac asks for your password.
+          {snapshot.appVersion}. System merge needs it. {words().adminPromptShort}
         </span>
       </p>
       {snapshot.error && (

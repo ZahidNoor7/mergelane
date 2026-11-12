@@ -1,28 +1,48 @@
 package tun
 
 import (
-	"errors"
-	"net/netip"
+	"reflect"
+	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
+	wun "golang.zx2c4.com/wireguard/tun"
 )
 
-// Until W5 nothing in this package may touch Windows networking.
-func TestWindowsRefusesSystemMerge(t *testing.T) {
-	if errUnsupported == nil {
-		t.Fatal("errUnsupported is not set on Windows")
+// The adapter is Mergelane's own type with a fixed GUID, so Windows keeps one network profile for it.
+func TestAdapterIdentity(t *testing.T) {
+	if wun.WintunTunnelType != "Mergelane" {
+		t.Errorf("WintunTunnelType = %q", wun.WintunTunnelType)
 	}
-	tn := New(nil)
-	if err := tn.On(); !errors.Is(err, errUnsupported) {
-		t.Errorf("On = %v, want %v", err, errUnsupported)
+	g, err := windows.GUIDFromString(adapterGUID)
+	if err != nil || wun.WintunStaticRequestedGUID == nil || *wun.WintunStaticRequestedGUID != g {
+		t.Errorf("requested GUID = %v, want %s (%v)", wun.WintunStaticRequestedGUID, adapterGUID, err)
 	}
-	if tn.IsOn() || tn.Name() != "" {
-		t.Errorf("after On: on %v, adapter %q; want off and none", tn.IsOn(), tn.Name())
+	if staleHook == nil {
+		t.Error("staleHook is not set: a crashed run's strong-host changes would never be put back")
 	}
-	if idx, err := configure("mergelane", DefaultMTU, netip.MustParsePrefix("198.18.0.1/24")); idx != 0 || !errors.Is(err, errUnsupported) {
-		t.Errorf("configure = %d, %v; want 0, %v", idx, err, errUnsupported)
+}
+
+// The tools run from System32, never from PATH.
+func TestSystemToolIsInSystem32(t *testing.T) {
+	for _, name := range []string{"route", "netsh"} {
+		if got := strings.ToLower(systemTool(name)); !strings.HasSuffix(got, `\system32\`+name+".exe") {
+			t.Errorf("systemTool(%q) = %q", name, got)
+		}
 	}
-	delRoutes(1)   // nothing to remove; must not panic
-	CleanupStale() // finds no adapter of ours; must not panic
-	tn.Off()
-	tn.Close()
+}
+
+// Without administrator rights there is nothing to clean up, and cleanup must not fail or panic: the
+// kit runs it as a normal user, where no adapter of ours exists.
+func TestCleanupStaleWithNothingToDo(t *testing.T) {
+	CleanupStale()
+	restoreStrongHost()
+}
+
+// The capture routes, as route.exe takes them, are the shared /1 halves.
+func TestRoutes4win(t *testing.T) {
+	want := [][2]string{{"0.0.0.0", "128.0.0.0"}, {"128.0.0.0", "128.0.0.0"}}
+	if !reflect.DeepEqual(routes4win, want) {
+		t.Errorf("routes4win = %v, want %v", routes4win, want)
+	}
 }

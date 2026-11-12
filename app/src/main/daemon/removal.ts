@@ -56,16 +56,25 @@ export async function simulatedAdminPrompt(answer: string): Promise<void> {
 export async function removeHelper(
   context: () => SnapshotContext,
   binary: string,
-  runAsAdmin: AdminRunner
+  runAsAdmin: AdminRunner,
+  {
+    command = uninstallCommand,
+    failure = adminFailure
+  }: {
+    /** What runAsAdmin is given: macOS's AppleScript; on Windows the binary itself (windowsAdmin.ts). */
+    command?: (binary: string) => string
+    /** How a failed run is read: osascript's error, or on Windows an ElevationError. */
+    failure?: (error: unknown) => { canceled: boolean; reason: string }
+  } = {}
 ): Promise<SystemMergeRemoval> {
   const before = context()
   const socket = before.socketPath ? { socketPath: before.socketPath } : {}
   const wasOn = await mergeIsOn(before)
   if (wasOn) await callDaemon('disable', {}, socket).catch(() => undefined)
   try {
-    await runAsAdmin(uninstallCommand(binary))
+    await runAsAdmin(command(binary))
   } catch (caught) {
-    const { canceled, reason } = adminFailure(caught)
+    const { canceled, reason } = failure(caught)
     if (!canceled) {
       return {
         outcome: 'failed',

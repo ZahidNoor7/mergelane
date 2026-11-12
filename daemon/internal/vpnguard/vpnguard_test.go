@@ -343,3 +343,28 @@ func TestReadRoutesOnThisMac(t *testing.T) {
 		t.Logf("conflict on this machine: %s", c.Message())
 	}
 }
+
+// Windows: the reader marks routes on a VPN's adapter as Tunnel (rib.FromWindows), since adapter names
+// there say nothing. A default route on Wi-Fi is the network's own; one on our adapter is ours; Windows'
+// own VPN connections come in as services.
+func TestConflictsWindows(t *testing.T) {
+	p := netip.MustParsePrefix
+	routes := []Route{
+		{Dst: p("0.0.0.0/0"), Gateway: "192.168.1.1", Iface: "Wi-Fi"},
+		{Dst: p("0.0.0.0/0"), Gateway: "link#30", Iface: "WireGuard Tunnel", Tunnel: true},
+		{Dst: p("10.0.0.0/8"), Gateway: "link#31", Iface: "Split VPN", Tunnel: true},
+		{Dst: p("0.0.0.0/1"), Gateway: "link#9", Iface: "mergelane", Tunnel: true},
+	}
+	ours := func(iface string) bool { return iface == "mergelane" }
+	got := Conflicts(routes, ours, []string{"Work VPN"})
+	if len(got) != 2 {
+		t.Fatalf("Conflicts = %+v, want the service and the WireGuard tunnel", got)
+	}
+	if got[0].Kind != KindService || got[0].Message() != "The VPN “Work VPN” is on. Turn it off to use system-wide merging." {
+		t.Errorf("service: %+v / %q", got[0], got[0].Message())
+	}
+	if got[1].Kind != KindRoute || got[1].Interface != "WireGuard Tunnel" ||
+		got[1].Message() != "Another VPN (WireGuard Tunnel) is routing all IPv4 traffic. Turn it off to use system-wide merging." {
+		t.Errorf("route: %+v / %q", got[1], got[1].Message())
+	}
+}

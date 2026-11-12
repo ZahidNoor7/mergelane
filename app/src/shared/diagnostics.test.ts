@@ -459,9 +459,9 @@ describe('diagnostics on Windows', () => {
 
   it('says the log is in ProgramData and zips with the tar Windows has', () => {
     expect(helperLogPath('win32', 'D:\\ProgramData')).toBe(
-      'D:\\ProgramData\\Mergelane\\Logs\\daemon.log'
+      'D:\\ProgramData\\Mergelane\\daemon\\daemon.log'
     )
-    expect(helperLogPath('win32')).toBe('C:\\ProgramData\\Mergelane\\Logs\\daemon.log')
+    expect(helperLogPath('win32')).toBe('C:\\ProgramData\\Mergelane\\daemon\\daemon.log')
     expect(helperLogPath('darwin')).toBe('/Library/Logs/Mergelane/daemon.log')
     expect(
       zipCommand('win32', 'C:\\Temp\\w', 'bundle', 'C:\\Temp\\w\\b.zip', 'C:\\WINDOWS')
@@ -481,7 +481,7 @@ describe('diagnostics on Windows', () => {
   it('its README speaks of Windows and the PC', () => {
     const text = diagnosticsReadme(Date.UTC(2026, 10, 12), true, 'win32')
     expect(text).toContain('Electron and Windows; the PC’s')
-    expect(text).toContain("the helper's log, %ProgramData%\\Mergelane\\Logs\\daemon.log.")
+    expect(text).toContain("the helper's log, %ProgramData%\\Mergelane\\daemon\\daemon.log.")
     expect(diagnosticsReadme(Date.UTC(2026, 10, 12), true)).toContain(
       '/Library/Logs/Mergelane/daemon.log'
     )

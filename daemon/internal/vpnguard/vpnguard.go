@@ -2,6 +2,10 @@
 // its routes over another VPN's (CLAUDE.md, "Coexist with VPNs"). The daemon checks it before enabling
 // and while enabled.
 //
+// On Windows (read_windows.go, ADR-0059) the same two signals come from the routing table, where a
+// route on a VPN's adapter is marked Tunnel, and from the PPP adapters that are up: Windows' own VPN
+// connections, which play the part of macOS's network services.
+//
 // Two signals, because neither is enough alone (ADR-0017): a VPN made from a plain process's utun is
 // not listed by `scutil --nc list`, so the routing table is read too; and macOS keeps utun interfaces
 // of its own, so a utun only counts when it carries a route that takes all traffic.
@@ -90,7 +94,8 @@ var tunnelName = regexp.MustCompile(`^(utun|ipsec|ppp|tun|tap)[0-9]+$`)
 
 // Conflicts lists why system-wide merging must stay off; none means it may turn on.
 //
-// A route conflicts when it is on a tunnel interface (tunnelName) for which ours returns false, is not
+// A route conflicts when it is on a tunnel interface (tunnelName, or Route.Tunnel where the name can't
+// tell, as on Windows: rib.FromWindows) for which ours returns false, is not
 // scoped, and takes all traffic of its family: a default (0.0.0.0/0, ::/0) or one of the /1 halves
 // (0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1). Scoped routes (RTF_IFSCOPE) are ignored: they only serve
 // sockets bound to that interface, so they capture nothing and our routes cannot override them, and
@@ -112,7 +117,7 @@ func Conflicts(routes []Route, ours func(iface string) bool, ncConnected []strin
 	}
 	byIface := map[string][]netip.Prefix{}
 	for _, r := range routes {
-		if !r.Dst.IsValid() || r.Dst.Bits() > 1 || r.Scoped() || !tunnelName.MatchString(r.Iface) {
+		if !r.Dst.IsValid() || r.Dst.Bits() > 1 || r.Scoped() || !(r.Tunnel || tunnelName.MatchString(r.Iface)) {
 			continue
 		}
 		if ours != nil && ours(r.Iface) {

@@ -1566,3 +1566,57 @@ the builds stay unsigned until free signing is set up (ADR-0053).
 - A release takes about ten minutes more (two Windows FFmpeg builds and two installers).
 - Only the laptop can prove the install, SmartScreen's prompt, Open with, the uninstall and the update itself (which
   needs two Windows releases).
+
+## ADR-0059: The system-wide helper on Windows: a LocalSystem service, a named pipe, Wintun (W5)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W5.
+
+### Context
+
+System merge needs a privileged helper on Windows as on macOS (ADR-0005): a virtual adapter, capture routes and a
+control API the app drives. Net Merge's Windows engine is an elevated tray program with no service and no API, so
+only its adapter and route code carries over. The app has no Apple-style password prompt on Windows, and Node.js
+can't speak Unix sockets there. CLAUDE.md: no Network Extension equivalent, crash safety, coexist with VPNs.
+
+### Decision
+
+- **Engine:** Net Merge's `tun_windows.go` (2b333a3) re-imported: a Wintun adapter named `mergelane` (type
+  `Mergelane`, its own fixed GUID), its address and MTU set with `netsh`, and two `/1` capture routes added with
+  `route` without `-p`, so they never outlive a restart. Both tools run by their System32 path. While capture is
+  on, weak host send and forwarding are turned off on the links (Windows ignores a pinned socket there) and put
+  back on off, after a crash, or by `cleanup`; the record of what to put back lives in the state folder.
+- **Wintun:** the official signed `wintun.dll` 0.14.1 per chip, pinned by the SHA-256 wintun.net publishes, fetched
+  by `build-helpers.mjs`, shipped beside the helper with its licence (WireGuard LLC's Prebuilt Binaries License:
+  redistribution allowed alongside software that uses only `wintun.h`'s API; not open source).
+- **Service:** `mergelane-daemon.exe install` copies the program and `wintun.dll` into `%ProgramFiles%\Mergelane`
+  (only administrators may change it: the app's own folder is the user's, and a SYSTEM service must never run a file
+  a user can replace), then registers the service `mergelane-daemon`: automatic start, LocalSystem, and recovery
+  that restarts it after 1, 5 and 30 seconds, also when it ends with an error. An installed helper is stopped
+  before its files are replaced. `uninstall` stops and deletes the service, cleans up, and removes the program.
+  The state folder, `%ProgramData%\Mergelane\daemon` (prefs, limits, log), is owned by Administrators with
+  full control for SYSTEM and Administrators and read for users, nothing inherited, set every time the helper
+  starts.
+- **Control API:** the same protocol (`shared/daemon-api.ts`) over the named pipe `\\.\pipe\mergelane-daemon`
+  (go-winio 0.6.2, already in the module graph through tun2socks). Its security descriptor allows SYSTEM,
+  Administrators and the one user the app installed it for, so Windows refuses everyone else before a connection
+  exists; that replaces macOS's `LOCAL_PEERCRED` check. Only a user account's SID is accepted (`S-1-5-21-…`,
+  `S-1-12-1-…`), never a group such as Everyone.
+- **Install from the app:** Windows' administrator prompt (User Account Control) through PowerShell's
+  `Start-Process -Verb RunAs`, with the script passed as `-EncodedCommand` and every argument quoted for
+  `CommandLineToArgvW`. The app passes its own user's SID (from `whoami /user`). An elevated program's output
+  can't be read back, so the helper writes "ok" or its error to a new `--report` file the app names; a declined
+  prompt is exit code 1223 (ERROR_CANCELLED).
+- **VPN guard:** the routing table is read with `GetIpForwardTable2`. A route counts as a tunnel's when its adapter
+  isn't network hardware (by IANA ifType) or when it is a `/1` half (OpenVPN's TAP adapter calls itself Ethernet,
+  but only a VPN splits the default route). Windows' own VPN connections that are up (PPP adapters) count as on, as
+  macOS's network services do.
+
+### Consequences
+
+- Wintun's docs don't promise the adapter disappears if the helper is killed, so crash safety rests on the
+  service restarting at once and cleaning up first (routes on the `mergelane` adapter, strong-host settings), on
+  `cleanup`, and on the routes not surviving a restart. The laptop's System merge test kills the helper to prove it.
+- The kit's Go tests now run the API over the pipe and the daemon command's tests on Windows; nothing waits for W5.
+- The System merge test is the one part of the kit that changes the PC: opt-in, as administrator, after the owner
+  types YES, refusing next to an installed helper, and always removing the helper again.
+- The app speaks of "an administrator's permission" on Windows where macOS asks for a password.

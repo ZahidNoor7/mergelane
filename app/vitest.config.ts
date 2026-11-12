@@ -18,6 +18,8 @@ export const COVERED = [
   // Windows (W2): the browser bridge's pipe, and the browsers on Windows.
   'src/shared/browserPipe.ts',
   'src/shared/browsers.ts',
+  // Windows (W5): the system-wide helper's install through the administrator prompt.
+  'src/shared/windowsHelper.ts',
   'src/renderer/src/theme.ts',
   'src/renderer/src/components/ui/switch.tsx',
   'src/shared/themes.ts',

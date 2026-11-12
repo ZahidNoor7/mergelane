@@ -2,18 +2,21 @@ package vpnguard
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/ZahidNoor7/mergelane/daemon/internal/rib"
 )
 
-// ReadRoutes reads the routing table for Conflicts. On Windows it fails until milestone W5 (see
-// rib.Read), so the guard refuses rather than guessing.
+// ReadRoutes reads the routing table for Conflicts (rib.Read), with each route on a VPN's adapter
+// marked Tunnel.
 func ReadRoutes() ([]Route, error) { return rib.Read() }
 
-// ReadNCConnected has no Windows equivalent of macOS's network services yet: finding the VPN
-// adapters that are on comes with milestone W5. Until then it fails, so the guard refuses.
+// ReadNCConnected lists Windows' own VPN connections that are on: the PPP adapters that are up
+// (rib.ConnectedPPP), by the name Windows shows for them. They play the part of macOS's network
+// services: one that is connected keeps merging off even when it takes only some traffic.
 func ReadNCConnected(context.Context) ([]string, error) {
-	return nil, fmt.Errorf("listing VPN connections on Windows: %w", errors.ErrUnsupported)
+	adapters, err := rib.Adapters()
+	if err != nil {
+		return nil, err
+	}
+	return rib.ConnectedPPP(adapters), nil
 }

@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,23 +52,6 @@ func (fakeHandler) Events(context.Context) (api.EventsResult, error) {
 	}}, nil
 }
 
-// serve starts the control API on a short temp socket path (sun_path is 104 bytes on macOS).
-func serve(t *testing.T, h api.Handler) string {
-	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "mld")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	path := filepath.Join(dir, "s")
-	srv, err := api.Listen(path, 0o600, func(uint32) bool { return true }, h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { srv.Close() })
-	return path
-}
-
 func run(cmd string, args ...string) (int, string, string) {
 	var out, errOut bytes.Buffer
 	code := dispatch(cmd, args, &out, &errOut)
@@ -82,27 +64,6 @@ func TestVersionAndUsage(t *testing.T) {
 	}
 	if code, _, errOut := run("bogus"); code != 2 || !strings.Contains(errOut, "mergelane-daemon: merges") {
 		t.Fatalf("unknown command = %d %q", code, errOut)
-	}
-}
-
-// A command the platform can't run yet (notyet_windows.go) is refused before it starts, with why;
-// every other command still runs.
-func TestDispatchRefusesCommandsThePlatformCannotRunYet(t *testing.T) {
-	old := notYet
-	defer func() { notYet = old }()
-	notYet = map[string]string{"install": "not on this platform yet"}
-
-	var out, errb bytes.Buffer
-	if code := dispatch("install", []string{"--uid", "501"}, &out, &errb); code != 1 {
-		t.Errorf("install exit %d, want 1", code)
-	}
-	if out.Len() != 0 || errb.String() != "error: not on this platform yet\n" {
-		t.Errorf("install wrote %q / %q", out.String(), errb.String())
-	}
-	out.Reset()
-	errb.Reset()
-	if code := dispatch("version", nil, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "mergelane-daemon ") {
-		t.Errorf("version: exit %d, %q / %q", code, out.String(), errb.String())
 	}
 }
 

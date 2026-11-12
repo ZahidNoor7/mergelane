@@ -57,32 +57,32 @@ func TestFromMessage(t *testing.T) {
 		ok   bool
 	}{
 		{"IPv4 default (UGSc en0)", msg(14, u|g|s, v4(0, 0, 0, 0), v4(192, 168, 1, 1), nil),
-			Route{netip.MustParsePrefix("0.0.0.0/0"), "192.168.1.1", "en0", u | g | s}, true},
+			Route{netip.MustParsePrefix("0.0.0.0/0"), "192.168.1.1", "en0", u | g | s, false}, true},
 		{"zero-length mask is /0 too", msg(14, u|g|s, v4(0, 0, 0, 0), v4(192, 168, 1, 1), v4(0, 0, 0, 0)),
-			Route{netip.MustParsePrefix("0.0.0.0/0"), "192.168.1.1", "en0", u | g | s}, true},
+			Route{netip.MustParsePrefix("0.0.0.0/0"), "192.168.1.1", "en0", u | g | s, false}, true},
 		{"macOS's scoped IPv6 default on a utun (UGcIg)", msg(18, u|g|i, v6("::", 0), v6("fe80::", 18), nil),
-			Route{netip.MustParsePrefix("::/0"), "fe80::%utun0", "utun0", u | g | i}, true},
+			Route{netip.MustParsePrefix("::/0"), "fe80::%utun0", "utun0", u | g | i, false}, true},
 		{"link-local gateway without a zone gets the route's interface", msg(14, u|g|i, v6("::", 0), v6("fe80::1", 0), nil),
-			Route{netip.MustParsePrefix("::/0"), "fe80::1%en0", "en0", u | g | i}, true},
+			Route{netip.MustParsePrefix("::/0"), "fe80::1%en0", "en0", u | g | i, false}, true},
 		{"unknown zone index falls back to the route's interface", msg(14, u|g|i, v6("::", 0), v6("fe80::1", 99), nil),
-			Route{netip.MustParsePrefix("::/0"), "fe80::1%en0", "en0", u | g | i}, true},
+			Route{netip.MustParsePrefix("::/0"), "fe80::1%en0", "en0", u | g | i, false}, true},
 		{"global IPv6 gateway has no zone", msg(14, u|g, v6("2001:db8::", 0), v6("2001:db8::1", 0), v6("ffff:ffff::", 0)),
-			Route{netip.MustParsePrefix("2001:db8::/32"), "2001:db8::1", "en0", u | g}, true},
+			Route{netip.MustParsePrefix("2001:db8::/32"), "2001:db8::1", "en0", u | g, false}, true},
 		{"capture route 0/1 (route add -interface utun4 -proto2)",
 			msg(22, u|s|p2, v4(0, 0, 0, 0), &route.LinkAddr{Index: 22, Name: "utun4"}, v4(128, 0, 0, 0)),
-			Route{netip.MustParsePrefix("0.0.0.0/1"), "link#22", "utun4", u | s | p2}, true},
+			Route{netip.MustParsePrefix("0.0.0.0/1"), "link#22", "utun4", u | s | p2, false}, true},
 		{"capture route 8000::/1", msg(22, u|s, v6("8000::", 0), &route.LinkAddr{Index: 22}, v6("8000::", 0)),
-			Route{netip.MustParsePrefix("8000::/1"), "link#22", "utun4", u | s}, true},
+			Route{netip.MustParsePrefix("8000::/1"), "link#22", "utun4", u | s, false}, true},
 		{"link gateway without an index uses the route's", msg(14, u|s, v4(192, 168, 1, 0), &route.LinkAddr{}, v4(255, 255, 255, 0)),
-			Route{netip.MustParsePrefix("192.168.1.0/24"), "link#14", "en0", u | s}, true},
+			Route{netip.MustParsePrefix("192.168.1.0/24"), "link#14", "en0", u | s, false}, true},
 		{"host route has no netmask", msg(1, u|h, v4(127, 0, 0, 1), v4(127, 0, 0, 1), nil),
-			Route{netip.MustParsePrefix("127.0.0.1/32"), "127.0.0.1", "lo0", u | h}, true},
+			Route{netip.MustParsePrefix("127.0.0.1/32"), "127.0.0.1", "lo0", u | h, false}, true},
 		{"ARP entry has a MAC gateway", msg(14, u|h|l, v4(192, 168, 1, 1), &route.LinkAddr{Index: 14, Addr: []byte{0xf4, 0xe8, 0x4f, 0xdf, 0xcb, 0x76}}, nil),
-			Route{netip.MustParsePrefix("192.168.1.1/32"), "f4:e8:4f:df:cb:76", "en0", u | h | l}, true},
+			Route{netip.MustParsePrefix("192.168.1.1/32"), "f4:e8:4f:df:cb:76", "en0", u | h | l, false}, true},
 		{"no gateway at all", &route.RouteMessage{Index: 14, Flags: u | h, Addrs: []route.Addr{v4(10, 0, 0, 1)}},
-			Route{netip.MustParsePrefix("10.0.0.1/32"), "", "en0", u | h}, true},
+			Route{netip.MustParsePrefix("10.0.0.1/32"), "", "en0", u | h, false}, true},
 		{"unknown gateway type", msg(14, u|g, v4(0, 0, 0, 0), &route.DefaultAddr{}, nil),
-			Route{netip.MustParsePrefix("0.0.0.0/0"), "", "en0", u | g}, true},
+			Route{netip.MustParsePrefix("0.0.0.0/0"), "", "en0", u | g, false}, true},
 
 		{"non-contiguous mask", msg(14, u, v4(10, 0, 0, 0), v4(10, 0, 0, 1), v4(255, 0, 255, 0)), Route{}, false},
 		{"IPv6 mask on an IPv4 route", msg(14, u, v4(10, 0, 0, 0), v4(10, 0, 0, 1), v6("ffff::", 0)), Route{}, false},
@@ -93,7 +93,7 @@ func TestFromMessage(t *testing.T) {
 		// x/net fills Err from rtm_use on darwin, so a busy route has one; it must still be read.
 		{"busy route (x/net's Err is rtm_use)", &route.RouteMessage{Index: 22, Flags: u | s, Err: syscall.Errno(4722),
 			Addrs: []route.Addr{v4(0, 0, 0, 0), &route.LinkAddr{Index: 22}, v4(128, 0, 0, 0)}},
-			Route{netip.MustParsePrefix("0.0.0.0/1"), "link#22", "utun4", u | s}, true},
+			Route{netip.MustParsePrefix("0.0.0.0/1"), "link#22", "utun4", u | s, false}, true},
 		{"no addresses", &route.RouteMessage{Index: 14}, Route{}, false},
 	} {
 		got, ok := fromMessage(c.in, name)
@@ -167,7 +167,7 @@ func TestKernelEncodedCaptureRoutes(t *testing.T) {
 }
 
 func TestRouteHelpers(t *testing.T) {
-	r := Route{netip.MustParsePrefix("::/0"), "fe80::%utun0", "utun0", FlagGateway | FlagIfscope}
+	r := Route{netip.MustParsePrefix("::/0"), "fe80::%utun0", "utun0", FlagGateway | FlagIfscope, false}
 	if !r.Scoped() {
 		t.Error("RTF_IFSCOPE route not Scoped")
 	}

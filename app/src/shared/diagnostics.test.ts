@@ -5,6 +5,7 @@ import {
   diagnosticsFileName,
   diagnosticsReadme,
   fileType,
+  helperLogPath,
   HELPER_LOG_LINES,
   HISTORY_IN_BUNDLE,
   redactIdentity,
@@ -13,6 +14,7 @@ import {
   redactText,
   redactUrl,
   summarizeDownload,
+  zipCommand,
   type DiagnosticsInput,
   type RedactionContext
 } from './diagnostics'
@@ -387,6 +389,20 @@ describe('the bundle', () => {
     expect(
       buildDiagnostics({ ...input, settings: { destinationDir: '/opt/x' } }, context).settings
     ).toMatchObject({ destination: 'a folder elsewhere' })
+    // Windows: the home folder's own, another disk's, and the system disk's other folders.
+    const pc = { home: 'C:\\Users\\alexsmith' }
+    for (const [dir, where] of [
+      ['C:\\Users\\alexsmith\\Downloads', 'a folder in the home folder'],
+      ['D:\\Downloads', 'a folder on another disk'],
+      ['C:\\Downloads', 'a folder elsewhere']
+    ]) {
+      expect(
+        buildDiagnostics({ ...input, settings: { destinationDir: dir } }, pc).settings,
+        dir
+      ).toMatchObject({
+        destination: where
+      })
+    }
     expect(buildDiagnostics({ ...input, settings: {} }, context).settings).toMatchObject({
       destination: 'Downloads (default)'
     })
@@ -423,5 +439,51 @@ describe('the bundle’s files', () => {
     expect(readme).toContain('Mergelane never sends this anywhere')
     expect(readme).toContain('helper-log.txt')
     expect(diagnosticsReadme(NOW, false)).toContain('No helper log')
+  })
+})
+
+describe('diagnostics on Windows', () => {
+  const windows = { home: 'C:\\Users\\alexsmith', userName: 'alexsmith' }
+
+  it('hides the home folder, other accounts and other disks, as on macOS', () => {
+    expect(
+      redactIdentity(
+        'saved C:\\Users\\alexsmith\\Videos\\holiday.mp4, read C:\\Users\\bob\\x.txt and D:\\Movies\\film.mkv',
+        windows
+      )
+    ).toBe('saved ~\\…, read C:\\Users\\<user>\\… and D:\\…')
+    expect(redactIdentity('C:\\Users\\Public\\x and C:\\Program Files\\Mergelane', windows)).toBe(
+      'C:\\Users\\Public\\x and C:\\Program Files\\Mergelane'
+    )
+  })
+
+  it('says the log is in ProgramData and zips with the tar Windows has', () => {
+    expect(helperLogPath('win32', 'D:\\ProgramData')).toBe(
+      'D:\\ProgramData\\Mergelane\\Logs\\daemon.log'
+    )
+    expect(helperLogPath('win32')).toBe('C:\\ProgramData\\Mergelane\\Logs\\daemon.log')
+    expect(helperLogPath('darwin')).toBe('/Library/Logs/Mergelane/daemon.log')
+    expect(
+      zipCommand('win32', 'C:\\Temp\\w', 'bundle', 'C:\\Temp\\w\\b.zip', 'C:\\WINDOWS')
+    ).toEqual([
+      'C:\\WINDOWS\\System32\\tar.exe',
+      ['-c', '-a', '-f', 'C:\\Temp\\w\\b.zip', '-C', 'C:\\Temp\\w', 'bundle']
+    ])
+    expect(zipCommand('win32', 'C:\\w', 'b', 'C:\\w\\b.zip')[0]).toBe(
+      'C:\\Windows\\System32\\tar.exe'
+    )
+    expect(zipCommand('darwin', '/tmp/w', 'bundle', '/tmp/w/b.zip')).toEqual([
+      '/usr/bin/ditto',
+      ['-c', '-k', '--norsrc', '--keepParent', '/tmp/w/bundle', '/tmp/w/b.zip']
+    ])
+  })
+
+  it('its README speaks of Windows and the PC', () => {
+    const text = diagnosticsReadme(Date.UTC(2026, 10, 12), true, 'win32')
+    expect(text).toContain('Electron and Windows; the PC’s')
+    expect(text).toContain("the helper's log, %ProgramData%\\Mergelane\\Logs\\daemon.log.")
+    expect(diagnosticsReadme(Date.UTC(2026, 10, 12), true)).toContain(
+      '/Library/Logs/Mergelane/daemon.log'
+    )
   })
 })

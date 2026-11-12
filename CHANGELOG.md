@@ -8,8 +8,10 @@ All notable changes to Mergelane are recorded here. The format follows
 ### Added
 
 - Windows version, in progress on the `windows` branch: a test kit that checks Windows builds on a Windows PC and
-  writes a report, and the system-wide helper now builds for Windows (it doesn't merge there yet). The Mac app
-  doesn't change.
+  writes a report; the system-wide helper builds for Windows (it doesn't merge there yet); the app packages for
+  Windows x64 and arm64, lists Windows' networks without VPNs and virtual adapters, keeps each download connection
+  on its network, and has a notification-area icon, Open at login, the Windows title bar and Liquid Glass on
+  Windows 11. The Mac app doesn't change.
 
 ### Changed
 

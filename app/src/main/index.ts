@@ -24,10 +24,11 @@ import {
   currentWindowBackground,
   glassWindow,
   setSolidGlass,
-  setWindowTheme
+  setWindowTheme,
+  titleBarOverlay
 } from './windowBackground'
 import { openedAtLogin } from './loginItem'
-import { startMenuBar } from './menuBar'
+import { startMenuBar, statusItemShown } from './menuBar'
 import { startClipboardOffers } from './clipboardOffers'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
@@ -55,8 +56,11 @@ let hasShownTrayNotification = false
 /** The first window waits to be asked for when macOS opened Mergelane at login (ADR-0037). */
 let startHidden = false
 
-function ensureTray(): Tray {
-  if (tray && !tray.isDestroyed()) return tray
+/** A tray icon while the window is closed and Mergelane keeps running. Windows already has the
+ * notification-area icon (menuBar.ts) unless Settings turned it off. */
+function ensureTray(): void {
+  if (process.platform === 'win32' && statusItemShown()) return
+  if (tray && !tray.isDestroyed()) return
   tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
   tray.setToolTip('Mergelane')
   tray.on('click', () => bringForward(ensureWindow()))
@@ -74,7 +78,6 @@ function ensureTray(): Tray {
       }
     ])
   )
-  return tray
 }
 
 /** Only once the app is ready. */
@@ -110,17 +113,6 @@ app.on('open-file', (event, path) => {
 const launchLink = linkFromArgs(process.argv)
 if (launchLink) offer(launchLink)
 
-/** The Windows/Linux window controls, in the title bar's colors (main.css's --bg-secondary and
- * --text) for the theme in use, at its height. */
-function titleBarOverlay(): Electron.TitleBarOverlayOptions {
-  const dark = nativeTheme.shouldUseDarkColors
-  return {
-    color: dark ? '#202325' : '#fafafa',
-    symbolColor: dark ? '#eae7e2' : '#1d1d1f',
-    height: 44
-  }
-}
-
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     // The final design's window, where a download's details sit beside the list, fitted to the
@@ -135,7 +127,11 @@ function createWindow(): void {
     // The theme's ground in the current mode, so a live window resize (which briefly exposes the
     // raw window background) and the first frame don't flash another colour.
     backgroundColor: glassWindow() ? CLEAR : currentWindowBackground(),
-    ...(glassWindow() ? { vibrancy: 'under-window' as const } : {}),
+    ...(glassWindow()
+      ? process.platform === 'win32'
+        ? { backgroundMaterial: 'acrylic' as const }
+        : { vibrancy: 'under-window' as const }
+      : {}),
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // No title bar: the renderer's sidebar (or compact bar) holds macOS's window buttons at its top
     // left, on a strip the window is dragged by (components/WindowChrome.tsx). Windows and Linux
@@ -277,8 +273,8 @@ app.whenReady().then(async () => {
     app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
+    // On Windows this also recolours the window buttons for the new mode.
     applyWindowMaterial(mainWindow)
-    if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 
   createWindow()

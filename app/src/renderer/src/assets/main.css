@@ -211,6 +211,14 @@
   -webkit-app-region: no-drag;
 }
 
+/* Windows draws its window buttons over the window's top right (main/windowBackground.ts titleBarOverlay).
+   The Window Controls Overlay variables say where the title-bar area ends; what is left to its right is the
+   buttons', so each header in the content pane keeps its controls clear of them. Without the variables (full
+   screen) the header keeps its own padding. */
+:root[data-platform='win32'] .ml-content .window-drag {
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 1rem);
+}
+
 /* While the theme changes, colours ease for 220ms instead of jumping (theme/appearance.ts fadeTheme). Nothing
    moves, so this outranks the reduced-motion rule below, as the design intends. */
 :root.mergelane-theme-fade,

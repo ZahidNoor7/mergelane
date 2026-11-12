@@ -685,6 +685,30 @@ Last updated: 2026-11-11
     `--user-data-dir` no longer registers `mergelane://`.
   - **Tests:** `build-helpers.test.mjs` (new), kit and report tests: 59 passed; lines `build-helpers.mjs` 97.6%,
     `kit.mjs` 99.3%, `report.mjs` 99.0%.
+- **W1, pull requests c to f: the app on Windows** (branch `w1-app-on-windows`, 2026-11-12). One pull request for
+  the four, since each is small and they touch the same files.
+  - **Networks (c):** `shared/windowsAdapters.ts` hides virtual adapters (Get-NetAdapter's `Virtual`,
+    `HardwareInterface`, and VPN or hypervisor drivers by description) and reads each adapter's kind from its
+    physical medium; tethered iPhones (Apple Mobile Device Ethernet) and Android phones (RNDIS, NCM) are `usb`.
+  - **Pinning (d), ADR-0055:** on Windows a download socket is pinned by its source address, which Windows'
+    default strong host model honours (Microsoft Learn, `MIB_IPINTERFACE_ROW`); `deviceBindingSupported()` is true
+    there with nothing loaded. CLAUDE.md's Windows rule now says so.
+  - **Paths (e):** `sanitizeFileName` takes the platform, and Windows' reserved characters, device names and
+    trailing dots are tested on the Mac (`e2e/windowsFileNames.spec.ts`). Plexo's sparse-file module was already
+    there.
+  - **Windows habits (f):**
+    - the notification-area icon with the merged speed in its tooltip; a click opens the window, and closing the
+      window with downloads running doesn't add a second icon;
+    - Open at login in the user's Run key, with `--opened-at-login` telling a login launch apart
+      (`shared/loginItem.ts`);
+    - the window buttons in the theme's colours, and each content header kept clear of them with the Window
+      Controls Overlay variables;
+    - Liquid Glass as acrylic from Windows 11 22H2 (build 22621), solid before (`shared/windowMaterial.ts`), and
+      Settings says which;
+    - "this PC", File Explorer, the notification area, Ctrl+, and Windows' Settings paths in the interface
+      (`platformWords.ts`).
+  - **Diagnostics:** zipped with Windows' own `tar.exe`, the helper log from ProgramData, and Windows paths
+    hidden like macOS ones (`C:\Users\name\…`, other disks).
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

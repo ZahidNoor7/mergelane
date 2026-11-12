@@ -49,6 +49,14 @@ const PATH_PART = `[^\\s"'<>:;,()]+`
 const HOME_PATH_PATTERN = new RegExp(`~(?:/${PATH_PART})+`, 'g')
 const USERS_PATTERN = new RegExp(`/Users/(?!Shared\\b)${PATH_PART}`, 'g')
 const VOLUMES_PATTERN = new RegExp(`/Volumes/${PATH_PART}`, 'g')
+// Windows (W1): the home folder's own paths (~\…), other accounts' (C:\Users\name\…, Public left alone) and
+// other disks' (D:\…), as the macOS ones above.
+const WINDOWS_HOME_PATH_PATTERN = new RegExp(`~(?:\\\\${PATH_PART})+`, 'g')
+const WINDOWS_USERS_PATTERN = new RegExp(
+  `\\b([A-Za-z]):\\\\Users\\\\(?!Public\\b)${PATH_PART}`,
+  'g'
+)
+const WINDOWS_OTHER_DISK_PATTERN = new RegExp(`\\b([A-BD-Za-bd-z]):\\\\${PATH_PART}`, 'g')
 const IPV4_PATTERN = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
 const IPV6_PATTERN = /(?<![\w:])[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?![\w:])/gi
 
@@ -65,6 +73,9 @@ export function redactIdentity(text: string, context: RedactionContext): string 
     .replace(HOME_PATH_PATTERN, '~/…')
     .replace(USERS_PATTERN, '/Users/<user>/…')
     .replace(VOLUMES_PATTERN, '/Volumes/…')
+    .replace(WINDOWS_HOME_PATH_PATTERN, '~\\…')
+    .replace(WINDOWS_USERS_PATTERN, '$1:\\Users\\<user>\\…')
+    .replace(WINDOWS_OTHER_DISK_PATTERN, '$1:\\…')
   const name = context.userName
   if (name && name.length >= 3) {
     out = out.replace(new RegExp(`(?<![\\w.-])${escapeRegExp(name)}(?![\\w-])`, 'gi'), '<user>')
@@ -183,10 +194,16 @@ export function summarizeInterfaces(networks: NetworkInterfaceInfo[]): Record<st
 /** Where downloads are saved, without naming the folder. */
 function destinationOf(dir: string | undefined, context: RedactionContext): string {
   if (dir === undefined) return 'Downloads (default)'
-  if (context.home.length > 1 && (dir === context.home || dir.startsWith(`${context.home}/`))) {
+  if (
+    context.home.length > 1 &&
+    (dir === context.home ||
+      dir.startsWith(`${context.home}/`) ||
+      dir.startsWith(`${context.home}\\`))
+  ) {
     return 'a folder in the home folder'
   }
-  if (dir.startsWith('/Volumes/')) return 'a folder on another disk'
+  if (dir.startsWith('/Volumes/') || /^[A-BD-Za-bd-z]:\\/.test(dir))
+    return 'a folder on another disk'
   return 'a folder elsewhere'
 }
 
@@ -383,21 +400,55 @@ export function buildDiagnostics(
   )
 }
 
+/** Where the system-wide helper writes its log: macOS's /Library/Logs, or on Windows the
+ * ProgramData folder the helper's service writes to (W5). */
+export function helperLogPath(platform: string, programData = 'C:\\ProgramData'): string {
+  return platform === 'win32'
+    ? `${programData}\\Mergelane\\Logs\\daemon.log`
+    : '/Library/Logs/Mergelane/daemon.log'
+}
+
+/** How the bundle's folder is zipped, with the folder itself at the archive's root: macOS's ditto, or
+ * the tar that comes with Windows ("tar on Windows", Microsoft Learn: `tar -caf archive.zip folder`,
+ * -a choosing zip from the name). */
+export function zipCommand(
+  platform: string,
+  parent: string,
+  folderName: string,
+  zip: string,
+  systemRoot = 'C:\\Windows'
+): [string, string[]] {
+  if (platform === 'win32') {
+    return [`${systemRoot}\\System32\\tar.exe`, ['-c', '-a', '-f', zip, '-C', parent, folderName]]
+  }
+  // -c -k: a PKZip archive; --norsrc: no resource forks or extended attributes; --keepParent: the
+  // folder itself at the archive's root (man ditto).
+  return [
+    '/usr/bin/ditto',
+    ['-c', '-k', '--norsrc', '--keepParent', `${parent}/${folderName}`, zip]
+  ]
+}
+
 /** README.txt: what the bundle holds and what was left out, for the user and for whoever reads it. */
-export function diagnosticsReadme(generatedAt: number, hasHelperLog: boolean): string {
+export function diagnosticsReadme(
+  generatedAt: number,
+  hasHelperLog: boolean,
+  platform = 'darwin'
+): string {
+  const windows = platform === 'win32'
   return [
     'Mergelane diagnostics',
     `Made ${new Date(generatedAt).toISOString()} on request. Mergelane never sends this anywhere:`,
     'attach it to a GitHub issue yourself if you want help.',
     '',
     'What is in it',
-    '- diagnostics.json: the versions of Mergelane, its helper, Electron and macOS; the Mac’s',
+    `- diagnostics.json: the versions of Mergelane, its helper, Electron and ${windows ? 'Windows; the PC’s' : 'macOS; the Mac’s'}`,
     '  architecture, processor and memory; each network’s kind and name, and its addresses only as',
     '  "private" or "public"; system-wide merging’s state; the networks that dropped or came back',
     '  in the last week; the settings that change how downloads run; and each download’s',
     '  progress, speed, networks and errors (unfinished ones, and the last 50 finished).',
     hasHelperLog
-      ? `- helper-log.txt: the last lines of the helper's log, /Library/Logs/Mergelane/daemon.log.`
+      ? `- helper-log.txt: the last lines of the helper's log, ${windows ? helperLogPath(platform, '%ProgramData%') : helperLogPath(platform)}.`
       : '- No helper log: the helper is not installed, or its log could not be read.',
     '',
     'What was left out or replaced',

@@ -3,13 +3,14 @@ import { FileArchive, FolderOpen } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { SettingRow, SettingsGroup } from './settingsParts'
 import { Button } from './ui/button'
+import { words } from '../platformWords'
 
 // Settings › General › Troubleshooting (M3.7, docs/DECISIONS.md ADR-0042). The design has no place for
 // a diagnostics bundle, so it is a row in Settings' own parts, and an app menu item ("Save
 // Diagnostics…") that comes here and saves one. Mergelane never sends it anywhere.
 
-const ABOUT =
-  'A zip file of Mergelane’s versions, your Mac’s networks, settings and recent downloads, to attach to a GitHub issue. Links keep only their site; file names, passwords, cookies and your home folder are left out. Mergelane never sends it anywhere.'
+const about = (): string =>
+  `A zip file of Mergelane’s versions, your ${words().computer}’s networks, settings and recent downloads, to attach to a GitHub issue. Links keep only their site; file names, passwords, cookies and your home folder are left out. Mergelane never sends it anywhere.`
 
 export function DiagnosticsSettings(): React.JSX.Element {
   const diagnostics = useAppStore((store) => store.diagnostics)
@@ -22,7 +23,7 @@ export function DiagnosticsSettings(): React.JSX.Element {
         label="Diagnostics"
         hint={
           <>
-            {ABOUT}
+            {about()}
             <span
               role="status"
               aria-atomic="true"
@@ -49,7 +50,7 @@ export function DiagnosticsSettings(): React.JSX.Element {
             onClick={() => void window.mergelane.revealDiagnostics()}
           >
             <FolderOpen data-icon="inline-start" />
-            Show in Finder
+            {words().revealLabel}
           </Button>
         )}
         <Button

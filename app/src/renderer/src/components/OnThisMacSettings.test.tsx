@@ -121,3 +121,34 @@ describe('On this Mac', () => {
     expect(updateSettings).toHaveBeenCalledWith({ notifyWhenDone: undefined })
   })
 })
+
+describe('On this PC (Windows)', () => {
+  beforeEach(() => {
+    window.mergelane.platform = 'win32'
+  })
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+  })
+
+  it('speaks of the PC and the notification area, and where Windows lists startup apps', async () => {
+    await show()
+    expect(screen.getByRole('region', { name: 'On this PC' })).toBeTruthy()
+    expect(
+      screen.getByRole('switch', { name: 'Show the merged speed in the notification area' })
+    ).toBeTruthy()
+    expect(hint()).toBe('Starts in the notification area, so scheduled downloads begin on time.')
+    expect(screen.getByText(/Uses Windows notifications/)).toBeTruthy()
+    cleanup()
+    login = { on: true, status: 'enabled' }
+    await show()
+    expect(hint()).toBe(
+      'Starts in the notification area, so scheduled downloads begin on time. Windows lists it in Settings › Apps › Startup.'
+    )
+  })
+
+  it('says only the installed app can open at login', async () => {
+    login = { on: false, status: 'unavailable' }
+    await show()
+    expect(hint()).toBe('Only Mergelane installed with its installer can open at login.')
+  })
+})

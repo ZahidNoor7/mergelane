@@ -2,6 +2,7 @@ import type { AppUsage } from '@shared/appUsage'
 import { SPEED_HISTORY_SECONDS } from '@shared/types'
 import { useEffect, useState } from 'react'
 import { Sparkline } from './Sparkline'
+import { onWindows, words } from '../platformWords'
 
 // The Dashboard's "Mergelane on this Mac", from the final design (prototype.html, UsagePanel): how
 // much CPU and memory Mergelane itself uses, in all and by part, as Activity Monitor counts it. In
@@ -74,10 +75,12 @@ export function UsagePanel({ merging }: { merging: boolean }): React.JSX.Element
     <section aria-labelledby="dashboard-usage" className="flex flex-col gap-3">
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule pt-7 pb-2">
         <h2 id="dashboard-usage" className="text-[13px] font-[650] tracking-[-0.005em]">
-          Mergelane on this Mac
+          Mergelane on {words().thisComputer}
         </h2>
         <span className="ml-auto text-[12px] text-ink-3">
-          As Activity Monitor counts it: 100% is one full core
+          {onWindows()
+            ? '100% is one full core'
+            : 'As Activity Monitor counts it: 100% is one full core'}
         </span>
       </div>
       {usage === null ? (

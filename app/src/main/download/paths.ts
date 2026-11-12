@@ -29,10 +29,16 @@ export async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-function sanitizeFileName(fileName: string): string {
+/** A server's name for a file, made safe as one file name here: never a path, and on Windows none of
+ * the characters or device names Windows reserves ("Naming Files, Paths, and Namespaces", Microsoft
+ * Learn), and no trailing dot or space. */
+export function sanitizeFileName(
+  fileName: string,
+  platform: NodeJS.Platform = process.platform
+): string {
   // A server-provided name is one component, never a path or NTFS data stream.
   let safe = fileName.replace(/[\\/]/g, '_').replace(/\p{Cc}/gu, '_')
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     safe = safe.replace(/[<>:"|?*]/g, '_').replace(/[ .]+$/, '')
     if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(safe)) safe = `_${safe}`
   }

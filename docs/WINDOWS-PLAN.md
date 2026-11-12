@@ -118,7 +118,7 @@ so that each later piece can be tried on the laptop through the unpacked build a
 | b | `w1-daemon-builds` | The daemon and the browser-bridge helper build and vet for `windows/amd64` and `arm64`: Net Merge's Windows files re-imported (`docs/UPSTREAM.md`), macOS-only tests behind build tags, and every package in the kit. The Wintun engine (`tun_windows.go`) waits for W5: until then the Windows daemon refuses `run`, `install` and `uninstall`, and never creates an adapter or a route. |
 | g | `w1-unpacked-build` | `electron-builder --win --dir` for both chips on the Mac, koffi's `win32` builds kept; a kit step that starts it with a test profile and checks that it is ready. |
 | c | `w1-networks` | The network list on Windows: kinds, and virtual adapters hidden. |
-| d | `w1-pinning` | Pinning download sockets with `IP_UNICAST_IF` / `IPV6_UNICAST_IF`. First check, from Node's and Microsoft's docs, whether Node on Windows can take a socket made outside it (the macOS approach); the answer decides the design, in an ADR. |
+| d | `w1-pinning` | Pinning download sockets. Decided in ADR-0055: by their source address, which Windows' default strong host model honours; `IP_UNICAST_IF` would need the socket's handle, which Node doesn't expose on Windows. |
 | e | `w1-paths` | Windows file names, the Downloads folder, and sparse files. |
 | f | `w1-windows-habits` | The tray icon, Ctrl shortcuts, the title bar, Open at login, notifications and the Windows 11 materials. |
 
@@ -134,10 +134,8 @@ so that each later piece can be tried on the laptop through the unpacked build a
   - hide virtual adapters: Hyper-V vEthernet, WSL, VPN adapters, Wintun, TAP, loopback.
   - Check the API in Microsoft's docs first (`GetAdaptersAddresses` through koffi, or a Node built-in).
 - **Pinning** (`network/deviceBinding.ts`):
-  - pin each download socket to its network with `IP_UNICAST_IF` (an IPv4 interface index in network byte order)
-    and `IPV6_UNICAST_IF` (host byte order), through koffi on `ws2_32.dll`, following the macOS `IP_BOUND_IF`
-    code;
-  - tests like the macOS ones.
+  - pin each download socket to its network by its source address (ADR-0055: Windows' strong host model);
+  - the helper's own sockets (W5) use `IP_UNICAST_IF`, set from Go.
 - **Paths and files:**
   - Windows file-name rules (reserved names such as `CON`, characters such as `<>:"/\|?*`, trailing dots and
     spaces, long paths);

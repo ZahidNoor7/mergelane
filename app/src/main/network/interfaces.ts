@@ -5,16 +5,15 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
 import { isMacTunnel } from '../../shared/tunnels'
+import {
+  windowsAdapterHidden,
+  windowsAdapterKind,
+  type WindowsAdapter
+} from '../../shared/windowsAdapters'
 import { testInterfaces } from '../testKnobs'
 
 const execFileAsync = promisify(execFile)
 const DISCOVERY_TIMEOUT_MS = 5000
-
-interface WindowsAdapter {
-  Name: string
-  InterfaceDescription: string
-  NdisPhysicalMedium: number
-}
 
 interface LinuxAdapter {
   displayName: string
@@ -75,7 +74,8 @@ function classifyInterface(hardwarePortName: string): NetworkInterfaceKind {
 
 /** Adapter aliases ("Wi-Fi", "Ethernet 2") match Node's interface names, and are what Windows shows
  * people; the description ("Intel(R) Wi-Fi 6 AX201 160MHz") and physical medium only tell what kind
- * of network a renamed or localized adapter is. */
+ * of network a renamed or localized adapter is, and the Virtual and HardwareInterface flags whether it
+ * is one at all (shared/windowsAdapters.ts). */
 async function getWindowsAdapters(): Promise<Map<string, WindowsAdapter>> {
   if (process.platform !== 'win32') return new Map()
   try {
@@ -86,7 +86,7 @@ async function getWindowsAdapters(): Promise<Map<string, WindowsAdapter>> {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter -ErrorAction Stop | Select-Object Name, InterfaceDescription, NdisPhysicalMedium | ConvertTo-Json -Compress'
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter -ErrorAction Stop | Select-Object Name, InterfaceDescription, NdisPhysicalMedium, Virtual, HardwareInterface | ConvertTo-Json -Compress'
       ],
       { windowsHide: true, timeout: DISCOVERY_TIMEOUT_MS, encoding: 'utf8' }
     )
@@ -266,23 +266,25 @@ export async function listActiveInterfaces(): Promise<NetworkInterfaceInfo[]> {
     // one would only go round through it. Not offered as networks (ADR-0052).
     if (process.platform === 'darwin' && isMacTunnel(device)) continue
 
+    // Windows' VPN and virtual adapters likewise (shared/windowsAdapters.ts). Without Get-NetAdapter's
+    // answer every adapter stays, as before.
+    const adapter = windowsAdapters.get(device)
+    if (process.platform === 'win32' && adapter && windowsAdapterHidden(adapter)) continue
+
     // On Linux, skip internal/virtual bridge adapters that aren't recognized hardware/adapters
     if (process.platform === 'linux' && linuxAdapters.size > 0 && !linuxAdapters.has(device)) {
       continue
     }
 
     const hardwareName = hardwarePorts.get(device)
-    const adapter = windowsAdapters.get(device)
     const linuxAdapter = linuxAdapters.get(device)
 
-    let kind =
+    const kind =
       linuxAdapter?.kind ??
       (process.platform === 'linux'
         ? classifyLinuxDevice(device)
-        : classifyInterface(adapter?.InterfaceDescription ?? hardwareName ?? device))
-    // NDIS media: 1 = wireless LAN, 9 = native 802.11, 14 = Ethernet (802.3).
-    if (adapter?.NdisPhysicalMedium === 1 || adapter?.NdisPhysicalMedium === 9) kind = 'wifi'
-    else if (kind === 'other' && adapter?.NdisPhysicalMedium === 14) kind = 'ethernet'
+        : ((adapter && windowsAdapterKind(adapter)) ??
+          classifyInterface(adapter?.InterfaceDescription ?? hardwareName ?? device)))
 
     const displayName = linuxAdapter?.displayName ?? hardwareName ?? device
 

@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Windows version, in progress on the `windows` branch: a test kit that checks Windows builds on a Windows PC and
+  writes a report. The Mac app doesn't change.
+
 ### Changed
 
 - The README is up to date: what Mergelane does today, installing and updating, and building it from source.

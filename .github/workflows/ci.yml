@@ -45,6 +45,9 @@ jobs:
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/hardware/hardware.mjs' --test-coverage-lines=90 scripts/hardware/hardware.test.mjs
       - name: Test the Deno notices generator
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' --test-coverage-lines=90 scripts/media-tools/deno-notices.test.mjs
+      # A stand-in for go, git and zip, and static checks of test-kit.ps1, which runs only on Windows.
+      - name: Test the Windows test kit's builder and report reader (ADR-0054)
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/windows/kit.mjs' --test-coverage-include='scripts/windows/report.mjs' --test-coverage-lines=90 scripts/windows/kit.test.mjs scripts/windows/report.test.mjs
 
   app-checks:
     runs-on: xcode-27

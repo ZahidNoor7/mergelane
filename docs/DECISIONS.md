@@ -1344,3 +1344,63 @@ until the owner overrides it.
   - Windows 10 users get no more security updates from Microsoft. Mergelane still runs there, but the README says
     Windows 11 is recommended.
   - Users whose Smart App Control is On can't run unsigned builds, until free signing is in place.
+
+## ADR-0054: The Windows test kit: built on the Mac, run by the owner on the laptop, read back here (W1)
+
+- Status: Proposed with W1's first pull request (2026-11-12). It fills in `docs/WINDOWS-PLAN.md`, "How Windows is
+  tested", including how the kit's PowerShell is tested.
+- Context:
+  - Claude works only on the owner's Mac; the owner runs Windows builds on their laptop (ADR-0053). CI is paused.
+  - The laptop must need no installs. Windows 10 and 11 come with Windows PowerShell 5.1.
+  - Windows' default execution policy on client PCs is Restricted, which runs no scripts. `powershell.exe
+    -ExecutionPolicy Bypass` sets the policy for that session only: it isn't stored, and it ends with the session.
+    A Group Policy setting overrides it. (Microsoft Learn, `about_Execution_Policies`, PowerShell 5.1.)
+  - Windows PowerShell reads a script without a byte-order mark in the ANSI code page, so non-ASCII text is garbled
+    (`about_Character_Encoding`).
+  - Smart App Control's mode is the registry value `VerifiedAndReputablePolicyState` under
+    `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`: 0 Off, 1 On, 2 Evaluation (Microsoft Learn, "Test your
+    app's signature with Smart App Control"). The chip is `Win32_Processor.Architecture` (9 x64, 12 ARM64). The
+    Downloads folder is the `{374DE290-123F-4565-9164-39C4925E467B}` value under `HKCU\...\Explorer\User Shell
+    Folders` (FOLDERID_Downloads), `%USERPROFILE%\Downloads` by default.
+  - Windows 11 on Arm runs x64 programs through emulation; Windows 10 on Arm doesn't (Microsoft Learn, "How
+    emulation works on Arm").
+  - `go test -c -o <file>` compiles a package's tests into a program without running it; flags to that program
+    need the `test.` prefix; a package with no test files for the platform produces no program (`go help test`,
+    `go help testflag`, Go 1.27.3).
+- Decision:
+  - **The kit** is a folder and a zip of it, built by `node scripts/windows/kit.mjs` into `dist/` (ignored by
+    git). It holds `test-kit.ps1`, `Run test kit.cmd`, `README.txt`, `kit.json` and the Go test programs.
+  - **Starting it:** the owner double-clicks `Run test kit.cmd`, which runs
+    `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+    test-kit.ps1` and then waits for a key. No setting changes.
+  - **The script** (`scripts/windows/test-kit.ps1`) targets Windows PowerShell 5.1 and stays ASCII; `kit.mjs`
+    refuses to build a kit otherwise. It:
+    - stops if it has administrator rights;
+    - reads the Windows version, the chip and Smart App Control (read only), and whether Windows marked the kit
+      as downloaded (the `Zone.Identifier` stream);
+    - lists the names, sizes and dates in Downloads before and after, and reports any change;
+    - checks each program's SHA-256, then runs the ones this PC's chip can run (`Start-Process -Wait`, output
+      redirected into the kit's `results` folder);
+    - writes `report.txt` in the kit folder and copies it to the clipboard. The user's profile path is replaced
+      with `%USERPROFILE%`.
+  - **Go test programs:** `GOOS=windows GOARCH=amd64|arm64 CGO_ENABLED=0 go test -c -cover -trimpath`, one per
+    package listed in `kit.mjs`'s `GO_PACKAGES`. Without cgo there is no `-race` on Windows; `go test -race` keeps
+    running on the Mac. Each program writes a coverage profile; the report carries back the lines for
+    `*_windows.go` files, so the coverage of Windows-only code is measured where it runs. A package can carry
+    `until: "W<n>"`: before that milestone its failures are reported as "not yet" and don't fail the run.
+  - **The report** is JSON between two marker lines, so it survives being pasted into a chat.
+    `node scripts/windows/report.mjs [file]` (or standard input) says what it shows, lists per-file coverage of
+    the Windows-only files, and exits 1 if something that must pass failed or Downloads changed.
+  - **How the PowerShell is tested:** everything that can run anywhere lives in Node (`kit.mjs`, `report.mjs`),
+    tested on the Mac with `node --test` to at least 90% of lines. The script stays thin, and its tests on the Mac
+    are static (`kit.test.mjs`): ASCII only; the same report markers as `report.mjs`; it reads the `kit.json`
+    fields `kit.mjs` writes; it contains no command that changes the system (registry writes, execution policy,
+    services, routes, firewall, Defender, downloads, elevation); it writes only inside the kit folder. Its first
+    real run is the owner's. Parsing and linting it on the Mac (PSScriptAnalyzer, Pester) would need PowerShell 7
+    installed here, which is the owner's decision.
+- Consequences:
+  - The owner needs nothing installed on the laptop, and no setting changes there.
+  - With Smart App Control On, Windows may refuse the unsigned test programs; the report shows it.
+  - A Group Policy that fixes the execution policy would stop the kit; the owner would see PowerShell's message.
+  - Later milestones add steps to the same kit: the unpacked app (W1), the extension (W2), media (W3), the
+    installer (W4) and, after a warning, the administrator steps (W5).

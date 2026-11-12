@@ -26,6 +26,8 @@ import {
   stepKey,
   tagProblems,
   treeProblems,
+  openAppProblems,
+  OPEN_APP,
   UsageError
 } from './local-release.mjs'
 import { parseChecksums } from './notes.mjs'
@@ -99,6 +101,10 @@ describe('the checks', () => {
   })
 
   test('the working tree must be clean', () => {
+    assert.deepEqual(openAppProblems(''), [])
+    assert.deepEqual(openAppProblems('\n'), [])
+    assert.match(openAppProblems('123\n')[0], /Mergelane is open/)
+    assert.equal(OPEN_APP, '/Mergelane.app/Contents/MacOS/Mergelane')
     assert.deepEqual(treeProblems(''), [])
     const many = Array.from({ length: 12 }, (_, i) => ` M file${i}`).join('\n')
     const [problem] = treeProblems(many)
@@ -354,6 +360,7 @@ describe('release', () => {
       answers: {
         'git symbolic-ref': 'topic\n',
         'git status': ' M CHANGELOG.md\n',
+        'pgrep -f': '4242\n',
         'git ls-remote': 'abc\trefs/tags/v1.0.0\n',
         'gh api': 'v1.0.0\n',
         'git tag': 'abc\n'
@@ -371,6 +378,7 @@ describe('release', () => {
     for (const message of [
       /HEAD is topic/,
       /uncommitted change/,
+      /Mergelane is open: quit it/,
       /exists here/,
       /exists on origin/,
       /already has a release/

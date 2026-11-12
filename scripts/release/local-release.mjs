@@ -174,6 +174,22 @@ export function treeProblems(status) {
   ]
 }
 
+/** What `pgrep -f` looks for: an installed Mergelane's main process. */
+export const OPEN_APP = '/Mergelane.app/Contents/MacOS/Mergelane'
+
+/**
+ * Problems with an open Mergelane (`pgrep -f OPEN_APP` output): the packaging test checks that nothing in the
+ * owner's Mergelane data changes while it runs, and an open Mergelane saves its network usage every few
+ * seconds, so the build would fail after ten minutes (0.3.2's first attempt). Said up front instead.
+ */
+export function openAppProblems(pids) {
+  if (!pids.trim()) return []
+  return [
+    'Mergelane is open: quit it (Mergelane › Quit Mergelane) and keep it closed until the release is built. ' +
+      'The packaging test checks that nothing of yours changes, and an open Mergelane keeps saving'
+  ]
+}
+
 /** Problems with the tag and the release: neither may exist yet. */
 export function tagProblems({ tag, localTag, remoteTags, releases }) {
   const problems = []
@@ -345,6 +361,10 @@ export async function release(options, { run, print }) {
       .stdout
     problems.push(...treeProblems(status))
   }
+  const open = (
+    await run('pgrep', ['-f', OPEN_APP], { cwd: root, capture: true, allowFail: true })
+  ).stdout
+  problems.push(...openAppProblems(open))
   const localTag = (
     await run('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`], {
       cwd: root,

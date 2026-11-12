@@ -1127,3 +1127,30 @@ until the owner overrides it.
   - One more folder in Downloads. It must stay there while the browser uses it. The Settings row and step 1 say so.
   - Choosing the folder in the browser stays a manual step. It can only go away with a Chrome Web Store listing,
     which needs a paid developer account (ADR-0038).
+
+## ADR-0049: The browser extension wears the app's default theme
+
+- Status: Owner-approved task (2026-11-12): restyle the extension's popup and options page to match the app.
+- Context:
+  - The extension still had its own look: green switches, orange links, uppercase monospace section labels and
+    grey cards. The app's look is the owner's final design (ADR-0034): seven themes, Porcelain the default.
+  - The extension can't read which theme the user picked without new messages through the native host, and its
+    pages are plain HTML, CSS and TypeScript, with no React or Tailwind.
+  - The app's fonts, Archivo and Fragment Mono (OFL 1.1), already ship in the extension: `build.mjs` copies
+    `src/renderer/src/assets/fonts`, licences included (about 250 KB). Nothing new is downloaded or bundled.
+- Decision:
+  - The extension always uses **Porcelain**, light or dark following the browser (`prefers-color-scheme`). Its
+    seeds are copied from `src/shared/themes.ts`, and every other colour is derived from them with the same
+    `color-mix()` formulas as `main.css`.
+  - The switch, buttons, field, tag and settings groups copy the app's `ui/` components and `settingsParts.tsx`:
+    sentence-case group titles over rounded cards of hairline rows, capsule buttons, the accent-filled switch.
+  - `prefers-contrast: more` raises lines and secondary text to the High contrast theme's strengths.
+    `prefers-reduced-motion` stops the transitions, and a press dims instead of shrinking.
+  - The CSS features used (`color-mix()`, `:has()`, the `translate` and `scale` properties, `prefers-contrast`)
+    are all supported by the extension's minimum browsers, Chrome 123 and Firefox 121, according to MDN's
+    browser-compat-data (read 2026-11-12).
+- Consequences:
+  - A user on another theme (Sandstone, High contrast and so on) sees Porcelain in the extension. Following the
+    app's theme would need the app to send it through the native host; that can come later.
+  - Porcelain's seeds are written in two places. A change to them in `themes.ts` must be copied to
+    `extension/src/ui.css`.

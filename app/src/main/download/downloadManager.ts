@@ -306,13 +306,18 @@ function samplePeak(runtime: DownloadRuntime, now: number): void {
   state.peakSpeedBytesPerSec = Math.max(state.peakSpeedBytesPerSec ?? 0, held, average)
 }
 
-function newHttpNetwork(iface: NetworkInterfaceInfo, enabled: boolean): HttpDownloadNetwork {
+function newHttpNetwork(
+  iface: NetworkInterfaceInfo,
+  enabled: boolean,
+  chosenOff = false
+): HttpDownloadNetwork {
   return {
     transfer: 'http',
     id: iface.id,
     label: iface.displayName,
     kind: iface.kind,
     enabled,
+    ...(chosenOff && { chosenOff: true as const }),
     status: enabled ? 'on' : 'off',
     bytesDownloaded: 0,
     speedBytesPerSec: 0,
@@ -320,9 +325,13 @@ function newHttpNetwork(iface: NetworkInterfaceInfo, enabled: boolean): HttpDown
   }
 }
 
-function newTorrentNetwork(iface: NetworkInterfaceInfo, enabled: boolean): TorrentDownloadNetwork {
+function newTorrentNetwork(
+  iface: NetworkInterfaceInfo,
+  enabled: boolean,
+  chosenOff = false
+): TorrentDownloadNetwork {
   return {
-    ...newHttpNetwork(iface, enabled),
+    ...newHttpNetwork(iface, enabled, chosenOff),
     transfer: 'torrent',
     bytesUploaded: 0,
     uploadSpeedBytesPerSec: 0
@@ -1331,7 +1340,9 @@ export class DownloadManager {
         bytesUploaded: 0,
         uploadSpeedBytesPerSec: 0,
         status: 'downloading',
-        networks: available.map((iface) => newTorrentNetwork(iface, selected.includes(iface))),
+        networks: available.map((iface) =>
+          newTorrentNetwork(iface, selected.includes(iface), !selected.includes(iface))
+        ),
         peers: [],
         peakPeers: 0,
         pieces,
@@ -1363,7 +1374,9 @@ export class DownloadManager {
         requestPayload.destinationDir,
         requestPayload.suggestedFileName
       )
-      const networks = available.map((iface) => newHttpNetwork(iface, usable.includes(iface)))
+      const networks = available.map((iface) =>
+        newHttpNetwork(iface, usable.includes(iface), !selected.includes(iface))
+      )
       if (!splittable(requestPayload)) {
         // One network carries it: a Use one before a Standby one (ADR-0045).
         const first = byRole(usable, (iface) => this.roleOf(iface.id))[0]
@@ -1459,7 +1472,9 @@ export class DownloadManager {
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       status: 'downloading',
-      networks: available.map((iface) => newHttpNetwork(iface, usable.includes(iface))),
+      networks: available.map((iface) =>
+        newHttpNetwork(iface, usable.includes(iface), !selected.includes(iface))
+      ),
       streams: [],
       peakStreams: 0,
       blocks,
@@ -1546,7 +1561,9 @@ export class DownloadManager {
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       status: 'downloading',
-      networks: available.map((iface) => newHttpNetwork(iface, usable.includes(iface))),
+      networks: available.map((iface) =>
+        newHttpNetwork(iface, usable.includes(iface), !selected.includes(iface))
+      ),
       streams: [],
       peakStreams: 0,
       blocks,
@@ -1832,7 +1849,10 @@ export class DownloadManager {
         networks.find(present) ??
         networks.find((network) => network.id === runtime.lastSwitchedOff) ??
         networks[0]
-      if (again) again.enabled = true
+      if (again) {
+        again.enabled = true
+        delete again.chosenOff
+      }
     }
     // A network that had failed, or couldn't get through, gets another go.
     for (const network of runtime.state.networks) {
@@ -1889,6 +1909,9 @@ export class DownloadManager {
       for (const other of networks) other.enabled = false
     }
     network.enabled = enabled
+    // Remembered, so it stays as the user left it when the network drops out and comes back.
+    if (enabled) delete network.chosenOff
+    else network.chosenOff = true
     if (!enabled) runtime.lastSwitchedOff = network.id
     if (wasLast && status === 'downloading') {
       runtime.pausedForNoNetwork = true
@@ -2461,6 +2484,7 @@ export class DownloadManager {
         state.networks = state.networks.filter(
           (network) =>
             network.enabled ||
+            network.chosenOff ||
             network.bytesDownloaded > 0 ||
             present.some((iface) => iface.id === network.id) ||
             state.streams.some((stream) => stream.interfaceId === network.id)
@@ -2469,17 +2493,22 @@ export class DownloadManager {
         state.networks = state.networks.filter(
           (network) =>
             network.enabled ||
+            network.chosenOff ||
             network.bytesDownloaded > 0 ||
             network.bytesUploaded > 0 ||
             present.some((iface) => iface.id === network.id) ||
             state.peers.some((peer) => peer.interfaceId === network.id)
         )
       }
+      // A network that connects while the download runs joins it (ADR-0052), as the networks it
+      // started with did, unless the download can only use one. Roles and routing still decide what
+      // it carries (below). One the user switched off for this download was kept above, still off.
+      const joins = !(runtime.kind === 'http' && !splittable(runtime.requestPayload))
       for (const iface of present) {
         if (!state.networks.some((network) => network.id === iface.id)) {
           if (state.kind === 'http' || state.kind === 'nzb' || state.kind === 'stream') {
-            state.networks.push(newHttpNetwork(iface, false))
-          } else state.networks.push(newTorrentNetwork(iface, false))
+            state.networks.push(newHttpNetwork(iface, joins))
+          } else state.networks.push(newTorrentNetwork(iface, joins))
         }
       }
     }

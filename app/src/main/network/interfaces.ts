@@ -4,6 +4,7 @@ import { readdir, readlink } from 'node:fs/promises'
 import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
+import { isMacTunnel } from '../../shared/tunnels'
 import { testInterfaces } from '../testKnobs'
 
 const execFileAsync = promisify(execFile)
@@ -259,6 +260,11 @@ export async function listActiveInterfaces(): Promise<NetworkInterfaceInfo[]> {
             : undefined
       }))
     if (usable.length === 0) continue
+
+    // macOS tunnels (utun: VPN apps, iCloud Private Relay and system merge's own; ipsec, ppp and the
+    // others below) carry traffic over a real network rather than being one, so a download bound to
+    // one would only go round through it. Not offered as networks (ADR-0052).
+    if (process.platform === 'darwin' && isMacTunnel(device)) continue
 
     // On Linux, skip internal/virtual bridge adapters that aren't recognized hardware/adapters
     if (process.platform === 'linux' && linuxAdapters.size > 0 && !linuxAdapters.has(device)) {

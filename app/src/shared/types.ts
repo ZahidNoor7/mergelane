@@ -293,6 +293,10 @@ interface DownloadNetworkBase {
   kind: NetworkInterfaceKind
   /** The user's choice; `status` is what came of it. */
   enabled: boolean
+  /** Switched off for this download by the user (in New download or in its networks), so a network
+   * that drops out and comes back stays off. A network the user never ruled out joins a running
+   * download by itself when it connects (ADR-0052). */
+  chosenOff?: true
   status: NetworkStatus
   error?: string
   /** Bytes of the file it delivered. */

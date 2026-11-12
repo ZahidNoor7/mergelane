@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-12
+
+A network you connect mid-download now joins it, the download details can be closed again, and Liquid Glass is
+clearer.
+
 ### Changed
 
 - **Liquid Glass's Clear look is clearer.** More of your desktop shows through the window, the sidebar and the

@@ -824,6 +824,8 @@ Last updated: 2026-11-11
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon
   and Archivo; `render.mjs` there redraws it). GitHub has no API for it: the owner uploads it in Settings.
+- **0.4.0** (2026-11-13, owner's go-ahead to merge everything and publish once all is green): the first release with
+  Windows, as a preview not yet tried on a Windows PC. `windows` (W1–W7, PRs #74–#84) merged into `main`.
 - **0.3.5** (2026-11-12, owner's go-ahead): PRs #70 and #71.
 - **0.3.4** (2026-11-12, owner's go-ahead): PR #66, the helper update offered at launch.
 - **0.3.3** (2026-11-12, owner's go-ahead): PR #63, the sticky first-burst fix, for the second M3.8 run.

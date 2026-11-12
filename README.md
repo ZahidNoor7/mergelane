@@ -4,8 +4,8 @@
 
 # Mergelane
 
-Mergelane is a free, open-source download manager for macOS that can use every internet connection your Mac
-has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
+Mergelane is a free, open-source download manager for macOS, and now Windows as a preview, that can use every
+internet connection your computer has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
 
 - **Downloads:** segmented multi-connection downloads, queues, a schedule, speed and data limits, and pause and
   resume, also across a restart. It handles direct links, torrents (`.torrent` and magnet links), Usenet (`.nzb`,
@@ -18,13 +18,15 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
 - **Everyday:** a menu-bar speed, Open at login, a notification when a download finishes, offering links you copy (off
   by default), seven themes with Liquid Glass, and updates from GitHub that it downloads and checks for you.
 
-> **Status: beta (0.3.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
-> The Safari extension and the 1.0 hardening come next. See `docs/PROGRESS.md` for the details.
+> **Status: beta (0.4.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
+> Windows is a preview from 0.4.0 (below). The Safari extension and the 1.0 hardening come next. See
+> `docs/PROGRESS.md` for the details.
 
 ## Requirements
 
 - macOS 27 or later
 - A Mac with Apple silicon (M1 or later). Intel Macs are not supported.
+- Or, for the Windows preview: Windows 10 or 11 on an Intel, AMD or Arm PC.
 
 ## What to expect (honest limits)
 
@@ -100,11 +102,11 @@ The helper can also be driven from Terminal. It is installed as
 After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
 an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.
 
-## Windows (in development)
+## Windows (preview)
 
-A Windows version, for Windows 10 and 11 on Intel, AMD and Arm PCs, is being built on the `windows` branch and isn't
-released yet. Once it is, each release carries two installers: `Mergelane-<version>-x64-setup.exe` (Intel or AMD)
-and `Mergelane-<version>-arm64-setup.exe` (Arm). Settings › System › About shows which one a PC needs, under
+The Windows version, for Windows 10 and 11 on Intel, AMD and Arm PCs, is a preview from 0.4.0: it is built and tested
+on a Mac but hasn't been tried on a Windows PC yet, so please report what doesn't work. Each release carries two
+installers: `Mergelane-<version>-x64-setup.exe` (Intel or AMD) and `Mergelane-<version>-arm64-setup.exe` (Arm). Settings › System › About shows which one a PC needs, under
 "System type".
 
 1. Open the installer. Mergelane isn't signed yet, so Windows may say it protected your PC: click **More info**,

@@ -258,6 +258,10 @@ merge test. Proven only on the laptop: everything that touches Windows networkin
 
 ### W6: real hardware and the Windows 1.0 checklist
 
+**Prepared** (branch `w6-hardware-prep`): the hardware run (`scripts/windows/hardware-test.ps1`, in the kit) and the
+accessibility checklist (`docs/WINDOWS-ACCESSIBILITY.md`). Both are run by the owner on the laptop. Free signing and
+the merge into `main` stay the owner's decisions.
+
 - **The Windows hardware script** (`scripts/hardware/`), run by the owner:
   - Wi-Fi plus a phone over USB (and Ethernet if available);
   - unplug and reconnect;

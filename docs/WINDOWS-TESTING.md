@@ -114,6 +114,27 @@ restart. Or, in PowerShell as administrator: `& "<kit>\helper\<chip>\mergelane-d
 `route print -4` shows any leftover `0.0.0.0` / `128.0.0.0` routes with mask `128.0.0.0`; Device Manager ›
 Network adapters lists the `Mergelane` (Wintun) adapter if one is left, and Uninstall device removes it.
 
+### The hardware run (W6, as yourself)
+
+`hardware-test.ps1`, with its starter `Run hardware test.cmd`, is the Windows counterpart of the Mac's real-hardware
+suite (`docs/HARDWARE.md`). Run it as yourself, not as administrator, once Mergelane and its helper are installed
+from the app, with two or more networks connected (Wi-Fi and a phone over USB, Ethernet if there is one) and any VPN
+off. It talks to the helper over its pipe and:
+
+- caps every network at 16 Mbit/s while it measures, and turns System merge on, checking its two routes;
+- downloads 8 × 10 MB from Cloudflare's speed test with sticky sites off (two or more networks must carry 10% or
+  more of the bytes) and on (only one may carry 15% or more), reading the helper's per-network stats;
+- asks you whether Mergelane's own download shows traffic on every network;
+- for each network you choose: you unplug it while downloads run (the helper must see it go within 30 s, merging
+  stays on, a new download gets through, a running one finishes), then plug it back (up again within 2 minutes);
+- if you say yes: sleep and wake (the helper answers, merging on, routes once, internet works); a VPN turned on
+  (merging goes off with a reason, turning it on is refused, no route left) and off again (merging turns on); a
+  crash, with the one `Stop-Process` command it shows for an administrator PowerShell window (Windows starts the
+  helper again within 30 s, the routes match its state, internet works);
+- puts System merge, sticky sites and every network's limit back as they were, whatever happened.
+
+It downloads about 160 MB, plus about 50 MB per network unplugged, and writes `hardware-report.txt`.
+
 ### Adding Go packages
 
 `GO_PACKAGES` in `scripts/windows/kit.mjs` lists the daemon packages the kit runs. Add a package once it builds

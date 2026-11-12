@@ -19,9 +19,11 @@ import {
   UsageError,
   addApp,
   ADMIN_CMD_NAME,
+  HARDWARE_CMD_NAME,
   addHelper,
   addInstaller,
   adminCmdFile,
+  hardwareCmdFile,
   installerName,
   assertAscii,
   buildKit,
@@ -40,6 +42,7 @@ import { BEGIN, END } from './report.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = readFileSync(join(HERE, 'test-kit.ps1'), 'utf8')
 const ADMIN_SCRIPT = readFileSync(join(HERE, 'system-merge-test.ps1'), 'utf8')
+const HARDWARE_SCRIPT = readFileSync(join(HERE, 'hardware-test.ps1'), 'utf8')
 
 const scratch = mkdtempSync(join(tmpdir(), 'mergelane-kit-test-'))
 after(() => rmSync(scratch, { recursive: true, force: true }))
@@ -57,6 +60,7 @@ function fakeRoot(script = SCRIPT) {
   mkdirSync(join(root, 'scripts', 'windows'), { recursive: true })
   writeFileSync(join(root, 'scripts', 'windows', 'test-kit.ps1'), script)
   writeFileSync(join(root, 'scripts', 'windows', 'system-merge-test.ps1'), ADMIN_SCRIPT)
+  writeFileSync(join(root, 'scripts', 'windows', 'hardware-test.ps1'), HARDWARE_SCRIPT)
   for (const arch of Object.keys(ARCHES)) {
     mkdirSync(join(root, 'daemon', 'bin', `win-${arch}`), { recursive: true })
     writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'mergelane-daemon.exe'), `daemon ${arch}`)
@@ -688,5 +692,45 @@ describe('the System merge test (W5)', () => {
     const stops = ADMIN_SCRIPT.split('\n').filter((line) => /Stop-Process/.test(line))
     assert.deepEqual(stops.map((line) => line.trim()), ['Stop-Process -Id $firstPid -Force'])
     assertAscii('system-merge-test.ps1', ADMIN_SCRIPT)
+  })
+})
+
+describe('the hardware run (W6)', () => {
+  it('ships with its starter whenever the helper does', async () => {
+    const out = freshDir('kit')
+    const { runner } = fakeRunner()
+    await buildKit({ root: fakeRoot(), out, zip: false, helper: true, runner })
+    assert.equal(readFileSync(join(out, 'hardware-test.ps1'), 'utf8'), crlf(HARDWARE_SCRIPT))
+    assert.equal(readFileSync(join(out, HARDWARE_CMD_NAME), 'utf8'), hardwareCmdFile())
+    assert.match(readFileSync(join(out, 'README.txt'), 'utf8'), /Run hardware test\.cmd/)
+    assert.match(hardwareCmdFile(), /-ExecutionPolicy Bypass -File "%~dp0hardware-test\.ps1"/)
+  })
+
+  it('needs no administrator rights and changes nothing outside the helper\'s own settings, which it puts back', () => {
+    for (const pattern of [
+      /Set-ItemProperty|New-ItemProperty|Remove-ItemProperty|Set-ExecutionPolicy|Unblock-File/i,
+      /\bnetsh\b|\broute(\.exe)?\s+(add|delete|change)/i,
+      /New-NetRoute|Remove-NetRoute|Set-NetIPInterface|Set-DnsClient|New-NetFirewallRule|Set-NetFirewall/i,
+      /\breg(\.exe)?\s+(add|delete|import|load)/i,
+      /New-Service|Set-Service|Remove-Service|sc\.exe|-Verb\s+RunAs/i,
+      /Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|Out-File|WriteAllBytes/i,
+      /Stop-Process(?! -Id \$\(\$before\.ProcessId\) -Force" -ForegroundColor Cyan)/
+    ]) {
+      assert.doesNotMatch(HARDWARE_SCRIPT, pattern, String(pattern))
+    }
+    // Downloads stay in memory; the one file it writes is its report, in the kit folder.
+    const writes = HARDWARE_SCRIPT.split('\n').filter((l) => /Set-Content|Add-Content|New-Item/.test(l))
+    assert.deepEqual(writes.map((l) => l.trim()), ['Set-Content -LiteralPath $ReportFile -Value $report -Encoding ASCII'])
+    // Everything it changes through the helper is put back in the finally block.
+    const final = HARDWARE_SCRIPT.lastIndexOf('} finally {')
+    for (const restore of ["Invoke-Helper 'disable'", "Invoke-Helper 'setStickySites' @{ enabled = $stickyBefore }",
+      "Invoke-Helper 'setLimit' @{ link = $name; mbps = $limitsBefore[$name] }"]) {
+      assert.ok(HARDWARE_SCRIPT.indexOf(restore, final) > final, restore)
+    }
+    // Every optional step asks first.
+    for (const ask of ["Ask \"Test unplugging", "Ask 'Test sleep and wake?", "Ask 'Test a VPN?", "Ask 'Test a helper crash?"]) {
+      assert.ok(HARDWARE_SCRIPT.includes(ask), ask)
+    }
+    assertAscii('hardware-test.ps1', HARDWARE_SCRIPT)
   })
 })

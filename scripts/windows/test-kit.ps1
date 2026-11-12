@@ -6,6 +6,8 @@
 #   - lists the names, sizes and dates in the Downloads folder before and after, to prove the tests never write
 #     there (it opens nothing);
 #   - runs the Go test programs listed in kit.json that this PC's chip can run, after checking each SHA-256;
+#   - opens Mergelane from the kit folder once, with a throwaway profile in the results folder (--user-data-dir),
+#     waits for its window, and closes it;
 #   - writes report.txt in the kit folder and copies it to the clipboard, for the owner to paste into the chat,
 #     where scripts/windows/report.mjs reads it.
 #
@@ -29,6 +31,8 @@ $ReportBegin = '-----BEGIN MERGELANE TEST KIT REPORT-----'
 $ReportEnd = '-----END MERGELANE TEST KIT REPORT-----'
 $TailLines = 40
 $MaxLineLength = 300
+# How long Mergelane may take to show its window.
+$AppReadySeconds = 90
 
 # A property of a JSON or registry object, or $null when it has none (strict mode throws on a missing one).
 function Get-Value($Object, [string]$Name) {
@@ -232,10 +236,85 @@ function Invoke-GoProgram($Program, [string]$Chip, [int]$Build) {
     return $result
 }
 
+# Starts the app once with its own profile inside the results folder (Electron's --user-data-dir, so it reaches
+# no other Mergelane and keeps its settings there), waits for its window ("Mergelane", app/src/renderer/index.html),
+# then closes it the way a user does. Anything from the kit's app folder still running afterwards is stopped.
+function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
+    $result = [ordered]@{
+        arch = [string]$App.arch
+        kind = [string]$App.kind
+    }
+    if (-not (Test-CanRun $result.arch $Chip $Build)) {
+        $result.status = 'skipped'
+        $result.reason = "this PC ($Chip) can't run $($result.arch) programs"
+        return $result
+    }
+    $exe = Join-Path $KitDir (([string]$App.path) -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $exe)) {
+        $result.status = 'error'
+        $result.reason = 'the app is missing from the kit folder (an antivirus may have removed it)'
+        return $result
+    }
+    $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($hash -ne ([string]$App.sha256).ToLowerInvariant()) {
+        $result.status = 'error'
+        $result.reason = 'Mergelane.exe differs from the one built (SHA-256); copy the kit again'
+        return $result
+    }
+    $appDir = Split-Path -Parent $exe
+    $profileDir = Join-Path $ResultsDir "profile-$($result.arch)"
+
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $process = Start-Process -FilePath $exe -ArgumentList "--user-data-dir=`"$profileDir`"" `
+            -WorkingDirectory $appDir -PassThru
+    } catch {
+        $result.status = 'error'
+        $result.reason = Hide-Profile $_.Exception.Message
+        return $result
+    }
+    # Reading Handle now keeps the exit code readable after the process ends.
+    $null = $process.Handle
+    $title = ''
+    while ($watch.Elapsed.TotalSeconds -lt $AppReadySeconds) {
+        Start-Sleep -Milliseconds 500
+        $process.Refresh()
+        if ($process.HasExited) { break }
+        if ($process.MainWindowTitle -like 'Mergelane*') {
+            $title = $process.MainWindowTitle
+            break
+        }
+    }
+    $result.seconds = [math]::Round($watch.Elapsed.TotalSeconds, 1)
+    if ($title) {
+        $result.status = 'ready'
+    } elseif ($process.HasExited) {
+        $result.status = 'failed'
+        $result.reason = "it closed by itself (exit code $($process.ExitCode))"
+    } else {
+        $result.status = 'failed'
+        $result.reason = "no window within $AppReadySeconds seconds"
+    }
+
+    if (-not $process.HasExited) {
+        $process.CloseMainWindow() | Out-Null
+        if (-not $process.WaitForExit(20000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $left = @(Get-Process -Name 'Mergelane' -ErrorAction SilentlyContinue | Where-Object {
+            $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
+        })
+    foreach ($leftover in $left) { Stop-Process -Id $leftover.Id -Force -ErrorAction SilentlyContinue }
+    $result.leftRunning = $left.Count
+    return $result
+}
+
 # ---------------------------------------------------------------------------------------------------------------
 
 Write-Host 'Mergelane Windows test kit'
-Write-Host 'It reads information about this PC and runs Mergelane''s own test programs from this folder.'
+Write-Host 'It reads information about this PC, runs Mergelane''s own test programs from this folder, and opens'
+Write-Host 'Mergelane once with a test profile.'
 Write-Host 'It needs no administrator rights and changes no settings.'
 Write-Host ''
 
@@ -273,6 +352,15 @@ foreach ($program in @($Kit.programs)) {
     $programs += , $outcome
 }
 
+$apps = @()
+foreach ($app in @(Get-Value $Kit 'apps')) {
+    if ($null -eq $app) { continue }
+    Write-Host "Opening Mergelane ($($app.arch)) with a test profile, then closing it ..."
+    $outcome = Invoke-AppCheck $app $chip.arch $build
+    Write-Host "  $($outcome.status)"
+    $apps += , $outcome
+}
+
 $downloads = Compare-Snapshots $downloadsBefore (Get-FolderSnapshot $downloadsFolder)
 
 $report = [ordered]@{
@@ -291,13 +379,16 @@ $report = [ordered]@{
     markOfTheWeb    = Test-MarkOfTheWeb $PSCommandPath
     downloads       = $downloads
     programs        = $programs
+    apps            = $apps
 }
 
 $passed = @($programs | Where-Object { $_.status -eq 'passed' }).Count
+$opened = @($apps | Where-Object { $_.status -eq 'ready' }).Count
 $downloadsSame = ($downloads.added.Count + $downloads.removed.Count + $downloads.changed.Count) -eq 0
 $summary = @(
     'Mergelane Windows test kit report',
     "Test programs passed: $passed of $($programs.Count)",
+    "Mergelane opened: $opened of $($apps.Count)",
     "Downloads folder unchanged: $downloadsSame"
 )
 $json = $report | ConvertTo-Json -Depth 8

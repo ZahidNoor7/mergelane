@@ -17,6 +17,10 @@ Claude builds everything on the owner's Mac and can't run Windows code. So Windo
   write there. It opens nothing.
 - Runs Mergelane's Go test programs that the PC's chip can run, after checking that each one is the file that was
   built (SHA-256).
+- Opens Mergelane once from the kit folder for each chip the PC can run, with a throwaway profile in the kit's
+  `results` folder (Electron's `--user-data-dir`), waits up to 90 seconds for its window, and closes it. Anything
+  still running from the kit's app folder afterwards is stopped. A run with its own `--user-data-dir` doesn't
+  register `mergelane://` links (`app/src/main/index.ts`), so the test copy never takes them over.
 - Writes `report.txt` in the kit folder and copies it to the clipboard.
 
 What it never does: it needs no administrator rights (it stops if it has them), changes no settings, installs
@@ -26,12 +30,18 @@ themselves. `scripts/windows/kit.test.mjs` checks the script for commands that w
 ### Build it (on the Mac)
 
 ```sh
+node scripts/windows/build-helpers.mjs     # mergelane-daemon.exe and mergelane-nmhost.exe, both chips
+cd app && npm run build:win:dir && cd ..   # the unpacked Windows app, both chips, in app/dist
 node scripts/windows/kit.mjs
 ```
 
-This writes `dist/windows-kit/` and `dist/mergelane-windows-kit.zip` (both ignored by git). Options:
-`--arch x64` or `--arch arm64` to build one chip only, `--out <dir>` for another folder, `--no-zip`. The builder
-replaces only a folder that is empty or an earlier kit.
+The Windows app is built with `electron-builder.win.yml`, which extends `electron-builder.yml` with the file
+rules only Windows needs (Windows' own native-module builds instead of the Mac's). Plain `electron-builder --win`
+without it would pack the Mac's native modules, so always use `npm run build:win` or `build:win:dir`.
+
+The kit builder writes `dist/windows-kit/` and `dist/mergelane-windows-kit.zip` (both ignored by git). Options:
+`--arch x64` or `--arch arm64` to build one chip only, `--out <dir>` for another folder, `--no-zip`, `--no-app`
+(Go test programs only). The builder replaces only a folder that is empty or an earlier kit.
 
 ### Run it (on the laptop)
 

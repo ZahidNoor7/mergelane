@@ -669,6 +669,22 @@ Last updated: 2026-11-11
     total 82.5%. Windows-only tests for every new Windows file, run by the kit, which now holds 12 packages per chip
     (24 programs). Their coverage comes back in the kit's report.
   - **Next:** the owner runs the kit; failures in packages without "not yet" get fixed in this pull request.
+- **W1, pull request g: the Windows app builds on the Mac** (branch `w1-unpacked-build`, 2026-11-12).
+  - `npm run build:win` / `build:win:dir` (in `app/`) package Mergelane for Windows x64 and arm64 on this Mac, with
+    no extra tools. `electron-builder.win.yml` extends `electron-builder.yml` with the Windows-only file rules:
+    electron-builder replaces the shared `files` list with a platform's own one, but `extends` adds to it.
+  - **Native modules:** koffi keeps only `win32_<arch>`; bufferutil, utf-8-validate, utp-native and
+    fs-native-extensions use their Windows prebuilds, not this Mac's `build/Release`. Arm64 has no prebuild for
+    the first three; their callers fall back to JavaScript (checked: ws, webtorrent's `lib/utp.cjs`).
+  - **The Mac app is unchanged:** a `--mac --dir` build has the same native files as before (koffi `darwin_arm64`
+    only). The shared koffi rule uses `${os}32_${arch}`, which matches nothing on macOS.
+  - `scripts/windows/build-helpers.mjs` builds `mergelane-daemon.exe` and `mergelane-nmhost.exe` per chip into
+    `daemon/bin/win-<arch>/`, which `win.extraResources` ships.
+  - **Kit:** it now carries the unpacked app per chip and opens it once with a throwaway profile
+    (`--user-data-dir` in its `results` folder), waits for the window and closes it. A run with its own
+    `--user-data-dir` no longer registers `mergelane://`.
+  - **Tests:** `build-helpers.test.mjs` (new), kit and report tests: 59 passed; lines `build-helpers.mjs` 97.6%,
+    `kit.mjs` 99.3%, `report.mjs` 99.0%.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

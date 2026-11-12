@@ -1,0 +1,16 @@
+# The Windows build: electron-builder.yml plus the file rules only Windows needs. `npm run build:win` uses it.
+#
+# They can't sit under `win:` in electron-builder.yml: a platform's own `files` list replaces the shared one
+# for the app's files, while `extends` adds to it (app-builder-lib 26.16.1, util/config/config.js,
+# doMergeConfigs). In node_modules only exclusions count, so these only take away.
+extends: ./electron-builder.yml
+files:
+  - '!electron-builder.win.yml'
+  # The shared rule keeps darwin_arm64 too; Windows loads win32_x64 or win32_arm64.
+  - '!node_modules/koffi/build/koffi/darwin_arm64/**'
+  # node-gyp-build loads build/Release before prebuilds/, and on the Mac build/Release holds this Mac's own
+  # compile. Windows takes the packages' own Windows prebuilds instead. Where one is missing (arm64 for
+  # bufferutil, utf-8-validate and utp-native), the package that loads it falls back to JavaScript: ws, and
+  # webtorrent's uTP (lib/utp.cjs) wrap the require in try/catch.
+  - '!node_modules/{bufferutil,utf-8-validate,utp-native,fs-native-extensions}/build/**'
+  - '!node_modules/{bufferutil,utf-8-validate,utp-native,fs-native-extensions}/prebuilds/!(win32-${arch})/**'

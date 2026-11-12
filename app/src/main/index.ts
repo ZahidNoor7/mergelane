@@ -271,8 +271,10 @@ app.whenReady().then(async () => {
     console.error('[mergelane] couldn’t update the saved extension folders', error)
   )
   // Unlike magnet:, mergelane:// is Mergelane's own, so registering it takes nothing from another app. A
-  // development build has no fixed path to register.
-  if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')
+  // development build has no fixed path to register, and a run with its own --user-data-dir is a test (the
+  // package test, the Windows test kit) whose copy of the app must not take the links over.
+  if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir'))
+    app.setAsDefaultProtocolClient('mergelane')
 
   nativeTheme.on('updated', () => {
     applyWindowMaterial(mainWindow)

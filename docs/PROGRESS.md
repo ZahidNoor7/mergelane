@@ -779,6 +779,14 @@ Last updated: 2026-11-11
     (`windowsHelper.ts` 100%); e2e smoke 724 passed (`windowsAdmin.spec.ts` 6); repo-checks 415, daemon job 638.
   - **Proven only on the laptop:** the service, the pipe, the adapter, the routes, the crash restart and the
     administrator prompt (the kit's System merge test).
+- **W6 prepared: the hardware run and the accessibility checklist** (branch `w6-hardware-prep`, 2026-11-12).
+  - `scripts/windows/hardware-test.ps1` (in the kit, with `Run hardware test.cmd`): the Mac suite's checks on
+    Windows, over the helper's pipe, as the owner: spread and sticky shares, unplug and reconnect, sleep, a VPN, a
+    crash (one administrator command it shows), and everything put back.
+  - `docs/WINDOWS-ACCESSIBILITY.md`: Narrator, keyboard only, contrast themes, transparency and animation off, text
+    size and display scale.
+  - **Tests:** `kit.test.mjs` checks the script ships, needs no administrator rights, writes only its report, asks
+    before each optional step and puts the helper's settings back in its `finally` block.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

@@ -16,6 +16,8 @@
 //   - helper/<x64|arm64>/: the system-wide helper and wintun.dll (scripts/windows/build-helpers.mjs), for
 //     system-merge-test.ps1 and its "Run system merge test (administrator).cmd" (W5): the one part of the kit that
 //     changes the system, run by the owner as administrator after typing YES, and that puts everything back;
+//   - hardware-test.ps1 and "Run hardware test.cmd" (W6): the real-hardware run against the helper the app
+//     installed, as the owner, asking before each unplug, sleep, VPN or crash step;
 //   - kit.json: what to run, with each program's SHA-256, so the scripts can tell a damaged copy.
 //
 // Text files are written with Windows line endings. test-kit.ps1 must stay ASCII: Windows PowerShell reads a
@@ -66,6 +68,8 @@ export const GO_PACKAGES = [
 export const COVER_INCLUDE = '_windows\\.go:'
 
 export const CMD_NAME = 'Run test kit.cmd'
+/** The real-hardware run's starter (hardware-test.ps1, W6): run as yourself, with the helper installed. */
+export const HARDWARE_CMD_NAME = 'Run hardware test.cmd'
 /** The System merge test's starter, which the owner runs as administrator (system-merge-test.ps1, W5). */
 export const ADMIN_CMD_NAME = 'Run system merge test (administrator).cmd'
 
@@ -195,6 +199,17 @@ async function commitOf(root, runner) {
   }
 }
 
+/** The hardware run's starter: as the kit's, for this run only and not as administrator. */
+export function hardwareCmdFile() {
+  return crlf(`@echo off
+rem Starts Mergelane's real-hardware run (W6). Run it as yourself, not as administrator, with Mergelane and its helper
+rem installed. -ExecutionPolicy Bypass applies to this run only and changes no setting.
+"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0hardware-test.ps1"
+echo.
+pause
+`)
+}
+
 /** The System merge test's starter. Unlike the kit's, it is meant to be run as administrator. */
 export function adminCmdFile() {
   return crlf(`@echo off
@@ -272,6 +287,11 @@ merge on, stops the helper once by force, and then removes it again, whatever ha
 6. Read what it says, type YES and wait for the report (it is on the clipboard and in system-merge-report.txt).
 7. Paste that report into the chat too.
 If your internet stops and does not come back, restart the PC: the helper's routes never outlive a restart.
+
+Later, with Mergelane installed and its helper installed from the app, the real-hardware run
+8. Double-click "${HARDWARE_CMD_NAME}" (not as administrator). It needs two or more networks (for example Wi-Fi and
+   your phone over USB), downloads about 160 MB, and asks you to unplug a network, sleep the PC, switch a VPN and
+   stop the helper, each only if you say yes. Paste its report into the chat.
 `
       : ''
   }
@@ -295,6 +315,8 @@ export async function buildKit({
   assertAscii('test-kit.ps1', script)
   const adminScript = helper ? readFileSync(join(root, 'scripts', 'windows', 'system-merge-test.ps1'), 'utf8') : null
   if (adminScript) assertAscii('system-merge-test.ps1', adminScript)
+  const hardwareScript = helper ? readFileSync(join(root, 'scripts', 'windows', 'hardware-test.ps1'), 'utf8') : null
+  if (hardwareScript) assertAscii('hardware-test.ps1', hardwareScript)
   prepareOut(out)
 
   const programs = []
@@ -338,6 +360,10 @@ export async function buildKit({
   if (adminScript) {
     writeFileSync(join(out, 'system-merge-test.ps1'), crlf(adminScript))
     writeFileSync(join(out, ADMIN_CMD_NAME), adminCmdFile())
+  }
+  if (hardwareScript) {
+    writeFileSync(join(out, 'hardware-test.ps1'), crlf(hardwareScript))
+    writeFileSync(join(out, HARDWARE_CMD_NAME), hardwareCmdFile())
   }
   writeFileSync(join(out, 'README.txt'), readme({ commit, built, helper: Boolean(adminScript) }))
 

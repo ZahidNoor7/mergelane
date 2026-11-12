@@ -704,7 +704,7 @@ export function writeReport(
 }
 
 /** The command line: `node scripts/hardware/hardware.mjs [--links en0,en7] [--skip unplug,sleep,vpn,crash,app]`. */
-export async function main(argv = process.argv.slice(2), mac = realMac()) {
+export async function main(argv = process.argv.slice(2), mac = realMac(), root = ROOT) {
   const option = (name) => {
     const i = argv.indexOf(name)
     return i >= 0 ? argv[i + 1]?.split(',').filter(Boolean) : undefined
@@ -720,7 +720,7 @@ export async function main(argv = process.argv.slice(2), mac = realMac()) {
       links: option('--links'),
       skip: option('--skip')
     })
-    const dir = writeReport(results, facts)
+    const dir = writeReport(results, facts, root)
     mac.say(`\n${renderReport(results, facts)}\nReport: ${dir}/report.md`)
     return results.some((r) => r.status === 'FAIL') || mac.aborted?.() ? 1 : 0
   } catch (error) {

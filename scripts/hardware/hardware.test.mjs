@@ -610,10 +610,10 @@ describe('the real Mac’s parts', () => {
     try {
       const failing = fakeMac([], { unreachable: true })
       failing.say = () => {}
-      assert.equal(await main([], failing), 1)
+      assert.equal(await main([], failing, root), 1)
       const declined = fakeMac(['n'])
       declined.say = () => {}
-      assert.equal(await main(['--skip', 'unplug,sleep', '--links', 'en0'], declined), 0)
+      assert.equal(await main(['--skip', 'unplug,sleep', '--links', 'en0'], declined, root), 0)
       const stoppedMac = fakeMac(['y', '^C'])
       stoppedMac.say = () => {}
       let aborted = false
@@ -621,7 +621,7 @@ describe('the real Mac’s parts', () => {
       stoppedMac.aborted = () => aborted
       process.emit('SIGINT')
       assert.equal(aborted, false) // not listening yet
-      const done = main([], stoppedMac)
+      const done = main([], stoppedMac, root)
       process.emit('SIGINT')
       assert.equal(await done, 1)
       const throwing = fakeMac()
@@ -629,7 +629,7 @@ describe('the real Mac’s parts', () => {
       throwing.run = async () => {
         throw new Error('no sw_vers')
       }
-      assert.equal(await main([], throwing), 1)
+      assert.equal(await main([], throwing, root), 1)
     } finally {
       process.chdir(cwd)
       rmSync(root, { recursive: true, force: true })

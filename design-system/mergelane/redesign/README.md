@@ -21,6 +21,9 @@ milestone M3.1 in `docs/PHASE-3.md`.
     `icon-default-1024.png` (ImageMagick, Lanczos). `icon-off-16.png` and `icon-off-32.png`, shown while the extension
     isn't capturing or can't reach Mergelane, are those in grey at 55% opacity.
   - `app/src/shared/brandIcons.test.ts` keeps all of these on the design's files.
+  - The GitHub social preview (2026-11-12): `brand/social/social-preview.png`, 1280 × 640 as GitHub's docs recommend,
+    drawn from `social-preview.html` (the icon inlined, the app's Archivo) by `brand/social/render.mjs`. The README
+    shows `icon-default-128.png`.
   - The light icon variant is not used yet: macOS's light, dark and tinted app-icon variants need checking against
     Apple's and electron-builder's docs first.
 

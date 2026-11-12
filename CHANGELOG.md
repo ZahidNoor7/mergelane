@@ -5,6 +5,10 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README is up to date: what Mergelane does today, installing and updating, and building it from source.
+
 ## [0.3.5] - 2026-11-12
 
 A network you connect mid-download now joins it, the download details can be closed again, and Liquid Glass is

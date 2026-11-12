@@ -649,6 +649,26 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **M3.8, second run** (2026-11-12, 0.3.3 app and helper, Wi-Fi + iPhone USB, `--skip vpn`). Passed:
+  - merge on;
+  - spread with sticky off (50/50);
+  - **sticky on (98% on one network)** and two hosts of one site (100%): the 0.3.3 fix holds on real hardware;
+  - different sites spreading;
+  - Mergelane's own download on both networks (seen by the owner);
+  - both reconnects;
+  - sleep and wake;
+  - put back.
+
+  Failed, both from the script (branch `hardware-script-fixes`):
+  - **"Internet broke" after each unplug:** the internet check asked Cloudflare for 8 MB (its size is in the
+    address, so the 1 MB meant was ignored), with 20 s, over the one network left, which was capped at 4 Mbit/s
+    and busy. It now fetches 100 kB, retries for up to 30 s, and notes how long it took or the last error.
+  - **The crash check ran `sudo` inside the script.** The script's own prompt read the keyboard at the same time,
+    so what the owner typed for the password was echoed on screen, and `sudo` got nothing ("kill didn't run").
+    The owner was told and advised to change the password if it was the real one. The script no longer runs
+    sudo: it shows the command for a second Terminal window and waits.
+  - Added `--skip sites`, so a repeat run uses data only for unplug and crash. `hardware.test.mjs`: 27 tests,
+    99.8% of lines.
 - **Helper update offered at launch** (branch `helper-update-notice`, owner's go-ahead, ADR-0051).
   `HelperUpdateNotice` sits in the sidebar's foot when the installed helper is out of date, with Update… (the same
   admin-prompt install) and Later. It is checked at launch and on focus, and hidden on Networks.

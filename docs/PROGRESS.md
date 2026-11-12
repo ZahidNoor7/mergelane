@@ -636,7 +636,25 @@ Last updated: 2026-11-11
   platform, signing, architecture, testing and laptop-safety rules; ADR-0053; `docs/WINDOWS-PLAN.md` (W1 app and
   in-app merging, W2 extension bridge, W3 media tools, W4 installer and updates, W5 system-wide helper, W6 hardware).
   The daemon cross-compiles for Windows except for the removed Windows files; `mergelane-nmhost` already builds.
-  **Next:** W1 on the owner's Windows laptop.
+- **W1, pull request a: the Windows test kit** (branch `w1-test-kit`, 2026-11-12; W1's seven pull requests are listed
+  in `docs/WINDOWS-PLAN.md`).
+  - **macOS baseline on `windows`** (this Mac, the `mergelane-windows` worktree after its own `npm ci`): lint,
+    typecheck and format clean; Vitest 407 passed (lines 99.21%); daemon `go vet`, staticcheck and `go test -race`
+    all ok; e2e smoke 710 passed, 1 skipped (a Windows-only test), 0 failed. A shell started from VS Code carries
+    `ELECTRON_RUN_AS_NODE=1`, which makes every e2e launch fail; run Playwright without it (`scripts/ci/local.mjs`
+    already removes it).
+  - **The kit** (ADR-0054, `docs/WINDOWS-TESTING.md`): `node scripts/windows/kit.mjs` cross-builds the Go test
+    programs (`go test -c -cover -trimpath`, x64 and arm64) and writes `dist/windows-kit/` and its zip, with
+    `test-kit.ps1` (Windows PowerShell 5.1, ASCII only), `Run test kit.cmd` (`-ExecutionPolicy Bypass` for that
+    run only) and `kit.json` (SHA-256s). On the laptop the script reads Windows, the chip and Smart App Control,
+    guards Downloads, runs the programs and writes a report; `node scripts/windows/report.mjs` reads it here. Its
+    first kit holds the browser-bridge helper's two packages (they already build for Windows), marked "not yet"
+    until W2.
+  - **Tests:** `scripts/windows/kit.test.mjs` and `report.test.mjs`, 45 passed; lines `kit.mjs` 99.2%,
+    `report.mjs` 98.9%. They include static safety checks of `test-kit.ps1`.
+  - **Not proven:** the PowerShell script has not run anywhere yet; its first run is on the owner's laptop.
+  - **Next:** the owner runs the kit and pastes the report (it answers the chip and Smart App Control questions);
+    then W1b, the daemon building for Windows.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

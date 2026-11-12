@@ -631,6 +631,10 @@ Last updated: 2026-11-11
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
 - **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
+  described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
+  social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon
+  and Archivo; `render.mjs` there redraws it). GitHub has no API for it: the owner uploads it in Settings.
 - **0.3.5** (2026-11-12, owner's go-ahead): PRs #70 and #71.
 - **0.3.4** (2026-11-12, owner's go-ahead): PR #66, the helper update offered at launch.
 - **0.3.3** (2026-11-12, owner's go-ahead): PR #63, the sticky first-burst fix, for the second M3.8 run.

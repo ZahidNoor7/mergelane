@@ -113,6 +113,56 @@ test.describe('System merge @smoke', () => {
     expect(fake.requests.some((r) => r.method === 'enable' || r.method === 'disable')).toBe(false)
   })
 
+  test('at launch, the sidebar offers an outdated helper’s update (ADR-0051)', async ({
+    mergelane
+  }) => {
+    fake.version = '0.3.2'
+    await mergelane.relaunch({
+      MERGELANE_E2E_DAEMON_SOCKET: fake.path,
+      MERGELANE_E2E_DAEMON_INSTALLED: '1',
+      MERGELANE_E2E_APP_VERSION: '0.3.3'
+    })
+    const page = mergelane.page
+    // Straight away, on whatever screen Mergelane opens to.
+    const notice = page.getByRole('status', { name: 'Helper update' })
+    await expect(notice).toContainText('Update the helper to match Mergelane 0.3.3.')
+    await expect(notice).toContainText('Your Mac asks for your password.')
+    // One click runs the same install as Networks' Update (a development build has no helper to install).
+    await notice.getByRole('button', { name: 'Update…' }).click()
+    await expect(notice).toContainText(/needs the packaged app/)
+    // Networks says the same with more, so the sidebar leaves it to it; Later lets it go for this launch.
+    await mergelane.place('Networks')
+    await expect(notice).toHaveCount(0)
+    await expect(
+      page
+        .getByRole('region', { name: 'System merge' })
+        .getByRole('group', { name: "Mergelane's helper is out of date" })
+    ).toBeVisible()
+    await mergelane.place('Downloads')
+    await notice.getByRole('button', { name: 'Later' }).click()
+    await expect(notice).toHaveCount(0)
+  })
+
+  test('no helper update is offered when it matches, or isn’t installed', async ({ mergelane }) => {
+    fake.version = '0.3.3'
+    await mergelane.relaunch({
+      MERGELANE_E2E_DAEMON_SOCKET: fake.path,
+      MERGELANE_E2E_DAEMON_INSTALLED: '1',
+      MERGELANE_E2E_APP_VERSION: '0.3.3'
+    })
+    await expect(mergelane.page.getByRole('navigation').first()).toBeVisible()
+    await expect.poll(() => fake.requests.some((r) => r.method === 'status')).toBe(true)
+    await expect(mergelane.page.getByRole('status', { name: 'Helper update' })).toHaveCount(0)
+    fake.version = '0.1.0'
+    await mergelane.relaunch({
+      MERGELANE_E2E_DAEMON_SOCKET: fake.path,
+      MERGELANE_E2E_DAEMON_INSTALLED: '0',
+      MERGELANE_E2E_APP_VERSION: '0.3.3'
+    })
+    await expect(mergelane.page.getByRole('navigation').first()).toBeVisible()
+    await expect(mergelane.page.getByRole('status', { name: 'Helper update' })).toHaveCount(0)
+  })
+
   test('the matching helper is not flagged', async ({ mergelane }) => {
     fake.version = '0.2.0'
     const section = await openSection(mergelane, { MERGELANE_E2E_APP_VERSION: '0.2.0' })

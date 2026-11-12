@@ -649,6 +649,12 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **Helper update offered at launch** (branch `helper-update-notice`, owner's go-ahead, ADR-0051).
+  `HelperUpdateNotice` sits in the sidebar's foot when the installed helper is out of date, with Update… (the same
+  admin-prompt install) and Later. It is checked at launch and on focus, and hidden on Networks.
+  - Tests: Vitest `HelperUpdateNotice.test.tsx` (6, 100% lines, in `COVERED`), and two e2e tests in
+    `systemMerge.spec` against the fake helper. Full Vitest: 404 passed. Smoke and extension: 725 passed,
+    1 skipped.
 - **M3.8, first run on the owner's Mac** (Wi-Fi + iPhone USB; no Ethernet, Android or VPN at hand). Passed:
   the preflight, merge on, spread with sticky off, different sites spreading, and the put-back after Ctrl-C.
   Failed, and fixed on branch `sticky-first-burst`:

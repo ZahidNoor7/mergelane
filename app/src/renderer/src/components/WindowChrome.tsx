@@ -23,6 +23,7 @@ import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { UpdateNotice } from './UpdateNotice'
+import { HelperUpdateNotice } from './HelperUpdateNotice'
 import { CopiedLinkOffer } from './CopiedLinkOffer'
 
 // The window's frame in the final design (design-system/mergelane/redesign/prototype.html, Sidebar and
@@ -192,6 +193,7 @@ export function Sidebar(): React.JSX.Element {
         <div className="mt-auto flex flex-col gap-3 pt-4">
           <CopiedLinkOffer layout="sidebar" />
           <UpdateNotice />
+          <HelperUpdateNotice />
           {schedule && <p className="px-1.5 text-[12px] leading-snug text-ink-2">{schedule}</p>}
           {free !== null && (
             <p className="flex items-center gap-1.5 px-1.5 text-[12px] text-ink-3">

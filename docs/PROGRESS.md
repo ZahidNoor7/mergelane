@@ -631,6 +631,8 @@ Last updated: 2026-11-11
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
 - **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **0.3.1** (2026-11-12, owner's go-ahead to prepare and publish): PRs #49–#56 since 0.3.0. Built and uploaded with
+  `scripts/release/local-release.mjs`.
 - **New download: the quality list and the wait for a link** (branch `fix-quality-list`, owner's screenshot).
   - **Quality list side by side:** `ui/toggle-group.tsx` never passed `orientation` to Base UI and styled
     `data-vertical`, which Base UI doesn't set (it sets `data-orientation`, per its 1.8.0 types). Vertical groups

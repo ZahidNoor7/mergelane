@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-12
+
+New download can start a download later or put it in the queue, each network can be kept on standby, the helper
+can be removed from your Mac, and the browser extension is easier to install.
+
 ### Added
 
 - **Remove helper** (Networks › Other apps): takes system merge's helper off your Mac. After you confirm,

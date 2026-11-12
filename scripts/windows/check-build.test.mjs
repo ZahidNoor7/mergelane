@@ -1,6 +1,6 @@
 // Tests for check-build.mjs: node --test scripts/windows/check-build.test.mjs
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -14,7 +14,9 @@ import {
   fuseProblems,
   main,
   parseArgs,
-  programsOf
+  programsOf,
+  isIco,
+  TRAY_ICON
 } from './check-build.mjs'
 import { APP_EXE, APP_FOLDERS, UsageError, installerName } from './kit.mjs'
 
@@ -58,6 +60,9 @@ function fakeDist({ version = '0.4.0', chips = { x64: 'x64', arm64: 'arm64' } } 
   for (const arch of Object.keys(chips)) {
     fakePe(join(dist, installerName(version, arch)), INSTALLER_MACHINE)
     for (const program of programsOf(MANIFEST[arch])) fakePe(join(dist, APP_FOLDERS[arch], program), chips[arch])
+    const icon = join(dist, APP_FOLDERS[arch], TRAY_ICON)
+    mkdirSync(dirname(icon), { recursive: true })
+    writeFileSync(icon, readFileSync(join(ROOT, 'app', 'resources', 'tray.ico')))
   }
   return dist
 }
@@ -130,6 +135,23 @@ describe('checkWindowsBuild', () => {
       problems.includes(`${join(dist, APP_FOLDERS.arm64, 'resources/yt-dlp/yt-dlp_arm64.exe')} is built for x64, expected arm64`)
     )
     assert.equal(problems.length, 1 + programsOf(MANIFEST.arm64).length)
+  })
+
+  it('finds a notification-area icon that is missing or is not an ICO', async () => {
+    const dist = fakeDist({ chips: { x64: 'x64', arm64: 'arm64' } })
+    const x64 = join(dist, APP_FOLDERS.x64, TRAY_ICON)
+    const arm64 = join(dist, APP_FOLDERS.arm64, TRAY_ICON)
+    rmSync(x64)
+    writeFileSync(arm64, Buffer.from('\x89PNG\r\n', 'latin1'))
+    const problems = await checkWindowsBuild({ root: ROOT, dist, version: '0.4.0', readers: fakeReaders() })
+    assert.deepEqual(problems, [`${x64} is missing`, `${arm64} is not an icon (no ICO header)`])
+  })
+
+  it('reads an ICO header', () => {
+    assert.equal(isIco(readFileSync(join(ROOT, 'app', 'resources', 'tray.ico'))), true)
+    assert.equal(isIco(Buffer.from([0, 0, 1, 0, 0, 0])), false, 'no images')
+    assert.equal(isIco(Buffer.from([0, 0, 2, 0, 1, 0])), false, 'a cursor')
+    assert.equal(isIco(Buffer.from([0, 0])), false, 'too short')
   })
 
   it('finds an installer that is not a Windows program', async () => {

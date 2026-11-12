@@ -1,5 +1,6 @@
 import type { AppUsage } from './appUsage'
 import type { BrowserId, BrowsersReport, ExtensionSaved } from './browsers'
+import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
 import type { UpdateChannel } from './releases'
 import type {
@@ -22,7 +23,8 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, magnetCheckStatus, historyChanged,
- * linkReceived, updateStateChanged, showUpdates, networkActivityChanged and saveDiagnosticsRequested) — one source of truth for
+ * linkReceived, updateStateChanged, showUpdates, networkActivityChanged, saveDiagnosticsRequested, showPlace and
+ * trayStatusChanged) — one source of truth for
  * both mergelaneApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -134,4 +136,16 @@ export interface IpcContract {
   saveDiagnostics: { args: []; result: { fileName: string } | null }
   /** Shows the last bundle saved in the Finder. */
   revealDiagnostics: { args: []; result: void }
+  /** Pauses every download that is downloading or waiting its turn (the notification area's Pause all). */
+  pauseAllDownloads: { args: []; result: void }
+  /** Shows the window and brings it forward (the notification-area flyout's Open Mergelane). */
+  openMainWindow: { args: []; result: void }
+  /** The window tells main what the notification-area flyout shows (shared/trayFlyout.ts). */
+  publishTrayStatus: { args: [status: TrayStatus]; result: void }
+  /** What the flyout shows now; null until the window has said. */
+  trayStatus: { args: []; result: TrayStatus | null }
+  /** The flyout's content is this tall: main sizes and places its window to fit. */
+  resizeTrayFlyout: { args: [height: number]; result: void }
+  /** Hides the flyout (Esc, or after one of its buttons). */
+  closeTrayFlyout: { args: []; result: void }
 }

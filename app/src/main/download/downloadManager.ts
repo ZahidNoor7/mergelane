@@ -522,6 +522,21 @@ export class DownloadManager {
     return count
   }
 
+  /** Pauses every download that is downloading or waiting its turn, as the user's own Pause does each (the
+   * notification area's Pause all, ADR-0061). The waiting ones go first, so none starts in the place of a
+   * running one being paused. */
+  async pauseAll(): Promise<void> {
+    await this.initialization
+    const all = [...this.runtimes.values()]
+    const waiting = all
+      .filter((runtime) => runtime.state.status === 'queued')
+      .map((runtime) => this.pause(runtime.state.id))
+    const running = all
+      .filter((runtime) => runtime.state.status === 'downloading')
+      .map((runtime) => this.pause(runtime.state.id))
+    await Promise.all([...waiting, ...running])
+  }
+
   private async configureSettings(settings: AppSettings): Promise<void> {
     const previousPreferences = this.networkPreferences
     this.networkPreferences = settings.networkPreferences ?? {}

@@ -20,6 +20,10 @@ export const COVERED = [
   'src/shared/browsers.ts',
   // Windows (W5): the system-wide helper's install through the administrator prompt.
   'src/shared/windowsHelper.ts',
+  // Windows (W7): the notification-area icon's flyout and menu (ADR-0061).
+  'src/shared/trayFlyout.ts',
+  'src/renderer/src/components/TrayFlyout.tsx',
+  'src/renderer/src/hooks/useTrayStatus.ts',
   'src/renderer/src/theme.ts',
   'src/renderer/src/components/ui/switch.tsx',
   'src/shared/themes.ts',

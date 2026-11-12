@@ -13,9 +13,8 @@ import { useDownloadSchedule } from '../hooks/useDownloadSchedule'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useFreeSpace } from '../hooks/useFreeSpace'
 import { hasUpdate } from '../hooks/useUpdates'
-import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { useNetworkLanes } from '../hooks/useNetworkLanes'
 import { useAppStore, type Screen } from '../store/useAppStore'
-import { networkSummaries } from '../utils/dashboard'
 import { formatBytes } from '../utils/format'
 import { NetworkTile } from './NetworkTile'
 import { SpeedText } from './SpeedText'
@@ -56,33 +55,6 @@ function usePlace(): [Place, (place: Place) => void] {
   const place = useAppStore((store) => store.screen)
   const setScreen = useAppStore((store) => store.setScreen)
   return [place, setScreen]
-}
-
-/** Every network, live: its tile, name and speed, or that it's out. */
-function useNetworkLanes(): {
-  id: string
-  kind: Parameters<typeof NetworkTile>[0]['kind']
-  name: string
-  color: string
-  onColor: string
-  speed: number
-  out: boolean
-}[] {
-  const interfaces = useAppStore((store) => store.interfaces)
-  const downloads = useAppStore((store) => store.downloads)
-  const visual = useNetworkVisuals()
-  return networkSummaries(interfaces, Object.values(downloads), {}, {}).map((network) => {
-    const look = visual(network.id, network.kind, network.osName)
-    return {
-      id: network.id,
-      kind: network.kind,
-      name: look.name,
-      color: look.solid,
-      onColor: look.onSolid,
-      speed: network.speed,
-      out: network.condition === 'offline'
-    }
-  })
 }
 
 function SlowModeSwitch({ withLabel }: { withLabel: boolean }): React.JSX.Element {

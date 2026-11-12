@@ -9,7 +9,8 @@ import { Switch } from './ui/switch'
 // Open at login, the merged speed in the menu bar, and a notification when a download finishes
 // (docs/DECISIONS.md ADR-0037). Open at login reports what macOS says, since an app that isn't
 // notarized may not be taken. On Windows it is "On this PC", with the notification area for the
-// menu bar, and Windows' own places to look.
+// menu bar (whose switch there also keeps Mergelane running when the window is closed), and Windows'
+// own places to look.
 
 const LOGIN_ITEMS = 'System Settings › General › Login Items'
 
@@ -83,9 +84,21 @@ export function OnThisMacSettings(): React.JSX.Element {
           onCheckedChange={changeLogin}
         />
       </SettingRow>
-      <SettingRow label={`Show the merged speed in ${words().statusArea}`} htmlFor={menuBarId}>
-        <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
-      </SettingRow>
+      {onWindows() ? (
+        // The notification-area icon on Windows keeps Mergelane running when its window is closed, and shows
+        // the merged speed when pointed at (main/notificationArea.ts, ADR-0061).
+        <SettingRow
+          label="Keep running in the notification area when I close the window"
+          hint="Downloads carry on. Point at the Mergelane icon to see the merged speed; right-click it to exit."
+          htmlFor={menuBarId}
+        >
+          <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
+        </SettingRow>
+      ) : (
+        <SettingRow label={`Show the merged speed in ${words().statusArea}`} htmlFor={menuBarId}>
+          <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
+        </SettingRow>
+      )}
       <SettingRow
         label="Notify me when a download finishes"
         hint={

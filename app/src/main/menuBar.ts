@@ -2,16 +2,21 @@ import { readFileSync } from 'node:fs'
 import { Menu, nativeImage, Tray } from 'electron'
 import trayIcon from '../../resources/trayTemplate.png?asset'
 import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
-import appIcon from '../../resources/icon-dark.png?asset'
 import { formatSpeed } from '../shared/speedText'
 import type { AppSettings, SpeedUnit } from '../shared/types'
+import {
+  createNotificationAreaIcon,
+  windowsShell,
+  type NotificationAreaActions
+} from './notificationArea'
 import { testKnobs, testRecord } from './testKnobs'
 
 // Mergelane in the macOS menu bar (docs/DECISIONS.md ADR-0037): the template icon, and while bytes
 // move, the merged speed beside it, in the units the window uses. Settings › General turns it off.
-// On Windows it is the notification-area icon (W1): the app's own icon, with the speed in its
-// tooltip, since Windows shows no text beside it; a click opens the window. Linux keeps the tray
-// index.ts shows only to keep downloads running.
+// On Windows it is the notification-area icon (notificationArea.ts, ADR-0061), with the speed in its
+// tooltip, since Windows shows no text beside it; Settings' switch there also keeps Mergelane running
+// when its window is closed (index.ts). Linux keeps the tray index.ts shows only to keep downloads
+// running.
 
 const TICK_MS = 1000
 
@@ -20,12 +25,7 @@ interface MenuBarItem {
   destroy(): void
 }
 
-interface MenuBarActions {
-  /** Bytes a second, every running download together. */
-  totalSpeed: () => number
-  open: () => void
-  quit: () => void
-}
+type MenuBarActions = NotificationAreaActions
 
 let actions: MenuBarActions | null = null
 let item: MenuBarItem | null = null
@@ -33,12 +33,8 @@ let ticker: NodeJS.Timeout | null = null
 let unit: SpeedUnit = 'bytes'
 let title = ''
 
-/** The icon in both sizes, marked as a template so macOS colours it for the menu bar. Windows gets
- * the app's own icon at the notification area's 16 px. */
+/** The icon in both sizes, marked as a template so macOS colours it for the menu bar. */
 function icon(): Electron.NativeImage {
-  if (process.platform === 'win32') {
-    return nativeImage.createFromPath(appIcon).resize({ width: 16, height: 16 })
-  }
   const image = nativeImage.createFromPath(trayIcon)
   image.addRepresentation({ scaleFactor: 2, buffer: readFileSync(trayIcon2x) })
   image.setTemplateImage(true)
@@ -47,6 +43,7 @@ function icon(): Electron.NativeImage {
 
 /** The real menu bar item; in a test run, one that only notes its title. */
 function createItem(): MenuBarItem {
+  if (windowsShell() && actions) return createNotificationAreaIcon(actions)
   if (testKnobs.userDataDir) {
     testRecord('menuBar', { shown: true, title: '' }, true)
     return {
@@ -63,13 +60,6 @@ function createItem(): MenuBarItem {
       { label: 'Quit Mergelane', click: () => actions?.quit() }
     ])
   )
-  if (process.platform === 'win32') {
-    tray.on('click', () => actions?.open())
-    return {
-      setTitle: (text) => tray.setToolTip(text ? `Mergelane: ${text}` : 'Mergelane'),
-      destroy: () => tray.destroy()
-    }
-  }
   return {
     setTitle: (text) => tray.setTitle(text, { fontType: 'monospacedDigit' }),
     destroy: () => tray.destroy()

@@ -13,6 +13,7 @@ import { useSettingsShortcut } from './hooks/useSettingsShortcut'
 import { useGlassAttributes } from './hooks/useGlassAttributes'
 import { useCopiedLinks } from './hooks/useCopiedLinks'
 import { useUpdates } from './hooks/useUpdates'
+import { useTrayStatus } from './hooks/useTrayStatus'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
 import { NetworksScreen } from './screens/NetworksScreen'
@@ -46,6 +47,7 @@ function App(): React.JSX.Element {
   useDiagnosticsMenu()
   useUpdates()
   useCopiedLinks()
+  useTrayStatus()
   // The final design's frame: a sidebar from 760px of window width, a compact bar below it. Until
   // the first measurement, the sidebar (the window opens wider than that). The screens size their
   // layout by <main>'s width (a container), not the window's, since the sidebar takes part of it.

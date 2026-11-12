@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-12
+
+System merge keeps each website on one network, and the browser extension looks like Mergelane. Update the helper
+when Mergelane asks.
+
 ### Added
 
 - **System merge keeps each website on one network** (on by default). Your networks each have their own internet

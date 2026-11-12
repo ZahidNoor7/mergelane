@@ -631,6 +631,7 @@ Last updated: 2026-11-11
     `e2e/downloadWhen.spec.ts` now checks the Dashboard row too (it fails on the old Dashboard). `downloadWhen`,
     `dashboard`, `dashboardModel` and `mux`: 64 passed.
 - **0.2.0 and 0.3.0 published** (2026-11-12, owner's go-ahead). 0.3.0 is GitHub's Latest.
+- **0.3.2** (2026-11-12, owner's go-ahead, before the M3.8 hardware run): PRs #58 and #59.
 - **0.3.1** (2026-11-12, owner's go-ahead to prepare and publish): PRs #49–#56 since 0.3.0. Built and uploaded with
   `scripts/release/local-release.mjs`.
 - **New download: the quality list and the wait for a link** (branch `fix-quality-list`, owner's screenshot).

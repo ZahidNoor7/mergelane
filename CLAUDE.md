@@ -109,8 +109,8 @@ Rules:
 - **The downloader's per-link sockets must stay on their link while system merging is on.** On macOS,
   pin them with `IP_BOUND_IF` / `IPV6_BOUND_IF` (via koffi `setsockopt`, following Plexo's
   `deviceBinding.ts` pattern), not just `localAddress`. Plexo currently relies on `localAddress` on macOS,
-  so this is a required change. Cover it with tests. On Windows, pin them with `IP_UNICAST_IF` /
-  `IPV6_UNICAST_IF` (Winsock, via koffi), for the same reason.
+  so this is a required change. Cover it with tests. On Windows, bind them to the network's own address
+  (`localAddress`): Windows' default strong host model then sends them out of that network (ADR-0055).
 - Platform code lives behind the existing seams (`process.platform` checks in the main process, Go build tags
   `_darwin.go` / `_windows.go` in the daemon). The macOS behaviour must not change on the `windows` branch: every
   macOS test keeps passing.

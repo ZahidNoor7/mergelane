@@ -10,6 +10,11 @@ import { defineConfig } from 'vitest/config'
 // the list in the pull request that changes it, so new and reworked code is held to the floor
 // while untouched upstream files are not counted against it.
 export const COVERED = [
+  // Windows (W1): which adapters are networks, and of what kind.
+  'src/shared/windowsAdapters.ts',
+  'src/shared/loginItem.ts',
+  'src/shared/windowMaterial.ts',
+  'src/renderer/src/platformWords.ts',
   'src/renderer/src/theme.ts',
   'src/renderer/src/components/ui/switch.tsx',
   'src/shared/themes.ts',

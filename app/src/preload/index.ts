@@ -26,6 +26,8 @@ function invoke<K extends keyof IpcContract>(
 
 const mergelaneApi = {
   platform: process.platform,
+  /** "10.0.22631" on Windows: which system backdrops it can draw (shared/windowMaterial.ts). */
+  systemVersion: process.getSystemVersion(),
   // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
   initialState: ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
 

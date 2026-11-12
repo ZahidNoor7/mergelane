@@ -25,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { UpdateNotice } from './UpdateNotice'
 import { HelperUpdateNotice } from './HelperUpdateNotice'
 import { CopiedLinkOffer } from './CopiedLinkOffer'
+import { words } from '../platformWords'
 
 // The window's frame in the final design (design-system/mergelane/redesign/prototype.html, Sidebar and
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
@@ -221,7 +222,9 @@ export function Sidebar(): React.JSX.Element {
                   className="size-2 rounded-full bg-primary"
                 />
               ) : (
-                <kbd className="font-mono text-[11px] font-normal text-ink-3">⌘,</kbd>
+                <kbd className="font-mono text-[11px] font-normal text-ink-3">
+                  {words().settingsShortcut}
+                </kbd>
               )}
             </button>
           </div>

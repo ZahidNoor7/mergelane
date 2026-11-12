@@ -291,3 +291,50 @@ describe('Settings, Liquid Glass', () => {
     expect(root.hasAttribute('data-solid')).toBe(false)
   })
 })
+
+describe('Settings on Windows', () => {
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+    delete (window.mergelane as { systemVersion?: string }).systemVersion
+  })
+
+  it('speaks of Windows, not the Mac', async () => {
+    window.mergelane.platform = 'win32'
+    useAppStore.setState({ settingsSection: 'appearance', themeSource: 'light' })
+    show()
+    expect(screen.getByText('Always light, whatever Windows uses.')).toBeTruthy()
+    cleanup()
+    useAppStore.setState({ settingsSection: 'general', speedUnit: 'bytes' })
+    show()
+    expect(screen.getByText('Megabytes per second, dropping to KB/s below 1 MB/s.')).toBeTruthy()
+    cleanup()
+    useAppStore.setState({ settingsSection: 'downloads' })
+    show()
+    expect(screen.queryByText(/macOS may ask/)).toBeNull()
+  })
+
+  it('draws the glass from Windows 11 22H2, and follows Transparency effects', () => {
+    window.mergelane.platform = 'win32'
+    window.mergelane.systemVersion = '10.0.22631'
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
+    show()
+    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
+    expect(within(glass).getByText(/Glass is used only for what floats/)).toBeTruthy()
+    expect(
+      within(glass).getByText(/follows Transparency effects in Settings › Personalization › Colors/)
+    ).toBeTruthy()
+  })
+
+  it('says the window stays solid before Windows 11 22H2, and when transparency effects are off', () => {
+    window.mergelane.platform = 'win32'
+    window.mergelane.systemVersion = '10.0.19045'
+    dark = true // the stubbed media query answers true: transparency is reduced
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
+    show()
+    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
+    expect(
+      within(glass).getByText(/Windows draws the glass from Windows 11 version 22H2/)
+    ).toBeTruthy()
+    expect(within(glass).getByText(/Transparency effects are off in Windows/)).toBeTruthy()
+  })
+})

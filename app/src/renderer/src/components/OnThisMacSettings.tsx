@@ -1,18 +1,27 @@
 import type { LoginItemState } from '@shared/types'
 import { useEffect, useId, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { onWindows, words } from '../platformWords'
 import { SettingRow, SettingsGroup } from './settingsParts'
 import { Switch } from './ui/switch'
 
 // Settings › General › "On this Mac", from the final design (prototype.html, GeneralSettings):
 // Open at login, the merged speed in the menu bar, and a notification when a download finishes
 // (docs/DECISIONS.md ADR-0037). Open at login reports what macOS says, since an app that isn't
-// notarized may not be taken.
+// notarized may not be taken. On Windows it is "On this PC", with the notification area for the
+// menu bar, and Windows' own places to look.
 
 const LOGIN_ITEMS = 'System Settings › General › Login Items'
 
 function loginHint(state: LoginItemState | null): string {
-  if (!state) return 'Starts in the menu bar, so scheduled downloads begin on time.'
+  const starts = `Starts in ${words().statusArea}, so scheduled downloads begin on time.`
+  if (onWindows()) {
+    if (state?.status === 'unavailable') {
+      return 'Only Mergelane installed with its installer can open at login.'
+    }
+    return state?.on ? `${starts} Windows lists it in Settings › Apps › Startup.` : starts
+  }
+  if (!state) return starts
   switch (state.status) {
     case 'unavailable':
       return 'Only Mergelane installed from its disk image can open at login.'
@@ -20,11 +29,9 @@ function loginHint(state: LoginItemState | null): string {
       return `macOS needs your approval: turn Mergelane on in ${LOGIN_ITEMS}.`
     case 'not-registered':
     case 'not-found':
-      return state.on
-        ? `macOS didn’t take it. Add Mergelane yourself in ${LOGIN_ITEMS}.`
-        : 'Starts in the menu bar, so scheduled downloads begin on time.'
+      return state.on ? `macOS didn’t take it. Add Mergelane yourself in ${LOGIN_ITEMS}.` : starts
     default:
-      return 'Starts in the menu bar, so scheduled downloads begin on time.'
+      return starts
   }
 }
 
@@ -63,7 +70,7 @@ export function OnThisMacSettings(): React.JSX.Element {
   }
 
   return (
-    <SettingsGroup title="On this Mac">
+    <SettingsGroup title={`On ${words().thisComputer}`}>
       <SettingRow label="Open at login" hint={loginHint(login)} htmlFor={loginId}>
         <Switch
           id={loginId}
@@ -72,12 +79,16 @@ export function OnThisMacSettings(): React.JSX.Element {
           onCheckedChange={changeLogin}
         />
       </SettingRow>
-      <SettingRow label="Show the merged speed in the menu bar" htmlFor={menuBarId}>
+      <SettingRow label={`Show the merged speed in ${words().statusArea}`} htmlFor={menuBarId}>
         <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
       </SettingRow>
       <SettingRow
         label="Notify me when a download finishes"
-        hint="Uses macOS notifications. You can change their style in System Settings › Notifications."
+        hint={
+          onWindows()
+            ? 'Uses Windows notifications. You can change them in Settings › System › Notifications.'
+            : 'Uses macOS notifications. You can change their style in System Settings › Notifications.'
+        }
         htmlFor={notifyId}
       >
         <Switch id={notifyId} checked={notifyWhenDone} onCheckedChange={setNotifyWhenDone} />

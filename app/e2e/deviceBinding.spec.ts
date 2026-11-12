@@ -39,6 +39,13 @@ function physicalDevice(): string | undefined {
   )?.[0]
 }
 
+test.describe('per-network socket pinning on Windows @smoke', () => {
+  // Windows pins a socket by its source address alone (ADR-0055); the kit's checklist proves it on a laptop.
+  test('is supported without loading anything', async () => {
+    expect(await deviceBindingSupported('win32')).toBe(true)
+  })
+})
+
 test.describe('per-network socket pinning @smoke', () => {
   test.skip(!darwin, 'IP_BOUND_IF is macOS only')
 

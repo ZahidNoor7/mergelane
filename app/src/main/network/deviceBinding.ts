@@ -8,7 +8,11 @@ import type { NetworkRoute } from './routes'
 // rebalance it. So the socket is pinned to the interface itself before it connects, with
 // setsockopt IP_BOUND_IF / IPV6_BOUND_IF and the interface index. Node has no setsockopt, so the
 // socket is made through libc (koffi) and handed to Node as an fd, as upstream Plexo did on Linux
-// with SO_BINDTODEVICE (that Linux path is gone: Mergelane is macOS only).
+// with SO_BINDTODEVICE (that Linux path is gone).
+//
+// Windows needs none of this (ADR-0055). It sends a packet out of the interface that owns the socket's
+// source address (the strong host model, Windows' default since Vista: MIB_IPINTERFACE_ROW on Microsoft
+// Learn), so connecting from the network's own address (localAddress, below) already pins the socket.
 
 interface Constants {
   AF_INET: number
@@ -95,7 +99,11 @@ function openOnDevice(lib: Libc, device: string, family: 4 | 6): number {
 }
 
 /** Whether each network can carry its own connections. */
-export function deviceBindingSupported(): Promise<boolean> {
+export function deviceBindingSupported(
+  platform: NodeJS.Platform = process.platform
+): Promise<boolean> {
+  // Windows: the source address pins the socket (see the top of this file); nothing to load.
+  if (platform === 'win32') return Promise.resolve(true)
   support ??= (async () => {
     try {
       const candidate = await loadLibc()

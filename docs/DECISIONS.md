@@ -1404,3 +1404,43 @@ until the owner overrides it.
   - A Group Policy that fixes the execution policy would stop the kit; the owner would see PowerShell's message.
   - Later milestones add steps to the same kit: the unpacked app (W1), the extension (W2), media (W3), the
     installer (W4) and, after a warning, the administrator steps (W5).
+
+## ADR-0055: On Windows, a download socket is pinned by its source address (W1)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W1 (`docs/WINDOWS-PLAN.md`, pull request d).
+
+### Context
+
+On macOS, Mergelane makes each download socket itself (libc through koffi), sets `IP_BOUND_IF` on it, and hands
+it to Node as a file descriptor, because binding the source address alone doesn't keep a socket off system
+merge's capture routes there (CLAUDE.md). The Windows plan asked first whether Node on Windows can take a socket
+made outside it, and to decide the design from the answer.
+
+What the documentation says:
+
+- **Node:** `net.Socket`'s `fd` option wraps "an existing socket with the given file descriptor". On Windows a
+  Winsock socket is a `SOCKET` handle, not a C runtime file descriptor, and Node's documentation doesn't say that
+  it can wrap one. Not verified either way; it would need a Windows run.
+- **Microsoft Learn, `MIB_IPINTERFACE_ROW` (Remarks):** Windows Vista and later use the strong host model by
+  default (`WeakHostSend` is false). "With the strong host mode, a unicast packet can be sent out a specific
+  interface that does not have the lowest metric for a route by binding the socket to the source address of the
+  specific interface." `IP_UNICAST_IF` exists too (IPPROTO_IP socket options), but needs the socket's handle,
+  which Node doesn't expose on Windows.
+
+### Decision
+
+- On Windows, a download socket is pinned by binding it to its network's own address (`localAddress`), which
+  Node supports everywhere. `deviceBindingSupported()` is true on Windows without loading anything, so the app
+  no longer warns that combining is unavailable there.
+- The macOS path (`IP_BOUND_IF` through koffi) is unchanged.
+- CLAUDE.md's Windows pinning rule now says this instead of `IP_UNICAST_IF` through koffi. The system-wide helper
+  (W5) still uses `IP_UNICAST_IF` for its own sockets: Go can set it directly (`nics/egress_windows.go`).
+
+### Consequences
+
+- **The weak host model breaks it.** An adapter with weak host send or forwarding turned on (Mobile Hotspot,
+  Internet Connection Sharing, Hyper-V and some VPNs turn these on) routes by destination only, ignoring the
+  bound address, as upstream Net Merge found. In-app downloads then follow the routing table on that adapter.
+  W5's helper turns these off on the adapters it merges while it runs, and puts them back after, as upstream did.
+- No native code runs for downloads on Windows, so nothing there can fail to load.
+- Proven only on the laptop: the kit's checklist downloads over two networks and watches both carry traffic.

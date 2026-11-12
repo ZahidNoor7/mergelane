@@ -335,6 +335,12 @@ export function windowBackground(themeId: unknown, dark: boolean): string {
   return dark ? theme.dark.bg : theme.light.bg
 }
 
+/** The theme's ink for the mode: the colour Windows draws its window buttons' symbols in. */
+export function windowInk(themeId: unknown, dark: boolean): string {
+  const theme = themeById(themeId)
+  return dark ? theme.dark.text : theme.light.text
+}
+
 /** Colours a user can pick for a network (renderer theme.ts NETWORK_COLOR_SWATCHES), the same in
  * every theme. A pick overrides the theme's colour for that network. Each is at least 3:1 on every
  * theme's grounds, and its glyph colour at least 3:1 on it (theme/contrast.test.ts). The ids are the

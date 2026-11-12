@@ -1,4 +1,5 @@
 import { THEMES, type ThemeSeeds } from '@shared/themes'
+import { backdropSupported, windowsBuild } from '@shared/windowMaterial'
 import {
   DOWNLOADS_AT_ONCE,
   type GlassLook,
@@ -27,6 +28,7 @@ import { NetworkTile } from '../components/NetworkTile'
 import { SpeedText } from '../components/SpeedText'
 import { SpeedUnitToggle } from '../components/SpeedUnitToggle'
 import { DiagnosticsSettings } from '../components/DiagnosticsSettings'
+import { onWindows, words } from '../platformWords'
 import { ExtensionSettings } from '../components/ExtensionSettings'
 import { OnThisMacSettings } from '../components/OnThisMacSettings'
 import { SettingRow, SettingsGroup } from '../components/settingsParts'
@@ -165,7 +167,9 @@ function GeneralSettings(): React.JSX.Element {
           hint={
             speedUnit === 'bits'
               ? 'Megabits per second, the way internet providers quote speeds. 8 Mbps is 1 MB/s.'
-              : 'Megabytes per second, dropping to KB/s below 1 MB/s. Matches the sizes Finder shows.'
+              : onWindows()
+                ? 'Megabytes per second, dropping to KB/s below 1 MB/s.'
+                : 'Megabytes per second, dropping to KB/s below 1 MB/s. Matches the sizes Finder shows.'
           }
         >
           <SpeedUnitToggle />
@@ -344,8 +348,8 @@ function AppearanceSettings(): React.JSX.Element {
           label="Appearance"
           hint={
             themeSource === 'system'
-              ? `Follows your Mac, which is ${macDark ? 'dark' : 'light'} right now.`
-              : `Always ${themeSource}, whatever your Mac uses.`
+              ? `Follows ${words().appearanceSource}, which is ${macDark ? 'dark' : 'light'} right now.`
+              : `Always ${themeSource}, whatever ${words().appearanceSource} uses.`
           }
         >
           <ToggleGroup
@@ -457,7 +461,8 @@ function AppearanceSettings(): React.JSX.Element {
   )
 }
 
-/** Whether the Mac has Reduce Transparency on (System Settings › Accessibility › Display). */
+/** Whether the system asks for less transparency: the Mac's Reduce Transparency (System Settings ›
+ * Accessibility › Display), or Windows' Transparency effects turned off. */
 function useSystemReducedTransparency(): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -478,10 +483,18 @@ function GlassSettings(): React.JSX.Element {
   const setSolidGlass = useAppStore((store) => store.setSolidGlass)
   const systemSolid = useSystemReducedTransparency()
   const solidId = useId()
+  // Windows draws the glass from Windows 11 22H2 (shared/windowMaterial.ts); before that the window
+  // keeps the theme's solid ground, and Settings says so.
+  const noBackdrop =
+    onWindows() && !backdropSupported(windowsBuild(window.mergelane.systemVersion ?? ''))
   return (
     <SettingsGroup
       title="Liquid Glass"
-      description="Glass is used only for what floats above your downloads: the window, the sidebar and the content pane. Cards and lists stay easy to read."
+      description={
+        noBackdrop
+          ? 'Windows draws the glass from Windows 11 version 22H2. On this PC the window stays solid; the sidebar and the content pane keep their glass colours.'
+          : 'Glass is used only for what floats above your downloads: the window, the sidebar and the content pane. Cards and lists stay easy to read.'
+      }
     >
       <SettingRow
         label="Look"
@@ -507,9 +520,13 @@ function GlassSettings(): React.JSX.Element {
         label="Reduce transparency"
         htmlFor={solidId}
         hint={
-          systemSolid
-            ? 'Already on in your Mac’s Accessibility settings, so the glass is solid.'
-            : 'Makes the glass solid. Mergelane also follows this setting in System Settings › Accessibility › Display.'
+          onWindows()
+            ? systemSolid
+              ? 'Transparency effects are off in Windows (Settings › Personalization › Colors), so the glass is solid.'
+              : 'Makes the glass solid. Mergelane also follows Transparency effects in Settings › Personalization › Colors.'
+            : systemSolid
+              ? 'Already on in your Mac’s Accessibility settings, so the glass is solid.'
+              : 'Makes the glass solid. Mergelane also follows this setting in System Settings › Accessibility › Display.'
         }
       >
         <Switch
@@ -579,7 +596,7 @@ function DownloadSettings(): React.JSX.Element {
         <SettingRow
           label="Offer links I copy"
           htmlFor={offerId}
-          hint="When you switch to Mergelane, a link you copied in another app is offered for download. Mergelane looks at what you copied only then. macOS may ask once to allow it."
+          hint={`When you switch to Mergelane, a link you copied in another app is offered for download. Mergelane looks at what you copied only then.${onWindows() ? '' : ' macOS may ask once to allow it.'}`}
         >
           <Switch id={offerId} checked={offerCopiedLinks} onCheckedChange={setOfferCopiedLinks} />
         </SettingRow>

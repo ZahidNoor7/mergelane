@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-12
+
+Keeping each website on one network now holds from a site's very first connections. Update the helper when
+Mergelane asks.
+
 ### Fixed
 
 - **System merge now keeps a website on one network from its very first connections.** A browser opens several

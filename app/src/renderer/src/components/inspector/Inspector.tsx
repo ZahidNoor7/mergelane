@@ -1,4 +1,4 @@
-import { ChevronLeft, Folder } from 'lucide-react'
+import { ChevronLeft, Folder, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { isFinished, type DownloadItem } from '../../utils/downloadActions'
@@ -16,11 +16,14 @@ import { InspectorActions } from './parts'
 
 export function Inspector({
   download,
-  onBack
+  onBack,
+  onClose
 }: {
   download: DownloadItem
   /** In a narrow window: back to the list. */
   onBack?: () => void
+  /** Beside the list, in a wide window: closes the details (Esc does too). */
+  onClose?: () => void
 }): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -71,6 +74,18 @@ export function Inspector({
             </span>
           </p>
         </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close details"
+            title="Close details (Esc)"
+            className="-mt-1 -mr-1 shrink-0"
+            onClick={onClose}
+          >
+            <X aria-hidden />
+          </Button>
+        )}
       </header>
 
       <InspectorActions download={download} />

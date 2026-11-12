@@ -486,6 +486,12 @@ describe('DownloadsScreen, the selection', () => {
     expect(screen.getByText('10 selected')).toBeTruthy()
     await keys.keyboard('{Escape}')
     expect(screen.queryByRole('toolbar')).toBeNull()
+    // With nothing ticked, Esc closes the open details instead, and with none open does nothing.
+    useAppStore.setState({ selectedId: completed.id, detailOpen: true })
+    await keys.keyboard('{Escape}')
+    expect(useAppStore.getState()).toMatchObject({ selectedId: null, detailOpen: false })
+    await keys.keyboard('{Escape}')
+    expect(useAppStore.getState().selectedId).toBeNull()
 
     await keys.click(screen.getByRole('checkbox', { name: 'Select done.zip' }))
     await keys.keyboard('{Backspace}')

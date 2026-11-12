@@ -116,6 +116,7 @@ export function DownloadsScreen({
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const openDownload = useAppStore((store) => store.openDownload)
+  const closeDetails = useAppStore((store) => store.closeDetails)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
@@ -199,7 +200,9 @@ export function DownloadsScreen({
         return
 
       if (event.key === 'Escape') {
-        setSelected(new Set())
+        // Esc clears the ticked rows first; with none ticked, it closes the open details.
+        if (selected.size > 0) setSelected(new Set())
+        else if (useAppStore.getState().selectedId !== null) closeDetails()
       } else if (command && event.key.toLowerCase() === 'f') {
         event.preventDefault()
         if (chosen.length > 0) {
@@ -223,7 +226,7 @@ export function DownloadsScreen({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [items, chosen, perform, isMac])
+  }, [items, chosen, selected, perform, isMac, closeDetails])
 
   // What the toolbar offers: the two actions most needed for what's selected as buttons, and
   // the rest of what the menu does for the selection behind More, so six never need more room.

@@ -644,6 +644,29 @@ describe('DownloadsPlace', () => {
     expect(within(details).queryByRole('button', { name: 'Downloads' })).toBeNull()
   })
 
+  it('wide: the details close with their × or Esc, and focus goes back to the row', async () => {
+    useAppStore.setState({ downloads: { run: running }, history: [finished] })
+    show(<DownloadsPlace />)
+    measure(1044)
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Report.pdf' }))
+    const details = screen.getByRole('complementary', { name: 'Download details' })
+    await user.click(within(details).getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(useAppStore.getState().selectedId).toBeNull()
+    act(() => frames.forEach((frame) => frame(0)))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Report.pdf' }))
+    // Esc closes them too, once nothing is ticked.
+    await user.click(screen.getByRole('button', { name: 'Holiday film.mkv' }))
+    expect(screen.getByRole('complementary', { name: 'Download details' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
   it('narrow: the details in the list’s place, focused, and back to the row', async () => {
     useAppStore.setState({ downloads: { run: running } })
     show(<DownloadsPlace />)

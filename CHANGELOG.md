@@ -14,6 +14,8 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Fixed
 
+- **The download details beside the list can be closed again**: with the × at their top-right, or with Esc
+  when no downloads are ticked. Focus goes back to the download's row.
 - Tunnels, such as a VPN app's or iCloud Private Relay's (`utun0`), are no longer offered as networks for
   downloads. They aren't separate internet connections.
 

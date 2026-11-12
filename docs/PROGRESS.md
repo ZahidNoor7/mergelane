@@ -650,6 +650,12 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **Details pane can be closed** (same branch, owner's screenshot). The design's wide layout shows the details
+  whenever a download is selected and gave no way to close them. The pane now has a × (`Inspector`'s `onClose`,
+  "Close details") and Esc, when no rows are ticked, closes it (`closeDetails` clears the selection), with focus
+  back on the row. Tests: Vitest `inspector.test` (the × and Esc) and `DownloadsScreen.test` (Esc order).
+  `Inspector.tsx` and `DownloadsPlace.tsx` are at 100%, `DownloadsScreen.tsx` at 98.9%. Full Vitest: 407 passed.
+  Smoke: 727 passed, 1 skipped.
 - **Networks join running downloads; tunnels hidden** (branch `networks-join-midway`, owner's go-ahead, ADR-0052).
   The owner's iPhone, connected mid-download, wasn't used. A network that connects now joins running downloads
   unless `chosenOff` for that download. One-connection downloads keep to one network. macOS tunnels (`utun` …) are

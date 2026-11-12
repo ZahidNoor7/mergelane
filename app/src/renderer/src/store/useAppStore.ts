@@ -136,6 +136,8 @@ interface AppStore {
   openDownload: (id: string) => void
   /** Back to the list, in a narrow window. The download stays selected for a wide one. */
   closeDownload: () => void
+  /** Closes the details beside the list, in a wide window: no download is selected any more. */
+  closeDetails: () => void
   /** Opens New download, with `link` in its link field when one is given. */
   openNewDownload: (link?: string) => void
   closeNewDownload: () => void
@@ -331,6 +333,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setScreen: (screen) => set({ screen, detailOpen: false }),
   openDownload: (id) => set({ screen: 'downloads', selectedId: id, detailOpen: true }),
   closeDownload: () => set({ detailOpen: false }),
+  closeDetails: () => set({ selectedId: null, detailOpen: false }),
 
   openNewDownload: (link) =>
     set(link === undefined ? { newDownloadOpen: true } : { newDownloadOpen: true, draftUrl: link }),

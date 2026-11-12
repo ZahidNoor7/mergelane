@@ -13,6 +13,7 @@ export function DownloadsPlace(): React.JSX.Element {
   const split = width >= SPLIT_FROM
   const detailOpen = useAppStore((store) => store.detailOpen)
   const closeDownload = useAppStore((store) => store.closeDownload)
+  const closeDetails = useAppStore((store) => store.closeDetails)
   // Just the one selected: an update to any other download leaves this selector's result alone.
   const selected = useAppStore((store) => {
     const id = store.selectedId
@@ -22,6 +23,17 @@ export function DownloadsPlace(): React.JSX.Element {
     return shown && !('unitsWritten' in shown) && shown.status === 'cancelled' ? null : shown
   })
 
+  /** Back to its row, where the details were opened from. */
+  const backToRow = (id: string | undefined): void => {
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-download-id="${CSS.escape(id ?? '')}"]`)?.focus()
+    )
+  }
+  const close = (): void => {
+    const id = selected?.id
+    closeDetails()
+    backToRow(id)
+  }
   const back = (): void => {
     const id = selected?.id
     closeDownload()
@@ -47,7 +59,7 @@ export function DownloadsPlace(): React.JSX.Element {
               aria-label="Download details"
               className="w-[400px] shrink-0 overflow-y-auto border-l border-rule bg-card"
             >
-              <Inspector download={selected} />
+              <Inspector download={selected} onClose={close} />
             </aside>
           )}
         </>

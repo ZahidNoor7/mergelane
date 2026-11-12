@@ -84,8 +84,11 @@ browser's native messaging, so there is no open network port, and Mergelane regi
 when it starts.
 
 The extension comes inside Mergelane. Until it is in the browsers' stores, you load it by hand once:
-**Settings › Browser extensions** finds your browsers, shows the extension's folder in the Finder, and walks you
-through it.
+**Settings › Browser extensions** finds your browsers. **Install…** saves the extension in a folder you can find:
+your Downloads folder, or another you choose with **Change…**. It then walks you through loading it, with buttons
+to show the folder in the Finder, open the browser, and copy what to paste. Keep that folder: the browser loads the
+extension from it, and Mergelane keeps it up to date. No browser lets another app pick the folder for you, so
+choosing it in the browser stays one step of your own.
 
 - **Chrome, Edge and Chromium:** turn on Developer mode on the browser's extensions page, click **Load unpacked**,
   and choose the folder. After a Mergelane update, restart the browser to use the new version.

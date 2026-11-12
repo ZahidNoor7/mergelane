@@ -645,6 +645,27 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **The extension saved where the user can find it** (branch `extension-folder`, owner's request, ADR-0047).
+  - Install… saves it in Downloads, or the folder chosen with Change… (`extensionLocation`). Every saved copy
+    (`extensionCopies`) and the old `<userData>/Browser Extension` folders are refreshed at launch and on each scan.
+    A folder of the same name that Mergelane didn't make is left alone. The guide has Show in Finder, Copy, Open
+    <browser>, and Copy path on the Load unpacked step, with a ⌘⇧G tip.
+  - One-click install isn't possible in branded Chrome: `--load-extension` is gone since Chrome 137, outside
+    installs on macOS must come from the Chrome Web Store, and `chrome://` isn't linkable (sources in ADR-0047).
+  - **Tests:** e2e `browserExtensions.spec.ts` (3) checks:
+    - nothing is saved on opening Settings;
+    - Install saves into the test's own Downloads, stamped with the app's version;
+    - Show in Finder and Open Chrome are recorded;
+    - Change… then saves Firefox's copy there;
+    - both copies are remembered;
+    - an older copy, and the old Library folder, are refreshed at launch;
+    - a stranger's folder is left alone.
+  - Vitest: `ExtensionSettings.test.tsx` and `shared/browsers.test.ts`. 397 passed. `ExtensionSettings.tsx` has
+    97.6% of its lines covered and `shared/browsers.ts` 100%. `main/browsers.ts` is main-process code, outside
+    Vitest here, and covered by those e2e tests.
+  - Smoke and extension: 721 passed, 1 skipped. `~/Downloads` unchanged.
+  - **Owner to check by hand:** that ⌘⇧G and pasting the path works in Chrome's Load unpacked window, and that Open
+    Chrome opens Chrome.
 - **The extension's icon** (branch `extension-icon`, owner's request). The extension still had Plexo's icon. Its
   16, 32, 48 and 128 px icons and the grey "off" 16 and 32 px icons now come from the design's `icon-default`
   (details in `design-system/mergelane/redesign/README.md`).

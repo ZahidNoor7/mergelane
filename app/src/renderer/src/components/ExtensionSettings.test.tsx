@@ -1,4 +1,9 @@
-import { BROWSERS, type BrowsersReport } from '@shared/browsers'
+import {
+  BROWSERS,
+  EXTENSION_FOLDER_NAME,
+  type BrowsersReport,
+  type ExtensionSaved
+} from '@shared/browsers'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,32 +17,47 @@ function report(found: string[], fields: Partial<BrowsersReport> = {}): Browsers
     browsers: BROWSERS.map((spec) => ({
       ...spec,
       found: found.includes(spec.id),
-      extensionFolder:
-        found.includes(spec.id) && spec.kind
-          ? `/Users/test/Mergelane/Browser Extension/${spec.kind}`
-          : null,
+      appPath: found.includes(spec.id) ? `/Applications/${spec.app}` : null,
+      extensionFolder: spec.kind
+        ? `/Users/test/Downloads/${EXTENSION_FOLDER_NAME[spec.kind]}`
+        : null,
       contact: null
     })),
     extensionConnected: false,
     extensionVersion: '1.0.0',
     scannedAt: NOW,
+    extensionLocation: '/Users/test/Downloads',
     ...fields
   }
 }
 
 let answer: BrowsersReport
 const browsers = vi.fn(() => Promise.resolve(answer))
-const revealExtension = vi.fn(() => Promise.resolve())
+/** Where saving puts the extension: the location's folder for its kind. */
+let location = '/Users/test/Downloads'
+const saved = (id: string): ExtensionSaved => ({
+  ok: true,
+  folder: `${location}/${id === 'firefox' ? EXTENSION_FOLDER_NAME.firefox : EXTENSION_FOLDER_NAME.chrome}`
+})
+const saveExtension = vi.fn((id: string) => Promise.resolve(saved(id)))
+const revealExtension = vi.fn((id: string) => Promise.resolve(saved(id)))
+const chooseExtensionLocation = vi.fn((): Promise<string | null> => Promise.resolve(null))
+const openBrowser = vi.fn(() => Promise.resolve())
 const writeText = vi.fn(() => Promise.resolve())
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
   answer = report(['chrome', 'firefox', 'brave', 'safari'])
+  location = '/Users/test/Downloads'
+  useAppStore.setState({ homeDir: '/Users/test' })
   window.mergelane = {
     ...window.mergelane,
     browsers,
+    saveExtension,
     revealExtension,
+    chooseExtensionLocation,
+    openBrowser,
     updateSettings
   } as unknown as typeof window.mergelane
 })
@@ -85,10 +105,30 @@ describe('Settings › Browser extensions', () => {
     )
   })
 
-  it('guides a Chrome-family install: the folder in the Finder, the page to open, the steps', async () => {
+  it('says where the extension is saved, and changes it', async () => {
+    const user = setupUser()
+    await show()
+    const row = screen.getByText('Save the extension in').parentElement!.parentElement!
+    expect(row.textContent).toContain('~/Downloads')
+    expect(row.textContent).toContain('so leave it in place')
+    // Cancelled: nothing changes.
+    await user.click(within(row).getByRole('button', { name: 'Change…' }))
+    expect(chooseExtensionLocation).toHaveBeenCalledOnce()
+    expect(browsers).toHaveBeenCalledOnce()
+    // Chosen: the browsers are looked at again, and say the new place.
+    chooseExtensionLocation.mockImplementationOnce(() => Promise.resolve('/Users/test/Desktop'))
+    answer = { ...report(['chrome', 'firefox']), extensionLocation: '/Users/test/Desktop' }
+    await user.click(within(row).getByRole('button', { name: 'Change…' }))
+    expect(browsers).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('~/Desktop')).toBeTruthy()
+    expect(saveExtension).not.toHaveBeenCalled()
+  })
+
+  it('saves the extension on Install, then guides loading it in a Chrome-family browser', async () => {
     const user = setupUser()
     await show()
     await user.click(screen.getAllByRole('button', { name: 'Install…' })[0])
+    expect(saveExtension).toHaveBeenCalledWith('chrome')
     const dialog = screen.getByRole('dialog', { name: 'Add Mergelane to Chrome' })
     expect(within(dialog).getByText(/takes it from a folder on your Mac/)).toBeTruthy()
     expect(
@@ -96,31 +136,84 @@ describe('Settings › Browser extensions', () => {
         .getAllByRole('listitem')
         .map((step) => step.querySelector('span')!.textContent)
     ).toEqual([
-      'Show the extension folder in the Finder.',
-      'In Chrome, go to chrome://extensions.',
+      'Mergelane saved the extension in this folder. Keep it there: Chrome loads it from there.',
+      'Open Chrome and go to chrome://extensions.',
       'Turn on Developer mode.',
       'Click “Load unpacked” and choose that folder.'
     ])
+    expect(within(dialog).getByText('~/Downloads/Mergelane Extension')).toBeTruthy()
+    // Copying the path sits with the step that needs it, after the page's address is pasted.
+    const steps = within(dialog).getAllByRole('listitem')
+    expect(within(steps[3]).getByText(/press ⌘⇧G, paste the path and press Return/)).toBeTruthy()
+    expect(within(steps[3]).getByRole('button', { name: 'Copy path' })).toBeTruthy()
+    expect(within(steps[0]).queryByRole('button', { name: 'Copy path' })).toBeNull()
     await user.click(within(dialog).getByRole('button', { name: 'Show in Finder' }))
     expect(revealExtension).toHaveBeenCalledWith('chrome')
-    await user.click(within(dialog).getByRole('button', { name: 'Copy' }))
-    expect(writeText).toHaveBeenCalledWith('chrome://extensions')
+    await user.click(within(dialog).getByRole('button', { name: 'Copy path' }))
+    expect(writeText).toHaveBeenLastCalledWith('/Users/test/Downloads/Mergelane Extension')
     expect(within(dialog).getByRole('button', { name: 'Copied' })).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Copy' }))
+    expect(writeText).toHaveBeenLastCalledWith('chrome://extensions')
+    // One "Copied" at a time: the last thing copied.
+    expect(within(dialog).getByRole('button', { name: 'Copy path' })).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Open Chrome' }))
+    expect(openBrowser).toHaveBeenCalledWith('chrome')
     await user.click(within(dialog).getAllByRole('button', { name: 'Close' }).at(-1)!)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('says Firefox keeps it only until it quits', async () => {
+  it('says Firefox keeps it only until it quits, and copies the manifest’s path', async () => {
     const user = setupUser()
     await show()
     await user.click(screen.getAllByRole('button', { name: 'Install…' })[1])
+    expect(saveExtension).toHaveBeenCalledWith('firefox')
     expect(
       screen.getByText(/only keeps an extension that Mozilla hasn’t signed until it quits/)
     ).toBeTruthy()
+    const steps = within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem')
+    await user.click(within(steps[2]).getByRole('button', { name: 'Copy path' }))
+    expect(writeText).toHaveBeenLastCalledWith(
+      '/Users/test/Downloads/Mergelane Extension for Firefox/manifest.json'
+    )
     // A refused clipboard leaves the button as it was.
     writeText.mockImplementationOnce(() => Promise.reject(new Error('no')))
     await user.click(screen.getByRole('button', { name: 'Copy' }))
     expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy()
+  })
+
+  it('says why the extension couldn’t be saved, and saves it in another folder', async () => {
+    const user = setupUser()
+    await show()
+    saveExtension.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        message: '“Downloads” already has a folder named “Mergelane Extension”.'
+      })
+    )
+    await user.click(screen.getAllByRole('button', { name: 'Install…' })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Add Mergelane to Chrome' })
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      '“Downloads” already has a folder named “Mergelane Extension”.'
+    )
+    expect(within(dialog).queryByRole('list', { name: 'Steps' })).toBeNull()
+    // Choosing another folder saves it there and shows the steps.
+    chooseExtensionLocation.mockImplementationOnce(() => {
+      location = '/Users/test/Desktop'
+      return Promise.resolve(location)
+    })
+    await user.click(within(dialog).getByRole('button', { name: 'Choose another folder…' }))
+    expect(saveExtension).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('~/Desktop/Mergelane Extension')).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Steps' })).toBeTruthy()
+    // A save that fails outright says so too.
+    await user.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
+    saveExtension.mockImplementationOnce(() => Promise.reject(new Error('Disk full')))
+    await user.click(screen.getAllByRole('button', { name: 'Install…' })[1])
+    expect(screen.getByRole('alert').textContent).toBe('Disk full')
+    saveExtension.mockImplementationOnce(() => Promise.reject('odd'))
+    await user.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
+    await user.click(screen.getAllByRole('button', { name: 'Install…' })[1])
+    expect(screen.getByRole('alert').textContent).toBe('odd')
   })
 
   it('scans again, and says when the extension has reached Mergelane', async () => {

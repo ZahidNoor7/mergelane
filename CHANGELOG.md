@@ -26,6 +26,14 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- **Installing the browser extension is easier.** **Install…** in Settings › Browser extensions now saves the
+  extension in your Downloads folder, as "Mergelane Extension" (and "Mergelane Extension for Firefox"), instead of
+  the hidden Library folder. **Change…** saves it somewhere else. The guide then has buttons to show the folder in
+  the Finder, open the browser, and copy the browser's extensions page and the folder's path, each on the step
+  that uses it, with a tip for going straight to the folder in the browser's file picker. Every folder Mergelane
+  saved, including the old one in Library, is kept up to date when Mergelane updates. A folder of the same name
+  that Mergelane didn't make is never touched. Chrome doesn't let another app choose the folder for you, so that
+  step stays yours.
 - The browser extension uses the new Mergelane icon, in the toolbar, its menu and its options page. It had kept the
   old one. While it isn't capturing or can't reach Mergelane, the icon is a grey copy of the new one.
 - While New download checks a link, the place where its preview will appear shows a spinning tile and a glowing

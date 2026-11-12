@@ -41,6 +41,8 @@ jobs:
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/sources.mjs' --test-coverage-lines=90 scripts/media-tools/sources.test.mjs
       - name: Test the local release script
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/release/local-release.mjs' --test-coverage-lines=90 scripts/release/local-release.test.mjs
+      - name: Test the real-hardware suite's script (against a stand-in Mac; ADR-0050)
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/hardware/hardware.mjs' --test-coverage-lines=90 scripts/hardware/hardware.test.mjs
       - name: Test the Deno notices generator
         run: node --test --experimental-test-coverage --test-coverage-include='scripts/media-tools/deno-notices.mjs' --test-coverage-lines=90 scripts/media-tools/deno-notices.test.mjs
 

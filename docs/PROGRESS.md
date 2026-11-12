@@ -648,6 +648,14 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **M3.8 real-hardware suite** (branch `m3.8-hardware`, owner's go-ahead, ADR-0050). `scripts/hardware/hardware.mjs`
+  is a guided script the owner runs in Terminal.
+  - It checks: the preflight, merge on, spread with sticky off, sticky (one site, two hosts of one site, different
+    sites), Mergelane's own download (confirmed by the owner), unplugging and reconnecting each network, sleep and
+    wake, a VPN on and off, and an optional helper crash.
+  - It always puts everything back, and it caps networks at 16 Mbit/s with `setLimit` so the data stays predictable.
+  - Tests: `hardware.test.mjs` (23) against a stand-in Mac: 99.7% lines, 95% branches. Run on the owner's Mac: not
+    yet; it waits for 0.3.2.
 - **Sticky-per-site for system merge** (branch `sticky-sites`, owner's go-ahead, ADR-0048). The helper reads an
   HTTPS flow's server name from its ClientHello and keeps each registrable domain on one link. Flows without a name
   follow their address. Failover moves the site, and 10 minutes idle frees it. The setting is `setStickySites` /

@@ -20,6 +20,7 @@ import {
   callHelper,
   captureRoutes,
   dataEstimateMB,
+  hardwarePorts,
   describeShares,
   download,
   linkLabel,
@@ -32,6 +33,7 @@ import {
   runSuite,
   shares,
   stopped,
+  unplugSteps,
   until,
   writeReport
 } from './hardware.mjs'
@@ -149,6 +151,10 @@ function fakeMac(answers = [], world = {}) {
           return out(
             w.netstat ?? (w.vpnOn ? NETSTAT_VPN : w.state === 'on' ? NETSTAT_ON : NETSTAT_OFF)
           )
+        case 'networksetup':
+          return out(
+            'Hardware Port: Wi-Fi\nDevice: en1\nEthernet Address: aa\n\nHardware Port: iPhone USB\nDevice: en7\nEthernet Address: bb\n\nHardware Port: Ethernet\nDevice: en0\n'
+          )
         case 'scutil':
           return out(w.vpnOn ? '* (Connected) 1234 VPN (com.example) "Work"\n' : '')
         case 'pgrep':
@@ -261,6 +267,29 @@ describe('the pure parts', () => {
     assert.equal(FILES.hetznerAsh.site, FILES.hetznerNbg.site)
   })
 
+  it('names each network by its hardware port, and says how to take it away', () => {
+    const ports = hardwarePorts(
+      'Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: x\n\nHardware Port: iPhone USB\nDevice: en7\n\nHardware Port: Bluetooth PAN\nDevice: en9\n\nDevice: en99\n'
+    )
+    assert.deepEqual(ports, { en0: 'Wi-Fi', en7: 'iPhone USB', en9: 'Bluetooth PAN' })
+    assert.match(unplugSteps({ name: 'en0', kind: 'Wi-Fi' }).off, /Turn Wi-Fi off/)
+    assert.match(unplugSteps({ name: 'en0', kind: 'Wi-Fi' }).on, /Turn Wi-Fi back on/)
+    assert.equal(
+      unplugSteps({ name: 'en7', kind: 'iPhone USB' }).off,
+      'Unplug the iPhone USB cable'
+    )
+    assert.match(unplugSteps({ name: 'en8', kind: 'Android' }).on, /hotspot on/)
+    assert.equal(
+      unplugSteps({ name: 'en5', kind: 'Thunderbolt Ethernet Slot 1' }).on,
+      'Plug the Thunderbolt Ethernet Slot 1 cable back in'
+    )
+    assert.equal(
+      unplugSteps({ name: 'en9', kind: 'Bluetooth PAN' }).off,
+      'Disconnect Bluetooth PAN (en9)'
+    )
+    assert.equal(unplugSteps({ name: 'en9' }).on, 'Reconnect en9')
+  })
+
   it('renders the report', () => {
     const facts = {
       when: 'now',
@@ -351,6 +380,13 @@ describe('the suite', () => {
     assert.ok(mac.said.some((t) => t.includes(`${HELPER} limit en1 50`)))
   })
 
+  it('names networks from macOS when the helper sends no kind', async () => {
+    const links = fakeMac().world.links.map(({ kind, ...rest }) => rest)
+    const mac = fakeMac(['n'], { links })
+    const { facts } = await runSuite(mac)
+    assert.deepEqual(facts.links, ['Ethernet (en0)', 'Wi-Fi (en1)', 'iPhone USB (en7)'])
+  })
+
   it('stops at the preflight when something isn’t right, changing nothing', async () => {
     const cases = [
       [{ unreachable: true }, 'The helper answers'],
@@ -413,7 +449,7 @@ describe('the suite', () => {
     })
     // The link is "unplugged" but stays up, then really disappears for good.
     mac.ask = ((ask) => async (q) => {
-      if (/^Reconnect/.test(q)) mac.world.unplugged.add('en0')
+      if (/back in/.test(q)) mac.world.unplugged.add('en0')
       return ask(q)
     })(mac.ask)
     const { results } = await runSuite(mac, { links: ['en0'] })

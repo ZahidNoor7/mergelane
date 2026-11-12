@@ -648,6 +648,15 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **M3.8, first run on the owner's Mac** (Wi-Fi + iPhone USB; no Ethernet, Android or VPN at hand). Passed:
+  the preflight, merge on, spread with sticky off, different sites spreading, and the put-back after Ctrl-C.
+  Failed, and fixed on branch `sticky-first-burst`:
+  - **Sticky lost a site's first burst:** 8 connections to a new site at once each got balanced before the first had
+    claimed a link (51/49). `Sticky.acquire` now picks and claims the link in one step. Test: 32 concurrent
+    first connections land on one link.
+  - **The script named networks "en0" only** (the helper sends no kind), so the owner couldn't tell what to unplug.
+    It now reads `networksetup -listallhardwareports` and words each step for the kind ("Turn Wi-Fi off", "Unplug the
+    iPhone USB cable"). `hardware.test.mjs`: 25 tests.
 - **M3.8 real-hardware suite** (branch `m3.8-hardware`, owner's go-ahead, ADR-0050). `scripts/hardware/hardware.mjs`
   is a guided script the owner runs in Terminal.
   - It checks: the preflight, merge on, spread with sticky off, sticky (one site, two hosts of one site, different

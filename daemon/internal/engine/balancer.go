@@ -154,11 +154,12 @@ func (b *Balancer) DialSite(ctx context.Context, host string, port int, site str
 		rep, lastErr = repNetUnreachable, errors.New("no usable IPv6 adapter")
 	}
 	for {
-		prefer := ""
+		var sl *Slot
 		if sticky {
-			prefer = b.Sticky.Link(site)
+			sl = b.Sticky.acquire(site, func(prefer string) *Slot { return b.S.AcquireSticky(f, tried, prefer) })
+		} else {
+			sl = b.S.AcquireFor(f, tried)
 		}
-		sl := b.S.AcquireSticky(f, tried, prefer)
 		if sl == nil {
 			return nil, nil, f, &dialError{rep: rep, err: lastErr}
 		}

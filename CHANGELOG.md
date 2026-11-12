@@ -5,6 +5,13 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **System merge now keeps a website on one network from its very first connections.** A browser opens several
+  connections to a new site at once; they could each be sent over a different network before the site had one,
+  which is what keeping a site on one network is meant to stop. Found by the real-hardware test on Wi-Fi and an
+  iPhone. Update the helper when Mergelane asks.
+
 ## [0.3.2] - 2026-11-12
 
 System merge keeps each website on one network, and the browser extension looks like Mergelane. Update the helper

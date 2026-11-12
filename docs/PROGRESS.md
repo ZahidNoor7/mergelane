@@ -737,6 +737,28 @@ Last updated: 2026-11-11
     Windows" section.
   - **Tests:** `fetch.test.mjs` 71 passed, `fetch.mjs` 99.4% lines; `e2e/mux.spec.ts` checks the Windows manifests
     against `WINDOWS_TOOL_PROGRAM` and the `win:` section.
+- **W4: the Windows installer, updates and releases** (branch `w4-installer`, 2026-11-12, ADR-0058).
+  - **Installer:** one per-user NSIS installer per chip, `Mergelane-<version>-<x64|arm64>-setup.exe`, no
+    administrator password, opens Mergelane afterwards. A chip list under `win.target` packed both chips into one
+    installer, so the chip now comes only from `--x64` / `--arm64` (`npm run build:win` builds both, one at a time).
+  - **Open with:** `build/installer.nsh` adds Mergelane to Open with for `.torrent` and `.nzb` (per-user ProgIDs and
+    `OpenWithProgids`, never the default). No `magnet:` handler: Microsoft documents the non-default registration
+    only machine-wide (ADR-0058).
+  - **Uninstall:** removes the Open with entries, the browsers' host keys and manifests, `mergelane://` and the Open
+    at login entry; skipped during an update.
+  - **Updates:** Settings › Updates picks the installer for the PC's chip, checks its SHA-256, starts it and quits.
+  - **Releases:** `local-release.mjs` and `release.yml` build the Windows helpers, media tools and installers after
+    the Mac app, check them with the new `scripts/windows/check-build.mjs` (each program's chip, the version, the
+    fuses), and attach the installers and the Windows sources; the notes gain "Install on Windows".
+    `--mac-only` is for dry runs only.
+  - **Kit:** installs each installer silently into its own folder, checks the window, the bridge, both helpers'
+    versions (the Mac can't read them: no `-ldflags` in `-trimpath` build info) and Open with, uninstalls, and
+    checks nothing is left.
+  - **Tests:** repo-checks 406 passed (`check-build.mjs` 98.8%, `local-release.mjs` 99.7%, `notes.mjs` 99.5%,
+    `sources.mjs` 97.9%, `kit.mjs` 99.4%, `report.mjs` 99.1%); Vitest 444 passed (`releases.ts` 100% lines);
+    lint, typecheck and format clean; both installers built here and passed `check-build.mjs`.
+  - **Proven only on the laptop:** the install, SmartScreen's prompt, Open with, the uninstall, and an update
+    (which needs two Windows releases).
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

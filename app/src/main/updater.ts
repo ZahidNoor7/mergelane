@@ -103,7 +103,8 @@ async function check(): Promise<UpdateState> {
     const latest = newestUpdate(await response.json(), {
       current: state.version,
       channel: state.channel,
-      skipped: state.skipped
+      skipped: state.skipped,
+      target: { platform: process.platform, arch: process.arch }
     })
     const lastChecked = Date.now()
     save({ updateLastChecked: lastChecked })
@@ -221,7 +222,8 @@ function forgetDownload(): void {
 }
 
 /** Opens the checked disk image in the Finder and quits, so the user can drag the new Mergelane
- * over this one. Running downloads pause on the way out, as at any quit. */
+ * over this one; on Windows, starts the checked installer and quits, and the installer replaces
+ * this version and opens the new one. Running downloads pause on the way out, as at any quit. */
 export async function installUpdate(): Promise<void> {
   if (state.status !== 'ready' || !readyPath) return
   // A test run must never open a disk image on the Mac or quit: it notes what it would open.
@@ -231,7 +233,11 @@ export async function installUpdate(): Promise<void> {
   }
   const problem = await shell.openPath(readyPath)
   if (problem) {
-    set({ status: 'error', error: `macOS couldn’t open the disk image: ${problem}` })
+    const what =
+      process.platform === 'win32'
+        ? 'Windows couldn’t start the installer'
+        : 'macOS couldn’t open the disk image'
+    set({ status: 'error', error: `${what}: ${problem}` })
     return
   }
   app.quit()

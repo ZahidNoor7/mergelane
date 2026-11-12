@@ -22,6 +22,8 @@ import {
   main,
   missingAssets,
   parseChecksums,
+  windowsAssetNames,
+  windowsInstallSection,
   sections,
   sourceAssets,
   VERSION
@@ -507,5 +509,75 @@ describe('command line (exit codes)', () => {
     assert.match(ready.stdout, /0\.2\.0 is ready/)
     assert.equal(node(['--version', '0.1.0', '--check', ...files]).status, 1)
     assert.equal(node(['--check', ...files]).status, 2)
+  })
+})
+
+describe('Windows in the notes (W4)', () => {
+  const WINDOWS_MANIFEST = {
+    tools: MANIFEST.tools.map((tool) =>
+      tool.name === 'ffmpeg'
+        ? {
+            ...tool,
+            buildScript: 'build-ffmpeg-windows.sh',
+            buildInputs: [
+              { name: 'llvm-mingw.tar.xz', url: 'https://example.org/t', sha256: SHA_A },
+              { name: 'zlib-1.3.2.tar.gz', url: 'https://example.org/z', sha256: SHA_B, source: true }
+            ]
+          }
+        : tool
+    )
+  }
+
+  test('names the two installers, one per chip', () => {
+    assert.deepEqual(windowsAssetNames('0.4.0'), {
+      x64: 'Mergelane-0.4.0-x64-setup.exe',
+      arm64: 'Mergelane-0.4.0-arm64-setup.exe'
+    })
+  })
+
+  test('with the Windows manifest, both installers and the Windows sources must be listed', () => {
+    const entries = parseChecksums(read(fixture('SHA256SUMS')))
+    assert.deepEqual(missingAssets(entries, '0.2.0', MANIFEST, WINDOWS_MANIFEST), [
+      'Mergelane-0.2.0-x64-setup.exe',
+      'Mergelane-0.2.0-arm64-setup.exe',
+      'ffmpeg-9.0.2-build-ffmpeg-windows.sh',
+      'zlib-1.3.2.tar.gz'
+    ])
+    // The compiler isn't attached: only an input marked "source" is.
+    assert.ok(!sourceAssets(WINDOWS_MANIFEST).includes('llvm-mingw.tar.xz'))
+  })
+
+  test('the Windows install section follows the macOS one, only when the release has Windows', () => {
+    const section = windowsInstallSection('0.4.0')
+    for (const text of [
+      '## Install on Windows',
+      '`Mergelane-0.4.0-x64-setup.exe` (Intel or AMD)',
+      '`Mergelane-0.4.0-arm64-setup.exe` (Arm)',
+      '**More info**, then\n   **Run anyway**',
+      'Smart App Control is On',
+      'Settings › Updates',
+      '**Add or remove programs**'
+    ]) {
+      assert.ok(section.includes(text), text)
+    }
+    const input = {
+      version: '0.2.0',
+      changes: changelogSection(CHANGELOG, '0.2.0'),
+      limits: honestLimits(README),
+      checksums: parseChecksums(read(fixture('SHA256SUMS'))),
+      manifest: MANIFEST
+    }
+    const mac = buildNotes(input)
+    const both = buildNotes({ ...input, windows: true })
+    assert.ok(!mac.includes('## Install on Windows'))
+    // Checking a download, the licence texts and the Windows FFmpeg's sources, said for Windows only when it ships.
+    for (const windowsOnly of ['`Get-FileHash <file>` in PowerShell', '`resources\\licenses\\`', 'with zlib linked in']) {
+      assert.ok(both.includes(windowsOnly), windowsOnly)
+      assert.ok(!mac.includes(windowsOnly), windowsOnly)
+    }
+    const install = both.indexOf('## Install\n')
+    const windows = both.indexOf('## Install on Windows')
+    const limits = both.indexOf('## What to expect (honest limits)')
+    assert.ok(install < windows && windows < limits)
   })
 })

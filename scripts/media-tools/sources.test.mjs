@@ -3,7 +3,16 @@
 //        scripts/media-tools/sources.test.mjs
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -111,12 +120,28 @@ describe('releaseSourceNames', () => {
     const [ffmpeg, ytdlp, deno] = manifest().tools
     assert.deepEqual(releaseSourceNames(ffmpeg), {
       source: 'ffmpeg-9.0.2-source.tar.xz',
-      buildScript: 'ffmpeg-9.0.2-build-tiny.sh'
+      buildScript: 'ffmpeg-9.0.2-build-tiny.sh',
+      inputs: []
     })
     assert.deepEqual(releaseSourceNames(ytdlp), {
       source: 'yt-dlp-2026.10.26-source.tar.gz',
-      buildScript: null
+      buildScript: null,
+      inputs: []
     })
+    // A build input whose source ships (Windows FFmpeg's zlib), and one that doesn't (the compiler).
+    const windows = {
+      ...ffmpeg,
+      buildInputs: [
+        { name: 'toolchain.tar.xz', url: 'https://example.invalid/t', sha256: hashOf('t') },
+        {
+          name: 'zlib-1.3.2.tar.gz',
+          url: 'https://example.invalid/z',
+          sha256: hashOf('z'),
+          source: true
+        }
+      ]
+    }
+    assert.deepEqual(releaseSourceNames(windows).inputs, ['zlib-1.3.2.tar.gz'])
     assert.equal(releaseSourceNames(deno), null)
     assert.equal(releaseSourceNames(undefined), null)
   })
@@ -174,18 +199,72 @@ describe('collectSources', () => {
     const written = await collect(manifest(), outDir, lines)
     assert.deepEqual(
       written.map((path) => path.slice(outDir.length + 1)),
-      ['ffmpeg-9.0.2-source.tar.xz', 'ffmpeg-9.0.2-build-tiny.sh', 'yt-dlp-2026.10.26-source.tar.gz']
+      [
+        'ffmpeg-9.0.2-source.tar.xz',
+        'ffmpeg-9.0.2-build-tiny.sh',
+        'yt-dlp-2026.10.26-source.tar.gz'
+      ]
     )
     assert.deepEqual(readFileSync(join(outDir, 'ffmpeg-9.0.2-source.tar.xz')), LGPL_SOURCE)
     assert.deepEqual(readFileSync(join(outDir, 'yt-dlp-2026.10.26-source.tar.gz')), GPL_SOURCE)
-    assert.equal(readFileSync(join(outDir, 'ffmpeg-9.0.2-build-tiny.sh'), 'utf8'), '#!/bin/sh\necho build\n')
+    assert.equal(
+      readFileSync(join(outDir, 'ffmpeg-9.0.2-build-tiny.sh'), 'utf8'),
+      '#!/bin/sh\necho build\n'
+    )
     assert.ok(lines.includes('deno: MIT, no source to attach'))
     assert.ok(lines.some((line) => line.startsWith('ffmpeg: ffmpeg-9.0.2-source.tar.xz (SHA-256 ')))
   })
 
+  test('downloads a build input whose source ships, and keeps a source already there with the pinned hash', async () => {
+    const outDir = join(root, 'out-inputs')
+    const lines = []
+    const windows = manifest([
+      {
+        buildInputs: [
+          { name: 'toolchain.tar.xz', url: `${base}/gpl.tar.gz`, sha256: hashOf(GPL_SOURCE) },
+          {
+            name: 'zlib-1.3.2.tar.gz',
+            url: `${base}/gpl.tar.gz`,
+            sha256: hashOf(GPL_SOURCE),
+            source: true
+          }
+        ]
+      }
+    ])
+    const written = await collect(windows, outDir, lines)
+    assert.ok(written.some((path) => path.endsWith('zlib-1.3.2.tar.gz')))
+    assert.equal(existsSync(join(outDir, 'toolchain.tar.xz')), false)
+    assert.ok(lines.some((line) => line.startsWith('ffmpeg: zlib-1.3.2.tar.gz (SHA-256 ')))
+    // Again into the same folder (the other Windows manifest): nothing is downloaded twice.
+    const before = statSync(join(outDir, 'ffmpeg-9.0.2-source.tar.xz')).mtimeMs
+    const again = []
+    await collect(windows, outDir, again)
+    assert.equal(statSync(join(outDir, 'ffmpeg-9.0.2-source.tar.xz')).mtimeMs, before)
+    assert.equal(again.filter((line) => line.includes('downloading')).length, 0)
+  })
+
+  test('a build input that does not match its pin fails', async () => {
+    const outDir = join(root, 'out-input-mismatch')
+    const bad = manifest([
+      {
+        buildInputs: [
+          { name: 'zlib.tar.gz', url: `${base}/gpl.tar.gz`, sha256: hashOf('other'), source: true }
+        ]
+      }
+    ])
+    await assert.rejects(
+      collect(bad, outDir),
+      /ffmpeg zlib\.tar\.gz: source SHA-256 is [0-9a-f]{64}, expected/
+    )
+    assert.equal(existsSync(join(outDir, 'zlib.tar.gz')), false)
+  })
+
   test('refuses a bad manifest before downloading anything', async () => {
     const outDir = join(root, 'out-refused')
-    await assert.rejects(collect(manifest([{ sourceSha256: undefined }]), outDir), /cannot collect sources/)
+    await assert.rejects(
+      collect(manifest([{ sourceSha256: undefined }]), outDir),
+      /cannot collect sources/
+    )
     assert.equal(existsSync(outDir), false)
   })
 
@@ -208,14 +287,25 @@ describe('collectSources', () => {
       pauseMs: 0
     })
     assert.deepEqual(readFileSync(join(outDir, 'ffmpeg-9.0.2-source.tar.xz')), LGPL_SOURCE)
-    assert.ok(lines.some((line) => /flaky\.tar\.xz: .*trying again in 0s \(attempt 2 of 3\)/.test(line)))
-    assert.equal(readdirSync(outDir).some((name) => name.endsWith('.part')), false)
+    assert.ok(
+      lines.some((line) => /flaky\.tar\.xz: .*trying again in 0s \(attempt 2 of 3\)/.test(line))
+    )
+    assert.equal(
+      readdirSync(outDir).some((name) => name.endsWith('.part')),
+      false
+    )
   })
 
   test('a missing file fails and leaves no partial file', async () => {
     const outDir = join(root, 'out-404')
-    await assert.rejects(collect(manifest([{}, { sourceUrl: `${base}/missing.tar.gz` }]), outDir), /HTTP 404/)
-    assert.deepEqual(readdirSync(outDir).sort(), ['ffmpeg-9.0.2-build-tiny.sh', 'ffmpeg-9.0.2-source.tar.xz'])
+    await assert.rejects(
+      collect(manifest([{}, { sourceUrl: `${base}/missing.tar.gz` }]), outDir),
+      /HTTP 404/
+    )
+    assert.deepEqual(readdirSync(outDir).sort(), [
+      'ffmpeg-9.0.2-build-tiny.sh',
+      'ffmpeg-9.0.2-source.tar.xz'
+    ])
   })
 })
 
@@ -225,7 +315,10 @@ describe('main', () => {
     writeFileSync(path, JSON.stringify(manifest()))
     const lines = []
     const outDir = join(root, 'out-main')
-    assert.equal(await main([outDir, '--manifest', path], { ...quiet, log: (line) => lines.push(line) }), 0)
+    assert.equal(
+      await main([outDir, '--manifest', path], { ...quiet, log: (line) => lines.push(line) }),
+      0
+    )
     assert.equal(readdirSync(outDir).length, 3)
     assert.equal(lines.at(-1), `sources ready in ${outDir}`)
   })

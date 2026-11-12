@@ -187,6 +187,11 @@ so that each later piece can be tried on the laptop through the unpacked build a
 
 ### W4: installer, updates, and releases
 
+**Built** (branch `w4-installer`, ADR-0058): one per-user installer per chip, Open with for `.torrent` and `.nzb`,
+the uninstall clean-up, updates, the release script's Windows mode, `check-build.mjs`, and the kit's install and
+uninstall check. Not done, by decision: a `magnet:` handler (ADR-0058: no documented per-user way that leaves
+another app's links alone) and removing the helper on uninstall, which comes with the helper itself in W5.
+
 - **Installer:**
   - electron-builder's NSIS target for x64 and arm64: one installer per architecture, or one for both, chosen from
     electron-builder's docs;

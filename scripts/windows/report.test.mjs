@@ -321,6 +321,87 @@ describe('the app check', () => {
     assert.equal(describeApp(skipped), "arm64 Mergelane: skipped, this PC (x64) can't run arm64 programs")
   })
 
+  it('an installer: installed, opened and uninstalled cleanly, or what the uninstaller left', () => {
+    const clean = app({ kind: 'installer', status: 'ready', installSeconds: 12.5, seconds: 6, bridge: 'ready', leftovers: [], leftRunning: 0 })
+    assert.equal(
+      describeApp(clean),
+      'x64   Mergelane: installed in 12.5 s, window opened after 6 s, the browser bridge answered, uninstalled cleanly'
+    )
+    const messy = app({
+      kind: 'installer',
+      status: 'failed',
+      installSeconds: 11,
+      seconds: 6,
+      bridge: 'ready',
+      reason: 'the uninstaller left something behind',
+      leftovers: ['a shortcut is left in Desktop'],
+      leftRunning: 0
+    })
+    assert.equal(
+      describeApp(messy),
+      'x64   Mergelane: FAILED after 6 s: installed in 11 s, the uninstaller left something behind; after uninstalling: a shortcut is left in Desktop'
+    )
+    assert.equal(appVerdict(messy), 'must')
+    const notInstalled = app({ kind: 'installer', status: 'failed', installSeconds: 3, reason: 'the installer ended with code 2 and Mergelane.exe is not in its folder' })
+    assert.equal(
+      describeApp(notInstalled),
+      'x64   Mergelane: FAILED: installed in 3 s, the installer ended with code 2 and Mergelane.exe is not in its folder'
+    )
+    const already = app({ kind: 'installer', status: 'skipped', reason: 'Mergelane is already installed for you, so the kit does not install over it' })
+    assert.equal(appVerdict(already), 'info')
+  })
+
+  it('says the helpers carry the app\'s version, or which one does not', () => {
+    const good = app({
+      kind: 'installer',
+      status: 'ready',
+      installSeconds: 9,
+      seconds: 5,
+      bridge: 'ready',
+      version: '0.4.0',
+      helpers: [],
+      openWithMissing: [],
+      leftovers: [],
+      leftRunning: 0
+    })
+    assert.equal(
+      describeApp(good),
+      'x64   Mergelane: installed in 9 s, window opened after 5 s, the browser bridge answered, both helpers say 0.4.0, ' +
+        'Open with lists it for .torrent and .nzb, uninstalled cleanly'
+    )
+    const noOpenWith = app({
+      kind: 'installer',
+      status: 'failed',
+      installSeconds: 9,
+      seconds: 5,
+      bridge: 'ready',
+      openWithMissing: ['.nzb'],
+      reason: 'the installer did not add Mergelane to Open with for .nzb',
+      leftovers: ['Open with still lists Mergelane for .torrent'],
+      leftRunning: 0
+    })
+    assert.equal(
+      describeApp(noOpenWith),
+      'x64   Mergelane: FAILED after 5 s: installed in 9 s, the installer did not add Mergelane to Open with for .nzb; ' +
+        'after uninstalling: Open with still lists Mergelane for .torrent'
+    )
+    const stale = app({
+      kind: 'folder',
+      status: 'failed',
+      seconds: 5,
+      bridge: 'ready',
+      version: '0.4.0',
+      helpers: ["mergelane-daemon.exe says 'mergelane-daemon dev', expected 'mergelane-daemon 0.4.0'"],
+      reason: "mergelane-daemon.exe says 'mergelane-daemon dev', expected 'mergelane-daemon 0.4.0'",
+      leftRunning: 0
+    })
+    assert.equal(
+      describeApp(stale),
+      "x64   Mergelane: FAILED after 5 s: mergelane-daemon.exe says 'mergelane-daemon dev', expected 'mergelane-daemon 0.4.0'"
+    )
+    assert.equal(appVerdict(stale), 'must')
+  })
+
   it('reads a report from before the app check (no apps)', () => {
     const { lines } = summarize(report())
     assert.equal(lines.includes('Mergelane opened from the kit:'), false)

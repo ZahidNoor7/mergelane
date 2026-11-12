@@ -54,7 +54,8 @@ The protocol is the same; how the three find each other differs.
   - Edge: `Software\Microsoft\Edge\NativeMessagingHosts` (learn.microsoft.com);
   - Firefox: `Software\Mozilla\NativeMessagingHosts` (developer.mozilla.org).
   - Chromium, Brave and Vivaldi document no Windows key, so they aren't supported there yet.
-  - A run with its own `--user-data-dir` (the test kit) registers nothing. The uninstaller removes the keys (W4).
+  - A run with its own `--user-data-dir` (the test kit) registers nothing. The uninstaller removes the keys and the manifests
+    (`app/build/installer.nsh`, ADR-0058).
 - **Arguments:** Chrome and Edge also pass `--parent-window=<handle>` after the origin. The host ignores it.
 - **The pipe:** the app serves the bridge on a named pipe, `\\.\pipe\mergelane-browser-<16 hex digits>`: the
   SHA-256 of its folder's path with A-Z lowercased (`app/src/shared/browserPipe.ts`, `daemon/internal/nmhost/pipe.go`

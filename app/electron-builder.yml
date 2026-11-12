@@ -103,14 +103,25 @@ mac:
           CFBundleTypeExtensions: [nzb]
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
+# The Windows installer (W4, ADR-0058): one per chip, built one chip at a time (the release script and
+# `npm run build:win`), so each download carries only what its PC runs; the updater picks it by this name
+# (shared/releases.ts updateAssetName). One-click, per user: it installs into the user's own programs folder with
+# no administrator rights, and starts Mergelane after a normal install. build/installer.nsh cleans up on uninstall.
+nsis:
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+  oneClick: true
+  perMachine: false
+  # The elevate helper is for electron-updater and per-machine installs, which Mergelane doesn't use.
+  packElevateHelper: false
+  include: build/installer.nsh
 # Windows 10 and 11, x64 and arm64 (ADR-0053), built on the Mac with electron-builder.win.yml, which adds the
 # Windows-only file rules (docs/WINDOWS-PLAN.md). Unsigned for now: free signing is switched on later by config
 # only.
 win:
   executableName: Mergelane
-  target:
-    - target: nsis
-      arch: [x64, arm64]
+  # The chip comes from the command line (--x64, --arm64), one build per chip, so each installer holds one chip and
+  # is named for it. A chip list here would override that and pack both chips into one installer.
+  target: nsis
   extraResources:
     # Built by scripts/windows/build-helpers.mjs for each chip.
     - from: ../daemon/bin/win-${arch}/mergelane-daemon.exe

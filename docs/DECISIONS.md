@@ -1510,3 +1510,59 @@ built on the Mac like everything else (ADR-0053).
 - Every release attaches zlib's source and the Windows build script next to FFmpeg's (W4's release script).
 - The Windows programs are proven on the laptop: the kit's checklist downloads a video, which runs yt-dlp, Deno and
   FFmpeg.
+
+## ADR-0058: The Windows installer, updates and releases (W4)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W4.
+
+### Context
+
+Windows users need an installer that asks for no administrator password, updates from Settings › Updates as on the
+Mac, and the same draft release as the Mac files. CI is paused (ADR-0020), so the release is built on the Mac, and
+the builds stay unsigned until free signing is set up (ADR-0053).
+
+### Decision
+
+- **Installer:** electron-builder's NSIS target, one-click and per user (`perMachine: false`), so it installs into
+  the user's own programs folder without administrator rights and opens Mergelane afterwards. **One installer per
+  chip**, `Mergelane-<version>-<x64|arm64>-setup.exe`, each built alone with `--x64` or `--arm64`: a chip list under
+  `win.target` overrides those flags and packs both chips into one installer (seen on the first W4 build). The
+  elevate helper is left out (`packElevateHelper: false`): it serves per-machine installs and electron-updater,
+  which Mergelane doesn't use.
+- **Open with, never the default:** `build/installer.nsh` gives `.torrent` and `.nzb` Mergelane's own ProgIDs under
+  `HKCU\Software\Classes` and lists them in each extension's `OpenWithProgids`, which adds Mergelane to Open with
+  without changing the default app (Microsoft Learn, "How to Include an Application in the Open With Dialog Box";
+  "File Types" for the `SHChangeNotify` call). This matches the Mac's `LSHandlerRank: Alternate`.
+- **No `magnet:` handler yet.** Microsoft documents the "a choice, not the default" registration for protocols
+  (Default Programs, `RegisteredApplications`) only under `HKEY_LOCAL_MACHINE`, which needs administrator rights.
+  A per-user `HKCU\Software\Classes\magnet` key would take magnet links from a torrent app installed for all users.
+  Magnet links still reach Mergelane by pasting, the clipboard offer and the browser extension. An opt-in setting
+  can come later.
+- **Uninstall:** on a real uninstall (not the one an update runs, `${isUpdated}`), the hook removes what Mergelane
+  wrote for the user: the Open with entries, the browsers' native messaging keys and their manifests (ADR-0056),
+  `mergelane://`, and the Open at login entry. Settings and downloads stay, as the one-click uninstaller leaves app
+  data by default.
+- **Updates:** Settings › Updates picks the installer for this PC's chip by name (`shared/releases.ts`,
+  `updateAssetName`), checks its SHA-256 against `SHA256SUMS` as on the Mac (ADR-0036), starts it and quits. The
+  installer replaces the old version and opens the new one.
+- **Releases:** `scripts/release/local-release.mjs` and `release.yml` build, after the Mac app, the Windows helpers,
+  the Windows media tools, both installers, and run `scripts/windows/check-build.mjs`. The release attaches the
+  installers and the Windows sources (zlib and the Windows FFmpeg build script, ADR-0057), lists them in
+  `SHA256SUMS`, and the notes gain an "Install on Windows" section. `--mac-only` leaves Windows out of a dry run
+  only: a published release without the installers would offer Windows users an update they can't install.
+- **Checks:** on the Mac, `check-build.mjs` reads what can't be run there: each installer exists, every program in
+  each chip's app is built for that chip (PE header), the app's `package.json` says the version, and
+  `Mergelane.exe`'s Electron fuses match `electron-builder.yml` (read with `@electron/fuses`). On the laptop, the
+  test kit installs each installer silently into its own folder, opens the app, checks the window, the browser
+  bridge, the helpers' versions and the Open with entries, uninstalls it and checks nothing is left.
+
+### Consequences
+
+- **Unsigned:** SmartScreen may stop the installer until the user clicks **More info › Run anyway**. Smart App
+  Control **On** blocks it with no way round it. The README and the release notes say so and never tell users to
+  turn Smart App Control off.
+- The helpers' version stamp can't be checked on the Mac: `go version -m` shows no `-ldflags` for these `-trimpath`
+  builds, and a Windows program can't run here. The kit runs the helpers on the laptop instead.
+- A release takes about ten minutes more (two Windows FFmpeg builds and two installers).
+- Only the laptop can prove the install, SmartScreen's prompt, Open with, the uninstall and the update itself (which
+  needs two Windows releases).

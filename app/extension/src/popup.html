@@ -12,8 +12,9 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 12px 14px;
-        border-bottom: 0.5px solid var(--border);
+        min-height: 52px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--rule);
       }
       header img {
         width: 22px;
@@ -21,62 +22,70 @@
       }
       header strong {
         flex: 1;
-        font-size: 14px;
+        font-size: 15px;
+        font-weight: 680;
+        letter-spacing: -0.01em;
       }
       #status {
         display: flex;
         align-items: center;
         gap: 6px;
-        font: 11px var(--mono);
-        color: var(--text2);
+        font-size: 12px;
+        font-weight: 520;
+        color: var(--text-2);
       }
-      #site-host {
-        font: 500 12.5px var(--mono);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #closed {
-        padding: 16px 14px;
+      main {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        border-bottom: 0.5px solid var(--border);
+        gap: 12px;
+        padding: 12px;
       }
+      /* Blocks that say something and offer one action: a card with room around the words. */
+      #closed,
       #video {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 12px 14px;
-        border-bottom: 0.5px solid var(--border);
+        gap: 4px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: var(--card);
+        box-shadow: inset 0 0 0 1px var(--border);
       }
-      #video h2,
-      #video p {
-        margin: 0;
+      #closed .muted {
+        font-size: 12.5px;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 8px;
+      }
+      #video-title {
+        font-weight: 650;
+        letter-spacing: -0.005em;
       }
       #video-name {
         font-size: 12.5px;
+        color: var(--text-2);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      #video-send {
+        width: 100%;
+        margin-top: 8px;
+      }
       #video-status {
+        margin-top: 4px;
         font-size: 12px;
       }
       #video-status:empty {
         display: none;
       }
-      #media {
-        padding: 12px 14px 6px;
-        border-bottom: 0.5px solid var(--border);
-      }
-      #media h2 {
-        margin: 0 0 4px;
-      }
       #media-list {
         list-style: none;
-        margin: 0;
-        padding: 0;
+        margin: 0 -16px;
+        padding: 0 16px;
         /* About four and a half rows, so a longer list shows that it scrolls. */
         max-height: 236px;
         overflow-y: auto;
@@ -86,27 +95,29 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 8px 0;
+        padding: 10px 0;
       }
       #media-list li + li {
-        border-top: 0.5px solid var(--border);
+        border-top: 1px solid var(--rule);
       }
       #media-list .grow {
         gap: 1px;
       }
+      /* The app's tag (ui/badge.tsx): a small capsule on the sunken fill. */
       .kind {
         flex-shrink: 0;
-        min-width: 40px;
+        min-width: 44px;
         height: 20px;
-        padding: 0 6px;
+        padding: 0 8px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 0.5px solid var(--strong);
-        border-radius: 5px;
-        font: 600 10.5px var(--mono);
-        letter-spacing: 0.02em;
-        color: var(--text2);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--sunken);
+        font-size: 11.5px;
+        font-weight: 580;
+        color: var(--text-2);
       }
       .media-host,
       .media-path {
@@ -115,63 +126,64 @@
         white-space: nowrap;
       }
       .media-host {
-        font: 500 12.5px var(--mono);
+        font: 12.5px var(--mono);
       }
       .media-path {
         font: 11.5px var(--mono);
+        color: var(--text-3);
       }
-      .media-send {
-        flex-shrink: 0;
+      .media-send:not(#video-send) {
         /* Download, Sending… and Sent all fit, so the row never shifts. */
         min-width: 88px;
-        transition: transform 0.1s ease-out;
-      }
-      #video-send {
-        width: 100%;
-      }
-      /* Answers the press itself, not its release. */
-      .media-send:active:not([aria-disabled='true']) {
-        transform: scale(0.97);
+        height: 28px;
+        padding: 0 12px;
+        font-size: 12.5px;
       }
       .media-send[aria-disabled='true'] {
         cursor: default;
       }
-      .media-send[aria-busy='true'] {
-        color: var(--text2);
+      .media-send[aria-disabled='true']:hover {
+        background: var(--secondary);
       }
-      #video-send[aria-busy='true'] {
-        color: var(--accent-on);
+      .media-send[aria-busy='true'] {
+        color: var(--text-2);
+      }
+      #video-send[aria-busy='true'],
+      #video-send[aria-busy='true']:hover {
+        background: var(--color-accent);
+        color: var(--color-accent-onsolid);
         opacity: 0.75;
       }
-      .media-send.sent {
-        border-color: transparent;
+      .media-send.sent,
+      .media-send.sent:hover {
         background: transparent;
-        color: var(--on);
+        box-shadow: none;
+        color: var(--color-accent);
       }
       #media-status {
-        margin: 0;
+        padding: 0 4px;
         font-size: 12px;
       }
-      #media-status:not(:empty) {
-        margin: 2px 0 6px;
+      #media-status:empty {
+        display: none;
       }
-      @media (prefers-reduced-motion: reduce) {
-        .media-send {
-          transition: none;
-        }
-        .media-send:active:not([aria-disabled='true']) {
-          transform: none;
-          opacity: 0.75;
-        }
+      #site-host {
+        font: 12.5px var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      label.row {
+        cursor: default;
       }
       footer {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 6px 6px 6px 14px;
-        background: var(--bg2);
+        padding: 6px 6px 6px 16px;
+        border-top: 1px solid var(--rule);
         font-size: 11.5px;
-        color: var(--text3);
+        color: var(--text-3);
       }
       footer span {
         flex: 1;
@@ -187,57 +199,63 @@
       </div>
     </header>
 
-    <div class="notice" id="access" hidden>
-      Mergelane needs access to websites to send your sign-in with each download and to find videos
-      on pages.
-      <button type="button" class="primary" id="grant">Allow access</button>
-    </div>
-
-    <div id="closed" hidden>
-      <div class="title">Mergelane isn’t open</div>
-      <div class="muted">Downloads stay in the browser until it is.</div>
-      <div style="display: flex; align-items: center; gap: 12px">
-        <button type="button" id="open-mergelane">Open Mergelane</button>
-        <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
-          >Get Mergelane</a
-        >
+    <main>
+      <div class="notice" id="access" hidden>
+        Mergelane needs access to websites to send your sign-in with each download and to find
+        videos on pages.
+        <button type="button" class="primary" id="grant">Allow access</button>
       </div>
-    </div>
 
-    <section id="video" aria-labelledby="video-title" hidden>
-      <h2 class="title" id="video-title">YouTube video</h2>
-      <p id="video-name"></p>
-      <button type="button" class="primary media-send" id="video-send">
-        Send this video to Mergelane
-      </button>
-      <p class="muted" id="video-status" role="status" aria-atomic="true"></p>
-    </section>
+      <div id="closed" hidden>
+        <div class="title">Mergelane isn’t open</div>
+        <div class="muted">Downloads stay in the browser until it is.</div>
+        <div class="actions">
+          <button type="button" id="open-mergelane">Open Mergelane</button>
+          <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
+            >Get Mergelane</a
+          >
+        </div>
+      </div>
 
-    <section id="media" aria-labelledby="media-title" hidden>
-      <h2 class="title" id="media-title">Videos on this page</h2>
-      <ul id="media-list"></ul>
-      <p class="muted" id="media-status" role="status" aria-atomic="true"></p>
-    </section>
+      <section id="video" aria-labelledby="video-title" hidden>
+        <h2 class="title" id="video-title">YouTube video</h2>
+        <p id="video-name"></p>
+        <button type="button" class="primary media-send" id="video-send">
+          Send this video to Mergelane
+        </button>
+        <p class="muted" id="video-status" role="status" aria-atomic="true"></p>
+      </section>
 
-    <label class="row" for="capture">
-      <span class="grow">
-        <span class="title">Capture downloads</span>
-        <span class="muted" id="capture-hint"></span>
-      </span>
-      <input type="checkbox" role="switch" class="switch" id="capture" />
-    </label>
+      <section class="group" id="media" aria-labelledby="media-title" hidden>
+        <h2 class="group-title" id="media-title">Videos on this page</h2>
+        <div class="card">
+          <ul id="media-list"></ul>
+        </div>
+        <p class="muted" id="media-status" role="status" aria-atomic="true"></p>
+      </section>
 
-    <label class="row" for="site" id="site-row" hidden>
-      <span class="grow">
-        <span id="site-host"></span>
-        <span class="muted" id="site-hint"></span>
-      </span>
-      <input type="checkbox" role="switch" class="switch" id="site" />
-    </label>
+      <div class="card">
+        <label class="row" for="capture">
+          <span class="grow">
+            <span class="title">Capture downloads</span>
+            <span class="muted" id="capture-hint"></span>
+          </span>
+          <input type="checkbox" role="switch" class="switch" id="capture" />
+        </label>
+
+        <label class="row" for="site" id="site-row" hidden>
+          <span class="grow">
+            <span id="site-host"></span>
+            <span class="muted" id="site-hint"></span>
+          </span>
+          <input type="checkbox" role="switch" class="switch" id="site" />
+        </label>
+      </div>
+    </main>
 
     <footer>
       <span>Right-click any link › Download with Mergelane</span>
-      <button type="button" class="ghost" id="options">Options</button>
+      <button type="button" class="ghost small" id="options">Options</button>
     </footer>
     <script src="popup.js"></script>
   </body>

@@ -127,6 +127,47 @@ export function restoreCommands(links) {
 /** A link as the report names it: "iPhone USB (en7)". */
 export const linkLabel = (link) => (link.kind ? `${link.kind} (${link.name})` : link.name)
 
+/**
+ * Each device's hardware port as System Settings names it ("Wi-Fi", "iPhone USB"), from
+ * `networksetup -listallhardwareports` (man networksetup: "Displays list of all hardware ports"). The helper
+ * doesn't send a link's kind, so the suite asks macOS itself.
+ */
+export function hardwarePorts(text) {
+  const ports = {}
+  let port = null
+  for (const line of text.split('\n')) {
+    const name = line.match(/^Hardware Port: (.+)$/)
+    if (name) port = name[1].trim()
+    const device = line.match(/^Device: (\S+)$/)
+    if (device && port) {
+      ports[device[1]] = port
+      port = null
+    }
+  }
+  return ports
+}
+
+/** How to take a network away and bring it back, in the words of its kind. */
+export function unplugSteps(link) {
+  const kind = link.kind ?? ''
+  if (/wi-?fi|airport/i.test(kind)) {
+    return {
+      off: 'Turn Wi-Fi off (Wi-Fi in the menu bar)',
+      on: 'Turn Wi-Fi back on and wait until it joins your network'
+    }
+  }
+  if (/iphone|ipad|android|usb|rndis|modem/i.test(kind)) {
+    return {
+      off: `Unplug the ${kind} cable`,
+      on: `Plug the ${kind} cable back in (keep the phone's hotspot on)`
+    }
+  }
+  if (/ethernet|lan|thunderbolt/i.test(kind)) {
+    return { off: `Unplug the ${kind} cable`, on: `Plug the ${kind} cable back in` }
+  }
+  return { off: `Disconnect ${linkLabel(link)}`, on: `Reconnect ${linkLabel(link)}` }
+}
+
 /** The suite's summary: one line per check, and a verdict. */
 export function renderReport(results, facts) {
   const icon = { PASS: 'PASS', FAIL: 'FAIL', SKIP: 'skip', INFO: 'info' }
@@ -345,7 +386,11 @@ export async function runSuite(mac, options = {}) {
     )
     return { results, facts }
   }
-  const { links } = await mac.helper('links')
+  const ports = hardwarePorts((await mac.run('networksetup', ['-listallhardwareports'])).stdout)
+  const links = (await mac.helper('links')).links.map((l) => ({
+    ...l,
+    kind: l.kind ?? ports[l.name]
+  }))
   const up = links.filter((l) => l.up && l.state === 'up')
   facts.links = up.map(linkLabel)
   if (up.length < 2) {
@@ -412,7 +457,11 @@ export async function runSuite(mac, options = {}) {
     record(
       'System merge turns on',
       on && routes.once ? 'PASS' : 'FAIL',
-      on ? `${routes.count} capture routes` : 'it never reported on',
+      on
+        ? routes.once
+          ? 'both capture routes in place'
+          : `capture routes wrong (${routes.count})`
+        : 'it never reported on',
       started
     )
     if (!on) return { results, facts }
@@ -500,9 +549,8 @@ export async function runSuite(mac, options = {}) {
       const running = Promise.all(
         repeat(FILES.ovh, DOWNLOADS.failover).map((f) => mac.download(f, { seconds: 120 }))
       )
-      await mac.ask(
-        `Disconnect ${label} now (unplug it, turn its Wi-Fi off, or stop the hotspot), then press Enter.`
-      )
+      const steps = unplugSteps(link)
+      await mac.ask(`${steps.off} now, then press Enter.`)
       started = mac.now()
       const gone = await until(
         mac,
@@ -528,7 +576,7 @@ export async function runSuite(mac, options = {}) {
         ].join(', '),
         started
       )
-      await mac.ask(`Reconnect ${label}, then press Enter.`)
+      await mac.ask(`${steps.on}, then press Enter.`)
       started = mac.now()
       const back = await until(
         mac,

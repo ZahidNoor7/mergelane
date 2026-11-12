@@ -1149,7 +1149,9 @@ until the owner overrides it.
     most 16 KiB). A fuzz test covers it, and found one bug before release (a name ending in two dots).
   - **Flows without a name** (plain HTTP, QUIC on UDP 443, other ports) belong to the site last seen at their
     address within 10 minutes, or else to the address alone. Other UDP (DNS, torrents) is not kept on one network.
-  - **Keeping it:** a site's first flow is balanced as usual. Its later flows take the same link while that link can
+  - **Keeping it** (the first burst fixed 2026-11-12, found by the M3.8 run): the link is chosen and made the site's
+    in one step under the site table's lock (`Sticky.acquire` around `Scheduler.AcquireSticky`), so connections a
+    browser opens to a new site at once all take the first one's link. A site's first flow is balanced as usual. Its later flows take the same link while that link can
     carry them: it has the address family, it isn't in a failure cooldown, and it isn't worse than the best link
     (`Scheduler.AcquireSticky`). A failover moves the site to the link that worked. A site forgets its link after
     10 minutes without a new flow. At most 4096 sites and addresses are kept; the least recently used go first.

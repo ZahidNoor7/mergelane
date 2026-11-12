@@ -119,6 +119,29 @@ func (s *Sticky) Link(site string) string {
 	return e.link
 }
 
+// acquire picks the link for a site's next flow and, in the same step, makes it the site's link: the
+// site's link when it can carry the flow, otherwise whatever choose balances to. Holding the lock across
+// the choice is what keeps a site's first burst together: a browser opens several connections to a new
+// site at once, and without it each would be balanced before the first had claimed a link. choose is the
+// scheduler's AcquireSticky, which never calls back here, so the two locks can't deadlock.
+func (s *Sticky) acquire(site string, choose func(prefer string) *Slot) *Slot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	prefer := ""
+	if e, ok := s.sites[site]; ok && now.Sub(e.used) < StickyIdle {
+		prefer = e.link
+	}
+	sl := choose(prefer)
+	if sl != nil && s.On() {
+		s.sites[site] = &stickySite{link: sl.key, used: now}
+		if len(s.sites) > stickyMax {
+			pruneOldest(s.sites, func(e *stickySite) time.Time { return e.used })
+		}
+	}
+	return sl
+}
+
 // Remember records that a site's flow went out over link: its next flows take the same one.
 func (s *Sticky) Remember(site, link string) {
 	if site == "" || link == "" || !s.On() {

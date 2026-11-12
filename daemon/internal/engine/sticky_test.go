@@ -172,6 +172,45 @@ func TestAcquireStickyKeepsTheSiteOnItsLink(t *testing.T) {
 	}
 }
 
+// A browser opens several connections to a new site at once. They must all land on one link: the
+// first one's choice is the site's before the others choose (found on the owner's Mac, M3.8).
+func TestASitesFirstBurstStaysTogether(t *testing.T) {
+	s := NewScheduler([]nics.Nic{nic("A", "10.0.0.1", 1), nic("B", "10.0.0.2", 1), nic("C", "10.0.0.3", 1)})
+	for _, sl := range s.slots {
+		s.SetState(sl, Fam4, true)
+	}
+	sticky := NewSticky(true)
+	const burst = 32
+	got := make(chan *Slot, burst)
+	start := make(chan struct{})
+	for range burst {
+		go func() {
+			<-start
+			got <- sticky.acquire("example.com", func(prefer string) *Slot { return s.AcquireSticky(Fam4, nil, prefer) })
+		}()
+	}
+	close(start)
+	first := <-got
+	for range burst - 1 {
+		if sl := <-got; sl != first {
+			t.Fatalf("the burst split: %s and %s", first.Name, sl.Name)
+		}
+	}
+	if sticky.Link("example.com") != first.Key() {
+		t.Fatal("the site's link isn't the burst's")
+	}
+	// Off: acquire still picks, but keeps nothing.
+	sticky.SetOn(false)
+	if sl := sticky.acquire("example.org", func(string) *Slot { return s.AcquireFor(Fam4, nil) }); sl == nil || sticky.Sites() != 0 {
+		t.Fatal("off kept a site, or picked nothing")
+	}
+	// No link at all: nothing kept.
+	sticky.SetOn(true)
+	if sl := sticky.acquire("example.net", func(string) *Slot { return nil }); sl != nil || sticky.Link("example.net") != "" {
+		t.Fatal("a site was kept without a link")
+	}
+}
+
 func TestDialSiteFailsOverAndMovesTheSite(t *testing.T) {
 	lo := loopbackNic(t)
 	ln := acceptingListener(t)

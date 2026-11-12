@@ -13,6 +13,13 @@ All notable changes to Mergelane are recorded here. The format follows
   them. A site moves only if its network stops working. Turn it off in Networks › System merge › Keep each site on
   one network. Mergelane's own downloads still use every network. Update the helper when Mergelane asks.
 
+### Changed
+
+- **The browser extension looks like Mergelane.** Its popup and options page now use the app's colours, fonts,
+  switches and buttons, with settings grouped the way Settings groups them. They follow your browser's light or
+  dark mode, show a clear outline around whatever the keyboard is on, use stronger lines when your Mac's Increase
+  Contrast is on, and keep still when Reduce Motion is on.
+
 ## [0.3.1] - 2026-11-12
 
 New download can start a download later or put it in the queue, each network can be kept on standby, the helper

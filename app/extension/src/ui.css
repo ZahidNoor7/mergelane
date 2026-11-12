@@ -1,53 +1,90 @@
-/* The app's tokens (src/renderer/src/assets/main.css), so the extension looks like Mergelane. */
+/* The app's look, so the extension reads as the same product: the Porcelain theme's seeds (the default,
+   src/shared/themes.ts) and the tokens the app derives from them (src/renderer/src/assets/main.css), with
+   the switch, buttons, field, tag and settings groups drawn as the app's ui/ components and
+   settingsParts.tsx draw them. Light or dark follows the browser (ADR-0049). */
+
 /* The app's fonts (OFL 1.1; their licences are copied in with them, see the app's assets/fonts/README.md). */
 @font-face {
   font-family: 'Archivo';
+  font-style: normal;
   font-weight: 100 900;
   font-stretch: 62% 125%;
+  font-display: swap;
   src: url('fonts/Archivo-Variable.woff2') format('woff2');
 }
 @font-face {
   font-family: 'Fragment Mono';
+  font-style: normal;
   font-weight: 400;
+  font-display: swap;
   src: url('fonts/FragmentMono-Regular.woff2') format('woff2');
 }
 
+/* Porcelain's seeds, and what main.css keeps the same in every theme. */
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --bg2: #fafafa;
-  --input: #ffffff;
-  --text: #1d1d1f;
-  --text2: #6e6e73;
-  --text3: #737377;
-  --border: #e0e0e2;
-  --strong: #b9b9bb;
-  --on: #1f8a70;
-  /* Darker than the app's #d97706, so white text on it reads at WCAG AA. */
-  --accent: #b45309;
-  --accent-on: #ffffff;
-  --warn: #92400e;
-  --warn-bg: #fef3c7;
-  --warn-border: #fde68a;
-  --mono: 'Fragment Mono', ui-monospace, Menlo, monospace;
+  --bg: #fbfcfd;
+  --card: #ffffff;
+  --text: #101b22;
+  --color-accent: #2853c7;
+  --color-accent-onsolid: #ffffff;
+  --color-warning: #8f5300;
+  --color-warning-bg: #fbf1df;
+  --color-warning-border: #eed7a8;
+  --shadow-raise: 0 1px 2px rgb(16 20 28 / 0.14), 0 0 0 0.5px rgb(16 20 28 / 0.1);
+  --line: 14%;
+  --line-subtle: 8%;
+  --ink-2: 76%;
+  --ink-3: 63%;
+  --thumb-mix: 0%;
+  --sans:
+    'Archivo', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial,
+    sans-serif;
+  --mono: 'Fragment Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1e20;
-    --bg2: #202325;
-    --input: #242729;
-    --text: #eae7e2;
-    --text2: #a9adb2;
-    --text3: #8d9196;
-    --border: #2b2f33;
-    --strong: #3a3f44;
-    --on: #4ea89a;
-    --accent: #d8a44c;
-    --accent-on: #1b1408;
-    --warn: #e8bb6d;
-    --warn-bg: #33291a;
-    --warn-border: #54421f;
+    --bg: #151d22;
+    --card: #1b252b;
+    --text: #e5edf1;
+    --color-accent: #86a8ff;
+    --color-accent-onsolid: #0c1216;
+    --color-warning: #f0b35e;
+    --color-warning-bg: #33260f;
+    --color-warning-border: #5a4219;
+    --shadow-raise: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.08);
+    --thumb-mix: 62%;
   }
+}
+/* The Mac's Increase Contrast: lines and secondary ink as strong as the app's High contrast theme. */
+@media (prefers-contrast: more) {
+  :root {
+    --line: 48%;
+    --line-subtle: 30%;
+    --ink-2: 90%;
+    --ink-3: 82%;
+  }
+}
+
+/* Derived from the seeds exactly as main.css derives them. */
+:root {
+  --sunken: color-mix(in oklab, var(--text) 4.5%, var(--bg));
+  --secondary: color-mix(in oklab, var(--text) 5%, var(--bg));
+  --hover: color-mix(
+    in oklab,
+    var(--color-accent) 6%,
+    color-mix(in oklab, var(--text) 3%, var(--bg))
+  );
+  --text-2: color-mix(in oklab, var(--text) var(--ink-2), var(--bg));
+  --text-3: color-mix(in oklab, var(--text) var(--ink-3), var(--bg));
+  --border: color-mix(in oklab, var(--text) var(--line), var(--bg));
+  --rule: color-mix(in oklab, var(--text) var(--line-subtle), var(--bg));
+  /* A field's or a switch's edge must reach 3:1, so it is --control, not a decorative line. */
+  --control: color-mix(in oklab, var(--text) 52%, var(--bg));
+  --focus: var(--color-accent);
+  --switch-off: color-mix(in oklab, var(--text) 13%, var(--bg));
+  --switch-thumb-off: color-mix(in oklab, var(--text) var(--thumb-mix), var(--card));
+  --selected: color-mix(in oklab, var(--color-accent) 15%, var(--bg));
 }
 
 * {
@@ -58,68 +95,118 @@ body {
   background: var(--bg);
   color: var(--text);
   font:
-    13px/1.45 Archivo,
-    -apple-system,
-    'Helvetica Neue',
+    13px/1.45 var(--sans),
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+::selection {
+  background: var(--selected);
+  color: var(--text);
 }
 [hidden] {
   display: none !important;
 }
-a {
-  color: var(--accent);
+h1,
+h2,
+p {
+  margin: 0;
 }
 .mono {
   font-family: var(--mono);
 }
 .muted {
-  color: var(--text2);
+  color: var(--text-2);
 }
 .title {
   font-size: 13.5px;
   font-weight: 600;
 }
 
+/* A link: the accent's ink, underlined while pointed at (the app's link button). */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  text-underline-offset: 4px;
+  border-radius: 4px;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* SettingsGroup: a sentence-case title over a rounded card of hairline rows. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-title {
+  padding: 0 4px;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* SettingRow: label and hint on the left, the control on the right, a hairline between rows. */
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border-bottom: 0.5px solid var(--border);
+  gap: 10px 16px;
+  padding: 12px 0;
+}
+.row + .row,
+.card > * + * {
+  border-top: 1px solid var(--rule);
 }
 .grow {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
+.grow .muted {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
-  background: var(--text3);
+  background: var(--control);
   flex-shrink: 0;
 }
 .dot.ok {
-  background: var(--on);
+  background: var(--color-accent);
 }
 .dot.warn {
-  background: var(--accent);
+  background: var(--color-warning);
 }
 
-/* A real checkbox under the switch look, so keyboards and screen readers still work. */
+/* The app's switch (ui/switch.tsx), on a real checkbox so keyboards and screen readers still work. */
 .switch {
   appearance: none;
   margin: 0;
   flex-shrink: 0;
+  position: relative;
   width: 38px;
   height: 22px;
   border-radius: 999px;
-  background: var(--strong);
-  position: relative;
-  cursor: pointer;
-  transition: background 0.15s;
+  background: var(--switch-off);
+  box-shadow: inset 0 0 0 1px var(--control);
+  cursor: default;
+  transition:
+    background-color 150ms,
+    box-shadow 150ms;
 }
 .switch::after {
   content: '';
@@ -129,75 +216,148 @@ a {
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s;
+  background: var(--switch-thumb-off);
+  box-shadow: var(--shadow-raise);
+  transition:
+    translate 200ms cubic-bezier(0.25, 1, 0.5, 1),
+    width 200ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 .switch:checked {
-  background: var(--on);
+  background: var(--color-accent);
+  box-shadow: none;
 }
 .switch:checked::after {
-  transform: translateX(16px);
+  background: var(--color-accent-onsolid);
+  translate: 16px 0;
+}
+/* Pressed, the thumb stretches toward where it is going, as the app's does. */
+.switch:active:not(:disabled)::after,
+label:active > .switch:not(:disabled)::after {
+  width: 20px;
+}
+.switch:checked:active:not(:disabled)::after,
+label:active > .switch:checked:not(:disabled)::after {
+  translate: 12px 0;
 }
 .switch:disabled {
   opacity: 0.45;
-  cursor: default;
+  cursor: not-allowed;
 }
-.switch:focus-visible,
-button:focus-visible,
-input:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--accent);
+label.row:has(.switch:disabled) {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
+/* The app's capsule buttons (ui/button.tsx): secondary by default, primary and ghost by class. */
 button {
   font: inherit;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 580;
   height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 0.5px solid var(--border);
-  background: var(--bg2);
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--secondary);
   color: var(--text);
-  cursor: pointer;
-  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: default;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out,
+    scale 100ms ease-out,
+    opacity 100ms ease-out;
+}
+button:hover {
+  background: var(--hover);
+}
+/* Answers the press itself, not its release. */
+button:active:not(:disabled, [aria-disabled='true']) {
+  scale: 0.96;
+}
+button:disabled {
+  opacity: 0.45;
 }
 button.primary {
-  border: none;
-  background: var(--accent);
-  color: var(--accent-on);
-  font-weight: 600;
+  background: var(--color-accent);
+  color: var(--color-accent-onsolid);
+  box-shadow: none;
+}
+button.primary:hover {
+  background: color-mix(in oklab, var(--color-accent) 88%, transparent);
 }
 button.ghost {
-  border: none;
   background: transparent;
-  color: var(--text2);
+  box-shadow: none;
+  color: var(--text-2);
+}
+button.ghost:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+button.small {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12.5px;
 }
 
+/* The app's field (ui/input.tsx): a capsule with a 3:1 edge. */
 input[type='text'],
 input[type='number'] {
   font: inherit;
+  font-size: 13px;
   height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 0.5px solid var(--strong);
-  background: var(--input);
+  min-width: 0;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--card);
   color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--control);
+}
+input::placeholder {
+  color: var(--text-3);
+}
+input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
+/* A warning, in the app's warning colours. */
 .notice {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 12px 14px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 0.5px solid var(--warn-border);
-  background: var(--warn-bg);
-  color: var(--warn);
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-warning-bg);
+  box-shadow: inset 0 0 0 1px var(--color-warning-border);
+  color: var(--color-warning);
   font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* As main.css does: nothing slides or stretches, and the pressed state still shows, as a dim. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  button:active:not(:disabled, [aria-disabled='true']) {
+    scale: none;
+    opacity: 0.75;
+  }
 }

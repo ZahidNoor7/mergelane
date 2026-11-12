@@ -694,6 +694,15 @@ Last updated: 2026-11-11
     extension's manifest and `background.ts` name: it exists, at its size, with transparency, and the off icons are
     grey. It fails on the old icons. Full Vitest: 394 passed. Smoke and extension: 720 passed, 1 skipped. The built
     Chrome and Firefox extensions carry the new files, and screenshots of the popup and options page show them.
+- **The extension restyled to match the app** (branch `extension-restyle`, owner-approved, ADR-0049). The popup and
+  options page use Porcelain's colours (light and dark from the browser), the app's switch, capsule buttons, field
+  and tag, and Settings' groups: sentence-case titles over rounded cards of hairline rows. Focus rings on every
+  control, stronger lines with Increase Contrast, no motion with Reduce Motion. Only `popup.html`, `options.html`
+  and `ui.css` changed; every id, text, role and label is kept.
+  - **Tests:** no extension code changed, so there is nothing new for Vitest to cover. Extension e2e
+    (`--grep @extension`): 17 passed. Lint, format and typecheck clean. Screenshots of both pages, light and dark,
+    compared with Settings in the app. `~/Downloads` unchanged.
+  - **Not checked:** Firefox. The CSS used is supported from Firefox 121, the extension's minimum, per MDN.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

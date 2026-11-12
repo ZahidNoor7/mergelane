@@ -649,6 +649,21 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **M3.8 on Wi-Fi + iPhone USB: every check passes** (2026-11-12, 0.3.3 app and helper). The third run
+  (`--skip sites,vpn,app,sleep`, about 96 MB) passed:
+  - System merge turning on;
+  - unplugging and reconnecting the iPhone and Wi-Fi, each with merging staying on;
+  - the crash: `sudo kill -9` from a second window; launchd started a new helper, which came up off with no routes
+    left, and the internet worked;
+  - the put-back.
+
+  With the second run's passes (sites spreading, sticky 98%/100%, Mergelane's own downloads, sleep and wake), every
+  check has passed on this hardware. The reports are in `local-ci-logs/` (not in git).
+  - **Seen:** after a network goes, a new connection fails for about 2 s and then works (macOS and the helper
+    moving over). Connections already on the lost network break, as CLAUDE.md's honest limits say.
+  - **Not yet tested, for want of hardware:** Ethernet, Android USB, and a VPN turning on and off. M3.8's exit
+    criterion also names Ethernet and a VPN, so it stays open until they can be run:
+    `node scripts/hardware/hardware.mjs --skip sites,app` covers them in one run.
 - **M3.8, second run** (2026-11-12, 0.3.3 app and helper, Wi-Fi + iPhone USB, `--skip vpn`). Passed:
   - merge on;
   - spread with sticky off (50/50);

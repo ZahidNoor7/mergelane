@@ -650,6 +650,11 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **Liquid Glass Clear made clearer** (branch `glass-clearer`, owner's request with a screenshot). In `main.css`, the
+  light layers go from 0.12/0.28/0.42/0.5 to 0.06/0.18/0.3/0.42 (window, sidebar, pane, cards), and the dark ones
+  from 0.34/0.42/0.5 to 0.24/0.3/0.38. Tinted, solid and the macOS material (`under-window`) are unchanged. Tests:
+  `glass.spec` passed, and theme and surface Vitest 52 passed. A screenshot can't show the desktop behind the
+  window, so the owner judges the look in the app.
 - **Details pane can be closed** (same branch, owner's screenshot). The design's wide layout shows the details
   whenever a download is selected and gave no way to close them. The pane now has a × (`Inspector`'s `onClose`,
   "Close details") and Esc, when no rows are ticked, closes it (`closeDetails` clears the selection), with focus

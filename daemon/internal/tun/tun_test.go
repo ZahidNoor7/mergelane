@@ -53,3 +53,24 @@ func TestCmdErrorPutsTheReasonFirst(t *testing.T) {
 		t.Errorf("no output: got %q", err)
 	}
 }
+
+// A platform that can't open the adapter yet (Windows until W5) sets errUnsupported. On and Warm
+// must then fail with it before anything else runs: no stale-route cleanup, no adapter, no route.
+func TestOnAndWarmRefuseWhereThePlatformCannotOpen(t *testing.T) {
+	old, oldKeep, oldHook := errUnsupported, keepDevice, staleHook
+	defer func() { errUnsupported, keepDevice, staleHook = old, oldKeep, oldHook }()
+	errUnsupported = errors.New("not on this platform yet")
+	keepDevice = true // so Warm tries to open too
+	staleHook = func() { t.Error("cleanup ran before the platform check") }
+
+	tn := New(nil)
+	if err := tn.On(); err != errUnsupported {
+		t.Errorf("On = %v, want %v", err, errUnsupported)
+	}
+	if err := tn.Warm(); err != errUnsupported {
+		t.Errorf("Warm = %v, want %v", err, errUnsupported)
+	}
+	if tn.IsOn() || tn.Name() != "" {
+		t.Errorf("after a refusal: on %v, adapter %q; want off and none", tn.IsOn(), tn.Name())
+	}
+}

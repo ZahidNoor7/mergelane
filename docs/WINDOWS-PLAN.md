@@ -115,7 +115,7 @@ so that each later piece can be tried on the laptop through the unpacked build a
 | PR | Branch | What |
 |---|---|---|
 | a | `w1-test-kit` | The Windows test kit (`scripts/windows/`, ADR-0054, `docs/WINDOWS-TESTING.md`) and the Go test programs for the packages that already build for Windows. |
-| b | `w1-daemon-builds` | The daemon and the browser-bridge helper build and vet for `windows/amd64` and `arm64`: Net Merge's Windows files re-imported (`docs/UPSTREAM.md`), macOS-only tests behind build tags, and every package in the kit. |
+| b | `w1-daemon-builds` | The daemon and the browser-bridge helper build and vet for `windows/amd64` and `arm64`: Net Merge's Windows files re-imported (`docs/UPSTREAM.md`), macOS-only tests behind build tags, and every package in the kit. The Wintun engine (`tun_windows.go`) waits for W5: until then the Windows daemon refuses `run`, `install` and `uninstall`, and never creates an adapter or a route. |
 | g | `w1-unpacked-build` | `electron-builder --win --dir` for both chips on the Mac, koffi's `win32` builds kept; a kit step that starts it with a test profile and checks that it is ready. |
 | c | `w1-networks` | The network list on Windows: kinds, and virtual adapters hidden. |
 | d | `w1-pinning` | Pinning download sockets with `IP_UNICAST_IF` / `IPV6_UNICAST_IF`. First check, from Node's and Microsoft's docs, whether Node on Windows can take a socket made outside it (the macOS approach); the answer decides the design, in an ADR. |

@@ -655,6 +655,20 @@ Last updated: 2026-11-11
   - **Not proven:** the PowerShell script has not run anywhere yet; its first run is on the owner's laptop.
   - **Next:** the owner runs the kit and pastes the report (it answers the chip and Smart App Control questions);
     then W1b, the daemon building for Windows.
+- **W1, pull request b: the daemon builds for Windows** (branch `w1-daemon-builds`, 2026-11-12).
+  - **Builds and checks:** `go build`, `go vet` and staticcheck pass for `windows/amd64`, `windows/arm64` and macOS.
+  - **From Net Merge `2b333a3`:** `nics/{counters,egress,info}_windows.go` (adapters from `GetAdaptersAddresses`,
+    byte counters, `IP_UNICAST_IF` egress), `state/replace_windows.go`, and `platform_windows.go` without its
+    tray-only helpers. Recorded in `docs/UPSTREAM.md`.
+  - **Not yet on Windows (W5):** the Wintun engine. `tun_windows.go` refuses before any adapter or route exists;
+    the routing-table and VPN reads fail, so the guard refuses; `run`, `install` and `uninstall` say "System merge is
+    not available on Windows yet". `cleanup` stays.
+  - **Mac-only tests behind build tags, none removed:** `routemark` and `vpnguard` tests (`darwin`), and two `api`
+    tests that need umask and socketpair (`!windows`, in `server_unix_test.go`). `cmd/fakevpn` is `darwin`-only.
+  - **Tests:** on the Mac, the platform gate in `tun` and the command gate in `dispatch`; `go test -race ./...` all ok,
+    total 82.5%. Windows-only tests for every new Windows file, run by the kit, which now holds 12 packages per chip
+    (24 programs). Their coverage comes back in the kit's report.
+  - **Next:** the owner runs the kit; failures in packages without "not yet" get fixed in this pull request.
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

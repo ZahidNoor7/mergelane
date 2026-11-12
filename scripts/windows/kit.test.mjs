@@ -256,18 +256,19 @@ describe('buildKit', () => {
     assert.equal(kit.coverInclude, COVER_INCLUDE)
     assert.deepEqual(
       kit.programs.map((p) => p.id),
-      ['x64/cmd/mergelane-nmhost', 'x64/internal/nmhost', 'arm64/cmd/mergelane-nmhost', 'arm64/internal/nmhost']
+      ['x64', 'arm64'].flatMap((arch) => GO_PACKAGES.map(({ pkg }) => `${arch}/${pkg}`))
     )
+    const until = new Map(GO_PACKAGES.map((p) => [p.pkg, p.until]))
     for (const program of kit.programs) {
       assert.equal(program.sha256, sha256(join(out, program.path)))
-      assert.equal(program.until, 'W2')
+      assert.equal(program.until, until.get(program.package))
       assert.equal(program.path, `go/${program.arch}/${program.package}/${program.package.split('/').at(-1)}.test.exe`)
     }
     assert.deepEqual(JSON.parse(readFileSync(join(out, 'kit.json'), 'utf8')), kit)
     assert.equal(readFileSync(join(out, 'test-kit.ps1'), 'utf8'), crlf(SCRIPT))
     assert.equal(readFileSync(join(out, CMD_NAME), 'utf8'), cmdFile())
     assert.match(readFileSync(join(out, 'README.txt'), 'utf8'), /commit abc1234 on 2026-11-12/)
-    assert.equal(logged.length, 4)
+    assert.equal(logged.length, kit.programs.length)
 
     assert.equal(zipFile, join(dirname(out), 'mergelane-windows-kit.zip'))
     const zip = calls.find((c) => c.file === 'zip')

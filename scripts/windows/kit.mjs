@@ -39,8 +39,19 @@ export const ARCHES = { x64: 'amd64', arm64: 'arm64' }
  * and doesn't fail the run. Remove `until` when that milestone lands.
  */
 export const GO_PACKAGES = [
+  { pkg: 'cmd/mergelane-daemon', until: 'W5' },
   { pkg: 'cmd/mergelane-nmhost', until: 'W2' },
-  { pkg: 'internal/nmhost', until: 'W2' }
+  { pkg: 'internal/api', until: 'W5' },
+  { pkg: 'internal/control' },
+  { pkg: 'internal/engine' },
+  { pkg: 'internal/nics' },
+  { pkg: 'internal/nmhost', until: 'W2' },
+  { pkg: 'internal/platform' },
+  { pkg: 'internal/rib' },
+  { pkg: 'internal/state' },
+  { pkg: 'internal/tun' },
+  { pkg: 'internal/vpnguard' }
+  // Not listed: cmd/fakevpn, internal/launchd and internal/routemark are macOS-only, and internal/logx has no tests.
 ]
 
 /** Coverage lines the report carries back: the Windows-only files, the ones the Mac can't run. */

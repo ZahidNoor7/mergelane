@@ -50,8 +50,16 @@ func main() {
 	os.Exit(dispatch(os.Args[1], os.Args[2:], os.Stdout, os.Stderr))
 }
 
+// notYet names the commands this platform can't run yet, with why. Windows fills it
+// (notyet_windows.go): the system-wide helper comes there in milestone W5.
+var notYet map[string]string
+
 // dispatch runs one command and returns the process exit code.
 func dispatch(cmd string, args []string, stdout, stderr io.Writer) int {
+	if why, ok := notYet[cmd]; ok {
+		fmt.Fprintln(stderr, "error:", why)
+		return 1
+	}
 	var err error
 	switch cmd {
 	case "version":

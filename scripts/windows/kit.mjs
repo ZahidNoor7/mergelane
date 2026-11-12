@@ -42,12 +42,12 @@ export const ARCHES = { x64: 'amd64', arm64: 'arm64' }
  */
 export const GO_PACKAGES = [
   { pkg: 'cmd/mergelane-daemon', until: 'W5' },
-  { pkg: 'cmd/mergelane-nmhost', until: 'W2' },
+  { pkg: 'cmd/mergelane-nmhost' },
   { pkg: 'internal/api', until: 'W5' },
   { pkg: 'internal/control' },
   { pkg: 'internal/engine' },
   { pkg: 'internal/nics' },
-  { pkg: 'internal/nmhost', until: 'W2' },
+  { pkg: 'internal/nmhost' },
   { pkg: 'internal/platform' },
   { pkg: 'internal/rib' },
   { pkg: 'internal/state' },

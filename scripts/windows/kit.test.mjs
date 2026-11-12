@@ -504,4 +504,14 @@ describe('the app in the kit', () => {
     }
     assert.match(SCRIPT, /\$_\.Path\.StartsWith\(\$appDir/)
   })
+
+  it('the script asks the browser bridge on the pipe the app names (shared/fixtures/browser-pipe.json)', () => {
+    // The same recipe as app/src/shared/browserPipe.ts: A-Z lowercased, SHA-256, the first 16 hex digits.
+    assert.match(SCRIPT, /\[regex\]::Replace\(\$Folder, '\[A-Z\]'/)
+    assert.match(SCRIPT, /SHA256\]::Create\(\)/)
+    assert.match(SCRIPT, /'mergelane-browser-' \+ \$hex\.Substring\(0, 16\)/)
+    assert.match(SCRIPT, /Get-BridgePipeName \$profileDir/)
+    assert.match(SCRIPT, /'\{"v":3,"origin":"","message":\{"type":"health"\}\}'/)
+    assert.match(SCRIPT, /'"ready":true'/)
+  })
 })

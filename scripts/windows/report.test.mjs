@@ -296,6 +296,8 @@ describe('the app check', () => {
     assert.equal(ok, true)
     assert.ok(lines.includes('Mergelane opened from the kit:'))
     assert.ok(lines.includes('  x64   Mergelane: window opened after 6.5 s, then closed'))
+    const bridged = summarize(report({ apps: [app({ status: 'ready', seconds: 7, bridge: 'ready', leftRunning: 0 })] }))
+    assert.ok(bridged.lines.includes('  x64   Mergelane: window opened after 7 s, the browser bridge answered, then closed'))
   })
 
   it('fails when the window never opened or the app could not start, and notes stopped processes', () => {

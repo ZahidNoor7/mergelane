@@ -15,6 +15,9 @@ export const COVERED = [
   'src/shared/loginItem.ts',
   'src/shared/windowMaterial.ts',
   'src/renderer/src/platformWords.ts',
+  // Windows (W2): the browser bridge's pipe, and the browsers on Windows.
+  'src/shared/browserPipe.ts',
+  'src/shared/browsers.ts',
   'src/renderer/src/theme.ts',
   'src/renderer/src/components/ui/switch.tsx',
   'src/shared/themes.ts',

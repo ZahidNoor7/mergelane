@@ -307,3 +307,27 @@ describe('what the extension does', () => {
     ).toBe(true)
   })
 })
+
+describe('Settings › Browser extensions on Windows', () => {
+  afterEach(() => {
+    window.mergelane.platform = 'darwin'
+  })
+
+  it('speaks of this PC and File Explorer, and how to reach the folder in the picker', async () => {
+    window.mergelane.platform = 'win32'
+    const user = setupUser()
+    await show()
+    expect(screen.getByRole('list', { name: 'Browsers on this PC' })).toBeTruthy()
+    expect(rows('Other browsers')).toContain(
+      'Microsoft EdgeNot on this PC. Install it, then scan again.'
+    )
+    await user.click(screen.getAllByRole('button', { name: 'Install…' })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Add Mergelane to Chrome' })
+    expect(within(dialog).getByText(/takes it from a folder on your PC/)).toBeTruthy()
+    expect(
+      within(dialog).getByText(/click its address bar, paste the path and press Enter/)
+    ).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Show in File Explorer' }))
+    expect(revealExtension).toHaveBeenCalledWith('chrome')
+  })
+})

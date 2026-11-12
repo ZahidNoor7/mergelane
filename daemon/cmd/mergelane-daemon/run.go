@@ -142,7 +142,7 @@ type runDeps struct {
 	readRoutes    func() ([]rib.Route, error) // the routing table, to spot a crashed run's routes
 	cleanup       func()                      // remove routes a previous run left behind
 	discover      func(include []string, weights map[string]float64) ([]nics.Nic, error)
-	newMerger     func(found []nics.Nic, v6 engine.V6Mode, mtu int) (runEngine, runTunnel)
+	newMerger     func(found []nics.Nic, v6 engine.V6Mode, mtu int, sticky *engine.Sticky) (runEngine, runTunnel)
 	guard         control.Guard
 	listen        func(path string, mode os.FileMode, authorize func(uint32) bool, h api.Handler) (runServer, error)
 	signalContext func() (context.Context, context.CancelFunc) // done on SIGINT or SIGTERM
@@ -173,11 +173,13 @@ func discoverLinks(include []string, weights map[string]float64) ([]nics.Nic, er
 }
 
 // newMerger builds the scheduler over the discovered links and the utun that balances every flow
-// across them. Nothing is opened yet: Warm creates the utun.
-func newMerger(found []nics.Nic, v6 engine.V6Mode, mtu int) (runEngine, runTunnel) {
+// across them, keeping sites on one link while sticky is on (ADR-0048). Nothing is opened yet: Warm
+// creates the utun.
+func newMerger(found []nics.Nic, v6 engine.V6Mode, mtu int, sticky *engine.Sticky) (runEngine, runTunnel) {
 	sched := engine.NewScheduler(found)
 	bal := engine.NewBalancer(sched)
 	bal.SetV6Mode(v6)
+	bal.Sticky = sticky
 	t := tun.New(bal)
 	t.MTU = mtu
 	return sched, t
@@ -259,7 +261,8 @@ func runDaemon(c runConfig, d runDeps) error {
 	if err != nil {
 		return err
 	}
-	sched, t := d.newMerger(found, c.v6, c.mtu)
+	sticky := engine.NewSticky(prefs.StickySites)
+	sched, t := d.newMerger(found, c.v6, c.mtu, sticky)
 	sched.SetAuto(c.auto)
 	if limits, err := state.LoadLimits(c.stateDir); err == nil {
 		sched.SetLimits(limits)
@@ -285,10 +288,15 @@ func runDaemon(c runConfig, d runDeps) error {
 		Guard:       d.guard,
 		SaveLimits:  func(m map[string]float64) error { return state.SaveLimits(c.stateDir, m) },
 		StartReason: startReason,
-		Prefs:       control.Prefs{AutoResume: prefs.AutoResume, WantOn: prefs.WantOn},
-		SavePrefs: func(p control.Prefs) error {
-			return store.Update(func(s *state.Prefs) { s.AutoResume, s.WantOn = p.AutoResume, p.WantOn })
+		Prefs: control.Prefs{
+			AutoResume: prefs.AutoResume, WantOn: prefs.WantOn, StickySites: prefs.StickySites,
 		},
+		SavePrefs: func(p control.Prefs) error {
+			return store.Update(func(s *state.Prefs) {
+				s.AutoResume, s.WantOn, s.StickySites = p.AutoResume, p.WantOn, p.StickySites
+			})
+		},
+		ApplySticky: sticky.SetOn,
 	})
 	go ctl.Watch(ctx, time.Second)
 	srv, err := d.listen(c.socketPath, 0o666, authorizer(c.allowedUID), ctl)

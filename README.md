@@ -21,6 +21,11 @@ has at the same time: Wi-Fi, Ethernet, and a tethered iPhone or Android phone.
 - **One connection always uses one link.** Merging adds speed only when something opens several connections
   at once. Mergelane's own downloads do this. In system-wide mode, other apps gain speed only if they open
   several connections themselves; a single video call or a single-connection download will not get faster.
+- **In system-wide mode, each website stays on one network** (on by default; Settings › Networks › Keep each site
+  on one network). Every network has its own public address, and a site that sees you arrive from several at once
+  may sign you out, ask "are you a robot?", or break a call. So one site gets one network's speed, while different
+  sites spread over all of them. Mergelane's own downloads still use every network. Turn it off to spread a site's
+  connections too.
 - **Connections on a link that drops must reconnect.** New connections move to the remaining links, but a
   connection that was already open on the lost link breaks, as it would without Mergelane.
 - **Links must be genuinely separate internet connections.** Two Wi-Fi networks from the same router, or a
@@ -64,15 +69,16 @@ The helper can also be driven from Terminal. It is installed as
 `/Library/PrivilegedHelperTools/io.github.zahidnoor7.mergelane.daemon`; the commands below call it
 `mergelane-daemon`. Only you (the user who installed it) and root can talk to it.
 
-| Command                                   | What it does                                                                                  |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `mergelane-daemon status`                 | Shows whether system merge is on, and why not if it is off                                    |
-| `mergelane-daemon on` / `off`             | Turns system merge on or off                                                                  |
-| `mergelane-daemon links` / `stats`        | Lists the networks it uses, and live traffic per network                                      |
-| `mergelane-daemon events`                 | Shows the last 50 network changes (a network lost, back, or failing its check)                |
-| `mergelane-daemon auto-resume on` / `off` | Whether merging turns itself back on after the helper crashes (off by default)                |
-| `sudo mergelane-daemon cleanup`           | Removes any routes Mergelane left behind. Use it if your internet stops working after a crash |
-| `sudo mergelane-daemon uninstall`         | Removes the helper, its system service and its routes                                         |
+| Command                                    | What it does                                                                                  |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `mergelane-daemon status`                  | Shows whether system merge is on, and why not if it is off                                    |
+| `mergelane-daemon on` / `off`              | Turns system merge on or off                                                                  |
+| `mergelane-daemon links` / `stats`         | Lists the networks it uses, and live traffic per network                                      |
+| `mergelane-daemon events`                  | Shows the last 50 network changes (a network lost, back, or failing its check)                |
+| `mergelane-daemon auto-resume on` / `off`  | Whether merging turns itself back on after the helper crashes (off by default)                |
+| `mergelane-daemon sticky-sites on` / `off` | Whether each website stays on one network (on by default)                                     |
+| `sudo mergelane-daemon cleanup`            | Removes any routes Mergelane left behind. Use it if your internet stops working after a crash |
+| `sudo mergelane-daemon uninstall`          | Removes the helper, its system service and its routes                                         |
 
 After a crash the helper starts with merging off, unless you turned auto-resume on. After a restart of the Mac or
 an update of the helper, merging always starts off, and Mergelane turns it back on if it was on before an update.

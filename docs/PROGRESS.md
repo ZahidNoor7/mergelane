@@ -647,6 +647,22 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **Sticky-per-site for system merge** (branch `sticky-sites`, owner's go-ahead, ADR-0048). The helper reads an
+  HTTPS flow's server name from its ClientHello and keeps each registrable domain on one link. Flows without a name
+  follow their address. Failover moves the site, and 10 minutes idle frees it. The setting is `setStickySites` /
+  `stickySites` (protocol 1, additive), on by default, saved in `prefs.json`, with the CLI `sticky-sites on|off`.
+  The app shows a switch in Networks › System merge.
+  - **Tests:**
+    - Go: the parser against real `crypto/tls` ClientHellos (every prefix, edge cases), and a fuzz test: 1.5M runs
+      after the fix, plus the corpus input that found the double-dot bug;
+    - Go: the site table (eTLD+1, learning addresses, expiry, the cap), `AcquireSticky`, the per-site dial with
+      failover on lo0, the TUN proxy's per-site dialing, the controller, the prefs default, the CLI, and the API
+      fixtures on both sides. Coverage of the new functions is 88–100%. `forward.go` needs a real utun (root), and
+      was already at 0%.
+    - TypeScript: Vitest `SystemMergeSection` (100% lines) and `diagnostics`; e2e `daemonApi` and `systemMerge`
+      against the fake helper (44 passed).
+  - **Needs the hardware suite** (M3.8): a real browser on real links, checking that one site stays on one
+    network.
 - **The extension saved where the user can find it** (branch `extension-folder`, owner's request, ADR-0047).
   - Install… saves it in Downloads, or the folder chosen with Change… (`extensionLocation`). Every saved copy
     (`extensionCopies`) and the old `<userData>/Browser Extension` folders are refreshed at launch and on each scan.

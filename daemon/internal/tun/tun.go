@@ -122,7 +122,12 @@ var (
 type tunProxy struct{ b *engine.Balancer }
 
 func (p tunProxy) DialContext(ctx context.Context, m *M.Metadata) (net.Conn, error) {
-	return p.b.DialPinned(ctx, m.DstIP.Unmap().String(), int(m.DstPort))
+	name := takeServerName(m) // always taken, so none is left behind if sticky went off meanwhile
+	site := ""
+	if p.b.Sticky.On() {
+		site = p.b.Sticky.Site(m.DstIP, name)
+	}
+	return p.b.DialPinnedSite(ctx, m.DstIP.Unmap().String(), int(m.DstPort), site)
 }
 
 func (p tunProxy) DialUDP(m *M.Metadata) (net.PacketConn, error) {
@@ -130,7 +135,12 @@ func (p tunProxy) DialUDP(m *M.Metadata) (net.PacketConn, error) {
 	if d := m.DstIP.Unmap(); d.Is6() {
 		f = engine.Fam6
 	}
-	return p.b.ListenUDP(context.Background(), f)
+	// QUIC (HTTPS over UDP) stays with its site; other UDP, such as DNS and torrents, is balanced.
+	site := ""
+	if m.DstPort == httpsPort && p.b.Sticky.On() {
+		site = p.b.Sticky.Site(m.DstIP, "")
+	}
+	return p.b.ListenUDPSite(context.Background(), f, site)
 }
 
 // Tun is the system-wide switch: On creates the adapter and routes, Off removes them. Both are
@@ -203,7 +213,7 @@ func (t *Tun) open() error {
 		dev.Close()
 		return err
 	}
-	installForwarders(stk, t.B.V6Allowed)
+	installForwarders(stk, t.B.V6Allowed, t.B.Sticky.On)
 	t.dev, t.stk = dev, stk
 	return nil
 }

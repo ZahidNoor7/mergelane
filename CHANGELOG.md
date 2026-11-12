@@ -5,6 +5,14 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **System merge keeps each website on one network** (on by default). Your networks each have their own internet
+  address, and some sites sign you out, ask "are you a robot?", or drop a call when you arrive from several at once.
+  Now all of one site's connections go over the same network, while different sites still spread over all of
+  them. A site moves only if its network stops working. Turn it off in Networks › System merge › Keep each site on
+  one network. Mergelane's own downloads still use every network. Update the helper when Mergelane asks.
+
 ### Changed
 
 - **The browser extension looks like Mergelane.** Its popup and options page now use the app's colours, fonts,

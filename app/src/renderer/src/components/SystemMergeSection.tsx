@@ -67,6 +67,8 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
   const updateId = useId()
   const autoResumeId = useId()
   const autoResumeHelpId = useId()
+  const stickyId = useId()
+  const stickyHelpId = useId()
   const removeHelpId = useId()
 
   if (!snapshot) {
@@ -193,6 +195,32 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
             disabled={busy || snapshot.autoResume === undefined}
             onCheckedChange={(checked) =>
               run(() => window.mergelane.setSystemMergeAutoResume(checked), 'autoResume')
+            }
+          />
+        </div>
+      )}
+      {snapshot.reachable && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col">
+            <span id={stickyId} className="text-[12.5px]">
+              Keep each site on one network
+            </span>
+            <span id={stickyHelpId} className="text-[12px] text-muted-foreground">
+              {snapshot.stickySites === undefined
+                ? 'Needs the updated helper.'
+                : 'Sign-ins and calls stay steady. One site then gets one network’s speed; Mergelane’s own downloads still use every network.'}
+            </span>
+          </div>
+          <Switch
+            className={
+              snapshot.stickySites === undefined ? 'cursor-not-allowed opacity-50' : undefined
+            }
+            aria-labelledby={stickyId}
+            aria-describedby={stickyHelpId}
+            checked={snapshot.stickySites === true}
+            disabled={busy || snapshot.stickySites === undefined}
+            onCheckedChange={(checked) =>
+              run(() => window.mergelane.setSystemMergeStickySites(checked), 'stickySites')
             }
           />
         </div>

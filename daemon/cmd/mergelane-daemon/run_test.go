@@ -357,7 +357,7 @@ func newHarness(t *testing.T) *harness {
 			}
 			return h.links, h.discoverErr
 		},
-		newMerger: func(found []nics.Nic, v6 engine.V6Mode, mtu int) (runEngine, runTunnel) {
+		newMerger: func(found []nics.Nic, v6 engine.V6Mode, mtu int, _ *engine.Sticky) (runEngine, runTunnel) {
 			h.mergerArgs = []any{found, v6, mtu}
 			h.eng = newFakeEngine(found)
 			h.eng.linkState = h.linkState
@@ -818,7 +818,7 @@ func TestRealRunDeps(t *testing.T) {
 	}
 
 	links := []nics.Nic{{Name: "en0", Index: 4, IP: net.ParseIP("192.0.2.2"), Weight: 1}}
-	sched, tunnel := newMerger(links, engine.V6On, 1500)
+	sched, tunnel := newMerger(links, engine.V6On, 1500, engine.NewSticky(true))
 	tt, ok := tunnel.(*tun.Tun)
 	if !ok || tt.MTU != 1500 || tt.B.V6Mode() != engine.V6On || tt.B.S != sched || tt.Name() != "" {
 		t.Fatalf("newMerger tunnel = %+v", tunnel)

@@ -186,6 +186,13 @@ func (c *Client) SetAutoResume(ctx context.Context, enabled bool) (Status, error
 	return s, err
 }
 
+// SetStickySites calls setStickySites. An older daemon answers UNKNOWN_METHOD.
+func (c *Client) SetStickySites(ctx context.Context, enabled bool) (Status, error) {
+	var s Status
+	err := c.Call(ctx, MethodSetStickySites, SetStickySitesParams{Enabled: enabled}, &s)
+	return s, err
+}
+
 // Events calls events. An older daemon answers UNKNOWN_METHOD.
 func (c *Client) Events(ctx context.Context) (EventsResult, error) {
 	var r EventsResult

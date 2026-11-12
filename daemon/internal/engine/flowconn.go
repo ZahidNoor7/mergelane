@@ -60,7 +60,12 @@ func (c *slotConn) Close() error      { c.release(); return c.TCPConn.Close() }
 
 // DialPinned is DialTCP for front-ends that hand the conn to someone else to pump.
 func (b *Balancer) DialPinned(ctx context.Context, host string, port int) (net.Conn, error) {
-	c, sl, f, err := b.DialTCP(ctx, host, port)
+	return b.DialPinnedSite(ctx, host, port, "")
+}
+
+// DialPinnedSite is DialPinned for a flow that belongs to site (see DialSite).
+func (b *Balancer) DialPinnedSite(ctx context.Context, host string, port int, site string) (net.Conn, error) {
+	c, sl, f, err := b.DialSite(ctx, host, port, site)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +98,13 @@ func (c *slotPacketConn) WriteTo(p []byte, a net.Addr) (int, error) {
 // of that flow leaves the same way). UDP flows are short and numerous (DNS), so they don't hold
 // a balancing slot: the pick still spreads them via the scheduler's tie-breaking.
 func (b *Balancer) ListenUDP(ctx context.Context, f Family) (net.PacketConn, error) {
+	return b.ListenUDPSite(ctx, f, "")
+}
+
+// ListenUDPSite is ListenUDP for a socket that belongs to site (see DialSite), such as QUIC to a
+// site's address.
+func (b *Balancer) ListenUDPSite(ctx context.Context, f Family, site string) (net.PacketConn, error) {
+	sticky := site != "" && b.Sticky.On()
 	network := "udp4"
 	if f == Fam6 {
 		network = "udp6"
@@ -100,7 +112,11 @@ func (b *Balancer) ListenUDP(ctx context.Context, f Family) (net.PacketConn, err
 	tried := map[string]struct{}{}
 	lastErr := errors.New("no usable network adapter")
 	for {
-		sl := b.S.AcquireFor(f, tried)
+		prefer := ""
+		if sticky {
+			prefer = b.Sticky.Link(site)
+		}
+		sl := b.S.AcquireSticky(f, tried, prefer)
 		if sl == nil {
 			return nil, lastErr
 		}
@@ -114,6 +130,9 @@ func (b *Balancer) ListenUDP(ctx context.Context, f Family) (net.PacketConn, err
 			}
 			lastErr = err
 			continue
+		}
+		if sticky {
+			b.Sticky.Remember(site, sl.key)
 		}
 		return &slotPacketConn{PacketConn: pc, sl: sl, fam: f}, nil
 	}

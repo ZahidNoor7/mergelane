@@ -14,9 +14,10 @@ func TestLoadPrefsWithoutAFileIsAFirstStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Auto-resume is off by default (ADR-0007), nothing is wanted on, and no clean exit is on record:
-	// only leftover routes can tell that a daemon from before M2.4 crashed.
-	if got != (Prefs{}) {
-		t.Fatalf("LoadPrefs = %+v, want the zero Prefs", got)
+	// only leftover routes can tell that a daemon from before M2.4 crashed. Sticky sites are on
+	// (ADR-0048).
+	if got != (Prefs{StickySites: true}) || got != DefaultPrefs() {
+		t.Fatalf("LoadPrefs = %+v, want the defaults", got)
 	}
 }
 
@@ -24,7 +25,8 @@ func TestPrefsRoundTrip(t *testing.T) {
 	for _, want := range []Prefs{
 		{AutoResume: true, WantOn: true, CleanExit: false},
 		{AutoResume: false, WantOn: false, CleanExit: true},
-		{AutoResume: true, WantOn: false, CleanExit: true},
+		{AutoResume: true, WantOn: false, CleanExit: true, StickySites: true},
+		{StickySites: false},
 	} {
 		dir := t.TempDir()
 		if err := SavePrefs(dir, want); err != nil {
@@ -46,7 +48,7 @@ func TestSavePrefsWritesTheDocumentedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "{\n  \"version\": 1,\n  \"autoResume\": true,\n  \"wantOn\": true,\n  \"cleanExit\": false\n}\n"
+	want := "{\n  \"version\": 1,\n  \"autoResume\": true,\n  \"wantOn\": true,\n  \"cleanExit\": false,\n  \"stickySites\": false\n}\n"
 	if string(b) != want {
 		t.Fatalf("prefs.json = %q, want %q", b, want)
 	}
@@ -61,8 +63,19 @@ func TestLoadPrefsWithoutACleanExitFieldIsNotClean(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := LoadPrefs(dir)
-	if want := (Prefs{AutoResume: true, WantOn: true}); err != nil || got != want {
+	// A file from before ADR-0048 has no stickySites: it is on.
+	if want := (Prefs{AutoResume: true, WantOn: true, StickySites: true}); err != nil || got != want {
 		t.Fatalf("LoadPrefs = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+func TestLoadPrefsKeepsStickySitesOff(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(PrefsPath(dir), []byte(`{"version":1,"stickySites":false}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadPrefs(dir); err != nil || got.StickySites {
+		t.Fatalf("LoadPrefs = %+v, %v; want sticky sites off", got, err)
 	}
 }
 
@@ -76,8 +89,8 @@ func TestLoadPrefsBrokenFile(t *testing.T) {
 		t.Fatalf("a broken prefs.json must be reported with its path, got %v", err)
 	}
 	// The caller may ignore the error: the result is still the safe default.
-	if got != (Prefs{}) {
-		t.Fatalf("LoadPrefs = %+v, want the zero Prefs", got)
+	if got != DefaultPrefs() {
+		t.Fatalf("LoadPrefs = %+v, want the defaults", got)
 	}
 }
 
@@ -86,7 +99,7 @@ func TestLoadPrefsUnreadable(t *testing.T) {
 	if err := os.Mkdir(PrefsPath(dir), 0o755); err != nil { // a directory where the file should be
 		t.Fatal(err)
 	}
-	if got, err := LoadPrefs(dir); err == nil || got != (Prefs{}) {
+	if got, err := LoadPrefs(dir); err == nil || got != DefaultPrefs() {
 		t.Fatalf("LoadPrefs = %+v, %v; want the defaults and an error", got, err)
 	}
 }

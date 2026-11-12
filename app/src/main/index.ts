@@ -15,6 +15,7 @@ import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
 import { registerNativeHost } from './nativeHost'
+import { refreshExtensionCopies } from './browsers'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import {
@@ -264,6 +265,11 @@ app.whenReady().then(async () => {
       (error) => console.error('[mergelane] browser host registration failed', error)
     )
   }
+  // The extension folders Mergelane saved for the browsers, brought up to this version at once, so a
+  // browser that loads one gets the new extension when it restarts (ADR-0047).
+  void refreshExtensionCopies().catch((error) =>
+    console.error('[mergelane] couldn’t update the saved extension folders', error)
+  )
   // Unlike magnet:, mergelane:// is Mergelane's own, so registering it takes nothing from another app. A
   // development build has no fixed path to register.
   if (app.isPackaged) app.setAsDefaultProtocolClient('mergelane')

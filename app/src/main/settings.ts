@@ -132,6 +132,19 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     }
     settings.browserContacts = contacts
   }
+  if (typeof parsed.extensionLocation === 'string' && isAbsolute(parsed.extensionLocation)) {
+    settings.extensionLocation = parsed.extensionLocation
+  }
+  if (Array.isArray(parsed.extensionCopies)) {
+    const copies: NonNullable<AppSettings['extensionCopies']> = []
+    for (const copy of parsed.extensionCopies.slice(0, 32)) {
+      if (!isRecord(copy) || typeof copy.path !== 'string' || !isAbsolute(copy.path)) continue
+      if (copy.kind !== 'chrome' && copy.kind !== 'firefox') continue
+      if (copies.some((each) => each.path === copy.path)) continue
+      copies.push({ kind: copy.kind, path: copy.path })
+    }
+    settings.extensionCopies = copies
+  }
   const routing = sanitizeRouting(parsed.routing)
   if (routing) settings.routing = routing
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false

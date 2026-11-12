@@ -689,6 +689,8 @@ until the owner overrides it.
     in `Contents/Resources/browser-extension/{chrome,firefox}`. The packaging test checks it is there.
   - **Copying:** Mergelane copies the extension to `<userData>/Browser Extension/<kind>` whenever its version
     changes. That folder is the one the user loads, so the path stays the same across app updates.
+    (Replaced by ADR-0047: Mergelane now saves it in Downloads, or a folder the user chooses, on Install. The old
+    folder is still kept up to date for anyone who loaded it.)
   - **Settings › Browser extensions:**
     - it finds Chrome, Edge, Chromium and Firefox in `/Applications` and `~/Applications`;
     - each found browser gets an Install… guide: show the folder in the Finder, the browser's extensions page (to
@@ -1082,3 +1084,46 @@ until the owner overrides it.
   - No test runs the real prompt, bootout or file removal. They need a manual check on the owner's Mac with a
     packaged build. The helper's own uninstall keeps its Go tests, which record launchctl instead of running it.
   - Install is unchanged, except that it now runs osascript through the same function.
+
+## ADR-0047: The extension saved where the user can find it, and a shorter guide
+
+- Status: Owner's request (2026-11-12): finding `~/Library/Application Support/Mergelane/Browser Extension/chrome`
+  in a browser's file picker is hard, because Library is hidden. The owner asked for a default in Downloads or on
+  the Desktop, a folder picker, and to look into one-click installation in Chrome.
+- Context, from official sources (read 2026-11-12):
+  - Branded Chrome dropped `--load-extension` in Chrome 137. The Chromium Extensions PSA (2025-04-04) says
+    the flag keeps working only in Chromium and Chrome for Testing.
+  - On macOS, an app can only add an extension to Chrome through the Chrome Web Store. Chrome's "Install and
+    manage extensions" page says the `update_URL` must point to the Chrome Web Store, and that "no external
+    installs are allowed from a path to a local CRX file on Mac OS".
+  - No official page offers a way to open "Load unpacked" with a folder already chosen.
+  - Chrome's Hello World tutorial says "By design `chrome://` URLs are not linkable", so Mergelane doesn't try to
+    open `chrome://extensions` itself.
+  - Apple's keyboard-shortcuts page lists Shift-Command-G as "Open a Go to Folder window". It doesn't mention file
+    pickers, so the guide offers this as a tip, not a required step. Checking it is on the owner's hands-on list.
+- Decision:
+  - **Where:** `<location>/Mergelane Extension`, shared by Chrome, Edge and Chromium, and `<location>/Mergelane
+    Extension for Firefox`. The location is the Downloads folder (`app.getPath('downloads')`) unless the user
+    chooses another in Settings › Browser extensions › Save the extension in › Change… (`extensionLocation`).
+  - **When:** saved when the user clicks Install…, never just by opening Settings. Every folder Mergelane saved is
+    recorded (`extensionCopies`), together with the folder it used before (`<userData>/Browser Extension/<kind>`).
+    Each one that carries Mergelane's `.mergelane-version` stamp is brought up to the running version at every
+    launch and every scan, so an extension loaded once keeps up with app updates. A folder the user deleted is
+    left deleted.
+  - **Never someone else's folder:** if a folder of that name is already there without Mergelane's stamp and
+    isn't empty, Install says so and leaves it alone. The guide offers to choose another folder.
+  - **The guide:**
+    1. The saved folder's path, with Show in Finder (the folder selected).
+    2. The browser's extensions page, with Copy and Open <browser>. Open runs `open` on the browser's app bundle
+       ("as if you had double-clicked the file's icon", open(1)).
+    3. Developer mode.
+    4. Load unpacked, with Copy path and the ⌘⇧G tip.
+    Copy path sits on the step that needs it, so copying the page's address in step 2 doesn't overwrite it.
+    Firefox's Copy path copies its manifest.json.
+  - **Tests** never write to the computer's Downloads. A test run's default location is `<userData>/Test
+    Downloads`. It isn't named "Downloads" because the download engine's own `<userData>/downloads` is there, and
+    macOS folder names ignore case. Show in Finder and Open <browser> are recorded, not run.
+- Consequences:
+  - One more folder in Downloads. It must stay there while the browser uses it. The Settings row and step 1 say so.
+  - Choosing the folder in the browser stays a manual step. It can only go away with a Chrome Web Store listing,
+    which needs a paid developer account (ADR-0038).

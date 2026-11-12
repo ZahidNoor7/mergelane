@@ -55,7 +55,14 @@ import {
   updateState
 } from '../updater'
 import { readAppUsage } from '../appUsage'
-import { revealExtension, scanBrowsers } from '../browsers'
+import {
+  extensionLocation,
+  openBrowser,
+  revealExtension,
+  saveExtension,
+  scanBrowsers,
+  setExtensionLocation
+} from '../browsers'
 import { DEFAULT_CAPTURE_RULES, sanitizeCaptureRules } from '../../shared/captureRules'
 import { loginItemState, setOpenAtLogin } from '../loginItem'
 import { applyMenuBarSettings } from '../menuBar'
@@ -360,7 +367,22 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('updateState', () => updateState())
   handle('browsers', () => scanBrowsers())
+  handle('saveExtension', (_event, id) => saveExtension(id))
   handle('revealExtension', (_event, id) => revealExtension(id))
+  handle('chooseExtensionLocation', async () => {
+    const window = getWindow()
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Choose where to save the browser extension',
+      buttonLabel: 'Choose',
+      defaultPath: await extensionLocation(),
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    await setExtensionLocation(result.filePaths[0])
+    return result.filePaths[0]
+  })
+  handle('openBrowser', (_event, id) => openBrowser(id))
   handle('loginItem', () => loginItemState())
   handle('setOpenAtLogin', (_event, on) => setOpenAtLogin(on === true))
   handle('checkForUpdates', () => checkForUpdates())

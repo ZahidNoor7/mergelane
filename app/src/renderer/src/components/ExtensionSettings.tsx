@@ -1,10 +1,25 @@
-import { installSteps, type BrowsersReport, type BrowserState } from '@shared/browsers'
+import {
+  installSteps,
+  pickPath,
+  type BrowsersReport,
+  type BrowserState,
+  type ExtensionSaved
+} from '@shared/browsers'
 import { CAPTURE_TYPES, MIN_SIZES, type MinSize } from '@shared/captureRules'
 import { cn } from 'cn'
-import { Check, Compass, Copy, FolderOpen, Globe, Puzzle, RefreshCw } from 'lucide-react'
+import {
+  Check,
+  Compass,
+  Copy,
+  ExternalLink,
+  FolderOpen,
+  Globe,
+  Puzzle,
+  RefreshCw
+} from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { formatWhen } from '../utils/format'
+import { formatWhen, toDisplayPath } from '../utils/format'
 import { SettingRow, SettingsGroup } from './settingsParts'
 import { Button } from './ui/button'
 import { Switch } from './ui/switch'
@@ -104,27 +119,47 @@ function BrowserRow({
   )
 }
 
+/** What the guide shows: a browser, and the extension saved for it (or why it couldn't be). */
+interface Guide {
+  browser: BrowserState
+  saved: ExtensionSaved
+}
+
 function InstallGuide({
-  browser,
+  guide,
+  onChooseFolder,
   onClose
 }: {
-  browser: BrowserState | null
+  guide: Guide | null
+  onChooseFolder: () => void
   onClose: () => void
 }): React.JSX.Element {
-  const [copied, setCopied] = useState(false)
+  const homeDir = useAppStore((store) => store.homeDir)
+  const [copied, setCopied] = useState<'path' | 'page' | null>(null)
+  const browser = guide?.browser ?? null
   const steps = browser ? installSteps(browser) : []
+  const copy = (text: string, what: 'path' | 'page'): void => {
+    void navigator.clipboard.writeText(text).then(
+      () => setCopied(what),
+      () => {}
+    )
+  }
+  const folder = guide?.saved.ok ? guide.saved.folder : null
+  const pick = browser && folder ? pickPath({ ...browser, extensionFolder: folder }) : null
+  /** The step where the browser asks for the folder (or Firefox's manifest.json). */
+  const pickStep = browser?.kind === 'firefox' ? 2 : 3
   return (
     <Dialog
-      open={browser !== null}
+      open={guide !== null}
       onOpenChange={(open) => {
         if (!open) {
-          setCopied(false)
+          setCopied(null)
           onClose()
         }
       }}
     >
       <DialogContent className="sm:max-w-md">
-        {browser && (
+        {browser && guide && (
           <>
             <DialogHeader>
               <DialogTitle>Add Mergelane to {browser.short}</DialogTitle>
@@ -134,49 +169,86 @@ function InstallGuide({
                   : `Until the extension is in the Chrome Web Store, ${browser.short} takes it from a folder on your Mac. Mergelane keeps that folder up to date.`}
               </DialogDescription>
             </DialogHeader>
-            <ol aria-label="Steps" className="flex list-decimal flex-col gap-2.5 pl-5 text-[13px]">
-              {steps.map((step, index) => (
-                <li key={step} className="pl-1 leading-[1.5]">
-                  <span>{step}</span>
-                  {index === 0 && (
-                    <div className="mt-1.5">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => void window.mergelane.revealExtension(browser.id)}
-                      >
-                        <FolderOpen aria-hidden />
-                        Show in Finder
-                      </Button>
-                    </div>
-                  )}
-                  {index === 1 && browser.extensionsPage && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <code className="rounded-[6px] bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
-                        {browser.extensionsPage}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(browser.extensionsPage ?? '').then(
-                            () => setCopied(true),
-                            () => {}
-                          )
-                        }}
-                      >
-                        <Copy aria-hidden />
-                        {copied ? 'Copied' : 'Copy'}
-                      </Button>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ol>
-            <p className="text-[12.5px] leading-[1.5] text-ink-2">
-              The extension’s icon turns on once {browser.short} reaches Mergelane. After Mergelane
-              updates, restart {browser.short} to use the new version of the extension.
-            </p>
+            {!guide.saved.ok ? (
+              <div className="flex flex-col items-start gap-2.5">
+                <p role="alert" className="text-[13px] leading-[1.5] text-destructive">
+                  {guide.saved.message}
+                </p>
+                <Button variant="secondary" size="sm" onClick={onChooseFolder}>
+                  <FolderOpen aria-hidden />
+                  Choose another folder…
+                </Button>
+              </div>
+            ) : (
+              <ol
+                aria-label="Steps"
+                className="flex list-decimal flex-col gap-2.5 pl-5 text-[13px]"
+              >
+                {steps.map((step, index) => (
+                  <li key={step} className="pl-1 leading-[1.5]">
+                    <span>{step}</span>
+                    {index === 0 && folder && (
+                      <div className="mt-1.5 flex min-w-0 flex-col items-start gap-2">
+                        <code className="max-w-full rounded-[6px] bg-sunken px-1.5 py-0.5 font-mono text-[12px] [overflow-wrap:anywhere]">
+                          {toDisplayPath(folder, homeDir)}
+                        </code>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void window.mergelane.revealExtension(browser.id)}
+                          >
+                            <FolderOpen aria-hidden />
+                            Show in Finder
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {index === 1 && browser.extensionsPage && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <code className="rounded-[6px] bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
+                          {browser.extensionsPage}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copy(browser.extensionsPage ?? '', 'page')}
+                        >
+                          <Copy aria-hidden />
+                          {copied === 'page' ? 'Copied' : 'Copy'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void window.mergelane.openBrowser(browser.id)}
+                        >
+                          <ExternalLink aria-hidden />
+                          Open {browser.short}
+                        </Button>
+                      </div>
+                    )}
+                    {index === pickStep && pick && (
+                      <div className="mt-1.5 flex flex-col items-start gap-1.5">
+                        <Button variant="ghost" size="sm" onClick={() => copy(pick, 'path')}>
+                          <Copy aria-hidden />
+                          {copied === 'path' ? 'Copied' : 'Copy path'}
+                        </Button>
+                        <p className="text-[12.5px] leading-[1.5] text-ink-2">
+                          To go straight to it in the window that opens, press ⌘⇧G, paste the path
+                          and press Return.
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {guide.saved.ok && (
+              <p className="text-[12.5px] leading-[1.5] text-ink-2">
+                The extension’s icon turns on once {browser.short} reaches Mergelane. After
+                Mergelane updates, restart {browser.short} to use the new version of the extension.
+              </p>
+            )}
             <DialogFooter showCloseButton />
           </>
         )}
@@ -186,9 +258,10 @@ function InstallGuide({
 }
 
 export function ExtensionSettings(): React.JSX.Element {
+  const homeDir = useAppStore((store) => store.homeDir)
   const [report, setReport] = useState<BrowsersReport | null>(null)
   const [scanning, setScanning] = useState(true)
-  const [guide, setGuide] = useState<BrowserState | null>(null)
+  const [guide, setGuide] = useState<Guide | null>(null)
 
   const load = useCallback(() => {
     window.mergelane.browsers().then(
@@ -203,6 +276,23 @@ export function ExtensionSettings(): React.JSX.Element {
   const scan = (): void => {
     setScanning(true)
     load()
+  }
+  /** Saves the extension where the user keeps it, then guides loading it from there. */
+  const install = async (browser: BrowserState): Promise<void> => {
+    const saved = await window.mergelane
+      .saveExtension(browser.id)
+      .catch((error: unknown): ExtensionSaved => ({
+        ok: false,
+        message: error instanceof Error ? error.message : String(error)
+      }))
+    setGuide({ browser, saved })
+  }
+  /** Asks where to save the extension; with a guide open, saves it there and carries on. */
+  const chooseFolder = async (): Promise<void> => {
+    const chosen = await window.mergelane.chooseExtensionLocation().catch(() => null)
+    if (!chosen) return
+    load()
+    if (guide) await install(guide.browser)
   }
 
   const browsers = report?.browsers ?? []
@@ -221,6 +311,26 @@ export function ExtensionSettings(): React.JSX.Element {
           </Button>
         }
       >
+        {report && (
+          <SettingRow
+            label="Save the extension in"
+            hint={
+              <>
+                <span className="font-mono text-[12px] text-foreground [overflow-wrap:anywhere]">
+                  {toDisplayPath(report.extensionLocation, homeDir)}
+                </span>
+                <br />
+                Mergelane saves it here when you install, and keeps it up to date. Your browser
+                loads it from here, so leave it in place.
+              </>
+            }
+          >
+            <Button type="button" size="sm" variant="secondary" onClick={() => void chooseFolder()}>
+              <FolderOpen data-icon="inline-start" />
+              Change…
+            </Button>
+          </SettingRow>
+        )}
         {onMac.length > 0 ? (
           <ul aria-label="Browsers on this Mac" className="flex flex-col">
             {onMac.map((browser) => (
@@ -228,7 +338,7 @@ export function ExtensionSettings(): React.JSX.Element {
                 key={browser.id}
                 browser={browser}
                 shipped={report?.extensionVersion ?? null}
-                onInstall={setGuide}
+                onInstall={(chosen) => void install(chosen)}
               />
             ))}
           </ul>
@@ -250,7 +360,7 @@ export function ExtensionSettings(): React.JSX.Element {
                 key={browser.id}
                 browser={browser}
                 shipped={report?.extensionVersion ?? null}
-                onInstall={setGuide}
+                onInstall={(chosen) => void install(chosen)}
               />
             ))}
           </ul>
@@ -259,7 +369,11 @@ export function ExtensionSettings(): React.JSX.Element {
 
       <CaptureRulesGroup />
 
-      <InstallGuide browser={guide} onClose={() => setGuide(null)} />
+      <InstallGuide
+        guide={guide}
+        onChooseFolder={() => void chooseFolder()}
+        onClose={() => setGuide(null)}
+      />
     </>
   )
 }

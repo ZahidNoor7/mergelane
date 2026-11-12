@@ -1,5 +1,5 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
-import type { BrowserContact, BrowserId } from './browsers'
+import type { BrowserContact, BrowserId, ExtensionKind } from './browsers'
 import type { CaptureRules } from './captureRules'
 import type { Release, UpdateChannel } from './releases'
 import type { ThemeId } from './themes'
@@ -662,6 +662,12 @@ export interface AppSettings {
   captureRules?: CaptureRules
   /** When each browser's extension last reached Mergelane, and its version (ADR-0039). */
   browserContacts?: Partial<Record<BrowserId, BrowserContact>>
+  /** The folder Mergelane saves the browser extension in, chosen in Settings › Browser extensions
+   * (ADR-0047). Missing: the Downloads folder. */
+  extensionLocation?: string
+  /** Every extension folder Mergelane has saved, so each is kept up to date as Mergelane updates:
+   * a browser keeps loading the extension from wherever it was saved (ADR-0047). */
+  extensionCopies?: Array<{ kind: ExtensionKind; path: string }>
   /** Networks › Which network carries what. Missing: every network, with fallback. */
   routing?: DownloadRouting
   /** Only ever saved as false: the menu bar shows the merged speed unless turned off (ADR-0037). */

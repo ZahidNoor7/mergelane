@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "id": "16",
+  "method": "setStickySites",
+  "params": {
+    "enabled": true
+  }
+}

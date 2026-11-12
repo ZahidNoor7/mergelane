@@ -8,6 +8,7 @@
     "since": "2026-11-10T09:31:12.25Z",
     "version": "0.1.0",
     "protocol": 1,
-    "autoResume": false
+    "autoResume": false,
+    "stickySites": true
   }
 }

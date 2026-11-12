@@ -198,8 +198,8 @@ func TestRunDaemonKeepsPrefs(t *testing.T) {
 	h := newHarness(t)
 	errc := h.start(t)
 	// Running: the exit is not clean until the daemon stops.
-	if p := loadPrefs(t, h); p != (state.Prefs{}) {
-		t.Fatalf("prefs while running = %+v, want all false (and the file written)", p)
+	if p := loadPrefs(t, h); p != state.DefaultPrefs() {
+		t.Fatalf("prefs while running = %+v, want the defaults (and the file written)", p)
 	}
 	if _, err := os.Stat(state.PrefsPath(h.cfg.stateDir)); err != nil {
 		t.Fatalf("the start did not record that the daemon runs: %v", err)
@@ -220,14 +220,28 @@ func TestRunDaemonKeepsPrefs(t *testing.T) {
 	}
 	// The CLI drives the same method.
 	code, out, errOut := run("auto-resume", "-socket", h.cfg.socketPath, "off")
-	if code != 0 || out != "system merge: on (daemon dev, protocol 1)\n" {
+	if code != 0 || out != "system merge: on (daemon dev, protocol 1)\neach site kept on one network: on\n" {
 		t.Fatalf("auto-resume off = %d %q %q", code, out, errOut)
+	}
+	// Sticky sites, from the CLI too: saved, and shown in the status.
+	code, out, errOut = run("sticky-sites", "-socket", h.cfg.socketPath, "off")
+	if code != 0 || out != "system merge: on (daemon dev, protocol 1)\n" {
+		t.Fatalf("sticky-sites off = %d %q %q", code, out, errOut)
+	}
+	if p := loadPrefs(t, h); p.StickySites {
+		t.Fatalf("prefs = %+v, want sticky sites off saved", p)
+	}
+	if code, _, errOut := run("sticky-sites", "-socket", h.cfg.socketPath, "maybe"); code == 0 || !strings.Contains(errOut, "sticky-sites on|off") {
+		t.Fatalf("sticky-sites maybe = %d %q", code, errOut)
+	}
+	if code, out, _ := run("sticky-sites", "-socket", h.cfg.socketPath, "on"); code != 0 || !strings.Contains(out, "each site kept on one network: on") {
+		t.Fatalf("sticky-sites on = %d %q", code, out)
 	}
 	if _, err := cl.Disable(ctxT(t), ""); err != nil {
 		t.Fatal(err)
 	}
 	h.shutdown(t, errc)
-	if p := loadPrefs(t, h); p != (state.Prefs{CleanExit: true}) {
+	if p := loadPrefs(t, h); p != (state.Prefs{CleanExit: true, StickySites: true}) {
 		t.Fatalf("prefs after shutdown = %+v", p)
 	}
 }
@@ -241,14 +255,14 @@ func TestRunDaemonRewritesBrokenPrefs(t *testing.T) {
 		t.Fatal(err)
 	}
 	errc := h.start(t)
-	if st, err := h.dial(t).Status(ctxT(t)); err != nil || st.Reason != "" || st.AutoResume {
+	if st, err := h.dial(t).Status(ctxT(t)); err != nil || st.Reason != "" || st.AutoResume || !st.StickySites {
 		t.Fatalf("status = %+v, %v; a broken file means the defaults", st, err)
 	}
 	h.shutdown(t, errc)
 	if !strings.Contains(h.logs.String(), "prefs.json") {
 		t.Errorf("logs %q lack the warning", h.logs.String())
 	}
-	if p := loadPrefs(t, h); p != (state.Prefs{CleanExit: true}) {
+	if p := loadPrefs(t, h); p != (state.Prefs{CleanExit: true, StickySites: true}) {
 		t.Fatalf("prefs = %+v, want a fresh file", p)
 	}
 }

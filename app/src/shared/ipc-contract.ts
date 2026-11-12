@@ -60,6 +60,8 @@ export interface IpcContract {
   removeSystemMerge: { args: []; result: SystemMergeRemoval }
   /** Whether merging turns itself back on after the helper restarts. */
   setSystemMergeAutoResume: { args: [enabled: boolean]; result: SystemMergeSnapshot }
+  /** Keeps each website on one network while system merge is on, or not (ADR-0048). */
+  setSystemMergeStickySites: { args: [enabled: boolean]; result: SystemMergeSnapshot }
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }

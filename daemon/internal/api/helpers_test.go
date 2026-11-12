@@ -31,6 +31,7 @@ type fakeHandler struct {
 	disables []DisableParams
 	limits   []SetLimitParams
 	resumes  []SetAutoResumeParams
+	stickies []SetStickySitesParams
 }
 
 func (f *fakeHandler) Status(ctx context.Context) (Status, error) {
@@ -71,6 +72,13 @@ func (f *fakeHandler) SetAutoResume(_ context.Context, p SetAutoResumeParams) (S
 	f.resumes = append(f.resumes, p)
 	f.mu.Unlock()
 	return Status{State: StateOff, Version: "test", AutoResume: p.Enabled}, f.err
+}
+
+func (f *fakeHandler) SetStickySites(_ context.Context, p SetStickySitesParams) (Status, error) {
+	f.mu.Lock()
+	f.stickies = append(f.stickies, p)
+	f.mu.Unlock()
+	return Status{State: StateOff, Version: "test", StickySites: p.Enabled}, f.err
 }
 
 func (f *fakeHandler) Events(context.Context) (EventsResult, error) {

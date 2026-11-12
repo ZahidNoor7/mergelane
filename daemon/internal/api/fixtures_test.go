@@ -63,7 +63,7 @@ func loadFixtures(t *testing.T) []fixture {
 // newResult returns a pointer to the result type of method.
 func newResult(t *testing.T, method string) any {
 	switch method {
-	case MethodStatus, MethodEnable, MethodDisable, MethodSetAutoResume:
+	case MethodStatus, MethodEnable, MethodDisable, MethodSetAutoResume, MethodSetStickySites:
 		return new(Status)
 	case MethodEvents:
 		return new(EventsResult)
@@ -101,6 +101,8 @@ func requestParams(t *testing.T, req Request) any {
 		p, err = parseSetLimit(req.Params)
 	case MethodSetAutoResume:
 		p, err = parseSetAutoResume(req.Params)
+	case MethodSetStickySites:
+		p, err = parseSetStickySites(req.Params)
 	default:
 		_, err = paramFields(req.Params)
 	}
@@ -206,6 +208,10 @@ func (h *fixtureHandler) SetLimit(_ context.Context, p SetLimitParams) (SetLimit
 	return *h.result.(*SetLimitResult), nil
 }
 func (h *fixtureHandler) SetAutoResume(_ context.Context, p SetAutoResumeParams) (Status, error) {
+	h.params = p
+	return h.status()
+}
+func (h *fixtureHandler) SetStickySites(_ context.Context, p SetStickySitesParams) (Status, error) {
 	h.params = p
 	return h.status()
 }

@@ -43,6 +43,10 @@ func (h fakeHandler) SetAutoResume(_ context.Context, p api.SetAutoResumeParams)
 	h.limits["auto-resume"] = map[bool]float64{false: 0, true: 1}[p.Enabled] // recorded beside the caps
 	return api.Status{State: api.StateOff, Version: "t", AutoResume: p.Enabled}, nil
 }
+func (h fakeHandler) SetStickySites(_ context.Context, p api.SetStickySitesParams) (api.Status, error) {
+	h.limits["sticky-sites"] = map[bool]float64{false: 0, true: 1}[p.Enabled] // recorded beside the caps
+	return api.Status{State: api.StateOff, Version: "t", StickySites: p.Enabled}, nil
+}
 func (fakeHandler) Events(context.Context) (api.EventsResult, error) {
 	return api.EventsResult{Events: []api.LinkEvent{
 		{At: time.Date(2026, 11, 10, 9, 41, 7, 0, time.Local), Link: "en0", From: api.LinkUp, To: api.LinkDown, Reason: api.EventProbeFailed},

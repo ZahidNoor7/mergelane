@@ -114,6 +114,7 @@ const helper: SystemMergeSnapshot = {
   helperVersion: '0.2.0',
   helperOutdated: false,
   autoResume: true,
+  stickySites: true,
   events: [],
   outages: []
 }
@@ -282,6 +283,8 @@ describe('the bundle', () => {
       state: 'off',
       reason: 'another VPN routes <ip>',
       error: 'socket at ~/… failed',
+      autoResume: true,
+      stickySites: true,
       links: helper.links
     })
     expect(report.networkActivity).toEqual(input.activity)

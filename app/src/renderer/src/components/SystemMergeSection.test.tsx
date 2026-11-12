@@ -19,6 +19,7 @@ function snapshot(patch: Partial<SystemMergeSnapshot> = {}): SystemMergeSnapshot
     helperVersion: '0.3.0',
     helperOutdated: false,
     autoResume: false,
+    stickySites: true,
     events: [],
     outages: [],
     ...patch
@@ -31,6 +32,7 @@ type Bridge = {
   installSystemMerge: ReturnType<typeof vi.fn>
   removeSystemMerge: ReturnType<typeof vi.fn>
   setSystemMergeAutoResume: ReturnType<typeof vi.fn>
+  setSystemMergeStickySites: ReturnType<typeof vi.fn>
 }
 
 let bridge: Bridge
@@ -47,6 +49,9 @@ beforeEach(() => {
     removeSystemMerge: vi.fn(),
     setSystemMergeAutoResume: vi.fn(
       async (enabled: boolean) => (current = snapshot({ autoResume: enabled }))
+    ),
+    setSystemMergeStickySites: vi.fn(
+      async (enabled: boolean) => (current = snapshot({ stickySites: enabled }))
     )
   }
   Object.assign(window.mergelane, bridge)
@@ -138,10 +143,25 @@ describe('SystemMergeSection', () => {
   })
 
   it('says a newer helper is needed when the versions match but a method is missing', async () => {
-    current = snapshot({ helperOutdated: true, autoResume: undefined })
+    current = snapshot({ helperOutdated: true, autoResume: undefined, stickySites: undefined })
     const region = await section()
     expect(within(region).getByText('This app needs a newer helper.')).toBeTruthy()
-    expect(within(region).getByText('Needs the updated helper.')).toBeTruthy()
+    // Both settings say so, and can't be changed.
+    expect(within(region).getAllByText('Needs the updated helper.')).toHaveLength(2)
+    const sticky = within(region).getByRole('switch', { name: 'Keep each site on one network' })
+    expect(sticky.hasAttribute('data-disabled')).toBe(true)
+    expect(sticky.className).toContain('cursor-not-allowed')
+  })
+
+  it('keeps each site on one network by default, and turns it off', async () => {
+    const region = await section()
+    const sticky = (): HTMLElement =>
+      within(region).getByRole('switch', { name: 'Keep each site on one network' })
+    expect(sticky().getAttribute('aria-checked')).toBe('true')
+    expect(within(region).getByText(/Sign-ins and calls stay steady/)).toBeTruthy()
+    await userEvent.click(sticky())
+    expect(bridge.setSystemMergeStickySites).toHaveBeenCalledWith(false)
+    await waitFor(() => expect(sticky().getAttribute('aria-checked')).toBe('false'))
   })
 
   it('turns auto-resume on', async () => {

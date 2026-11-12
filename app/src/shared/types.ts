@@ -587,6 +587,9 @@ export interface SystemMergeSnapshot {
   /** Whether merging turns itself back on after the helper restarts (ADR-0007's setting); absent
    * when the helper is too old to have it. */
   autoResume?: boolean
+  /** Whether system merge keeps each website on one network (ADR-0048); absent when the helper is
+   * too old to have the setting. */
+  stickySites?: boolean
   /** The daemon's recent link changes, oldest first; empty when it can't say. */
   events: SystemMergeLinkEvent[]
   /** The same log as outages, oldest first: what the failover history shows. */

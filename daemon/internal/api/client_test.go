@@ -59,6 +59,12 @@ func TestClientMethods(t *testing.T) {
 	if st, err = c.SetAutoResume(ctx, false); err != nil || st.AutoResume {
 		t.Fatalf("setAutoResume off %+v, %v", st, err)
 	}
+	if st, err = c.SetStickySites(ctx, false); err != nil || st.StickySites || st.Protocol != ProtocolVersion {
+		t.Fatalf("setStickySites off %+v, %v", st, err)
+	}
+	if st, err = c.SetStickySites(ctx, true); err != nil || !st.StickySites {
+		t.Fatalf("setStickySites on %+v, %v", st, err)
+	}
 	h.events = []LinkEvent{{At: testTime, Link: "en0", From: LinkUp, To: LinkGone, Reason: EventLost}}
 	ev, err := c.Events(ctx)
 	if err != nil || len(ev.Events) != 1 || ev.Events[0] != h.events[0] {
@@ -72,6 +78,9 @@ func TestClientMethods(t *testing.T) {
 	}
 	if len(h.resumes) != 2 || !h.resumes[0].Enabled || h.resumes[1].Enabled {
 		t.Fatalf("handler saw setAutoResume %+v", h.resumes)
+	}
+	if len(h.stickies) != 2 || h.stickies[0].Enabled || !h.stickies[1].Enabled {
+		t.Fatalf("handler saw setStickySites %+v", h.stickies)
 	}
 }
 
@@ -93,6 +102,9 @@ func TestClientNewMethodsAgainstAnOlderDaemon(t *testing.T) {
 	}
 	if _, err := c.Events(ctx); !isCode(err, CodeUnknownMethod) {
 		t.Fatalf("events against an older daemon = %v, want UNKNOWN_METHOD", err)
+	}
+	if _, err := c.SetStickySites(ctx, false); !isCode(err, CodeUnknownMethod) {
+		t.Fatalf("setStickySites against an older daemon = %v, want UNKNOWN_METHOD", err)
 	}
 	// An older daemon's status has no autoResume: it reads as off.
 	st, err := c.Status(ctx)

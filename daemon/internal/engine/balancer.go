@@ -20,7 +20,9 @@ type Balancer struct {
 	S              *Scheduler
 	ConnectTimeout time.Duration
 	FailCooldown   time.Duration
-	v6mode         atomic.Int32
+	// Sticky keeps each site on one link while it is on (ADR-0048); nil leaves every flow balanced.
+	Sticky *Sticky
+	v6mode atomic.Int32
 }
 
 // V6Mode decides what happens to IPv6 flows entering the TUN.
@@ -132,6 +134,14 @@ func classify(err error) dialClass {
 // DialTCP connects to host:port over one NIC, failing over to the others on link-level errors.
 // On success the caller owns the returned slot and must Relay or Release it.
 func (b *Balancer) DialTCP(ctx context.Context, host string, port int) (net.Conn, *Slot, Family, error) {
+	return b.DialSite(ctx, host, port, "")
+}
+
+// DialSite is DialTCP for a flow that belongs to site (see Sticky): while sticky-per-site is on,
+// the site's flows go over the link its last flow took, as long as that link can carry them. A
+// failover moves the site to the link that worked. An empty site is balanced as usual.
+func (b *Balancer) DialSite(ctx context.Context, host string, port int, site string) (net.Conn, *Slot, Family, error) {
+	sticky := site != "" && b.Sticky.On()
 	// The destination's family decides which NIC address is used; a host name stays IPv4.
 	f, network := Fam4, "tcp4"
 	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
@@ -144,7 +154,11 @@ func (b *Balancer) DialTCP(ctx context.Context, host string, port int) (net.Conn
 		rep, lastErr = repNetUnreachable, errors.New("no usable IPv6 adapter")
 	}
 	for {
-		sl := b.S.AcquireFor(f, tried)
+		prefer := ""
+		if sticky {
+			prefer = b.Sticky.Link(site)
+		}
+		sl := b.S.AcquireSticky(f, tried, prefer)
 		if sl == nil {
 			return nil, nil, f, &dialError{rep: rep, err: lastErr}
 		}
@@ -157,6 +171,9 @@ func (b *Balancer) DialTCP(ctx context.Context, host string, port int) (net.Conn
 		}
 		conn, err := d.DialContext(ctx, network, net.JoinHostPort(host, strconv.Itoa(port)))
 		if err == nil {
+			if sticky {
+				b.Sticky.Remember(site, sl.key)
+			}
 			return conn, sl, f, nil
 		}
 		b.S.ReleaseFor(sl, f)

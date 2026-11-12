@@ -496,6 +496,15 @@ func (s *Scheduler) Release(sl *Slot)                       { s.ReleaseFor(sl, F
 
 // AcquireFor picks a NIC that has an address of the given family.
 func (s *Scheduler) AcquireFor(f Family, skip map[string]struct{}) *Slot {
+	return s.AcquireSticky(f, skip, "")
+}
+
+// AcquireSticky is AcquireFor, except that the NIC whose key is prefer is taken whenever it can
+// carry the flow: it has an address of the family, it isn't skipped, and it isn't in a worse tier
+// than the best NIC available (a NIC whose probe failed is only kept while every NIC looks dead).
+// Keeping a site on the NIC it started on is what sticky-per-site needs (ADR-0048); load doesn't
+// move it. An empty prefer, or a NIC that can't carry the flow, falls back to the usual pick.
+func (s *Scheduler) AcquireSticky(f Family, skip map[string]struct{}, prefer string) *Slot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -503,6 +512,8 @@ func (s *Scheduler) AcquireFor(f Family, skip map[string]struct{}) *Slot {
 	// Only the best non-empty tier is used, so a dead tether gets no flows but, if every NIC
 	// looks dead, flows still go somewhere rather than nowhere.
 	var tiers [3][]*Slot
+	var preferred *Slot
+	preferredTier := 0
 	for _, sl := range s.slots {
 		if !sl.present || sl.ip(f) == nil {
 			continue
@@ -518,16 +529,23 @@ func (s *Scheduler) AcquireFor(f Family, skip map[string]struct{}) *Slot {
 			t = 0
 		}
 		tiers[t] = append(tiers[t], sl)
+		if prefer != "" && sl.key == prefer {
+			preferred, preferredTier = sl, t
+		}
 	}
 	var pool []*Slot
-	for _, tier := range tiers {
+	bestTier := 0
+	for i, tier := range tiers {
 		if len(tier) > 0 {
-			pool = tier
+			pool, bestTier = tier, i
 			break
 		}
 	}
 	if len(pool) == 0 {
 		return nil
+	}
+	if preferred != nil && (preferredTier < 2 || preferredTier <= bestTier) {
+		return s.takeLocked(preferred, f)
 	}
 	// Random start so ties don't resonate with the arrival pattern (a rotating counter can
 	// lock onto e.g. "every third flow is a short DNS-like one" and starve an adapter).
@@ -544,11 +562,19 @@ func (s *Scheduler) AcquireFor(f Family, skip map[string]struct{}) *Slot {
 			best, bestScore = sl, score
 		}
 	}
-	best.active.Add(1)
-	best.actF[f].Add(1)
-	best.total.Add(1)
-	return best
+	return s.takeLocked(best, f)
 }
+
+// takeLocked counts a new flow on sl. s.mu is held.
+func (s *Scheduler) takeLocked(sl *Slot, f Family) *Slot {
+	sl.active.Add(1)
+	sl.actF[f].Add(1)
+	sl.total.Add(1)
+	return sl
+}
+
+// Key is what names the NIC to AcquireSticky.
+func (sl *Slot) Key() string { return sl.key }
 
 // V6Usable reports whether any adapter can currently carry IPv6.
 func (s *Scheduler) V6Usable() bool {

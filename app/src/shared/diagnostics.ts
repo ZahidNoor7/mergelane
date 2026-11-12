@@ -272,6 +272,7 @@ export function summarizeHelper(
     helperVersion: helper.helperVersion,
     helperOutdated: helper.helperOutdated,
     autoResume: helper.autoResume,
+    stickySites: helper.stickySites,
     links: helper.links,
     events: helper.events,
     outages: helper.outages

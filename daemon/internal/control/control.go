@@ -39,6 +39,8 @@ type Prefs struct {
 	// WantOn is the user's last explicit choice: true after a successful enable, false after a
 	// disable or a VPN turn-off. Shutdown leaves it alone.
 	WantOn bool
+	// StickySites is the user's "keep each site on one network" setting (ADR-0048).
+	StickySites bool
 }
 
 // Guard returns a user-facing message for each active VPN or tunnel that conflicts with system
@@ -57,8 +59,11 @@ type Config struct {
 	// Prefs are the saved settings; SavePrefs (optional) saves every change.
 	Prefs     Prefs
 	SavePrefs func(Prefs) error
-	Now       func() time.Time
-	Logf      func(format string, a ...any) // warnings; logx.Printf when nil
+	// ApplySticky (optional) puts the sticky-sites setting into effect: called by New with the saved
+	// one, and on every change.
+	ApplySticky func(on bool)
+	Now         func() time.Time
+	Logf        func(format string, a ...any) // warnings; logx.Printf when nil
 }
 
 // Messages shown to the user.
@@ -101,13 +106,19 @@ func New(cfg Config) *Controller {
 	if cfg.Logf == nil {
 		cfg.Logf = logx.Printf
 	}
+	if cfg.ApplySticky != nil {
+		cfg.ApplySticky(cfg.Prefs.StickySites)
+	}
 	return &Controller{cfg: cfg, state: api.StateOff, reason: cfg.StartReason, since: cfg.Now(), prefs: cfg.Prefs}
 }
 
 var _ api.Handler = (*Controller)(nil)
 
 func (c *Controller) status() api.Status {
-	return api.Status{State: c.state, Reason: c.reason, Since: c.since, Version: c.cfg.Version, AutoResume: c.prefs.AutoResume}
+	return api.Status{
+		State: c.state, Reason: c.reason, Since: c.since, Version: c.cfg.Version,
+		AutoResume: c.prefs.AutoResume, StickySites: c.prefs.StickySites,
+	}
 }
 
 // setWantOn records the user's choice. A failed save is only logged: it must not undo an enable or
@@ -212,6 +223,28 @@ func (c *Controller) SetAutoResume(_ context.Context, p api.SetAutoResumeParams)
 		}
 	}
 	c.prefs = next
+	return c.status(), nil
+}
+
+// SetStickySites implements api.Handler: it saves the "keep each site on one network" setting and
+// puts it into effect for the next flows. If saving fails, the setting is unchanged.
+func (c *Controller) SetStickySites(_ context.Context, p api.SetStickySitesParams) (api.Status, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.prefs.StickySites == p.Enabled {
+		return c.status(), nil
+	}
+	next := c.prefs
+	next.StickySites = p.Enabled
+	if c.cfg.SavePrefs != nil {
+		if err := c.cfg.SavePrefs(next); err != nil {
+			return c.status(), api.Errorf(api.CodeInternal, "saving the sticky-sites setting: %v", err)
+		}
+	}
+	c.prefs = next
+	if c.cfg.ApplySticky != nil {
+		c.cfg.ApplySticky(next.StickySites)
+	}
 	return c.status(), nil
 }
 

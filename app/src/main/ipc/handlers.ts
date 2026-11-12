@@ -36,6 +36,7 @@ import {
   removeSystemMerge,
   setSystemMerge,
   setSystemMergeAutoResume,
+  setSystemMergeStickySites,
   systemMergeSnapshot
 } from '../daemon/daemon'
 import { deviceBindingSupported } from '../network/deviceBinding'
@@ -315,6 +316,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('removeSystemMerge', async () => removeSystemMerge())
   // `enabled` is checked with the daemon API's own guard (snapshot.ts) before it's sent.
   handle('setSystemMergeAutoResume', async (_event, enabled) => setSystemMergeAutoResume(enabled))
+  handle('setSystemMergeStickySites', async (_event, enabled) => setSystemMergeStickySites(enabled))
   handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))
 
   handle('freeSpace', async (_event, dir) => freeSpace(dir))

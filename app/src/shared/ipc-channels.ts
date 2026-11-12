@@ -20,6 +20,7 @@ export const IpcChannels = {
   installSystemMerge: 'merge:install',
   removeSystemMerge: 'merge:remove',
   setSystemMergeAutoResume: 'merge:auto-resume',
+  setSystemMergeStickySites: 'merge:sticky-sites',
   resetNetworkUsage: 'network:reset-usage',
   freeSpace: 'disk:free-space',
   appUsage: 'app:usage',

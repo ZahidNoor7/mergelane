@@ -34,6 +34,7 @@ const usage = `mergelane-daemon: merges every internet link the Mac has, system-
   mergelane-daemon status | on | off | links | stats | events
   mergelane-daemon limit <link> <Mbit/s>     cap a link (0 removes the cap)
   mergelane-daemon auto-resume on|off        turn merging back on by itself after a crash (off by default)
+  mergelane-daemon sticky-sites on|off       keep each website on one network (on by default)
   mergelane-daemon list                      show detected links
   mergelane-daemon version
 `
@@ -65,7 +66,7 @@ func dispatch(cmd string, args []string, stdout, stderr io.Writer) int {
 		err = cmdCleanup(stdout)
 	case "list":
 		err = cmdList(args, stdout)
-	case "status", "on", "off", "links", "stats", "limit", "events", "auto-resume":
+	case "status", "on", "off", "links", "stats", "limit", "events", "auto-resume", "sticky-sites":
 		err = cmdClient(cmd, args, stdout)
 	default:
 		fmt.Fprint(stderr, usage)
@@ -271,6 +272,9 @@ func cmdClient(cmd string, args []string, out io.Writer) error {
 	if cmd == "auto-resume" && (len(rest) != 1 || rest[0] != "on" && rest[0] != "off") {
 		return fmt.Errorf("usage: mergelane-daemon auto-resume on|off")
 	}
+	if cmd == "sticky-sites" && (len(rest) != 1 || rest[0] != "on" && rest[0] != "off") {
+		return fmt.Errorf("usage: mergelane-daemon sticky-sites on|off")
+	}
 	cl, err := api.Dial(*socketPath)
 	if err != nil {
 		return fmt.Errorf("mergelane-daemon isn't running or isn't reachable: %w", err)
@@ -331,6 +335,12 @@ func cmdClient(cmd string, args []string, out io.Writer) error {
 			return err
 		}
 		fmt.Fprint(out, formatStatus(st))
+	case "sticky-sites":
+		st, err := cl.SetStickySites(ctx, rest[0] == "on")
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(out, formatStatus(st))
 	}
 	return nil
 }
@@ -342,6 +352,9 @@ func formatStatus(st api.Status) string {
 	}
 	if st.AutoResume {
 		s += "auto-resume after a crash: on\n"
+	}
+	if st.StickySites {
+		s += "each site kept on one network: on\n"
 	}
 	return s
 }

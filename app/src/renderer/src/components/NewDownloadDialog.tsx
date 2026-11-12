@@ -13,6 +13,7 @@ import {
   Globe,
   HardDrive,
   Link as LinkIcon,
+  LoaderCircle,
   Lock,
   Magnet,
   Newspaper,
@@ -589,15 +590,6 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 <TooltipContent>Open a .torrent or .nzb file</TooltipContent>
               </Tooltip>
             </div>
-            {probe.status === 'probing' && (
-              <p className="text-[12px] text-ink-3">
-                {probe.noPeersYet
-                  ? 'No peers found yet, still looking…'
-                  : askingYoutube
-                    ? 'Asking YouTube about this video… it can take a minute.'
-                    : 'Checking the link…'}
-              </p>
-            )}
             {probe.status === 'error' && (
               <p className="flex items-start gap-1.5 text-[12px] leading-snug text-destructive">
                 <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
@@ -638,6 +630,38 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             >
               Resume it
             </Button>
+          </div>
+        )}
+
+        {/* While the link is checked, the preview's place is kept, its tile turning and its
+            name glowing, so the wait shows and the dialog doesn't jump when the answer comes.
+            Reduced motion stills both (main.css). */}
+        {probe.status === 'probing' && (
+          <div
+            role="status"
+            aria-busy
+            className="flex items-center gap-3 rounded-[12px] bg-sunken p-3 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
+          >
+            <span
+              aria-hidden
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-card text-primary shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              <LoaderCircle className="size-[48%] motion-safe:animate-spin" strokeWidth={1.75} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span
+                aria-hidden
+                data-placeholder="name"
+                className="h-3.5 w-2/5 rounded-full bg-[var(--border)] motion-safe:animate-[mergelane-glow_1.6s_ease-in-out_infinite]"
+              />
+              <p className="text-[12px] text-ink-2">
+                {probe.noPeersYet
+                  ? 'No peers found yet, still looking…'
+                  : askingYoutube
+                    ? 'Asking YouTube about this video… it can take a minute.'
+                    : 'Checking the link…'}
+              </p>
+            </div>
           </div>
         )}
 
@@ -729,8 +753,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               aria-labelledby="new-download-quality"
               variant="outline"
               orientation="vertical"
-              spacing={0}
-              className="w-full gap-0.5 rounded-[12px]"
+              spacing={0.5}
+              className="w-full rounded-[12px]"
             >
               {qualities.map((option) => {
                 const bytes = stream?.variants.find((variant) => variant.id === option.id)?.bytes

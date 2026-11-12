@@ -24,9 +24,17 @@ All notable changes to Mergelane are recorded here. The format follows
   network as such and can't pick a Don't use one. "Which network carries what" still wins while it names a
   network.
 
+### Changed
+
+- While New download checks a link, the place where its preview will appear shows a spinning tile and a glowing
+  name line above "Checking the link…", so the wait is visible and the window doesn't jump when the answer
+  arrives. With Reduce motion on, both stay still.
+
 ### Fixed
 
 - Selecting a download no longer nudges the download list up a few pixels.
+- New download lists a video's qualities one under another again, as designed. They sat side by side, which pushed
+  the window's contents sideways and cut off its left edge. The up and down arrow keys now move between them.
 - The Dashboard says when a download with a start time starts ("Starts at 1:00 AM"), and that a download started
   late, as the download list does, instead of "Waiting for a turn".
 

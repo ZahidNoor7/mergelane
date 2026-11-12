@@ -130,6 +130,22 @@ test.describe('stream downloads @smoke', () => {
     await expect(best).toHaveAttribute('aria-pressed', 'true')
     await expect(low).toHaveAttribute('aria-pressed', 'false')
     await expect(page.getByText('HLS', { exact: true })).toBeVisible()
+    // Listed one under another, as designed, so the dialog never scrolls sideways.
+    await expect(quality).toHaveAttribute('data-orientation', 'vertical')
+    const [bestBox, lowBox] = [await best.boundingBox(), await low.boundingBox()]
+    expect(lowBox!.y).toBeGreaterThanOrEqual(bestBox!.y + bestBox!.height)
+    expect(lowBox!.x).toBe(bestBox!.x)
+    const sideways = await quality.evaluate((element) => {
+      for (let box = element.parentElement; box; box = box.parentElement) {
+        if (box.scrollWidth > box.clientWidth) return box.className
+      }
+      return null
+    })
+    expect(sideways).toBeNull()
+    // Up and down arrows move between them.
+    await best.focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(low).toBeFocused()
     await low.click()
     await expect(low).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: 'Download' }).click()

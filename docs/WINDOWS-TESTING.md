@@ -135,6 +135,19 @@ off. It talks to the helper over its pipe and:
 
 It downloads about 160 MB, plus about 50 MB per network unplugged, and writes `hardware-report.txt`.
 
+### The Windows look (by eye, W7)
+
+The Mac renders Mergelane's Windows look in its tests (`app/e2e/windowsLook.spec.ts`), but not what Windows draws
+itself. With Mergelane open on the laptop, check (ADR-0060):
+
+- on Windows 11 22H2 or later, the desktop's colour shows faintly through the title bar and the navigation pane
+  (Mica); on an older Windows, or with Settings › Personalization › Colors › Transparency effects off, they are a
+  plain colour instead, with the same layout;
+- the title bar is a normal Windows one: the Mergelane icon and name on the left, minimise, maximise and close on
+  the right, the snap layouts appear when the pointer rests on maximise, and the icon and name dim when another
+  window is in front;
+- light and dark (Settings › Appearance) both look right, and Liquid Glass isn't offered.
+
 ### Adding Go packages
 
 `GO_PACKAGES` in `scripts/windows/kit.mjs` lists the daemon packages the kit runs. Add a package once it builds

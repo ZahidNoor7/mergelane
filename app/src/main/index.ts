@@ -23,6 +23,7 @@ import {
   CLEAR,
   currentWindowBackground,
   glassWindow,
+  micaWindow,
   setSolidGlass,
   setWindowTheme,
   titleBarOverlay
@@ -126,16 +127,13 @@ function createWindow(): void {
     title: 'Mergelane',
     // The theme's ground in the current mode, so a live window resize (which briefly exposes the
     // raw window background) and the first frame don't flash another colour.
-    backgroundColor: glassWindow() ? CLEAR : currentWindowBackground(),
-    ...(glassWindow()
-      ? process.platform === 'win32'
-        ? { backgroundMaterial: 'acrylic' as const }
-        : { vibrancy: 'under-window' as const }
-      : {}),
+    backgroundColor: glassWindow() || micaWindow() ? CLEAR : currentWindowBackground(),
+    ...(glassWindow() ? { vibrancy: 'under-window' as const } : {}),
+    ...(micaWindow() ? { backgroundMaterial: 'mica' as const } : {}),
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // No title bar: the renderer's sidebar (or compact bar) holds macOS's window buttons at its top
-    // left, on a strip the window is dragged by (components/WindowChrome.tsx). Windows and Linux
-    // draw their controls over the top right instead.
+    // left, on a strip the window is dragged by (components/WindowChrome.tsx). On Windows the renderer
+    // draws a 32px title bar and Windows its window buttons at that bar's right (WinTitleBar).
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
       ? // Inside the sidebar's 40px top strip (its panel is inset 8px from the window's edge).

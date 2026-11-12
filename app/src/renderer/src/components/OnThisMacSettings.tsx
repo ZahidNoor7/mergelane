@@ -71,7 +71,11 @@ export function OnThisMacSettings(): React.JSX.Element {
 
   return (
     <SettingsGroup title={`On ${words().thisComputer}`}>
-      <SettingRow label="Open at login" hint={loginHint(login)} htmlFor={loginId}>
+      <SettingRow
+        label={onWindows() ? 'Start with Windows' : 'Open at login'}
+        hint={loginHint(login)}
+        htmlFor={loginId}
+      >
         <Switch
           id={loginId}
           checked={wanted ?? login?.on ?? false}

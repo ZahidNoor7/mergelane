@@ -1,7 +1,8 @@
-// The Liquid Glass theme's material on Windows (W1). macOS draws vibrancy behind the window; Windows 11 22H2 and
-// later have system backdrops instead (Electron's BrowserWindow.setBackgroundMaterial, "only supported on Windows
-// 11 22H2 and up"). Acrylic is the one that blurs what is behind the window, as vibrancy does. Windows 10 and
-// older Windows 11 keep the theme's solid ground, as does a PC with transparency effects off.
+// The window's material on Windows (the design's Windows 11 study, ADR-0060): Mica behind every theme, the
+// material Windows 11 uses behind app windows, which the title bar and the navigation pane sit straight on.
+// Windows 11 22H2 and later have it (Electron's BrowserWindow.setBackgroundMaterial, "only supported on Windows
+// 11 22H2 and up"). Windows 10, older Windows 11, and a PC with transparency effects off get the theme's ground
+// instead (themes.ts windowsGround).
 
 /** Windows 11 version 22H2 (Microsoft Learn, Windows 11 release information: OS build 22621). */
 export const BACKDROP_FROM_BUILD = 22621
@@ -17,14 +18,12 @@ export function backdropSupported(build: number): boolean {
   return build >= BACKDROP_FROM_BUILD
 }
 
-/** The backdrop to set: acrylic for Liquid Glass while transparency is allowed, none otherwise; null where the
- * call isn't supported, so nothing is set. */
+/** The backdrop to set: Mica while transparency is allowed, none otherwise; null where the call isn't
+ * supported, so nothing is set. */
 export function windowsBackdrop(options: {
   build: number
-  liquid: boolean
-  solid: boolean
   reducedTransparency: boolean
-}): 'acrylic' | 'none' | null {
+}): 'mica' | 'none' | null {
   if (!backdropSupported(options.build)) return null
-  return options.liquid && !options.solid && !options.reducedTransparency ? 'acrylic' : 'none'
+  return options.reducedTransparency ? 'none' : 'mica'
 }

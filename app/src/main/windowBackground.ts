@@ -1,15 +1,18 @@
 import { nativeTheme, type BrowserWindow } from 'electron'
-import { windowBackground, windowInk } from '../shared/themes'
+import { windowBackground, windowInk, windowsGround } from '../shared/themes'
 import { windowsBackdrop, windowsBuild } from '../shared/windowMaterial'
 
 // The colour theme the window's background follows (ADR-0034). Set at start-up from the saved
 // settings, and again when the renderer saves a new theme, so a live resize (which shows the raw
 // window background for a moment) and the first frame never flash another theme's colour.
 //
-// The Liquid Glass theme draws the window in the system's own material instead (M3.1 pull request 7):
-// on macOS, Electron's vibrancy, 'under-window', with a clear background, so the desktop shows
-// through, blurred by the system; on Windows 11 22H2 and later, the acrylic backdrop
-// (shared/windowMaterial.ts). Reduce Transparency (the system's, or Settings') makes it solid again.
+// On macOS the Liquid Glass theme draws the window in the system's own material instead (M3.1 pull
+// request 7): Electron's vibrancy, 'under-window', with a clear background, so the desktop shows through,
+// blurred by the system. Reduce Transparency (the system's, or Settings') makes it solid again.
+//
+// On Windows every theme sits on Mica, from Windows 11 22H2, and Liquid Glass isn't offered (the design's
+// Windows 11 study, ADR-0060; shared/windowMaterial.ts): the title bar and the navigation pane show the
+// material, the content its own layer. Without Mica, the window's ground is themes.ts windowsGround.
 let themeId: unknown
 let solidGlass = false
 
@@ -21,26 +24,31 @@ export function setSolidGlass(solid: boolean): void {
   solidGlass = solid
 }
 
-/** The current theme's ground, in the mode the system (or the saved choice) has the window in now. */
+/** The current theme's ground, in the mode the system (or the saved choice) has the window in now: on
+ * Windows the window's own ground, behind the title bar and the navigation pane. */
 export function currentWindowBackground(): string {
-  return windowBackground(themeId, nativeTheme.shouldUseDarkColors)
+  const dark = nativeTheme.shouldUseDarkColors
+  return process.platform === 'win32'
+    ? windowsGround(themeId, dark)
+    : windowBackground(themeId, dark)
 }
 
-/** The Windows backdrop for the current theme, or null where Windows can't draw one. */
-function backdrop(): 'acrylic' | 'none' | null {
+/** The Windows backdrop, or null where Windows can't draw one. */
+function backdrop(): 'mica' | 'none' | null {
   if (process.platform !== 'win32') return null
   return windowsBackdrop({
     build: windowsBuild(process.getSystemVersion()),
-    liquid: themeId === 'liquid',
-    solid: solidGlass,
     reducedTransparency: nativeTheme.prefersReducedTransparency
   })
 }
 
-/** Whether the window shows the glass material: the Liquid Glass theme, on a Mac or on Windows 11
- * 22H2 and later, transparency not reduced. */
+/** Whether Windows draws Mica behind the window. */
+export function micaWindow(): boolean {
+  return backdrop() === 'mica'
+}
+
+/** Whether the window shows the Liquid Glass material: the theme on a Mac, transparency not reduced. */
 export function glassWindow(): boolean {
-  if (process.platform === 'win32') return backdrop() === 'acrylic'
   return (
     process.platform === 'darwin' &&
     themeId === 'liquid' &&
@@ -52,14 +60,17 @@ export function glassWindow(): boolean {
 /** A clear ground, behind the material. */
 export const CLEAR = '#00000000'
 
-/** Windows' window buttons, drawn over the top right (main/index.ts titleBarOverlay): on the theme's
- * ground, or clear over the glass, with symbols in the theme's ink, at the screen headers' height. */
+/** Windows' title-bar height, the design's 32px (renderer components/WindowChrome.tsx WinTitleBar). */
+export const TITLE_BAR_HEIGHT = 32
+
+/** Windows' window buttons, drawn at the title bar's right (main/index.ts titleBarOverlay): clear over
+ * Mica, or on the window's ground, with symbols in the theme's ink. */
 export function titleBarOverlay(): Electron.TitleBarOverlayOptions {
   const dark = nativeTheme.shouldUseDarkColors
   return {
-    color: glassWindow() ? CLEAR : currentWindowBackground(),
+    color: micaWindow() ? CLEAR : currentWindowBackground(),
     symbolColor: windowInk(themeId, dark),
-    height: 44
+    height: TITLE_BAR_HEIGHT
   }
 }
 
@@ -70,7 +81,7 @@ export function applyWindowMaterial(window: BrowserWindow | null | undefined): v
   if (process.platform === 'win32') {
     const material = backdrop()
     if (material) window.setBackgroundMaterial(material)
-    window.setBackgroundColor(material === 'acrylic' ? CLEAR : currentWindowBackground())
+    window.setBackgroundColor(material === 'mica' ? CLEAR : currentWindowBackground())
     window.setTitleBarOverlay(titleBarOverlay())
     return
   }

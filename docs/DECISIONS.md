@@ -1620,3 +1620,46 @@ can't speak Unix sockets there. CLAUDE.md: no Network Extension equivalent, cras
 - The System merge test is the one part of the kit that changes the PC: opt-in, as administrator, after the owner
   types YES, refusing next to an installed helper, and always removing the helper again.
 - The app speaks of "an administrator's permission" on Windows where macOS asks for a password.
+
+## ADR-0060: The Windows 11 look: Mica, a Windows title bar and navigation pane, Windows geometry (W7)
+
+**Status:** accepted, 2026-11-13. **Milestone:** W7. **Changes:** the "Liquid Glass on Windows" part of W1f
+(`docs/WINDOWS-PLAN.md`, Windows habits).
+
+### Context
+
+The owner's redesign prototype (`design-system/mergelane/redesign/prototype.html`, its "Windows 11" study) shows
+how the same window should look on Windows 11. W1f had only swapped the Mac's traffic lights for Windows' caption
+buttons and offered Liquid Glass on Windows 11 as acrylic. The study asks for more, and for less: Liquid Glass is
+macOS's design language, so Windows gets Windows' own material and shapes instead.
+
+### Decision
+
+- **Material:** Mica behind every theme on Windows 11 22H2 (build 22621) and later, through Electron's
+  `backgroundMaterial: 'mica'` (BrowserWindow docs: Windows 11 22H2 and later). The page is clear where the title
+  bar and the navigation pane sit, so Mica shows through; the content sits on its own layer with a hairline top
+  edge and an 8px top-left corner. Reduced transparency, or an older Windows, gives the ground the study
+  draws: the theme's window colour with 7% of its accent (`shared/themes.ts` `windowsGround`).
+- **Liquid Glass is the Mac's only.** Settings › Appearance doesn't offer it on Windows and says why. A Liquid
+  Glass choice saved on a Mac (settings can be copied) opens as Porcelain on Windows and stays saved, so the Mac
+  still shows it (`themeOnPlatform`).
+- **Title bar:** Microsoft's standard title bar (Learn, "Title bar design"): 32px, the 16px window icon 16px from
+  the left edge, the title 16px after it in Segoe UI Variable at caption size (12px), dimmed while another window
+  has the focus. Windows draws the caption buttons (`titleBarOverlay`, 32px), so snap layouts work.
+- **Navigation pane:** NavigationView's left pane: 248px, 36px items on a 4px backplate, and one 3×16px accent pill
+  that slides to the current place.
+- **Geometry** (Learn, "Geometry in Windows"): 8px for dialogs, menus and flyouts; 4px for everything in the page
+  (buttons, fields, cards, lists) and for tooltips; 6px for a segmented control's track.
+- **Controls:** buttons dim when pressed instead of shrinking, with a hairline that is darker along the bottom;
+  a focused text field gets a 2px accent line along its bottom edge; toggle switches are Fluent's (40×20, outlined
+  when off, the knob growing on hover and stretching when pressed). The app's own type stays Archivo, which ships
+  inside the app.
+- **Words:** "Start with Windows", Task Manager's way of counting CPU, and Windows' administrator approval.
+- **Testing:** `MERGELANE_E2E_RENDERER_PLATFORM=win32` (ignored by packaged builds) renders the Windows look on
+  the Mac, so `e2e/windowsLook.spec.ts` checks the real stylesheet in Chromium. What Windows draws itself (Mica,
+  the caption buttons) is on the laptop checklist.
+
+### Consequences
+
+- Windows 10 and Windows 11 before 22H2 get the solid ground: same layout, no Mica.
+- The notification-area icon and its flyout and menu from the study follow in their own change.

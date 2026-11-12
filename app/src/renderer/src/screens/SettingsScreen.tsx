@@ -1,5 +1,4 @@
 import { THEMES, type ThemeSeeds } from '@shared/themes'
-import { backdropSupported, windowsBuild } from '@shared/windowMaterial'
 import {
   DOWNLOADS_AT_ONCE,
   type GlassLook,
@@ -341,6 +340,8 @@ function AppearanceSettings(): React.JSX.Element {
   const macDark = usePrefersDark()
   const dark = themeSource === 'dark' || (themeSource === 'system' && macDark)
   const titleId = useId()
+  // Liquid Glass is macOS's design language: Windows doesn't offer it (the design's Windows 11 study).
+  const themes = onWindows() ? THEMES.filter((theme) => theme.id !== 'liquid') : THEMES
   return (
     <>
       <SettingsGroup title="Light or dark">
@@ -385,7 +386,7 @@ function AppearanceSettings(): React.JSX.Element {
           aria-labelledby={titleId}
           className="grid grid-cols-1 gap-3 @min-[448px]:grid-cols-2 @min-[768px]:grid-cols-3"
         >
-          {THEMES.map((theme) => {
+          {themes.map((theme) => {
             const on = appearanceTheme === theme.id
             return (
               <label
@@ -429,7 +430,14 @@ function AppearanceSettings(): React.JSX.Element {
         </div>
       </section>
 
-      {appearanceTheme === 'liquid' && <GlassSettings />}
+      {onWindows() ? (
+        <p className="max-w-[64ch] px-1 text-[12.5px] leading-[1.5] text-ink-3">
+          Liquid Glass is macOS’s design language, so it’s only offered on the Mac. On Windows every
+          theme sits on Mica, the material Windows 11 uses behind app windows.
+        </p>
+      ) : (
+        appearanceTheme === 'liquid' && <GlassSettings />
+      )}
 
       <SettingsGroup
         title="Network colours in this theme"
@@ -483,18 +491,10 @@ function GlassSettings(): React.JSX.Element {
   const setSolidGlass = useAppStore((store) => store.setSolidGlass)
   const systemSolid = useSystemReducedTransparency()
   const solidId = useId()
-  // Windows draws the glass from Windows 11 22H2 (shared/windowMaterial.ts); before that the window
-  // keeps the theme's solid ground, and Settings says so.
-  const noBackdrop =
-    onWindows() && !backdropSupported(windowsBuild(window.mergelane.systemVersion ?? ''))
   return (
     <SettingsGroup
       title="Liquid Glass"
-      description={
-        noBackdrop
-          ? 'Windows draws the glass from Windows 11 version 22H2. On this PC the window stays solid; the sidebar and the content pane keep their glass colours.'
-          : 'Glass is used only for what floats above your downloads: the window, the sidebar and the content pane. Cards and lists stay easy to read.'
-      }
+      description="Glass is used only for what floats above your downloads: the window, the sidebar and the content pane. Cards and lists stay easy to read."
     >
       <SettingRow
         label="Look"
@@ -520,13 +520,9 @@ function GlassSettings(): React.JSX.Element {
         label="Reduce transparency"
         htmlFor={solidId}
         hint={
-          onWindows()
-            ? systemSolid
-              ? 'Transparency effects are off in Windows (Settings › Personalization › Colors), so the glass is solid.'
-              : 'Makes the glass solid. Mergelane also follows Transparency effects in Settings › Personalization › Colors.'
-            : systemSolid
-              ? 'Already on in your Mac’s Accessibility settings, so the glass is solid.'
-              : 'Makes the glass solid. Mergelane also follows this setting in System Settings › Accessibility › Display.'
+          systemSolid
+            ? 'Already on in your Mac’s Accessibility settings, so the glass is solid.'
+            : 'Makes the glass solid. Mergelane also follows this setting in System Settings › Accessibility › Display.'
         }
       >
         <Switch

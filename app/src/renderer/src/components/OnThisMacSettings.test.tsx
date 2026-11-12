@@ -32,7 +32,11 @@ async function show(): Promise<void> {
   render(<OnThisMacSettings />)
   await act(async () => {})
 }
-const loginSwitch = (): HTMLElement => screen.getByRole('switch', { name: 'Open at login' })
+// "Open at login" on a Mac, "Start with Windows" on a PC (the design's Windows 11 study).
+const loginSwitch = (): HTMLElement =>
+  screen.getByRole('switch', {
+    name: window.mergelane.platform === 'win32' ? 'Start with Windows' : 'Open at login'
+  })
 const hint = (): string => loginSwitch().closest('div.border-b')!.querySelector('p')!.textContent!
 
 describe('On this Mac', () => {
@@ -137,6 +141,7 @@ describe('On this PC (Windows)', () => {
       screen.getByRole('switch', { name: 'Show the merged speed in the notification area' })
     ).toBeTruthy()
     expect(hint()).toBe('Starts in the notification area, so scheduled downloads begin on time.')
+    expect(screen.queryByRole('switch', { name: 'Open at login' })).toBeNull()
     expect(screen.getByText(/Uses Windows notifications/)).toBeTruthy()
     cleanup()
     login = { on: true, status: 'enabled' }

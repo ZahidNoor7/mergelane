@@ -41,6 +41,7 @@ import {
 } from '../daemon/daemon'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { pendingLink, pendingLinks, releaseLink } from '../openLinks'
+import { testKnobs } from '../testKnobs'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
@@ -191,6 +192,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
           new Promise<boolean>((resolve) => setTimeout(resolve, DESTINATION_CHECK_MS, false))
         ]))
       event.returnValue = {
+        ...(testKnobs.rendererPlatform ? { rendererPlatform: testKnobs.rendererPlatform } : {}),
         downloadSchedule: settings.downloadSchedule,
         homeDir: getHomeDir(),
         downloadsDir: getDefaultDownloadsDir(),

@@ -29,8 +29,9 @@ test take about 10 minutes in all.
    It:
    1. runs the release-notes script's tests;
    2. checks that `1.2.3` is `app/package.json`'s version and has its `CHANGELOG.md` section, that you are on `main`
-      at the same commit as `origin/main` (after `git fetch`), that nothing is uncommitted, and that neither the tag
-      `v1.2.3` (here or on GitHub) nor a release for it (even a draft) exists yet;
+      at the same commit as `origin/main` (after `git fetch`), that nothing is uncommitted, that Mergelane isn't open
+      (the packaging test checks that nothing of yours changes, and an open Mergelane keeps saving), and that neither
+      the tag `v1.2.3` (here or on GitHub) nor a release for it (even a draft) exists yet;
    3. builds both helpers stamped with the version, fetches yt-dlp and Deno and builds FFmpeg, and builds the DMG and
       the zip into a fresh `app/dist`;
    4. audits the Electron fuses, runs the packaging test in its local mode (below), and checks the app in the zip;

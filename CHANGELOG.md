@@ -5,6 +5,10 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-12
+
+Mergelane now offers to update its helper as soon as it opens, so the two stay in step.
+
 ### Changed
 
 - **Mergelane offers to update its helper as soon as it opens** after an update. A note at the foot of the sidebar

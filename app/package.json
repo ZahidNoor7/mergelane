@@ -1,6 +1,6 @@
 {
   "name": "mergelane",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Download manager for macOS that combines every internet connection the Mac has",
   "main": "./out/main/index.js",
   "author": "Mergelane contributors",

@@ -79,7 +79,7 @@ export function UsagePanel({ merging }: { merging: boolean }): React.JSX.Element
         </h2>
         <span className="ml-auto text-[12px] text-ink-3">
           {onWindows()
-            ? '100% is one full core'
+            ? '100% is one full core. Task Manager divides by every core, so it shows less.'
             : 'As Activity Monitor counts it: 100% is one full core'}
         </span>
       </div>

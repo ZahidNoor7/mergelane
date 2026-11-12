@@ -787,6 +787,22 @@ Last updated: 2026-11-11
     size and display scale.
   - **Tests:** `kit.test.mjs` checks the script ships, needs no administrator rights, writes only its report, asks
     before each optional step and puts the helper's settings back in its `finally` block.
+- **W7a: the Windows 11 look** (branch `w7-windows-window`, 2026-11-13, ADR-0060; the owner asked for the
+  redesign's Windows study to be fully in the code).
+  - Mica behind every theme from Windows 11 22H2 (`backgroundMaterial: 'mica'`), the study's ground without it;
+    Liquid Glass only on the Mac (a saved choice opens as Porcelain on Windows and stays saved).
+  - The 32px Windows title bar (icon, "Mergelane" in Segoe UI Variable, dimmed while inactive; Windows draws the
+    caption buttons), the navigation pane with a 4px backplate and a sliding 3×16px accent pill, the content on its
+    own layer.
+  - Windows geometry (8px overlays, 4px in the page and tooltips, 6px segmented tracks), Fluent switches, buttons
+    that dim when pressed, an accent underline on a focused field (the Downloads search box is a field now).
+  - Words: "Start with Windows", Task Manager's CPU note, Windows' administrator approval for an update.
+  - Test knob `MERGELANE_E2E_RENDERER_PLATFORM=win32` renders the Windows look on the Mac.
+  - **Tests:** Vitest 461 passed, every file in `COVERED` at 90% or more (WindowChrome, themes, windowMaterial,
+    SettingsScreen, OnThisMacSettings at 100%; UsagePanel 96%; colour 97%). New `e2e/windowsLook.spec.ts`
+    (5 tests: the real stylesheet in Chromium). Smoke: 729 passed, 1 skipped; ~/Downloads untouched.
+  - **Proven only on the laptop:** Mica, the caption buttons and snap layouts (`docs/WINDOWS-TESTING.md`, "The
+    Windows look").
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

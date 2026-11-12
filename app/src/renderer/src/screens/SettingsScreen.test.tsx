@@ -1,3 +1,4 @@
+import { THEMES } from '@shared/themes'
 import type { NetworkInterfaceInfo } from '@shared/types'
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -313,28 +314,22 @@ describe('Settings on Windows', () => {
     expect(screen.queryByText(/macOS may ask/)).toBeNull()
   })
 
-  it('draws the glass from Windows 11 22H2, and follows Transparency effects', () => {
+  it('offers every theme but Liquid Glass, a macOS look, and says every theme sits on Mica', () => {
     window.mergelane.platform = 'win32'
-    window.mergelane.systemVersion = '10.0.22631'
-    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
+    useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'porcelain' })
     show()
-    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
-    expect(within(glass).getByText(/Glass is used only for what floats/)).toBeTruthy()
-    expect(
-      within(glass).getByText(/follows Transparency effects in Settings › Personalization › Colors/)
-    ).toBeTruthy()
+    const themes = screen.getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)
+    expect(themes).toEqual(THEMES.filter((theme) => theme.id !== 'liquid').map((theme) => theme.id))
+    expect(screen.getByText(/Liquid Glass is macOS’s design language/)).toBeTruthy()
+    expect(screen.getByText(/On Windows every theme sits on Mica/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Liquid Glass' })).toBeNull()
   })
 
-  it('says the window stays solid before Windows 11 22H2, and when transparency effects are off', () => {
+  it('never shows the glass settings on Windows, even for a Liquid Glass choice saved on a Mac', () => {
     window.mergelane.platform = 'win32'
-    window.mergelane.systemVersion = '10.0.19045'
-    dark = true // the stubbed media query answers true: transparency is reduced
     useAppStore.setState({ settingsSection: 'appearance', appearanceTheme: 'liquid' })
     show()
-    const glass = screen.getByRole('region', { name: 'Liquid Glass' })
-    expect(
-      within(glass).getByText(/Windows draws the glass from Windows 11 version 22H2/)
-    ).toBeTruthy()
-    expect(within(glass).getByText(/Transparency effects are off in Windows/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Liquid Glass' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Liquid Glass/ })).toBeNull()
   })
 })

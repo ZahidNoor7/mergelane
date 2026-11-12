@@ -24,12 +24,15 @@ function invoke<K extends keyof IpcContract>(
   return ipcRenderer.invoke(IpcChannels[channel], ...args)
 }
 
+// Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
+const initialState = ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState
+
 const mergelaneApi = {
-  platform: process.platform,
+  // The window is drawn for this platform: this computer's, unless a test run asks for Windows'.
+  platform: initialState.rendererPlatform ?? process.platform,
   /** "10.0.22631" on Windows: which system backdrops it can draw (shared/windowMaterial.ts). */
   systemVersion: process.getSystemVersion(),
-  // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
-  initialState: ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
+  initialState,
 
   listInterfaces: () => invoke('listInterfaces'),
   deviceBindingSupported: () => invoke('deviceBindingSupported'),

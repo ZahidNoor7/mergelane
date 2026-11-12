@@ -147,9 +147,9 @@ so that each later piece can be tried on the laptop through the unpacked build a
   - window controls on the right, and Electron's Windows title-bar overlay instead of the Mac's traffic lights;
   - Open at login through Electron's `setLoginItemSettings`, which supports Windows;
   - notifications.
-- **Liquid Glass:** `win.setBackgroundMaterial('mica' | 'acrylic')` needs Windows 11 22H2 or later (Electron's
-  BrowserWindow docs). Windows 10 and older Windows 11 builds get the solid look. The appearance settings say which
-  is in use.
+- **Material:** Mica behind every theme (`backgroundMaterial: 'mica'`), which needs Windows 11 22H2 or later
+  (Electron's BrowserWindow docs); Windows 10 and older Windows 11 builds get a solid ground. Liquid Glass stays
+  the Mac's (W7, ADR-0060; this replaced W1f's acrylic Liquid Glass).
 - **Tests:**
   - Vitest and `node --test` on the Mac, with Windows behaviour behind seams and recorded Windows data;
   - mac-only e2e tests marked by platform, never deleted;
@@ -272,6 +272,15 @@ the merge into `main` stay the owner's decisions.
 - **Free signing:** apply to SignPath Foundation or the Microsoft Store if the owner approves. SignPath needs CI
   builds, which are paused.
 - **Merge:** the owner decides when `windows` merges into `main`.
+
+### W7: the Windows 11 look
+
+The owner's redesign prototype has a Windows 11 study (ADR-0060). Two pull requests:
+
+| PR | Branch | What |
+|---|---|---|
+| a | `w7-windows-window` | Mica, the 32px Windows title bar, the navigation pane with its sliding accent pill, Windows geometry (8px overlays, 4px in the page), Fluent switches, Windows button and field states and words; Liquid Glass stays the Mac's. |
+| b | `w7-windows-tray` | The notification-area icon as in the study: the mark alone, a flyout on click and a menu on right-click. |
 
 ## Simulated networks on Windows
 

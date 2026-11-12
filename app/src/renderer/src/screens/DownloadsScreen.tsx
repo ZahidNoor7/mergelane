@@ -258,7 +258,7 @@ export function DownloadsScreen({
             </p>
           </div>
           <div className="flex w-full min-w-0 items-center gap-2 @min-[640px]:w-auto">
-            <label className="relative flex h-8 min-w-0 flex-1 items-center rounded-full bg-sunken shadow-[inset_0_0_0_1px_var(--border)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring @min-[640px]:w-52 @min-[640px]:flex-none">
+            <label className="ml-field relative flex h-8 min-w-0 flex-1 items-center rounded-full bg-sunken shadow-[inset_0_0_0_1px_var(--border)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring @min-[640px]:w-52 @min-[640px]:flex-none">
               <Search
                 aria-hidden
                 className="pointer-events-none absolute left-2.5 size-3.5 text-ink-3"

@@ -27,7 +27,7 @@ describe('platformWords', () => {
       statusArea: 'the notification area',
       settingsShortcut: 'Ctrl+,',
       adminPrompt: 'Windows asks for an administrator’s permission.',
-      adminPromptShort: 'Windows asks for an administrator’s permission.'
+      adminPromptShort: 'Windows asks an administrator to approve the update once.'
     })
   })
 

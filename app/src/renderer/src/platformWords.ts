@@ -44,7 +44,7 @@ const WINDOWS: PlatformWords = {
   statusArea: 'the notification area',
   settingsShortcut: 'Ctrl+,',
   adminPrompt: 'Windows asks for an administrator’s permission.',
-  adminPromptShort: 'Windows asks for an administrator’s permission.'
+  adminPromptShort: 'Windows asks an administrator to approve the update once.'
 }
 
 /** The words for a platform; anything but Windows gets the Mac's, as before. */

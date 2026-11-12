@@ -1,4 +1,5 @@
 import { cn } from 'cn'
+import { useEffect, useState } from 'react'
 import {
   ArrowDownToLine,
   Gauge,
@@ -25,13 +26,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { UpdateNotice } from './UpdateNotice'
 import { HelperUpdateNotice } from './HelperUpdateNotice'
 import { CopiedLinkOffer } from './CopiedLinkOffer'
-import { words } from '../platformWords'
+import { onWindows, words } from '../platformWords'
+import appIcon from '../assets/brand/icon-128.png'
 
 // The window's frame in the final design (design-system/mergelane/redesign/prototype.html, Sidebar and
 // CompactBar): a sidebar from 760px of window width, a compact bar below. The macOS window buttons sit at
 // their top left (main/index.ts trafficLightPosition), on a strip the window is dragged by.
 //
 // Settings is at the sidebar's foot (a button in the compact bar), opened by ⌘, too (App.tsx).
+//
+// On Windows the same window follows the design's Windows 11 study (ADR-0060): a 32px title bar across the top
+// (WinTitleBar), with Windows' own window buttons at its right; the sidebar is a navigation pane straight on the
+// window's Mica, its current place on a quiet 4px backplate with a short accent pill at its left edge that
+// slides to the new place; the content sits on one layer below.
 
 /** Width of the window at which the sidebar replaces the compact bar. */
 export const SIDEBAR_FROM = 760
@@ -106,6 +113,60 @@ function SlowModeSwitch({ withLabel }: { withLabel: boolean }): React.JSX.Elemen
 const NAV_ITEM =
   'flex h-8 w-full items-center gap-2.5 rounded-[9px] px-2 text-[13px] font-[580] text-ink-2 transition-colors duration-100 outline-none hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-selected aria-[current=page]:bg-selected aria-[current=page]:text-foreground [&[aria-current=page]_svg]:text-[var(--color-accent-ink)]'
 
+/** Windows 11's navigation item (NavigationView, left pane): 36px, a 4px backplate on the current place. */
+const WIN_NAV_ITEM =
+  'relative flex h-9 w-full items-center gap-3 rounded-[4px] px-3 text-[13.5px] font-[540] text-foreground transition-colors duration-100 outline-none hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:opacity-80 aria-[current=page]:bg-selected aria-[current=page]:font-[620]'
+
+/** A navigation item's pitch on Windows: 36px, and the list's 2px gap. */
+export const NAV_PITCH = 38
+
+/** Windows 11's selection pill: one for the whole list, sliding to the current place (centred on its 36px
+ * row). It moves with a transition, so a click mid-slide turns it from where it is; reduced motion jumps. */
+export function NavPill({ index }: { index: number }): React.JSX.Element | null {
+  if (index < 0) return null
+  return (
+    <span
+      aria-hidden
+      data-testid="nav-pill"
+      className="pointer-events-none absolute top-0 left-0 z-10 h-4 w-[3px] rounded-full bg-primary transition-[translate] duration-[350ms] ease-[cubic-bezier(0.2,0.9,0.25,1)] motion-reduce:transition-none"
+      style={{ translate: `0 ${index * NAV_PITCH + 10}px` }}
+    />
+  )
+}
+
+/** Whether the window has the focus, following it as it comes and goes. */
+function useWindowFocused(): boolean {
+  const [focused, setFocused] = useState(() => document.hasFocus())
+  useEffect(() => {
+    const focus = (): void => setFocused(true)
+    const blur = (): void => setFocused(false)
+    window.addEventListener('focus', focus)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('focus', focus)
+      window.removeEventListener('blur', blur)
+    }
+  }, [])
+  return focused
+}
+
+/** Windows 11's title bar (the design's Windows study): 32px, the window icon 16px from the left edge, the title
+ * 16px after it in caption text. Windows draws minimise, maximise and close at its right
+ * (main/windowBackground.ts titleBarOverlay), so snap layouts work. The window is dragged by it. While another
+ * window has the focus, the icon and title are semi-transparent, as Microsoft's title bar guidance asks. */
+export function WinTitleBar(): React.JSX.Element {
+  const focused = useWindowFocused()
+  return (
+    <div
+      data-inactive={focused ? undefined : ''}
+      className="ml-titlebar window-drag flex h-8 shrink-0 items-center transition-opacity duration-100 select-none data-[inactive]:opacity-50"
+    >
+      <img src={appIcon} alt="" aria-hidden className="ml-4 size-4" />
+      <span className="truncate pl-4 text-[12px] text-foreground">Mergelane</span>
+    </div>
+  )
+}
+
 export function Sidebar(): React.JSX.Element {
   const [place, setPlace] = usePlace()
   const settings = place === 'settings'
@@ -122,20 +183,34 @@ export function Sidebar(): React.JSX.Element {
   const free = useFreeSpace(destinationDir)
   const { message: schedule } = useDownloadSchedule()
   const merged = lanes.reduce((sum, lane) => sum + (lane.out ? 0 : lane.speed), 0)
+  const win = onWindows()
+  const navItem = win ? WIN_NAV_ITEM : NAV_ITEM
+  const pad = win ? 'px-3' : 'px-1.5'
 
   return (
-    <div className="flex w-[236px] shrink-0 p-2">
-      <div className="ml-surface flex w-full flex-col rounded-[12px] bg-sidebar px-2.5 pb-2.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
-        {/* The window buttons' strip: the window is dragged by it. */}
-        <div className="window-drag -mx-2.5 h-10 shrink-0" />
-        <nav aria-label="Mergelane" className="mt-2 flex flex-col gap-0.5">
+    <div className={cn('flex shrink-0', win ? 'w-[248px] p-1' : 'w-[236px] p-2')}>
+      <div
+        className={cn(
+          'flex w-full flex-col',
+          win
+            ? 'px-1.5 pb-2'
+            : 'ml-surface rounded-[12px] bg-sidebar px-2.5 pb-2.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]'
+        )}
+      >
+        {/* The window buttons' strip: the window is dragged by it. Windows has its title bar instead. */}
+        {!win && <div className="window-drag -mx-2.5 h-10 shrink-0" />}
+        <nav
+          aria-label="Mergelane"
+          className={cn('relative flex flex-col gap-0.5', win ? 'mt-1' : 'mt-2')}
+        >
+          {win && <NavPill index={PLACES.findIndex((each) => each.id === place)} />}
           {PLACES.map((item) => (
             <button
               key={item.id}
               type="button"
               aria-current={place === item.id ? 'page' : undefined}
               onClick={() => setPlace(item.id)}
-              className={NAV_ITEM}
+              className={navItem}
             >
               <item.icon aria-hidden className="size-4" />
               <span className="flex-1 text-left">{item.label}</span>
@@ -153,11 +228,19 @@ export function Sidebar(): React.JSX.Element {
 
         {/* Not a labelled region: the dashboard has the Networks region. The heading still
             structures the sidebar for a screen reader. */}
-        <section className="mt-7 flex flex-col gap-1">
-          <h2 className="px-2 text-[12px] font-[650] text-ink-3">Networks</h2>
+        <section className={cn('flex flex-col gap-1', win ? 'mt-5' : 'mt-7')}>
+          <h2 className={cn('text-[12px] font-[650] text-ink-3', win ? 'px-3' : 'px-2')}>
+            Networks
+          </h2>
           <ul className="flex flex-col">
             {lanes.map((lane) => (
-              <li key={lane.id} className="flex h-9 items-center gap-2.5 rounded-[9px] px-2">
+              <li
+                key={lane.id}
+                className={cn(
+                  'flex h-9 items-center gap-2.5',
+                  win ? 'rounded-[4px] px-3' : 'rounded-[9px] px-2'
+                )}
+              >
                 <NetworkTile
                   kind={lane.kind}
                   color={lane.color}
@@ -181,7 +264,12 @@ export function Sidebar(): React.JSX.Element {
               </li>
             ))}
           </ul>
-          <div className="mx-2 mt-1.5 flex items-baseline justify-between border-t border-rule pt-2">
+          <div
+            className={cn(
+              'mt-1.5 flex items-baseline justify-between border-t border-rule pt-2',
+              win ? 'mx-3' : 'mx-2'
+            )}
+          >
             <span className="text-[12.5px] font-[620]">Merged</span>
             <SpeedText
               bytesPerSecond={merged}
@@ -195,23 +283,31 @@ export function Sidebar(): React.JSX.Element {
           <CopiedLinkOffer layout="sidebar" />
           <UpdateNotice />
           <HelperUpdateNotice />
-          {schedule && <p className="px-1.5 text-[12px] leading-snug text-ink-2">{schedule}</p>}
+          {schedule && <p className={cn('text-[12px] leading-snug text-ink-2', pad)}>{schedule}</p>}
           {free !== null && (
-            <p className="flex items-center gap-1.5 px-1.5 text-[12px] text-ink-3">
+            <p className={cn('flex items-center gap-1.5 text-[12px] text-ink-3', pad)}>
               <HardDrive aria-hidden className="size-3.5" />
               {formatBytes(free)} free
             </p>
           )}
-          <div className="px-1.5">
+          <div className={pad}>
             <SlowModeSwitch withLabel />
           </div>
-          {/* Settings, as the design's sidebar ends: to Updates, with a dot, when one is out. */}
-          <div className="-mx-1 border-t border-rule pt-2">
+          {/* Settings, as the design's sidebar ends: to Updates, with a dot, when one is out. On Windows its
+              pill is its own, at the foot. */}
+          <div className={cn('relative border-t border-rule', win ? 'pt-1.5' : '-mx-1 pt-2')}>
+            {win && settings && (
+              <span
+                aria-hidden
+                data-testid="nav-pill"
+                className="pointer-events-none absolute top-[16px] left-0 z-10 h-4 w-[3px] rounded-full bg-primary"
+              />
+            )}
             <button
               type="button"
               aria-current={settings ? 'page' : undefined}
               onClick={() => openSettings(updateOut ? 'updates' : undefined)}
-              className={NAV_ITEM}
+              className={navItem}
             >
               <Settings aria-hidden className="size-4" />
               <span className="flex-1 text-left">Settings</span>
@@ -242,11 +338,18 @@ export function CompactBar(): React.JSX.Element {
   const updateOut = useAppStore((store) => hasUpdate(store.update))
   const lanes = useNetworkLanes()
   const merged = lanes.reduce((sum, lane) => sum + (lane.out ? 0 : lane.speed), 0)
+  const win = onWindows()
   return (
-    <div className="ml-surface ml-compactbar window-drag flex flex-col gap-2.5 border-b border-rule bg-sidebar pt-3 pr-3 pb-2.5 pl-3">
+    <div
+      className={cn(
+        'ml-compactbar flex flex-col gap-2.5 border-b border-rule pt-3 pr-3 pb-2.5 pl-3',
+        // On Windows the title bar above holds the window buttons and drags the window.
+        win ? 'bg-background' : 'ml-surface window-drag bg-sidebar'
+      )}
+    >
       <div className="flex min-h-7 items-center gap-3">
         {/* Room for the window buttons. */}
-        <span aria-hidden className="w-[64px] shrink-0" />
+        {!win && <span aria-hidden className="w-[64px] shrink-0" />}
         <span className="flex items-baseline gap-1.5 text-[12px] text-ink-2">
           Merged
           <SpeedText

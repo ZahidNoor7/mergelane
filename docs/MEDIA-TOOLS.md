@@ -378,6 +378,34 @@ The app finds them with `resolveToolPath` (`app/src/main/media/mux/tools.ts`): i
 `app/resources/bin/` in development, or where `MERGELANE_FFMPEG_PATH`, `MERGELANE_YTDLP_PATH` (the program, not the
 folder) or `MERGELANE_DENO_PATH` point (development and tests only).
 
+## On Windows (W3, ADR-0057)
+
+The same three tools and versions, for Windows x64 and arm64, all fetched or built on the Mac:
+
+```sh
+cd app && npm run fetch:media-tools:win   # app/resources/bin-win/x64 and arm64
+```
+
+- **Manifests:** `scripts/media-tools/tools-windows-x64.json` and `tools-windows-arm64.json`, one per chip. Their
+  top-level `"platform": "win32"` and `"arch"` tell `fetch.mjs` to name programs `<name>.exe` and to check each
+  program's chip from its PE header (Microsoft Learn, "PE Format": the machine type after the `PE\0\0` signature),
+  where macOS uses `lipo`.
+- **yt-dlp:** the official unpacked Windows builds (`yt-dlp_win.zip`, `yt-dlp_win_arm64.zip`): `yt-dlp.exe` (on arm64
+  `yt-dlp_arm64.exe`, as yt-dlp names it) beside `_internal\`, for the same reason as on macOS (ADR-0031: nothing unpacked to a temporary folder on every run).
+- **Deno:** the official `deno-<chip>-pc-windows-msvc.zip`, pinned by the zip's and the program's SHA-256s, both from
+  Deno's own `.sha256sum` files.
+- **FFmpeg:** `build-ffmpeg-windows.sh` builds it on the Mac with llvm-mingw (a clang toolchain for Windows, both
+  chips, pinned by SHA-256), with zlib built from its pinned source and linked in statically, so the program needs
+  only Windows' own DLLs (the script checks its imports). The same component lists as `build-ffmpeg.sh`, word for
+  word (`fetch.test.mjs` checks), and the same LGPL guard, read from `config.h` since a Windows program can't run
+  here. x64's hand-written assembly is left out (`--disable-x86asm`): it needs nasm, and stream copy decodes almost
+  nothing. `fetch.mjs` passes the chip (`buildArgs`) and the two pinned archives (`buildInputs`) to the script, and
+  rebuilds when any of them changes.
+- **In the app:** `electron-builder.yml`'s `win:` section ships `resources/bin-win/<chip>/` as `yt-dlp\`,
+  `ffmpeg.exe`, `deno.exe` and `licenses\`; `app/src/main/media/mux/tools.ts` `WINDOWS_TOOL_PROGRAM` names them.
+- **Updating:** change the version in `tools.json` and both Windows manifests together (the tests check they
+  match), and take the Windows archives' SHA-256s from yt-dlp's `SHA2-256SUMS` and Deno's `.sha256sum` files.
+
 ## Open questions for the owner
 
 1. **The yt-dlp links repair.** `fetch.mjs` turns the three framework copies in `yt-dlp_macos.zip` back into links so

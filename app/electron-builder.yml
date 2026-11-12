@@ -24,6 +24,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # yt-dlp, FFmpeg and Deno ship through extraResources below, not inside app.asar.
   - '!resources/bin/**'
+  - '!resources/bin-win/**'
 asarUnpack:
   - resources/**
 # Licences ship inside the bundle (Contents/Resources), as CLAUDE.md requires.
@@ -116,6 +117,18 @@ win:
       to: mergelane-daemon.exe
     - from: ../daemon/bin/win-${arch}/mergelane-nmhost.exe
       to: mergelane-nmhost.exe
+    # The Windows media tools for this chip, from scripts/media-tools/tools-windows-${arch}.json (W3, ADR-0057):
+    # yt-dlp's unpacked Windows build (yt-dlp.exe beside _internal), Mergelane's own LGPL FFmpeg built on the
+    # Mac with llvm-mingw, Deno, and their licence texts. app/src/main/media/mux/tools.ts WINDOWS_TOOL_PROGRAM
+    # names them.
+    - from: resources/bin-win/${arch}/yt-dlp
+      to: yt-dlp
+    - from: resources/bin-win/${arch}/ffmpeg.exe
+      to: ffmpeg.exe
+    - from: resources/bin-win/${arch}/deno.exe
+      to: deno.exe
+    - from: resources/bin-win/${arch}/licenses
+      to: licenses
 npmRebuild: false
 # Electron fuses, flipped at package time, before signing. An REA audit of the first build found them
 # all at Electron's defaults; with runAsNode on, anyone could run the signed app as a plain Node.js

@@ -39,6 +39,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   readFile,
   readlink,
@@ -85,7 +86,44 @@ const INSTALL_REQUIRES = {
 const INSTALL_ALLOWS = {
   file: ['url', 'sha256', 'archive', 'archivePath', 'binarySha256'],
   folder: ['url', 'sha256', 'archive', 'executable', 'links'],
-  build: ['buildScript']
+  build: ['buildScript', 'buildArgs', 'buildInputs']
+}
+
+/** What a manifest's programs are built for: its top-level "platform" and "arch" (W3). macOS on Apple silicon
+ * when absent, as tools.json is; Windows on x64 or arm64 for tools-windows-<arch>.json. */
+export const TARGETS = { darwin: ['arm64'], win32: ['x64', 'arm64'] }
+
+export function targetOf(manifest) {
+  return { platform: manifest?.platform ?? 'darwin', arch: manifest?.arch ?? 'arm64' }
+}
+
+/** The installed program's name: the tool's name, with .exe on Windows. */
+export function programName(tool, target) {
+  return target.platform === 'win32' ? `${tool.name}.exe` : tool.name
+}
+
+/** PE machine types (Microsoft Learn, "PE Format", Machine Types). */
+const PE_MACHINES = { 0x8664: 'x64', 0xaa64: 'arm64', 0x14c: 'x86' }
+
+/** The chip a Windows program is built for, from its PE header: the "PE\\0\\0" signature at the offset stored at
+ * 0x3C, then the machine type. Throws when the file isn't a PE program. */
+export async function peMachineOf(path) {
+  const handle = await open(path, 'r')
+  try {
+    const head = Buffer.alloc(64)
+    await handle.read(head, 0, 64, 0)
+    if (head.toString('latin1', 0, 2) !== 'MZ')
+      throw new Error(`${path} is not a Windows program (no MZ header)`)
+    const offset = head.readUInt32LE(0x3c)
+    const pe = Buffer.alloc(6)
+    await handle.read(pe, 0, 6, offset)
+    if (pe.toString('latin1', 0, 4) !== 'PE\0\0')
+      throw new Error(`${path} is not a Windows program (no PE header)`)
+    const machine = pe.readUInt16LE(4)
+    return PE_MACHINES[machine] ?? `0x${machine.toString(16)}`
+  } finally {
+    await handle.close()
+  }
 }
 const INSTALL_FIELDS = [...new Set(Object.values(INSTALL_ALLOWS).flat())]
 
@@ -129,6 +167,12 @@ export function validateManifest(manifest) {
   const tools = manifest?.tools
   if (!Array.isArray(tools) || tools.length === 0) return ['the manifest has no "tools" list']
   const problems = []
+  const { platform, arch } = targetOf(manifest)
+  if (!Object.hasOwn(TARGETS, platform)) {
+    problems.push(`"platform" must be one of: ${Object.keys(TARGETS).join(', ')}`)
+  } else if (!TARGETS[platform].includes(arch)) {
+    problems.push(`"arch" must be one of: ${TARGETS[platform].join(', ')} for ${platform}`)
+  }
   const names = new Set()
   tools.forEach((tool, index) => {
     if (tool === null || typeof tool !== 'object' || Array.isArray(tool)) {
@@ -218,6 +262,27 @@ export function validateManifest(manifest) {
     if (tool.buildScript !== undefined && !PLAIN_FILE.test(String(tool.buildScript))) {
       add('"buildScript" must be the name of a file next to the manifest')
     }
+    if (tool.buildArgs !== undefined) {
+      const ok =
+        Array.isArray(tool.buildArgs) &&
+        tool.buildArgs.every((arg) => typeof arg === 'string' && PLAIN_FILE.test(arg))
+      if (!ok) add('"buildArgs" must be a list of plain words (letters, digits, ".", "_", "-")')
+    }
+    if (tool.buildInputs !== undefined) {
+      if (!Array.isArray(tool.buildInputs) || tool.buildInputs.length === 0) {
+        add('"buildInputs" must be a non-empty list of {name, url, sha256}')
+      } else {
+        for (const input of tool.buildInputs) {
+          const label = typeof input?.name === 'string' ? input.name : '?'
+          if (typeof input?.name !== 'string' || !PLAIN_FILE.test(input.name))
+            add(`build input ${label}: "name" must be a plain file name`)
+          if (typeof input?.sha256 !== 'string' || !SHA256.test(input.sha256))
+            add(`build input ${label}: "sha256" must be 64 lowercase hex characters`)
+          const problem = typeof input?.url === 'string' ? urlProblem(input.url) : 'missing "url"'
+          if (problem) add(`build input ${label}: ${problem}`)
+        }
+      }
+    }
     if (tool.licenseFiles !== undefined) {
       if (!Array.isArray(tool.licenseFiles) || tool.licenseFiles.length === 0) {
         add('"licenseFiles" must be a non-empty list')
@@ -259,7 +324,9 @@ function get(url, timeoutMs) {
     // 'timeout' only reports an idle socket; the request has to be destroyed by hand (Node docs).
     request.on('timeout', () => {
       request.destroy(
-        Object.assign(new Error(`no data from ${url} for ${timeoutMs / 1000}s`), { code: 'ETIMEDOUT' })
+        Object.assign(new Error(`no data from ${url} for ${timeoutMs / 1000}s`), {
+          code: 'ETIMEDOUT'
+        })
       )
     })
     request.on('error', reject)
@@ -578,6 +645,17 @@ async function requireArm64(tool, path) {
   return archs
 }
 
+/** Checks the program is built for the manifest's target: arm64 Mach-O on macOS, the target chip's PE on
+ * Windows. Returns what it found, for the log. */
+async function requireTarget(tool, path, target) {
+  if (target.platform !== 'win32') return requireArm64(tool, path)
+  const machine = await peMachineOf(path)
+  if (machine !== target.arch) {
+    throw new Error(`${tool.name}: built for ${machine}, expected Windows ${target.arch}`)
+  }
+  return [`windows-${machine}`]
+}
+
 /** Runs a mkdtemp'd work folder inside outDir (so renames stay on one filesystem), then removes it. */
 async function inWorkDir(outDir, name, task) {
   const work = await mkdtemp(join(outDir, `.fetch-${name}-`))
@@ -589,8 +667,8 @@ async function inWorkDir(outDir, name, task) {
 }
 
 /** "install": "file": one program, from a download or from inside an archive. */
-async function installFile(tool, { outDir, manifestDir, log, ...network }) {
-  const dest = join(outDir, tool.name)
+async function installFile(tool, { outDir, manifestDir, log, target, ...network }) {
+  const dest = join(outDir, programName(tool, target))
   const expected = tool.archive === 'none' ? tool.sha256 : tool.binarySha256
   if ((await installedHash(dest)) === expected) {
     await chmod(dest, 0o755)
@@ -618,7 +696,7 @@ async function installFile(tool, { outDir, manifestDir, log, ...network }) {
       }
     }
 
-    const archs = await requireArm64(tool, binary)
+    const archs = await requireTarget(tool, binary, target)
     // Licences first: if one is missing, no executable is installed without its licence.
     await copyLicenses(tool, manifestDir, outDir)
     await chmod(binary, 0o755)
@@ -631,7 +709,7 @@ async function installFile(tool, { outDir, manifestDir, log, ...network }) {
 }
 
 /** "install": "folder": an archive whose contents become <outDir>/<name>/. */
-async function installFolder(tool, { outDir, manifestDir, log, ...network }) {
+async function installFolder(tool, { outDir, manifestDir, log, target, ...network }) {
   const dest = join(outDir, tool.name)
   const stampFile = stampPath(outDir, tool.name)
   const stamp = await readStamp(stampFile)
@@ -661,7 +739,7 @@ async function installFolder(tool, { outDir, manifestDir, log, ...network }) {
       await checkTree(unpacked, tool.name)
     }
     const program = await fileInside(unpacked, tool.executable, tool.name)
-    const archs = await requireArm64(tool, program)
+    const archs = await requireTarget(tool, program, target)
     await chmod(program, 0o755)
     const tree = await treeHash(unpacked)
 
@@ -716,8 +794,8 @@ function runBuildScript(script, args, { tempDir, onOutput }) {
 }
 
 /** "install": "build": the pinned source tarball, built by the build script next to the manifest. */
-async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, ...network }) {
-  const dest = join(outDir, tool.name)
+async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, target, ...network }) {
+  const dest = join(outDir, programName(tool, target))
   const script = join(manifestDir, tool.buildScript)
   let scriptSha256
   try {
@@ -727,9 +805,15 @@ async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, ...
   }
   const stampFile = stampPath(outDir, tool.name)
   const stamp = await readStamp(stampFile)
+  const inputs = tool.buildInputs ?? []
+  const recipe = JSON.stringify({
+    args: tool.buildArgs ?? [],
+    inputs: inputs.map((input) => input.sha256)
+  })
   if (
     stamp?.sourceSha256 === tool.sourceSha256 &&
     stamp.buildScriptSha256 === scriptSha256 &&
+    (stamp.recipe ?? JSON.stringify({ args: [], inputs: [] })) === recipe &&
     typeof stamp.binarySha256 === 'string' &&
     (await installedHash(dest)) === stamp.binarySha256
   ) {
@@ -743,6 +827,14 @@ async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, ...
     const tarball = join(work, basename(new URL(tool.sourceUrl).pathname) || 'source')
     await downloadPinned(tool, tool.sourceUrl, tool.sourceSha256, tarball, log, network)
 
+    // What the build needs besides the source (on Windows, the cross-compiler and zlib), each pinned.
+    const inputPaths = []
+    for (const input of inputs) {
+      const path = join(work, input.name)
+      await downloadPinned(tool, input.url, input.sha256, path, log, network)
+      inputPaths.push(path)
+    }
+
     const built = join(work, 'built')
     // The build's own scratch space (its TMPDIR), in the system's temporary folder rather than in
     // outDir, whose path may have spaces. Removed whatever happens, with anything a stopped build
@@ -750,18 +842,23 @@ async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, ...
     const tempDir = await mkdtemp(join(tmpdir(), `mergelane-build-${tool.name}-`))
     try {
       log(`${tool.name} ${tool.version}: building with ${tool.buildScript}`)
-      await runBuildScript(script, [tarball, built], { tempDir, onOutput: onBuildOutput })
+      await runBuildScript(script, [tarball, built, ...(tool.buildArgs ?? []), ...inputPaths], {
+        tempDir,
+        onOutput: onBuildOutput
+      })
     } catch (error) {
       throw new Error(`${tool.name}: the build failed: ${error.message}`)
     } finally {
       await rm(tempDir, { recursive: true, force: true })
     }
 
-    const program = join(built, tool.name)
+    const program = join(built, programName(tool, target))
     if ((await installedHash(program)) === null) {
-      throw new Error(`${tool.name}: ${tool.buildScript} finished but did not write ${tool.name}`)
+      throw new Error(
+        `${tool.name}: ${tool.buildScript} finished but did not write ${programName(tool, target)}`
+      )
     }
-    const archs = await requireArm64(tool, program)
+    const archs = await requireTarget(tool, program, target)
     const binarySha256 = await sha256File(program)
 
     await copyLicenses(tool, manifestDir, outDir)
@@ -773,6 +870,7 @@ async function installBuild(tool, { outDir, manifestDir, log, onBuildOutput, ...
       version: tool.version,
       sourceSha256: tool.sourceSha256,
       buildScriptSha256: scriptSha256,
+      ...(recipe === JSON.stringify({ args: [], inputs: [] }) ? {} : { recipe }),
       binarySha256
     })
     log(
@@ -788,12 +886,15 @@ const INSTALLERS = { file: installFile, folder: installFolder, build: installBui
  * Fetches, verifies and installs one tool. Returns 'installed', 'built' or 'up-to-date'.
  * Nothing is made executable until every check has passed.
  */
-export async function fetchTool(tool, { outDir, manifestDir, log = () => {}, ...rest }) {
+export async function fetchTool(
+  tool,
+  { outDir, manifestDir, log = () => {}, target = targetOf(null), ...rest }
+) {
   await mkdir(outDir, { recursive: true })
   if (!Object.hasOwn(INSTALLERS, tool.install)) {
     throw new Error(`${tool.name}: unknown install kind ${JSON.stringify(tool.install)}`)
   }
-  return INSTALLERS[tool.install](tool, { outDir, manifestDir, log, ...rest })
+  return INSTALLERS[tool.install](tool, { outDir, manifestDir, log, target, ...rest })
 }
 
 /** Fetches every tool in a manifest, validating the whole manifest before any download. */
@@ -801,8 +902,9 @@ export async function fetchAll(manifest, options) {
   const problems = validateManifest(manifest)
   if (problems.length > 0) throw new Error(`invalid manifest:\n  - ${problems.join('\n  - ')}`)
   const results = {}
+  const target = targetOf(manifest)
   for (const tool of manifest.tools) {
-    results[tool.name] = await fetchTool(tool, options)
+    results[tool.name] = await fetchTool(tool, { target, ...options })
   }
   return results
 }

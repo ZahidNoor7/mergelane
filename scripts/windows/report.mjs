@@ -91,7 +91,10 @@ export function describeApp(app) {
   if (app.status === 'skipped') return `${head}: skipped, ${app.reason}`
   if (app.status === 'error') return `${head}: could not start: ${app.reason}`
   const stopped = app.leftRunning ? `; ${app.leftRunning} of its processes had to be stopped afterwards` : ''
-  if (app.status === 'ready') return `${head}: window opened after ${app.seconds} s, then closed${stopped}`
+  if (app.status === 'ready') {
+    const bridge = app.bridge === 'ready' ? ', the browser bridge answered' : ''
+    return `${head}: window opened after ${app.seconds} s${bridge}, then closed${stopped}`
+  }
   return `${head}: FAILED after ${app.seconds} s: ${app.reason}${stopped}`
 }
 

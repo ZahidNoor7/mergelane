@@ -14,8 +14,8 @@ import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
-import { registerNativeHost } from './nativeHost'
-import { refreshExtensionCopies } from './browsers'
+import { registerNativeHost, registerNativeHostWindows } from './nativeHost'
+import { installedWindowsHosts, refreshExtensionCopies } from './browsers'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import {
@@ -255,8 +255,20 @@ app.whenReady().then(async () => {
   // start, so it always points at this copy of the app.
   const nativeHost =
     testKnobs.nativeHostBinary ??
-    (app.isPackaged ? join(process.resourcesPath, 'mergelane-nmhost') : undefined)
-  if (nativeHost) {
+    (app.isPackaged
+      ? join(process.resourcesPath, `mergelane-nmhost${process.platform === 'win32' ? '.exe' : ''}`)
+      : undefined)
+  if (nativeHost && process.platform === 'win32') {
+    // Windows: per-user registry keys. A run with its own --user-data-dir is a test, whose copy of the
+    // app must not take the browsers over (as with mergelane:// below).
+    if (!app.commandLine.hasSwitch('user-data-dir')) {
+      void registerNativeHostWindows(
+        nativeHost,
+        app.getPath('userData'),
+        installedWindowsHosts()
+      ).catch((error) => console.error('[mergelane] browser host registration failed', error))
+    }
+  } else if (nativeHost) {
     void registerNativeHost(nativeHost, testKnobs.nativeHostHome ?? app.getPath('home')).catch(
       (error) => console.error('[mergelane] browser host registration failed', error)
     )

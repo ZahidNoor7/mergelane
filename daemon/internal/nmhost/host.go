@@ -64,7 +64,7 @@ func (o Options) withDefaults() Options {
 		o.Launch = OpenApp
 	}
 	if o.Dial == nil {
-		o.Dial = dialUnix
+		o.Dial = defaultDial
 	}
 	if o.Now == nil {
 		o.Now = time.Now

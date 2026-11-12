@@ -236,6 +236,38 @@ function Invoke-GoProgram($Program, [string]$Chip, [int]$Build) {
     return $result
 }
 
+# The app's browser pipe for a profile folder, as app/src/shared/browserPipe.ts names it (all three are tested
+# against shared/fixtures/browser-pipe.json): mergelane-browser- and 16 hex digits of the SHA-256 of the folder's
+# path, its letters A-Z lowercased.
+function Get-BridgePipeName([string]$Folder) {
+    $lower = [regex]::Replace($Folder, '[A-Z]', { param($m) $m.Value.ToLowerInvariant() })
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash((New-Object Text.UTF8Encoding($false)).GetBytes($lower))
+    } finally {
+        $sha.Dispose()
+    }
+    $hex = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+    return 'mergelane-browser-' + $hex.Substring(0, 16)
+}
+
+# Asks the app's browser bridge whether it is ready: the health message the Mac's package test sends
+# (scripts/ci/package-test.sh). Returns the app's one-line answer, or $null.
+function Get-BridgeHealth([string]$PipeName) {
+    $client = New-Object IO.Pipes.NamedPipeClientStream('.', $PipeName, [IO.Pipes.PipeDirection]::InOut)
+    try {
+        $client.Connect(2000)
+        $writer = New-Object IO.StreamWriter($client, (New-Object Text.UTF8Encoding($false)))
+        $writer.AutoFlush = $true
+        $writer.Write('{"v":3,"origin":"","message":{"type":"health"}}' + "`n")
+        return (New-Object IO.StreamReader($client)).ReadLine()
+    } catch {
+        return $null
+    } finally {
+        $client.Dispose()
+    }
+}
+
 # Starts the app once with its own profile inside the results folder (Electron's --user-data-dir, so it reaches
 # no other Mergelane and keeps its settings there), waits for its window ("Mergelane", app/src/renderer/index.html),
 # then closes it the way a user does. Anything from the kit's app folder still running afterwards is stopped.
@@ -286,8 +318,27 @@ function Invoke-AppCheck($App, [string]$Chip, [int]$Build) {
         }
     }
     $result.seconds = [math]::Round($watch.Elapsed.TotalSeconds, 1)
+    # With the window up, the browser bridge must answer on its pipe (W2): up to 30 seconds more.
+    $result.bridge = 'not asked'
     if ($title) {
+        $pipeName = Get-BridgePipeName $profileDir
+        $result.bridge = 'no answer'
+        $asked = [Diagnostics.Stopwatch]::StartNew()
+        while ($asked.Elapsed.TotalSeconds -lt 30 -and -not $process.HasExited) {
+            $answer = Get-BridgeHealth $pipeName
+            if ($answer -and $answer -match '"ready":true') {
+                $result.bridge = 'ready'
+                break
+            }
+            Start-Sleep -Milliseconds 500
+            $process.Refresh()
+        }
+    }
+    if ($title -and $result.bridge -eq 'ready') {
         $result.status = 'ready'
+    } elseif ($title) {
+        $result.status = 'failed'
+        $result.reason = 'the window opened, but the browser bridge did not answer on its pipe'
     } elseif ($process.HasExited) {
         $result.status = 'failed'
         $result.reason = "it closed by itself (exit code $($process.ExitCode))"

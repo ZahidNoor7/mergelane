@@ -7,6 +7,9 @@ import { app, shell } from 'electron'
 import {
   BROWSERS,
   EXTENSION_FOLDER_NAME,
+  notYetOn,
+  windowsCandidates,
+  type BrowserSpec,
   type BrowserId,
   type BrowsersReport,
   type BrowserState,
@@ -27,6 +30,16 @@ import { testKnobs, testRecord } from './testKnobs'
 function applicationFolders(): string[] {
   if (testKnobs.applicationFolders) return testKnobs.applicationFolders
   return ['/Applications', join(homedir(), 'Applications')]
+}
+
+/** Where a browser is installed: its app bundle on macOS, its executable on Windows (W2); null when
+ * it isn't. */
+function browserLocation(spec: BrowserSpec): string | null {
+  const candidates =
+    process.platform === 'win32' && !testKnobs.applicationFolders
+      ? windowsCandidates(spec, process.env)
+      : applicationFolders().map((folder) => join(folder, spec.app))
+  return candidates.find((path) => existsSync(path)) ?? null
 }
 
 /** The extension build Mergelane ships: inside the app when packaged, the build folder otherwise. */
@@ -101,18 +114,17 @@ export async function refreshExtensionCopies(): Promise<void> {
 
 /** Looks for every known browser, and where the extension for each is (or will be) saved. */
 export async function scanBrowsers(): Promise<BrowsersReport> {
-  const folders = applicationFolders()
   await refreshExtensionCopies()
   const settings = await loadSettings()
   const contacts = settings.browserContacts ?? {}
   const location = locationOf(settings)
   const browsers: BrowserState[] = BROWSERS.map((spec) => {
-    const appPath =
-      folders.map((folder) => join(folder, spec.app)).find((path) => existsSync(path)) ?? null
+    const appPath = browserLocation(spec)
     const built =
       spec.kind !== null && existsSync(join(bundledExtension(spec.kind), 'manifest.json'))
     return {
       ...spec,
+      notYet: notYetOn(spec, process.platform),
       found: appPath !== null,
       appPath,
       extensionFolder: built && spec.kind ? folderIn(location, spec.kind) : null,
@@ -178,21 +190,30 @@ export async function extensionLocation(): Promise<string> {
   return locationOf(await loadSettings())
 }
 
-/** Opens a browser, as double-clicking it in the Finder would (`open`, man open(1)). */
+/** Opens a browser, as double-clicking it in the Finder (`open`, man open(1)) or File Explorer would. */
 export async function openBrowser(id: BrowserId): Promise<void> {
   const spec = BROWSERS.find((each) => each.id === id)
-  const appPath = spec
-    ? applicationFolders()
-        .map((folder) => join(folder, spec.app))
-        .find((path) => existsSync(path))
-    : undefined
+  const appPath = spec ? browserLocation(spec) : null
   if (!appPath) return
   // A test run never opens a browser: it notes which it would open.
   if (testKnobs.userDataDir) return testRecord('openedBrowser', appPath)
+  if (process.platform === 'win32') {
+    const problem = await shell.openPath(appPath)
+    if (problem) console.error(`[mergelane] couldn't open ${appPath}: ${problem}`)
+    return
+  }
   await new Promise<void>((resolve) => {
     execFile('open', [appPath], (error) => {
       if (error) console.error(`[mergelane] couldn't open ${appPath}`, error)
       resolve()
     })
   })
+}
+
+/** The installed Windows browsers' native messaging keys, for nativeHost.ts (W2). */
+export function installedWindowsHosts(): { hostKey: string | null; firefox: boolean }[] {
+  return BROWSERS.filter((spec) => spec.windows && browserLocation(spec) !== null).map((spec) => ({
+    hostKey: spec.windows?.hostKey ?? null,
+    firefox: spec.kind === 'firefox'
+  }))
 }

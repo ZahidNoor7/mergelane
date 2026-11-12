@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -57,6 +58,67 @@ export async function registerNativeHost(
       written.push(file)
     } catch (error) {
       console.warn(`[mergelane] couldn't register the browser host in ${folder}:`, error)
+    }
+  }
+  return written
+}
+
+// Windows (W2): the manifest may sit anywhere, and each browser finds it through a key under HKCU whose
+// default value is the manifest's full path (Chrome's, Microsoft's and Mozilla's native messaging docs, which
+// give `REG ADD "HKCU\…\NativeMessagingHosts\<name>" /ve /t REG_SZ /d "<manifest>" /f`). Mergelane keeps the
+// two manifests (one for the Chrome family, one for Firefox) in its own folder, and writes one key per
+// installed browser whose maker documents its key (shared/browsers.ts WindowsBrowser.hostKey). These are
+// Mergelane's own keys, under the current user; the uninstaller removes them.
+
+/** One browser's registration: its key, and the manifest it points at. */
+export interface WindowsHostKey {
+  key: string
+  manifest: string
+}
+
+/** Runs reg.exe; a variable for tests. */
+export type RegRunner = (args: string[]) => Promise<void>
+
+export const runReg: RegRunner = (args) =>
+  new Promise((resolve, reject) => {
+    const reg = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'reg.exe')
+    execFile(reg, args, { windowsHide: true }, (error) => (error ? reject(error) : resolve()))
+  })
+
+/** The keys to write for the installed browsers, each pointing at the manifest of its kind. */
+export function windowsHostKeys(
+  manifests: { chrome: string; firefox: string },
+  browsers: { hostKey: string | null; firefox: boolean }[]
+): WindowsHostKey[] {
+  return browsers
+    .filter((browser): browser is { hostKey: string; firefox: boolean } => browser.hostKey !== null)
+    .map((browser) => ({
+      key: `HKCU\\${browser.hostKey}\\${NATIVE_HOST}`,
+      manifest: browser.firefox ? manifests.firefox : manifests.chrome
+    }))
+}
+
+/** Writes the two manifests into `folder` and one key per installed browser; returns the keys written. A key
+ * that can't be written is skipped. */
+export async function registerNativeHostWindows(
+  binary: string,
+  folder: string,
+  browsers: { hostKey: string | null; firefox: boolean }[],
+  run: RegRunner = runReg
+): Promise<WindowsHostKey[]> {
+  if (!browsers.some((browser) => browser.hostKey !== null)) return []
+  const dir = join(folder, 'NativeMessagingHosts')
+  const manifests = { chrome: join(dir, 'chrome.json'), firefox: join(dir, 'firefox.json') }
+  await mkdir(dir, { recursive: true })
+  await writeFile(manifests.chrome, hostManifest(binary, false))
+  await writeFile(manifests.firefox, hostManifest(binary, true))
+  const written: WindowsHostKey[] = []
+  for (const entry of windowsHostKeys(manifests, browsers)) {
+    try {
+      await run(['add', entry.key, '/ve', '/t', 'REG_SZ', '/d', entry.manifest, '/f'])
+      written.push(entry)
+    } catch (error) {
+      console.warn(`[mergelane] couldn't register the browser host in ${entry.key}:`, error)
     }
   }
   return written

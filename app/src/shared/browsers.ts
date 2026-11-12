@@ -13,12 +13,28 @@ export type BrowserId = 'chrome' | 'edge' | 'chromium' | 'firefox' | 'brave' | '
 /** Which build of the extension a browser loads (extension/build.mjs writes one per kind). */
 export type ExtensionKind = 'chrome' | 'firefox'
 
+/** A browser on Windows (W2): where it installs itself, and where it looks for native messaging hosts. */
+export interface WindowsBrowser {
+  /** Its executable, inside one of WINDOWS_ROOTS. */
+  exe: string
+  /** The HKCU key it reads native messaging hosts from, as its maker documents it: Chrome
+   * (developer.chrome.com, "Native messaging"), Edge (learn.microsoft.com, "Native messaging") and Firefox
+   * (developer.mozilla.org, "Native manifests"). Null when the maker documents none. */
+  hostKey: string | null
+}
+
+/** The folders browsers install into on Windows, by environment variable: for every user, for every user's
+ * 32-bit programs, and for one user. */
+export const WINDOWS_ROOTS = ['ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA'] as const
+
 export interface BrowserSpec {
   id: BrowserId
   name: string
   short: string
   /** The app's bundle name in /Applications or ~/Applications. */
   app: string
+  /** On Windows; absent for a browser that has no Windows version. */
+  windows?: WindowsBrowser
   /** The extension build it loads; null when Mergelane has none for it yet. */
   kind: ExtensionKind | null
   /** Where its extensions are managed, typed into its address bar. */
@@ -33,6 +49,10 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Google Chrome',
     short: 'Chrome',
     app: 'Google Chrome.app',
+    windows: {
+      exe: 'Google\\Chrome\\Application\\chrome.exe',
+      hostKey: 'Software\\Google\\Chrome\\NativeMessagingHosts'
+    },
     kind: 'chrome',
     extensionsPage: 'chrome://extensions'
   },
@@ -41,6 +61,10 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Microsoft Edge',
     short: 'Edge',
     app: 'Microsoft Edge.app',
+    windows: {
+      exe: 'Microsoft\\Edge\\Application\\msedge.exe',
+      hostKey: 'Software\\Microsoft\\Edge\\NativeMessagingHosts'
+    },
     kind: 'chrome',
     extensionsPage: 'edge://extensions'
   },
@@ -49,6 +73,7 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Chromium',
     short: 'Chromium',
     app: 'Chromium.app',
+    windows: { exe: 'Chromium\\Application\\chrome.exe', hostKey: null },
     kind: 'chrome',
     extensionsPage: 'chrome://extensions'
   },
@@ -57,6 +82,10 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Firefox',
     short: 'Firefox',
     app: 'Firefox.app',
+    windows: {
+      exe: 'Mozilla Firefox\\firefox.exe',
+      hostKey: 'Software\\Mozilla\\NativeMessagingHosts'
+    },
     kind: 'firefox',
     extensionsPage: 'about:debugging#/runtime/this-firefox'
   },
@@ -65,6 +94,7 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Brave',
     short: 'Brave',
     app: 'Brave Browser.app',
+    windows: { exe: 'BraveSoftware\\Brave-Browser\\Application\\brave.exe', hostKey: null },
     kind: null,
     extensionsPage: null,
     notYet: 'Not supported yet: Brave doesn’t document where it looks for Mergelane’s helper.'
@@ -74,6 +104,7 @@ export const BROWSERS: readonly BrowserSpec[] = [
     name: 'Vivaldi',
     short: 'Vivaldi',
     app: 'Vivaldi.app',
+    windows: { exe: 'Vivaldi\\Application\\vivaldi.exe', hostKey: null },
     kind: null,
     extensionsPage: null,
     notYet: 'Not supported yet: Vivaldi doesn’t document where it looks for Mergelane’s helper.'
@@ -102,10 +133,43 @@ export interface BrowserContact {
   extension?: string
 }
 
-/** The browser whose executable started Mergelane's helper (its path, from ps), if it's one we know:
- * the executable sits inside the browser's app bundle. */
+/** The browser whose executable started Mergelane's helper (its path), if it's one we know: on macOS
+ * the executable sits inside the browser's app bundle, on Windows it is the browser's own exe. */
 export function browserOfExecutable(path: string): BrowserId | null {
-  return BROWSERS.find((each) => path.includes(`/${each.app}/`))?.id ?? null
+  const lower = path.toLowerCase()
+  return (
+    BROWSERS.find(
+      (each) =>
+        path.includes(`/${each.app}/`) ||
+        (each.windows && lower.endsWith(`\\${each.windows.exe.toLowerCase()}`))
+    )?.id ?? null
+  )
+}
+
+/** Where a browser's executable may be on Windows, given the environment, most usual first. */
+export function windowsCandidates(
+  spec: BrowserSpec,
+  env: Record<string, string | undefined>
+): string[] {
+  if (!spec.windows) return []
+  const exe = spec.windows.exe
+  return WINDOWS_ROOTS.map((root) => env[root])
+    .filter((root): root is string => Boolean(root))
+    .map((root) => `${root}\\${exe}`)
+}
+
+/** Why a browser isn't supported on this platform yet, or undefined when it is. On Windows a browser
+ * whose maker documents no native messaging key can't reach Mergelane's helper. */
+export function notYetOn(spec: BrowserSpec, platform: string): string | undefined {
+  if (platform !== 'win32') return spec.notYet
+  if (!spec.windows) return spec.notYet
+  if (spec.windows.hostKey === null) {
+    return (
+      spec.notYet ??
+      `Not supported yet: ${spec.short} doesn’t document where it looks for Mergelane’s helper on Windows.`
+    )
+  }
+  return spec.notYet
 }
 
 export interface BrowserState extends BrowserSpec {
@@ -123,8 +187,9 @@ export interface BrowserState extends BrowserSpec {
 /** What the browser's file picker is pointed at: the folder, or for Firefox its manifest.json. */
 export function pickPath(browser: BrowserState): string | null {
   if (!browser.extensionFolder) return null
+  const separator = browser.extensionFolder.includes('\\') ? '\\' : '/'
   return browser.kind === 'firefox'
-    ? `${browser.extensionFolder}/manifest.json`
+    ? `${browser.extensionFolder}${separator}manifest.json`
     : browser.extensionFolder
 }
 

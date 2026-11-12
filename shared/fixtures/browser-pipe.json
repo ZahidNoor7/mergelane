@@ -1,0 +1,21 @@
+{
+  "comment": "Windows named pipes of the browser bridge, by the app folder they belong to (daemon/internal/nmhost/pipe.go PipeName, app/src/shared/browserPipe.ts, scripts/windows/test-kit.ps1). The first two are the same folder written in two cases.",
+  "cases": [
+    {
+      "userData": "C:\\Users\\Alex\\AppData\\Roaming\\Mergelane",
+      "pipe": "\\\\.\\pipe\\mergelane-browser-1c36b3032dc474f5"
+    },
+    {
+      "userData": "c:\\users\\alex\\appdata\\roaming\\mergelane",
+      "pipe": "\\\\.\\pipe\\mergelane-browser-1c36b3032dc474f5"
+    },
+    {
+      "userData": "D:\\Mergelane Kit\\results\\profile-x64",
+      "pipe": "\\\\.\\pipe\\mergelane-browser-ba0ea210ccedec3e"
+    },
+    {
+      "userData": "C:\\Users\\Zoë\\AppData\\Roaming\\Mergelane",
+      "pipe": "\\\\.\\pipe\\mergelane-browser-cf057d0aa7477095"
+    }
+  ]
+}

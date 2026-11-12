@@ -1444,3 +1444,36 @@ What the documentation says:
   W5's helper turns these off on the adapters it merges while it runs, and puts them back after, as upstream did.
 - No native code runs for downloads on Windows, so nothing there can fail to load.
 - Proven only on the laptop: the kit's checklist downloads over two networks and watches both carry traffic.
+
+## ADR-0056: The browser bridge on Windows: a named pipe and per-user registry keys (W2)
+
+**Status:** accepted, 2026-11-12. **Milestone:** W2.
+
+### Context
+
+On macOS the native messaging host reaches the app over a 0600 Unix socket in the app's folder, and each browser
+finds the host through a manifest file in its own profile folder. On Windows, Node serves a local server as a named
+pipe ("On Windows, the local domain is implemented using a named pipe"), Go's net package can't dial one, and the
+browsers find hosts through the registry.
+
+### Decision
+
+- **Transport:** the app listens on `\\.\pipe\mergelane-browser-<hash>`, the hash being the first 16 hex digits of
+  the SHA-256 of the app folder's path (A-Z lowercased). One pipe per folder keeps a test profile away from the
+  user's Mergelane, and keeps account names out of the system's pipe list. The default named-pipe security gives
+  other users read access only (Microsoft Learn), so no chmod-like step is needed. The host opens the pipe with
+  `CreateFile(… FILE_FLAG_OVERLAPPED …)` and `os.NewFile`, which Go makes pollable, so deadlines work.
+- **Registration:** two manifests in the app's folder and one `HKCU` key per installed browser that documents one
+  (Chrome, Edge, Firefox), written with `reg.exe` on every start. Chromium, Brave and Vivaldi are "not supported
+  yet" on Windows, as Brave and Vivaldi are on macOS.
+- **Wake:** `Mergelane.exe` is started with `CREATE_BREAKAWAY_FROM_JOB`, as MDN asks of any process a host starts
+  to outlive it, falling back to a start inside the job.
+- **Test runs** with their own `--user-data-dir` register nothing, as with `mergelane://`.
+
+### Consequences
+
+- The uninstaller (W4) must delete the three keys and the manifests.
+- A user whose Group Policy turns off user-level hosts (Edge's NativeMessagingUserLevelHosts) can't use the
+  extension; nothing Mergelane can do without administrator rights.
+- The test kit checks the pipe's health answer after the window opens, which proves the app side on the laptop.
+  Loading the extension in a browser stays on the kit's checklist.

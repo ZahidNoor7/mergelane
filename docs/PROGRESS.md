@@ -709,6 +709,21 @@ Last updated: 2026-11-11
       (`platformWords.ts`).
   - **Diagnostics:** zipped with Windows' own `tar.exe`, the helper log from ProgramData, and Windows paths
     hidden like macOS ones (`C:\Users\name\…`, other disks).
+- **W2: the browser bridge on Windows** (branch `w2-browser-bridge`, 2026-11-12, ADR-0056).
+  - **Pipe:** the app serves the bridge on `\\.\pipe\mergelane-browser-<hash of its folder>`; the host dials it as an
+    overlapped file (deadlines work). The app, the host and the kit compute the same name, tested against
+    `shared/fixtures/browser-pipe.json`.
+  - **Registration:** manifests in `%APPDATA%\Mergelane\NativeMessagingHosts` and an `HKCU` key per installed Chrome,
+    Edge or Firefox (`reg add`, as their docs give it); none for a test run. Chromium, Brave and Vivaldi document no
+    Windows key: "not supported yet" there.
+  - **Host on Windows:** the browser's path from `QueryFullProcessImageName`; wake starts `Mergelane.exe` with
+    `CREATE_BREAKAWAY_FROM_JOB` (MDN), falling back to a start inside the job.
+  - **Settings › Browser extensions:** finds the browsers in the program folders, opens them, and speaks of this PC
+    and File Explorer.
+  - **Kit:** the browser-bridge packages now must pass (no "not yet"); after the window opens, the kit asks the
+    bridge's pipe for its health, as the Mac's package test does.
+  - **Tests:** Go `nmhost` 98.8% (macOS), with Windows tests for the pipe, the browser's path and the launch; Vitest
+    `browserPipe.ts` and `browsers.ts` 100%; Playwright `nativeHost.spec.ts` (Windows registration, 7 passed).
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

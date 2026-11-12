@@ -9,12 +9,15 @@ import { PassThrough } from 'node:stream'
 import { after, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  APP_EXE,
+  APP_FOLDERS,
   ARCHES,
   CMD_NAME,
   COVER_INCLUDE,
   GO_PACKAGES,
   KIT_VERSION,
   UsageError,
+  addApp,
   assertAscii,
   buildKit,
   buildProgram,
@@ -320,14 +323,17 @@ describe('main', () => {
   it('prints the programs, the kit folder and the zip, and exits 0', async () => {
     const out = join(freshDir('dist'), 'windows-kit')
     const stdout = capture()
+    const root = fakeRoot()
+    fakeApps(root, ['x64'])
     const code = await main(['--out', out, '--arch', 'x64'], {
       stdout: stdout.stream,
-      root: fakeRoot(),
+      root,
       runner: fakeRunner({ dirty: true }).runner
     })
     assert.equal(code, 0)
     assert.match(stdout.text(), /building x64 cmd\/mergelane-nmhost/)
     assert.match(stdout.text(), /  go\/x64\/internal\/nmhost\/nmhost\.test\.exe\n/)
+    assert.match(stdout.text(), /  app\/x64\/Mergelane\.exe\n/)
     assert.match(stdout.text(), /uncommitted changes/)
     assert.match(stdout.text(), new RegExp(`Kit: ${out}\\n`))
     assert.match(stdout.text(), /Zip: .*mergelane-windows-kit\.zip\n/)
@@ -335,7 +341,7 @@ describe('main', () => {
 
   it('names packages with no Windows tests', async () => {
     const stdout = capture()
-    const code = await main(['--out', freshDir('kit'), '--arch', 'arm64', '--no-zip'], {
+    const code = await main(['--out', freshDir('kit'), '--arch', 'arm64', '--no-zip', '--no-app'], {
       stdout: stdout.stream,
       root: fakeRoot(),
       runner: fakeRunner({ withTests: new Set(['internal/nmhost']) }).runner
@@ -438,5 +444,64 @@ describe('test-kit.ps1 (static checks; it runs only on Windows)', () => {
     }
     assert.match(SCRIPT, /\$ResultsDir = Join-Path \$KitDir 'results'/)
     assert.match(SCRIPT, /\$ReportFile = Join-Path \$KitDir 'report\.txt'/)
+  })
+})
+
+/** Puts a stand-in unpacked app for each chip where `npm run build:win:dir` writes it. */
+function fakeApps(root, arches = Object.keys(ARCHES)) {
+  for (const arch of arches) {
+    const folder = join(root, 'app', 'dist', APP_FOLDERS[arch])
+    mkdirSync(join(folder, 'resources'), { recursive: true })
+    writeFileSync(join(folder, APP_EXE), `exe ${arch}`)
+    writeFileSync(join(folder, 'resources', 'app.asar'), 'asar')
+  }
+}
+
+describe('the app in the kit', () => {
+  it('copies each chip\'s unpacked app and lists it in kit.json with the exe\'s SHA-256', async () => {
+    const root = fakeRoot()
+    fakeApps(root)
+    const out = freshDir('kit')
+    const { runner } = fakeRunner()
+    const { kit } = await buildKit({ root, out, zip: false, apps: true, runner })
+    assert.deepEqual(
+      kit.apps.map((a) => a.path),
+      ['app/x64/Mergelane.exe', 'app/arm64/Mergelane.exe']
+    )
+    for (const app of kit.apps) {
+      assert.equal(app.kind, 'folder')
+      assert.equal(app.sha256, sha256(join(out, app.path)))
+      assert.equal(readFileSync(join(out, 'app', app.arch, 'resources', 'app.asar'), 'utf8'), 'asar')
+    }
+  })
+
+  it('refuses when an app is missing, and says how to build it', () => {
+    const root = fakeRoot()
+    fakeApps(root, ['x64'])
+    assert.throws(
+      () => addApp({ root, out: freshDir('kit'), arch: 'arm64' }),
+      (error) => error instanceof UsageError && /npm run build:win:dir/.test(error.message)
+    )
+  })
+
+  it('leaves the app out with --no-app, and by default when called as a function', async () => {
+    assert.equal(parseArgs(['--no-app']).apps, false)
+    assert.equal(parseArgs([]).apps, true)
+    const { runner } = fakeRunner()
+    const { kit } = await buildKit({ root: fakeRoot(), out: freshDir('kit'), zip: false, runner })
+    assert.deepEqual(kit.apps, [])
+  })
+
+  it('the script opens the app with its own profile, waits for its window, and closes it', () => {
+    assert.match(SCRIPT, /--user-data-dir=`"\$profileDir`"/)
+    assert.match(SCRIPT, /\$profileDir = Join-Path \$ResultsDir /)
+    assert.match(SCRIPT, /MainWindowTitle -like 'Mergelane\*'/)
+    assert.match(SCRIPT, /CloseMainWindow\(\)/)
+    assert.match(SCRIPT, /Get-Value \$Kit 'apps'/)
+    // Only processes started from the kit's own app folder are ever stopped.
+    for (const line of SCRIPT.split('\n').filter((l) => /Stop-Process/.test(l))) {
+      assert.match(line, /\$process\.Id|\$leftover\.Id/, line)
+    }
+    assert.match(SCRIPT, /\$_\.Path\.StartsWith\(\$appDir/)
   })
 })

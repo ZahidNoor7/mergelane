@@ -10,17 +10,19 @@
 //   - README.txt: the steps, in plain words;
 //   - go/<x64|arm64>/<package>/<name>.test.exe: the daemon's Go tests, cross-compiled for Windows with
 //     `go test -c -cover` (one program per package that has Windows tests);
+//   - app/<x64|arm64>/: the unpacked Windows app (`npm run build:win:dir` in app/), which the script starts once
+//     with a throwaway profile to check that its window opens;
 //   - kit.json: what to run, with each program's SHA-256, so the script can tell a damaged copy.
 //
 // Text files are written with Windows line endings. test-kit.ps1 must stay ASCII: Windows PowerShell reads a
 // script without a byte-order mark in the ANSI code page (about_Character_Encoding), so anything else would be
 // garbled.
 //
-// usage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip]
+// usage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app]
 // Exit codes: 0 built; 1 a build failed; 2 wrong usage.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -59,13 +61,18 @@ export const COVER_INCLUDE = '_windows\\.go:'
 
 export const CMD_NAME = 'Run test kit.cmd'
 
+/** The unpacked apps electron-builder writes to app/dist for each chip (`npm run build:win:dir`). */
+export const APP_FOLDERS = { x64: 'win-unpacked', arm64: 'win-arm64-unpacked' }
+export const APP_EXE = 'Mergelane.exe'
+
 export class UsageError extends Error {}
 
 export function parseArgs(argv) {
-  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true }
+  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true, apps: true }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--no-zip') options.zip = false
+    else if (arg === '--no-app') options.apps = false
     else if (arg === '--out' || arg === '--arch') {
       const value = argv[++i]
       if (!value) throw new UsageError(`${arg} needs a value`)
@@ -139,6 +146,17 @@ export async function buildProgram({ root, out, pkg, arch, runner = run }) {
   return existsSync(file) ? relative : null
 }
 
+/** Copies a chip's unpacked app into the kit; returns its kit.json entry. */
+export function addApp({ root, out, arch }) {
+  const from = join(root, 'app', 'dist', APP_FOLDERS[arch])
+  const exe = join(from, APP_EXE)
+  if (!existsSync(exe)) {
+    throw new UsageError(`no ${arch} Windows app in ${from}: run "npm run build:win:dir" in app/, or pass --no-app`)
+  }
+  cpSync(from, join(out, 'app', arch), { recursive: true })
+  return { arch, kind: 'folder', path: `app/${arch}/${APP_EXE}`, sha256: sha256(exe) }
+}
+
 async function commitOf(root, runner) {
   const head = await runner('git', ['rev-parse', '--short', 'HEAD'], { cwd: root })
   const status = await runner('git', ['status', '--porcelain'], { cwd: root })
@@ -167,6 +185,8 @@ Built from commit ${commit} on ${built.slice(0, 10)}.
 What it does
 - Reads which Windows, which chip and which Smart App Control setting this PC has.
 - Runs Mergelane's own test programs from this folder.
+- Opens Mergelane once from this folder, with a test profile kept in this folder, waits for its window, and
+  closes it again.
 - Looks at the names of the files in your Downloads folder before and after, to prove the tests never write
   there. It doesn't open them.
 - Writes report.txt in this folder and copies the report to the clipboard.
@@ -190,6 +210,7 @@ export async function buildKit({
   out,
   arches = Object.keys(ARCHES),
   zip = true,
+  apps = false,
   packages = GO_PACKAGES,
   runner = run,
   now = () => new Date(),
@@ -215,9 +236,17 @@ export async function buildKit({
     }
   }
 
+  const appEntries = []
+  if (apps) {
+    for (const arch of arches) {
+      log(`adding the ${arch} app`)
+      appEntries.push(addApp({ root, out, arch }))
+    }
+  }
+
   const { commit, dirty } = await commitOf(root, runner)
   const built = now().toISOString()
-  const kit = { kit: KIT_VERSION, commit, dirty, built, coverInclude: COVER_INCLUDE, programs }
+  const kit = { kit: KIT_VERSION, commit, dirty, built, coverInclude: COVER_INCLUDE, programs, apps: appEntries }
   writeFileSync(join(out, 'kit.json'), `${JSON.stringify(kit, null, 2)}\n`)
   writeFileSync(join(out, 'test-kit.ps1'), crlf(script))
   writeFileSync(join(out, CMD_NAME), cmdFile())
@@ -243,13 +272,14 @@ export async function main(
     options = parseArgs(argv)
   } catch (error) {
     stderr.write(
-      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip]\n`
+      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app]\n`
     )
     return 2
   }
   try {
     const { kit, noTests, zipFile } = await buildKit({ ...options, log: (line) => stdout.write(`${line}\n`), ...deps })
     for (const program of kit.programs) stdout.write(`  ${program.path}\n`)
+    for (const app of kit.apps) stdout.write(`  ${app.path}\n`)
     for (const id of noTests) stdout.write(`  ${id}: no Windows tests, nothing to run\n`)
     if (kit.dirty) stdout.write('Note: the checkout has uncommitted changes; kit.json says so.\n')
     stdout.write(`Kit: ${options.out}\n`)

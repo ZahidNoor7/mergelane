@@ -13,7 +13,9 @@ import {
   MODULE,
   REPORT_VERSION,
   ReportError,
+  appVerdict,
   coverageByFile,
+  describeApp,
   extractReport,
   main,
   programVerdict,
@@ -283,5 +285,42 @@ describe('main', () => {
     const stderr3 = capture()
     assert.equal(await main([], { stdin: Readable.from(['hello']), stderr: stderr3.stream }), 2)
     assert.match(stderr3.text(), /no report found/)
+  })
+})
+
+describe('the app check', () => {
+  const app = (fields) => ({ arch: 'x64', kind: 'folder', ...fields })
+
+  it('passes when the window opened, and says so', () => {
+    const { ok, lines } = summarize(report({ apps: [app({ status: 'ready', seconds: 6.5, leftRunning: 0 })] }))
+    assert.equal(ok, true)
+    assert.ok(lines.includes('Mergelane opened from the kit:'))
+    assert.ok(lines.includes('  x64   Mergelane: window opened after 6.5 s, then closed'))
+  })
+
+  it('fails when the window never opened or the app could not start, and notes stopped processes', () => {
+    const failed = app({ status: 'failed', seconds: 90, reason: 'no window within 90 seconds', leftRunning: 3 })
+    const { ok, lines } = summarize(report({ apps: [failed] }))
+    assert.equal(ok, false)
+    assert.ok(
+      lines.includes(
+        '  x64   Mergelane: FAILED after 90 s: no window within 90 seconds; 3 of its processes had to be stopped afterwards'
+      )
+    )
+    assert.equal(describeApp(app({ status: 'error', reason: 'blocked' })), 'x64   Mergelane: could not start: blocked')
+    assert.equal(appVerdict(app({ status: 'error' })), 'must')
+  })
+
+  it("doesn't count a chip this PC can't run", () => {
+    const skipped = app({ arch: 'arm64', status: 'skipped', reason: "this PC (x64) can't run arm64 programs" })
+    const { ok } = summarize(report({ apps: [skipped] }))
+    assert.equal(ok, true)
+    assert.equal(appVerdict(skipped), 'info')
+    assert.equal(describeApp(skipped), "arm64 Mergelane: skipped, this PC (x64) can't run arm64 programs")
+  })
+
+  it('reads a report from before the app check (no apps)', () => {
+    const { lines } = summarize(report())
+    assert.equal(lines.includes('Mergelane opened from the kit:'), false)
   })
 })

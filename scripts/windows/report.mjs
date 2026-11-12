@@ -79,6 +79,22 @@ export function programVerdict(program) {
   return program.until ? 'not yet' : 'must'
 }
 
+/** An app check: "passed" when its window opened, "info" when this PC's chip can't run it, else "must". */
+export function appVerdict(app) {
+  if (app.status === 'ready') return 'passed'
+  if (app.status === 'skipped') return 'info'
+  return 'must'
+}
+
+export function describeApp(app) {
+  const head = `${String(app.arch).padEnd(5)} Mergelane`
+  if (app.status === 'skipped') return `${head}: skipped, ${app.reason}`
+  if (app.status === 'error') return `${head}: could not start: ${app.reason}`
+  const stopped = app.leftRunning ? `; ${app.leftRunning} of its processes had to be stopped afterwards` : ''
+  if (app.status === 'ready') return `${head}: window opened after ${app.seconds} s, then closed${stopped}`
+  return `${head}: FAILED after ${app.seconds} s: ${app.reason}${stopped}`
+}
+
 const SMART_APP_CONTROL = {
   off: 'Off',
   evaluation: 'Evaluation (it watches, and may switch itself On or Off later)',
@@ -139,6 +155,13 @@ export function summarize(report) {
   for (const program of programs) {
     lines.push(`  ${describeProgram(program)}`)
     if (programVerdict(program) === 'must') ok = false
+  }
+
+  const apps = report.apps ?? []
+  if (apps.length) lines.push('Mergelane opened from the kit:')
+  for (const app of apps) {
+    lines.push(`  ${describeApp(app)}`)
+    if (appVerdict(app) === 'must') ok = false
   }
 
   const coverage = coverageByFile(programs.flatMap((program) => program.cover ?? []))

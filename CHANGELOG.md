@@ -10,7 +10,9 @@ All notable changes to Mergelane are recorded here. The format follows
 - Windows version, in progress on the `windows` branch: a test kit that checks Windows builds on a Windows PC and
   writes a report; the system-wide helper builds for Windows (it doesn't merge there yet); the app packages for
   Windows x64 and arm64, lists Windows' networks without VPNs and virtual adapters, keeps each download connection
-  on its network, and has a notification-area icon, Start with Windows, and the Windows 11 look from the redesign's Windows
+  on its network, and has a notification-area icon (the blue mark; a click shows the merged speed and each network with Open and
+  Pause all, a right-click its menu, and closing the window keeps Mergelane there), Start with Windows, and the
+  Windows 11 look from the redesign's Windows
   study (Mica behind every theme, a Windows title bar and navigation pane, Windows 11's corners, switches and
   button states; Liquid Glass stays a Mac theme); the browser extension works with Chrome, Edge and Firefox on Windows; video downloads work on Windows with
   yt-dlp, Deno and Mergelane's own FFmpeg built for Windows; a per-user installer for each chip that needs no

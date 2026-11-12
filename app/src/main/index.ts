@@ -12,6 +12,8 @@ import {
 } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
+// The unpacked copy (electron-builder.yml asarUnpack): a real file for Windows' own icon loader.
+import trayIcon from '../../resources/tray.ico?asset&asarUnpack'
 import { registerIpcHandlers } from './ipc/handlers'
 import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBridge'
 import { registerNativeHost, registerNativeHostWindows } from './nativeHost'
@@ -30,6 +32,9 @@ import {
 } from './windowBackground'
 import { openedAtLogin } from './loginItem'
 import { startMenuBar, statusItemShown } from './menuBar'
+import { windowsShell } from './notificationArea'
+import { setSystemMerge, systemMergeSnapshot } from './daemon/daemon'
+import { IpcChannels } from '../shared/ipc-channels'
 import { startClipboardOffers } from './clipboardOffers'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
@@ -58,11 +63,18 @@ let hasShownTrayNotification = false
 let startHidden = false
 
 /** A tray icon while the window is closed and Mergelane keeps running. Windows already has the
- * notification-area icon (menuBar.ts) unless Settings turned it off. */
+ * notification-area icon (menuBar.ts) unless Settings turned it off; then this one is the same mark,
+ * there only while downloads run or a browser needs Mergelane. */
 function ensureTray(): void {
-  if (process.platform === 'win32' && statusItemShown()) return
+  if (windowsShell() && statusItemShown()) return
+  // A test run never puts an icon on the Mac's menu bar.
+  if (testKnobs.userDataDir) return
   if (tray && !tray.isDestroyed()) return
-  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
+  tray = new Tray(
+    process.platform === 'win32'
+      ? trayIcon
+      : nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  )
   tray.setToolTip('Mergelane')
   tray.on('click', () => bringForward(ensureWindow()))
   tray.on('double-click', () => bringForward(ensureWindow()))
@@ -71,7 +83,7 @@ function ensureTray(): void {
       { label: 'Open Mergelane', click: () => bringForward(ensureWindow()) },
       { type: 'separator' },
       {
-        label: 'Quit Mergelane',
+        label: process.platform === 'win32' ? 'Exit' : 'Quit Mergelane',
         click: () => {
           isQuitting = true
           app.quit()
@@ -85,6 +97,18 @@ function ensureTray(): void {
 function ensureWindow(): BrowserWindow {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   return mainWindow as BrowserWindow
+}
+
+/** The window, brought forward on one of its places: the notification area's Settings, or Networks when
+ * System merge was refused there (notificationArea.ts). A window opened just now hears it once loaded. */
+function showPlace(place: 'settings' | 'networks'): void {
+  const window = ensureWindow()
+  bringForward(window)
+  const send = (): void => {
+    if (!window.isDestroyed()) window.webContents.send(IpcChannels.showPlace, place)
+  }
+  if (window.webContents.isLoading()) window.webContents.once('did-finish-load', send)
+  else send()
 }
 
 /** A link the OS handed over goes to the window's link field (see openLinks.ts). */
@@ -161,12 +185,15 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
-    if (isQuitting || process.platform === 'darwin') return
+    if (isQuitting || (process.platform === 'darwin' && !windowsShell())) return
 
     const activeCount = downloadManager?.activeDownloadCount() ?? 0
     const runsForBrowser = keepsRunningForBrowser()
+    // On Windows, Settings' "Keep running in the notification area when I close the window" (the
+    // notification-area icon's switch, ADR-0061) keeps Mergelane there whatever is running.
+    const keepsRunning = windowsShell() && statusItemShown()
 
-    if (activeCount > 0 || runsForBrowser) {
+    if (keepsRunning || activeCount > 0 || runsForBrowser) {
       event.preventDefault()
       mainWindow?.hide()
       ensureTray()
@@ -175,7 +202,9 @@ function createWindow(): void {
         if (!testKnobs.userDataDir && Notification.isSupported()) {
           new Notification({
             title: 'Mergelane is still downloading',
-            body: 'Downloads will continue in the background. Open Mergelane again, or use its tray icon, to quit.'
+            body: windowsShell()
+              ? 'Downloads carry on. Right-click the Mergelane icon in the notification area to exit.'
+              : 'Downloads will continue in the background. Open Mergelane again, or use its tray icon, to quit.'
           }).show()
         }
       }
@@ -299,7 +328,14 @@ app.whenReady().then(async () => {
       quit: () => {
         isQuitting = true
         app.quit()
-      }
+      },
+      activeCount: () => downloadManager?.activeDownloadCount() ?? 0,
+      pauseAll: async () => {
+        await downloadManager?.pauseAll()
+      },
+      showPlace,
+      systemMerge: () => systemMergeSnapshot(),
+      setSystemMerge: (on) => setSystemMerge(on)
     },
     settings
   )
@@ -334,7 +370,7 @@ app.on('before-quit', (event) => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform === 'darwin') return
+  if (process.platform === 'darwin' && !windowsShell()) return
   const activeCount = downloadManager?.activeDownloadCount() ?? 0
   if (!keepsRunningForBrowser() && activeCount === 0) return app.quit()
   ensureTray()

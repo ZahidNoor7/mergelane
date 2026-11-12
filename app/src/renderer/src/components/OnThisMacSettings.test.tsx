@@ -137,9 +137,7 @@ describe('On this PC (Windows)', () => {
   it('speaks of the PC and the notification area, and where Windows lists startup apps', async () => {
     await show()
     expect(screen.getByRole('region', { name: 'On this PC' })).toBeTruthy()
-    expect(
-      screen.getByRole('switch', { name: 'Show the merged speed in the notification area' })
-    ).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: /Show the merged speed/ })).toBeNull()
     expect(hint()).toBe('Starts in the notification area, so scheduled downloads begin on time.')
     expect(screen.queryByRole('switch', { name: 'Open at login' })).toBeNull()
     expect(screen.getByText(/Uses Windows notifications/)).toBeTruthy()
@@ -149,6 +147,21 @@ describe('On this PC (Windows)', () => {
     expect(hint()).toBe(
       'Starts in the notification area, so scheduled downloads begin on time. Windows lists it in Settings › Apps › Startup.'
     )
+  })
+
+  it('keeps Mergelane in the notification area when the window closes, the menu bar switch’s setting', async () => {
+    const user = userEvent.setup()
+    await show()
+    const keep = screen.getByRole('switch', {
+      name: 'Keep running in the notification area when I close the window'
+    })
+    expect(keep.getAttribute('aria-checked')).toBe('true')
+    expect(keep.closest('div.border-b')!.querySelector('p')!.textContent).toBe(
+      'Downloads carry on. Point at the Mergelane icon to see the merged speed; right-click it to exit.'
+    )
+    await user.click(keep)
+    expect(updateSettings).toHaveBeenCalledWith({ menuBarSpeed: false })
+    expect(useAppStore.getState().menuBarSpeed).toBe(false)
   })
 
   it('says only the installed app can open at login', async () => {

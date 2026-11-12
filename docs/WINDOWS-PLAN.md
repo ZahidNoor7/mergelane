@@ -280,7 +280,7 @@ The owner's redesign prototype has a Windows 11 study (ADR-0060). Two pull reque
 | PR | Branch | What |
 |---|---|---|
 | a | `w7-windows-window` | Mica, the 32px Windows title bar, the navigation pane with its sliding accent pill, Windows geometry (8px overlays, 4px in the page), Fluent switches, Windows button and field states and words; Liquid Glass stays the Mac's. |
-| b | `w7-windows-tray` | The notification-area icon as in the study: the mark alone, a flyout on click and a menu on right-click. |
+| b | `w7-windows-tray` | The notification-area icon as in the study (ADR-0061): the mark alone, a flyout on click, a menu on right-click, and closing the window keeps Mergelane there. |
 
 ## Simulated networks on Windows
 

@@ -53,8 +53,8 @@ node scripts/windows/kit.mjs
 ```
 
 `check-build.mjs` reads the build without running it: each installer is there, every program in each chip's app is
-built for that chip, the app says the right version, and its Electron fuses are the ones `electron-builder.yml`
-asks for. For a kit with the unpacked app instead, build with `npm run build:win:dir` and pass `--unpacked`.
+built for that chip, the notification-area icon is unpacked beside the app and is an ICO, the app says the right
+version, and its Electron fuses are the ones `electron-builder.yml` asks for. For a kit with the unpacked app instead, build with `npm run build:win:dir` and pass `--unpacked`.
 
 The Windows app is built with `electron-builder.win.yml`, which extends `electron-builder.yml` with the file
 rules only Windows needs (Windows' own native-module builds instead of the Mac's). Plain `electron-builder --win`
@@ -137,8 +137,9 @@ It downloads about 160 MB, plus about 50 MB per network unplugged, and writes `h
 
 ### The Windows look (by eye, W7)
 
-The Mac renders Mergelane's Windows look in its tests (`app/e2e/windowsLook.spec.ts`), but not what Windows draws
-itself. With Mergelane open on the laptop, check (ADR-0060):
+The Mac renders Mergelane's Windows look in its tests (`app/e2e/windowsLook.spec.ts` and
+`notificationArea.spec.ts`), but not what Windows draws itself. With Mergelane open on the laptop, check (ADR-0060,
+ADR-0061):
 
 - on Windows 11 22H2 or later, the desktop's colour shows faintly through the title bar and the navigation pane
   (Mica); on an older Windows, or with Settings › Personalization › Colors › Transparency effects off, they are a
@@ -146,7 +147,13 @@ itself. With Mergelane open on the laptop, check (ADR-0060):
 - the title bar is a normal Windows one: the Mergelane icon and name on the left, minimise, maximise and close on
   the right, the snap layouts appear when the pointer rests on maximise, and the icon and name dim when another
   window is in front;
-- light and dark (Settings › Appearance) both look right, and Liquid Glass isn't offered.
+- light and dark (Settings › Appearance) both look right, and Liquid Glass isn't offered;
+- the notification area (ADR-0061): the blue Mergelane mark, sharp at your display scale; pointing at it says
+  "Mergelane", or "Mergelane: … merged" while something downloads; a click opens the small panel just above the
+  taskbar beside the icon, with the merged speed, each network, Open Mergelane and Pause all, and a click anywhere
+  else closes it; a right-click shows Open Mergelane, Pause all downloads (while downloading), Merge for every app
+  (with the helper installed), Settings and Exit; closing the window leaves Mergelane in the notification area,
+  and Exit quits it.
 
 ### Adding Go packages
 

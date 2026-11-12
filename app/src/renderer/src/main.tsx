@@ -3,6 +3,7 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { TrayFlyout } from './components/TrayFlyout'
 import { installThemes } from './theme/appearance'
 import { themeOnPlatform } from '@shared/themes'
 
@@ -15,8 +16,10 @@ installThemes(
 // main.css draws the Windows 11 look under data-platform="win32" (ADR-0060).
 document.documentElement.dataset.platform = window.mergelane.platform
 
+// The same page draws the notification-area flyout on Windows, in its own small window
+// (main/notificationArea.ts loads it with #tray; ADR-0061).
+const flyout = window.location.hash === '#tray'
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+  <StrictMode>{flyout ? <TrayFlyout /> : <App />}</StrictMode>
 )

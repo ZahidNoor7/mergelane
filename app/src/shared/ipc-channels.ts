@@ -67,5 +67,13 @@ export const IpcChannels = {
   networkActivityChanged: 'network:activity-changed',
   saveDiagnostics: 'diagnostics:save',
   revealDiagnostics: 'diagnostics:reveal',
-  saveDiagnosticsRequested: 'diagnostics:requested'
+  saveDiagnosticsRequested: 'diagnostics:requested',
+  pauseAllDownloads: 'download:pause-all',
+  openMainWindow: 'app:open-main-window',
+  showPlace: 'app:show-place',
+  publishTrayStatus: 'tray:publish',
+  trayStatus: 'tray:status',
+  trayStatusChanged: 'tray:status-changed',
+  resizeTrayFlyout: 'tray:resize',
+  closeTrayFlyout: 'tray:close'
 } as const

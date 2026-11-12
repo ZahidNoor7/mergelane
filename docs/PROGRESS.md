@@ -803,6 +803,23 @@ Last updated: 2026-11-11
     (5 tests: the real stylesheet in Chromium). Smoke: 729 passed, 1 skipped; ~/Downloads untouched.
   - **Proven only on the laptop:** Mica, the caption buttons and snap layouts (`docs/WINDOWS-TESTING.md`, "The
     Windows look").
+- **W7b: Mergelane in Windows' notification area** (branch `w7-windows-tray`, 2026-11-13, ADR-0061; the rest of the
+  redesign's Windows study).
+  - The icon is the blue mark alone (`resources/tray.ico`, 16–64px, from `brand/tray/render.mjs`), loaded from its
+    unpacked copy; `check-build.mjs` checks it ships.
+  - Tooltip "Mergelane: … merged"; a click opens the flyout (merged speed, each network as the sidebar shows it, Open
+    Mergelane, Pause all) beside the icon; a right-click opens the menu (Open, Pause all downloads while something
+    runs, Merge for every app with the helper, Settings, Exit); a double-click opens the window.
+  - New: `DownloadManager.pauseAll`; Settings' Windows switch "Keep running in the notification area when I close
+    the window" (closing the window keeps Mergelane there; off, it quits unless something runs, as before).
+  - Fixed before merge: the flyout's hidden window could have kept Mergelane running after the switch was turned off.
+  - **Tests:** Vitest 482 passed; `trayFlyout.ts`, `TrayFlyout.tsx` and `useTrayStatus.ts` join `COVERED`
+    (100%, 100% and 100% of lines). New `e2e/notificationArea.spec.ts` (6 tests: tooltip, flyout, Pause all, menu,
+    Merge for every app against the fake helper, closing the window); with `windowsLook` and `onThisMac`, 30 of 30
+    over two repeats. Smoke: 735 passed, 1 skipped; nothing new in ~/Downloads. Windows scripts: 95 passed,
+    `check-build.mjs` 98.9%.
+  - **Proven only on the laptop:** the icon at each display scale, the real menu, the flyout's place and corners
+    (`docs/WINDOWS-TESTING.md`, "The Windows look").
 - **README and the repository's social preview** (branch `readme-refresh`, owner's request, 2026-11-12). The README
   described Phase 1 with no release; it now lists what 0.3.x does, how to install and update, and how to build. The
   social preview is `design-system/mergelane/redesign/brand/social/social-preview.png` (1280 × 640, from the app icon

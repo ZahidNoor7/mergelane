@@ -1662,4 +1662,47 @@ macOS's design language, so Windows gets Windows' own material and shapes instea
 ### Consequences
 
 - Windows 10 and Windows 11 before 22H2 get the solid ground: same layout, no Mica.
-- The notification-area icon and its flyout and menu from the study follow in their own change.
+- The notification-area icon and its flyout and menu from the study are ADR-0061.
+
+## ADR-0061: Mergelane in Windows' notification area: the mark, a flyout and a menu (W7)
+
+**Status:** accepted, 2026-11-13. **Milestone:** W7.
+
+### Context
+
+W1 gave Windows a notification-area icon that was the app's full icon, opened the window on a click and had a two-item
+menu. The redesign's Windows 11 study draws more: the blue mark alone, a flyout on a click with the merged speed, each
+network, Open and Pause all, and a menu on a right-click. Microsoft's notification-area guidance (Learn, "Notification
+Area") agrees: an icon with 16, 20 and 24px versions; a tooltip; a left click shows what people most want, near the
+icon, gone when they click elsewhere; a right-click shows the menu with the default command first; items that don't
+apply are removed, not greyed.
+
+### Decision
+
+- **Icon:** `app/resources/tray.ico`, the mark alone at 16, 20, 24, 32, 40, 48 and 64px, rendered from
+  `brand/svg/mark.svg` by `design-system/mergelane/redesign/brand/tray/render.mjs`. ICO, as Electron's Tray docs
+  recommend on Windows. It is loaded from its unpacked copy (`?asset&asarUnpack`), a real file for Windows' icon
+  loader, and `check-build.mjs` checks that copy is there and is an ICO.
+- **Tooltip:** "Mergelane", or "Mergelane: 4.2 MB/s merged" while bytes move.
+- **Flyout (a click):** a small frameless window of the app's own page (`#tray`, `TrayFlyout.tsx`), 300px wide and as
+  tall as its content, centred on the icon just clear of the taskbar on whichever edge it is, inside the work area
+  (`shared/trayFlyout.ts flyoutBounds`). Windows 11 rounds it. It closes on a second click, on Esc, on Open Mergelane,
+  or when anything else takes the focus. The window publishes what its sidebar shows (names, colours, speeds), the
+  units and the theme (`useTrayStatus`), so the two never disagree; main passes it on.
+- **Menu (a right-click):** Open Mergelane; Pause all downloads (only while something downloads or waits); Merge for
+  every app with a check mark (only while the helper is installed, answering and current); Settings; Exit. A refused
+  Merge opens the window on Networks, which says why. Electron menus can't put the default command in bold, so Open
+  comes first. A double-click opens the window.
+- **Pause all:** new `DownloadManager.pauseAll`, the user's own Pause for each download downloading or waiting, the
+  waiting ones first so none starts in a paused one's place.
+- **Closing the window:** Settings › General's switch on Windows is now "Keep running in the notification area when I
+  close the window" (the same `menuBarSpeed` setting). On, closing the window keeps Mergelane there. Off, closing it
+  quits, unless downloads run or a browser needs Mergelane (as before).
+- **Testing:** the test knob (ADR-0060) also gives a test run on the Mac the Windows shell, with a stand-in for the icon
+  that a test clicks, right-clicks and chooses from; the flyout is the real window.
+
+### Consequences
+
+- What Windows draws (the icon at each scale, the menu, the flyout's corners and place) is on the laptop checklist.
+- On Windows, Settings no longer has a separate "show the merged speed" switch: the tooltip always shows it while the
+  icon is there.

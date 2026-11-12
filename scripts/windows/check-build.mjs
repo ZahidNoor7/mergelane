@@ -6,6 +6,7 @@
 //     this expects;
 //   - in each chip's unpacked app, Mergelane.exe and every program inside it (the two helpers, Wintun's DLL,
 //     FFmpeg, Deno and yt-dlp, named by tools-windows-<arch>.json) is built for that chip;
+//   - the notification-area icon, tray.ico, is unpacked beside app.asar and is an ICO;
 //   - app.asar's package.json says the release version;
 //   - Mergelane.exe's Electron fuses are the ones electron-builder.yml asks for (audit-fuses.mjs EXPECTED_FUSES),
 //     read with @electron/fuses, which electron-builder itself uses to set them.
@@ -66,6 +67,15 @@ export function programsOf(manifest) {
   return programs
 }
 
+/** The notification-area icon (ADR-0061), where the app loads it from: unpacked from app.asar, so Windows' icon
+ * loader reads a real file. */
+export const TRAY_ICON = 'resources/app.asar.unpacked/resources/tray.ico'
+
+/** Whether these bytes start as an ICO file does: a reserved 0, type 1 (an icon), and at least one image. */
+export function isIco(bytes) {
+  return bytes.length >= 6 && bytes.readUInt16LE(0) === 0 && bytes.readUInt16LE(2) === 1 && bytes.readUInt16LE(4) > 0
+}
+
 /** Reads what the checks need from files: the fuses and app.asar's version. Tests replace it. */
 export function defaultReaders(root) {
   const require = createRequire(join(root, 'app', 'package.json'))
@@ -109,6 +119,10 @@ async function checkArch({ root, dist, version, arch, readers, fuseOptions }) {
   const app = join(dist, APP_FOLDERS[arch])
   const manifest = JSON.parse(readFileSync(join(root, 'scripts', 'media-tools', `tools-windows-${arch}.json`), 'utf8'))
   for (const program of programsOf(manifest)) await machine(join(app, program), arch)
+
+  const icon = join(app, TRAY_ICON)
+  if (!existsSync(icon)) problems.push(`${icon} is missing`)
+  else if (!isIco(readFileSync(icon))) problems.push(`${icon} is not an icon (no ICO header)`)
 
   const asar = join(app, 'resources', 'app.asar')
   try {

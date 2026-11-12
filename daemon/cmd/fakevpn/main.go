@@ -1,3 +1,5 @@
+//go:build darwin
+
 // Command fakevpn is a test tool for the acceptance suite: it opens a utun and adds the 0/1 and
 // 128/1 routes the way full-tunnel VPN clients do, then waits for SIGINT/SIGTERM (or SIGKILL).
 // Run as root. With -replace it first deletes existing 0/1 and 128/1 routes, as VPN clients that

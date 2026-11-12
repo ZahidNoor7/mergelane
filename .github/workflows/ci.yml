@@ -180,6 +180,18 @@ jobs:
       - name: Coverage by package
         run: go tool cover -func=coverage.out | tail -1 && rm coverage.out
       - run: go build -trimpath -o mergelane-daemon ./cmd/mergelane-daemon && file mergelane-daemon
+      # Windows (ADR-0053): every package builds, vets and passes staticcheck for both chips. staticcheck is
+      # built for this Mac into a temporary folder, then pointed at Windows with GOOS.
+      - name: Build, vet and staticcheck for Windows
+        run: |
+          bin="$(mktemp -d)"
+          GOBIN="$bin" go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          for arch in amd64 arm64; do
+            GOOS=windows GOARCH=$arch go build ./...
+            GOOS=windows GOARCH=$arch go vet ./...
+            GOOS=windows GOARCH=$arch "$bin/staticcheck" ./...
+          done
+          rm -rf "$bin"
 
   # Phase 1 M1.5: the simulated-network harness proves itself and its leak detection.
   netsim:

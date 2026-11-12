@@ -85,6 +85,27 @@ func TestVersionAndUsage(t *testing.T) {
 	}
 }
 
+// A command the platform can't run yet (notyet_windows.go) is refused before it starts, with why;
+// every other command still runs.
+func TestDispatchRefusesCommandsThePlatformCannotRunYet(t *testing.T) {
+	old := notYet
+	defer func() { notYet = old }()
+	notYet = map[string]string{"install": "not on this platform yet"}
+
+	var out, errb bytes.Buffer
+	if code := dispatch("install", []string{"--uid", "501"}, &out, &errb); code != 1 {
+		t.Errorf("install exit %d, want 1", code)
+	}
+	if out.Len() != 0 || errb.String() != "error: not on this platform yet\n" {
+		t.Errorf("install wrote %q / %q", out.String(), errb.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := dispatch("version", nil, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "mergelane-daemon ") {
+		t.Errorf("version: exit %d, %q / %q", code, out.String(), errb.String())
+	}
+}
+
 func TestClientCommandsTalkToTheDaemon(t *testing.T) {
 	h := fakeHandler{limits: map[string]float64{}}
 	sock := serve(t, h)

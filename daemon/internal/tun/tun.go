@@ -190,8 +190,15 @@ func (t *Tun) IsOn() bool {
 // virtual links such as a TetherKit phone, so pausing and resuming must never touch the adapter.
 var keepDevice bool
 
+// errUnsupported, if a platform sets it, is why that platform cannot open the adapter yet. open
+// returns it before touching anything, so On fails with no adapter made and no route added.
+var errUnsupported error
+
 // open creates the adapter and the userland stack, without capturing anything yet.
 func (t *Tun) open() error {
+	if errUnsupported != nil {
+		return errUnsupported
+	}
 	// "error", not "warn": tun2socks warns once per dropped UDP packet ("symmetric NAT ... drop
 	// packet"), which a torrent client triggers continuously.
 	if lvl, e := tlog.ParseLevel("error"); e == nil {

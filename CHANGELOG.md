@@ -8,7 +8,8 @@ All notable changes to Mergelane are recorded here. The format follows
 ### Added
 
 - Windows version, in progress on the `windows` branch: a test kit that checks Windows builds on a Windows PC and
-  writes a report. The Mac app doesn't change.
+  writes a report, and the system-wide helper now builds for Windows (it doesn't merge there yet). The Mac app
+  doesn't change.
 
 ### Changed
 

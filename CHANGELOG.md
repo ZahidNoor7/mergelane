@@ -5,6 +5,18 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A network you connect while a download runs now joins it.** Plug in your phone or join Wi-Fi during a download
+  and it starts using that network too, without a click. A network you switched off for a download, or left out
+  when you started it, stays off, even if it drops out and comes back. A download the server only allows over one
+  connection keeps to its one network.
+
+### Fixed
+
+- Tunnels, such as a VPN app's or iCloud Private Relay's (`utun0`), are no longer offered as networks for
+  downloads. They aren't separate internet connections.
+
 ## [0.3.4] - 2026-11-12
 
 Mergelane now offers to update its helper as soon as it opens, so the two stay in step.

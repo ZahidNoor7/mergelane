@@ -1267,3 +1267,26 @@ until the owner overrides it.
   - A real update needs the packaged app. Tests run the prompt through the test seam (ADR-0046) or a development
     build, which says it needs the packaged app.
 
+## ADR-0052: Networks that connect mid-download join it; tunnels aren't networks
+
+- Status: Owner (2026-11-12). The owner plugged in an iPhone while a download ran on Wi-Fi and saw it stay on Wi-Fi
+  only.
+- Context:
+  - Each download keeps its own list of networks. A network that connected while it ran was added switched off
+    (Plexo's behaviour, imported as it was and never decided here), so merging needed a manual switch per download.
+  - macOS tunnels (`utun0`: a VPN app, iCloud Private Relay, or system merge's own) have addresses, so they were
+    listed as networks for downloads. They carry traffic over a real network rather than being one.
+- Decision:
+  - **Joining:** a network that connects while a download runs, or that wasn't there when it was saved, joins it
+    switched on. Roles (ADR-0045) and routing (ADR-0040) still decide what it carries. A download that can only
+    use one connection (the server doesn't take byte ranges) keeps to its one network.
+  - **The user's choice is kept:** a network switched off for a download, or left out in New download, is marked
+    `chosenOff` on that download. It stays off when it drops out and comes back, and the mark is kept while the
+    network is gone. Switching it on clears the mark. Downloads saved before this have no marks, and their networks
+    keep their current switch.
+  - **Tunnels:** on macOS, `utun`, `ipsec`, `ppp`, `gif`, `stf`, `tun` and `tap` devices are never listed as
+    networks (`shared/tunnels.ts`, used by `listActiveInterfaces`).
+- Consequences:
+  - Plugging in a phone speeds up what's already downloading, with no clicks.
+  - Someone who wants a download to stay off a network switches that network off for it once.
+

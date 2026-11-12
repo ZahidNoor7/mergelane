@@ -68,7 +68,9 @@ test.describe('two networks @smoke', () => {
     expect(origin.log.slice(goneAt).some(overB), 'b carried more once it was back').toBe(true)
   })
 
-  test('a network that turns up mid-download is listed off; it carries traffic only while switched on', async ({
+  // ADR-0052 (the owner, 2026-11-12): a network that connects mid-download joins it, as merging should
+  // feel; before, it was listed off until switched on (Plexo's behaviour, never a decision of ours).
+  test('a network that turns up mid-download joins it; switched off, it stays off, even when it drops out and comes back', async ({
     mergelane,
     serve
   }) => {
@@ -79,22 +81,35 @@ test.describe('two networks @smoke', () => {
     expect(network((await mergelane.currentHttp())!, 'b')).toBeUndefined()
 
     await setNetworks(mergelane, NETWORKS)
-    const listed = await mergelane.waitUntil((state) => network(state, 'b') !== undefined)
-    expect(network(listed, 'b')).toMatchObject({ enabled: false, status: 'off' })
-    await settle(500)
-    expect(origin.chunkRequests().some(overB), 'not used until switched on').toBe(false)
-
-    await mergelane.api.setDownloadNetwork(id, 'b', true)
+    const joined = await mergelane.waitUntil((state) => network(state, 'b') !== undefined)
+    expect(network(joined, 'b')).toMatchObject({ enabled: true })
+    expect(network(joined, 'b')?.chosenOff).toBeUndefined()
     await mergelane.waitUntil((state) => (network(state, 'b')?.bytesDownloaded ?? 0) > 0)
 
     await mergelane.api.setDownloadNetwork(id, 'b', false)
     const off = await mergelane.waitUntil((state) => streamsOn(state, 'b') === 0)
-    expect(network(off, 'b')).toMatchObject({ enabled: false, status: 'off' })
+    expect(network(off, 'b')).toMatchObject({ enabled: false, status: 'off', chosenOff: true })
     expect(network(off, 'b')!.bytesDownloaded, 'what it delivered stays its own').toBeGreaterThan(0)
     const offAt = origin.log.length
 
     await settle(500)
     expect(origin.log.slice(offAt).some(overB), 'nothing over b while it is off').toBe(false)
+
+    // Switched off by the user, it stays off when it drops out and comes back.
+    await setNetworks(mergelane, { a: NETWORKS['a'] })
+    await settle(1500)
+    await setNetworks(mergelane, NETWORKS)
+    await settle(1500)
+    const back = (await mergelane.currentHttp())!
+    expect(network(back, 'b')).toMatchObject({ enabled: false, chosenOff: true })
+    expect(origin.log.slice(offAt).some(overB), 'still nothing over b').toBe(false)
+
+    // Switched on again, the choice is forgotten.
+    await mergelane.api.setDownloadNetwork(id, 'b', true)
+    const on = await mergelane.waitUntil((state) => network(state, 'b')?.enabled === true)
+    expect(network(on, 'b')?.chosenOff).toBeUndefined()
+    await mergelane.api.setDownloadNetwork(id, 'b', false)
+    await mergelane.waitUntil((state) => streamsOn(state, 'b') === 0)
 
     // Switching off the last network in use pauses the download; switching it back on resumes it.
     await mergelane.api.setDownloadNetwork(id, 'a', false)
@@ -115,6 +130,38 @@ test.describe('two networks @smoke', () => {
     await mergelane.api.resumeDownload(id)
     const resumed = await mergelane.waitUntil((state) => state.status === 'downloading')
     expect(network(resumed, 'a')?.enabled).toBe(true)
+  })
+
+  test('a network left out in New download doesn’t join when it comes back (ADR-0052)', async ({
+    mergelane,
+    serve
+  }) => {
+    const origin = await serve({ size: 128 * BLOCK, bytesPerSecond: 256 * 1024 })
+    await mergelane.start(origin.url(), origin.sha256, { networks: ['a'], connections: 2 })
+    const started = await mergelane.waitUntil((state) => state.bytesDownloaded > 0)
+    expect(network(started, 'b')).toMatchObject({ enabled: false, chosenOff: true })
+    await setNetworks(mergelane, { a: NETWORKS['a'] })
+    await settle(1500)
+    await setNetworks(mergelane, NETWORKS)
+    await settle(1500)
+    expect(network((await mergelane.currentHttp())!, 'b')).toMatchObject({ enabled: false })
+    expect(origin.chunkRequests().some(overB), 'never over b').toBe(false)
+  })
+
+  test('a download that can only use one network keeps to it when another turns up (ADR-0052)', async ({
+    mergelane,
+    serve
+  }) => {
+    await setNetworks(mergelane, { a: NETWORKS['a'] })
+    const origin = await serve({ size: 64 * BLOCK, bytesPerSecond: 256 * 1024, ranges: false })
+    await mergelane.start(origin.url(), origin.sha256)
+    await mergelane.waitUntil((state) => state.bytesDownloaded > 0)
+    await setNetworks(mergelane, NETWORKS)
+    const listed = await mergelane.waitUntil((state) => network(state, 'b') !== undefined)
+    expect(network(listed, 'b')).toMatchObject({ enabled: false })
+    expect(network(listed, 'a')).toMatchObject({ enabled: true })
+    await settle(500)
+    expect(origin.log.some(overB), 'never over b').toBe(false)
   })
 
   test('switching the last network off and on quickly ends up where it was left', async ({

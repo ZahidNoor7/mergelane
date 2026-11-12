@@ -114,7 +114,9 @@ export const COVERED = [
   'src/renderer/src/components/SystemMergeSection.tsx',
   'src/renderer/src/hooks/useSystemMerge.ts',
   // ADR-0051: the sidebar offers the helper's update as soon as Mergelane opens.
-  'src/renderer/src/components/HelperUpdateNotice.tsx'
+  'src/renderer/src/components/HelperUpdateNotice.tsx',
+  // ADR-0052: tunnels aren't offered as networks.
+  'src/shared/tunnels.ts'
 ]
 
 export default defineConfig({

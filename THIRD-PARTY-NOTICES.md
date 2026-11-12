@@ -339,6 +339,20 @@ The Windows builds ship the same versions, for x64 and arm64, from `scripts/medi
   SHA-256 `40d161bc35657cc7432a2e3832290922939cd63fddd29f66db2261d291e42478`), shipped as `deno.exe`, with the same
   licence and notices as on macOS.
 
+### Wintun 0.14.1 (on Windows, W5)
+
+- What: `wintun.dll`, the signed driver library from https://www.wintun.net that the Windows system-wide helper uses
+  for its network adapter (ADR-0059), for x64 and arm64. It ships unmodified next to `mergelane-daemon.exe` in the
+  install folder's `resources\`, and the helper's install copies it into `Program Files\Mergelane`.
+- Download: `wintun-0.14.1.zip` (SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`, the
+  checksum wintun.net publishes), fetched at build time by `scripts/windows/build-helpers.mjs` and never committed.
+- Licence: WireGuard LLC's "Prebuilt Binaries License", which is not an open-source licence. It allows the
+  unmodified DLL to be distributed alongside software that uses it only through the API in `wintun.h`, as
+  Mergelane's helper does (through `golang.zx2c4.com/wintun`, MIT). Its text ships as `licenses/wintun/LICENSE.txt`.
+
+The Windows helper also compiles in `github.com/Microsoft/go-winio` v0.6.2 for its control pipe: MIT licence,
+Copyright (c) 2015 Microsoft.
+
 ### yt-dlp 2026.10.26
 
 - Program: the official unpacked macOS build, `yt-dlp_macos.zip` from

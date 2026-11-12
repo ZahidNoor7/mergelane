@@ -18,7 +18,10 @@ import {
   KIT_VERSION,
   UsageError,
   addApp,
+  ADMIN_CMD_NAME,
+  addHelper,
   addInstaller,
+  adminCmdFile,
   installerName,
   assertAscii,
   buildKit,
@@ -36,6 +39,7 @@ import { BEGIN, END } from './report.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = readFileSync(join(HERE, 'test-kit.ps1'), 'utf8')
+const ADMIN_SCRIPT = readFileSync(join(HERE, 'system-merge-test.ps1'), 'utf8')
 
 const scratch = mkdtempSync(join(tmpdir(), 'mergelane-kit-test-'))
 after(() => rmSync(scratch, { recursive: true, force: true }))
@@ -46,12 +50,18 @@ function freshDir(name = 'dir') {
   return dir
 }
 
-/** A repository root holding the real test-kit.ps1 (or `script`) and an empty daemon folder. */
+/** A repository root holding the real test-kit.ps1 (or `script`) and system-merge-test.ps1, and a daemon folder
+ * with each chip's built helper and wintun.dll (stand-ins). */
 function fakeRoot(script = SCRIPT) {
   const root = freshDir('root')
   mkdirSync(join(root, 'scripts', 'windows'), { recursive: true })
-  mkdirSync(join(root, 'daemon'))
   writeFileSync(join(root, 'scripts', 'windows', 'test-kit.ps1'), script)
+  writeFileSync(join(root, 'scripts', 'windows', 'system-merge-test.ps1'), ADMIN_SCRIPT)
+  for (const arch of Object.keys(ARCHES)) {
+    mkdirSync(join(root, 'daemon', 'bin', `win-${arch}`), { recursive: true })
+    writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'mergelane-daemon.exe'), `daemon ${arch}`)
+    writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'wintun.dll'), `wintun ${arch}`)
+  }
   return root
 }
 
@@ -590,5 +600,93 @@ describe('the installer in the kit (W4)', () => {
     for (const leftover of ['still in its folder', 'Settings > Apps', 'a shortcut is left in']) {
       assert.ok(SCRIPT.includes(leftover), leftover)
     }
+  })
+})
+
+describe('the System merge test (W5)', () => {
+  it('carries each chip\'s helper and wintun.dll with their SHA-256s, the script and its starter', async () => {
+    const root = fakeRoot()
+    const out = freshDir('kit')
+    const { runner } = fakeRunner()
+    const { kit } = await buildKit({ root, out, zip: false, helper: true, runner })
+    assert.deepEqual(
+      kit.helpers.map((h) => h.path),
+      ['helper/x64/mergelane-daemon.exe', 'helper/arm64/mergelane-daemon.exe']
+    )
+    for (const h of kit.helpers) {
+      assert.equal(h.sha256, sha256(join(out, h.path)))
+      assert.equal(h.wintunSha256, sha256(join(out, 'helper', h.arch, 'wintun.dll')))
+    }
+    assert.equal(readFileSync(join(out, 'system-merge-test.ps1'), 'utf8'), crlf(ADMIN_SCRIPT))
+    assert.equal(readFileSync(join(out, ADMIN_CMD_NAME), 'utf8'), adminCmdFile())
+    assert.match(readFileSync(join(out, 'README.txt'), 'utf8'), /Run as administrator/)
+  })
+
+  it('is left out with --no-helper, and asks for the helpers when they aren\'t built', async () => {
+    assert.equal(parseArgs(['--no-helper']).helper, false)
+    assert.equal(parseArgs([]).helper, true)
+    const out = freshDir('kit')
+    const { runner } = fakeRunner()
+    const { kit } = await buildKit({ root: fakeRoot(), out, zip: false, runner })
+    assert.deepEqual(kit.helpers, [])
+    assert.equal(existsSync(join(out, ADMIN_CMD_NAME)), false)
+    assert.doesNotMatch(readFileSync(join(out, 'README.txt'), 'utf8'), /Only if you want to test System merge/)
+    const bare = fakeRoot()
+    rmSync(join(bare, 'daemon', 'bin', 'win-arm64', 'wintun.dll'))
+    assert.throws(
+      () => addHelper({ root: bare, out: freshDir('kit'), arch: 'arm64' }),
+      (error) => error instanceof UsageError && /build-helpers\.mjs/.test(error.message)
+    )
+  })
+
+  it('the starter runs the script as it is meant to: as administrator, for this run only', () => {
+    const cmd = adminCmdFile()
+    assert.match(cmd, /-ExecutionPolicy Bypass -File "%~dp0system-merge-test\.ps1"/)
+    assert.match(cmd, /Run as administrator/)
+    assert.match(cmd, /\r\n/)
+  })
+
+  it('the script changes nothing before YES, refuses next to an installed helper, and always removes it again', () => {
+    const at = (text) => {
+      const i = ADMIN_SCRIPT.indexOf(text)
+      assert.ok(i >= 0, text)
+      return i
+    }
+    const yes = at("if ($answer -cne 'YES') {")
+    const install = at("@('install', '--user-sid', $sid, '--source', $helper)")
+    assert.ok(at('if (-not (Test-Elevated)) {') < yes)
+    assert.ok(at('if (Get-HelperService) {') < yes)
+    assert.ok(at('if (-not (Test-Internet)) {') < install)
+    assert.ok(yes < install)
+    // The removal is in the last finally block, after the install, and checks what must be gone.
+    const final = ADMIN_SCRIPT.lastIndexOf('} finally {')
+    assert.ok(install < final)
+    assert.ok(final < at("Invoke-Helper $helper @('uninstall')"))
+    for (const check of ['no service left', 'no program left in Program Files', 'no capture routes left',
+      'no mergelane adapter left', "every adapter''s settings as before", 'internet after the test']) {
+      assert.ok(at(`Step '${check}'`) > final, check)
+    }
+    // Each file is checked against the kit before it runs.
+    assert.match(ADMIN_SCRIPT, /Get-FileHash -LiteralPath \$file\.path -Algorithm SHA256/)
+  })
+
+  it('the script changes only what the test is about: the helper\'s service, its routes and the process it kills', () => {
+    for (const pattern of [
+      /Set-ItemProperty|New-ItemProperty|Remove-ItemProperty/i,
+      /Set-ExecutionPolicy|Unblock-File/i,
+      /\bnetsh\b|\broute(\.exe)?\s+(add|delete|change)/i,
+      /New-NetRoute|Remove-NetRoute|Set-NetIPInterface|Set-DnsClient/i,
+      /New-NetFirewallRule|Set-NetFirewall|Set-MpPreference|Add-MpPreference/i,
+      /\breg(\.exe)?\s+(add|delete|import|load)/i,
+      /New-Service|Set-Service|sc\.exe|Remove-Service/i,
+      /Install-Module|Install-Package|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer/i,
+      /-Verb\s+RunAs/i
+    ]) {
+      assert.doesNotMatch(ADMIN_SCRIPT, pattern, String(pattern))
+    }
+    // The only process it stops is the helper's own, by the id the service reports.
+    const stops = ADMIN_SCRIPT.split('\n').filter((line) => /Stop-Process/.test(line))
+    assert.deepEqual(stops.map((line) => line.trim()), ['Stop-Process -Id $firstPid -Force'])
+    assertAscii('system-merge-test.ps1', ADMIN_SCRIPT)
   })
 })

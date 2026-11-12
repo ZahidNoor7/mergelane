@@ -19,23 +19,18 @@ const macStateDir = "/var/run/mergelane"
 const macLimitsDir = "/Library/Application Support/Mergelane/daemon"
 
 // DefaultDir is the daemon's state directory: a fixed root-owned path on macOS, so root never
-// follows a symlink planted in a user-owned directory.
+// follows a symlink planted in a user-owned directory, and on Windows a folder under ProgramData that
+// Prepare locks to SYSTEM and Administrators (dir_windows.go).
 func DefaultDir() string {
 	if runtime.GOOS == "darwin" {
 		return macStateDir
+	}
+	if dir := windowsDir(); dir != "" {
+		return dir
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
 		base = os.TempDir()
 	}
 	return filepath.Join(base, "mergelane")
-}
-
-// Prepare creates the state directory, readable by everyone (the socket inside checks each
-// caller's uid itself).
-func Prepare(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.Chmod(dir, 0o755)
 }

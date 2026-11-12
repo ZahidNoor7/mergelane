@@ -220,6 +220,11 @@ another app's links alone) and removing the helper on uninstall, which comes wit
 
 ### W5: the system-wide helper (largest)
 
+**Built** (branch `w5-system-helper`, ADR-0059): Net Merge's Wintun engine re-imported, `wintun.dll` pinned, the
+LocalSystem service with crash restarts, the named-pipe API with its security descriptor, the VPN guard from the
+Windows routing table, the app's install and removal through the administrator prompt, and the kit's opt-in System
+merge test. Proven only on the laptop: everything that touches Windows networking.
+
 - **Re-import Net Merge's Windows engine:**
   - a Wintun adapter;
   - capture routes;

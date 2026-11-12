@@ -11,7 +11,9 @@ describe('platformWords', () => {
       thisComputer: 'this Mac',
       revealLabel: 'Show in Finder',
       statusArea: 'the menu bar',
-      settingsShortcut: '⌘,'
+      settingsShortcut: '⌘,',
+      adminPrompt: 'Your Mac asks for your administrator password.',
+      adminPromptShort: 'Your Mac asks for your password.'
     })
   })
 
@@ -23,7 +25,9 @@ describe('platformWords', () => {
       system: 'Windows',
       revealLabel: 'Show in File Explorer',
       statusArea: 'the notification area',
-      settingsShortcut: 'Ctrl+,'
+      settingsShortcut: 'Ctrl+,',
+      adminPrompt: 'Windows asks for an administrator’s permission.',
+      adminPromptShort: 'Windows asks for an administrator’s permission.'
     })
   })
 

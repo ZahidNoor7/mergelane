@@ -5,6 +5,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/ZahidNoor7/mergelane/daemon/internal/rib"
 )
 
 // adapterInfo is what Windows knows about an adapter beyond what package net exposes.
@@ -14,17 +16,9 @@ type adapterInfo struct {
 	desc    string
 }
 
-// IANA ifType values for real network hardware. Tunnels (131), PPP (23), "proprietary virtual"
-// (53, used by most VPN drivers) and software loopback (24) are not in this set.
-func physicalIfType(t uint32) bool {
-	switch t {
-	case 6, 62, 69, 117, // ethernet (incl. fast / gigabit variants)
-		71,       // IEEE 802.11 Wi-Fi
-		243, 244: // mobile broadband (WWAN)
-		return true
-	}
-	return false
-}
+// physicalIfType is rib.PhysicalIfType: the one list of IANA ifTypes that are real network hardware,
+// shared with the VPN guard's route reader.
+func physicalIfType(t uint32) bool { return rib.PhysicalIfType(t) }
 
 // adapterInfos returns, per interface index, the up adapters with their gateway families, type
 // and description. This is what lets any adapter (Wi-Fi, Ethernet, USB tether, phone hotspot)

@@ -13,13 +13,17 @@
 //   - app/<x64|arm64>/: Mergelane's installer for each chip (`npm run build:win` in app/), which the script
 //     installs into the kit's own folder, opens once with a throwaway profile, and uninstalls again (W4); or, with
 //     --unpacked, the unpacked app (`npm run build:win:dir`), which it only opens;
-//   - kit.json: what to run, with each program's SHA-256, so the script can tell a damaged copy.
+//   - helper/<x64|arm64>/: the system-wide helper and wintun.dll (scripts/windows/build-helpers.mjs), for
+//     system-merge-test.ps1 and its "Run system merge test (administrator).cmd" (W5): the one part of the kit that
+//     changes the system, run by the owner as administrator after typing YES, and that puts everything back;
+//   - kit.json: what to run, with each program's SHA-256, so the scripts can tell a damaged copy.
 //
 // Text files are written with Windows line endings. test-kit.ps1 must stay ASCII: Windows PowerShell reads a
 // script without a byte-order mark in the ANSI code page (about_Character_Encoding), so anything else would be
 // garbled.
 //
 // usage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app | --unpacked]
+//        [--no-helper]
 // Exit codes: 0 built; 1 a build failed; 2 wrong usage.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -42,9 +46,9 @@ export const ARCHES = { x64: 'amd64', arm64: 'arm64' }
  * and doesn't fail the run. Remove `until` when that milestone lands.
  */
 export const GO_PACKAGES = [
-  { pkg: 'cmd/mergelane-daemon', until: 'W5' },
+  { pkg: 'cmd/mergelane-daemon' },
   { pkg: 'cmd/mergelane-nmhost' },
-  { pkg: 'internal/api', until: 'W5' },
+  { pkg: 'internal/api' },
   { pkg: 'internal/control' },
   { pkg: 'internal/engine' },
   { pkg: 'internal/nics' },
@@ -53,7 +57,8 @@ export const GO_PACKAGES = [
   { pkg: 'internal/rib' },
   { pkg: 'internal/state' },
   { pkg: 'internal/tun' },
-  { pkg: 'internal/vpnguard' }
+  { pkg: 'internal/vpnguard' },
+  { pkg: 'internal/winsvc' }
   // Not listed: cmd/fakevpn, internal/launchd and internal/routemark are macOS-only, and internal/logx has no tests.
 ]
 
@@ -61,6 +66,8 @@ export const GO_PACKAGES = [
 export const COVER_INCLUDE = '_windows\\.go:'
 
 export const CMD_NAME = 'Run test kit.cmd'
+/** The System merge test's starter, which the owner runs as administrator (system-merge-test.ps1, W5). */
+export const ADMIN_CMD_NAME = 'Run system merge test (administrator).cmd'
 
 /** The unpacked apps electron-builder writes to app/dist for each chip (`npm run build:win:dir`). */
 export const APP_FOLDERS = { x64: 'win-unpacked', arm64: 'win-arm64-unpacked' }
@@ -74,11 +81,12 @@ export function installerName(version, arch) {
 export class UsageError extends Error {}
 
 export function parseArgs(argv) {
-  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true, apps: 'installer' }
+  const options = { out: join(ROOT, 'dist', 'windows-kit'), arches: [], zip: true, apps: 'installer', helper: true }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--no-zip') options.zip = false
     else if (arg === '--no-app') options.apps = false
+    else if (arg === '--no-helper') options.helper = false
     else if (arg === '--unpacked') options.apps = 'folder'
     else if (arg === '--out' || arg === '--arch') {
       const value = argv[++i]
@@ -187,6 +195,32 @@ async function commitOf(root, runner) {
   }
 }
 
+/** The System merge test's starter. Unlike the kit's, it is meant to be run as administrator. */
+export function adminCmdFile() {
+  return crlf(`@echo off
+rem Starts Mergelane's System merge test (W5). It changes the system, after you type YES, and puts everything
+rem back. It needs administrator rights: right-click this file and choose "Run as administrator".
+"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0system-merge-test.ps1"
+echo.
+pause
+`)
+}
+
+/** Copies a chip's system-wide helper and wintun.dll (scripts/windows/build-helpers.mjs) into the kit, for
+ * the System merge test; returns its kit.json entry. */
+export function addHelper({ root, out, arch }) {
+  const from = join(root, 'daemon', 'bin', `win-${arch}`)
+  const exe = join(from, 'mergelane-daemon.exe')
+  const wintun = join(from, 'wintun.dll')
+  if (!existsSync(exe) || !existsSync(wintun)) {
+    throw new UsageError(`no ${arch} helper and wintun.dll in ${from}: run "node scripts/windows/build-helpers.mjs", or pass --no-helper`)
+  }
+  mkdirSync(join(out, 'helper', arch), { recursive: true })
+  cpSync(exe, join(out, 'helper', arch, 'mergelane-daemon.exe'))
+  cpSync(wintun, join(out, 'helper', arch, 'wintun.dll'))
+  return { arch, path: `helper/${arch}/mergelane-daemon.exe`, sha256: sha256(exe), wintunSha256: sha256(wintun) }
+}
+
 export function cmdFile() {
   // %~dp0 is this file's folder. Windows PowerShell is always at this path, also on Arm PCs.
   return crlf(`@echo off
@@ -197,7 +231,7 @@ pause
 `)
 }
 
-export function readme({ commit, built }) {
+export function readme({ commit, built, helper = false }) {
   return crlf(`Mergelane Windows test kit
 ==========================
 
@@ -228,6 +262,19 @@ How to run it
 3. Paste the report into the chat (it is already on the clipboard; it is also in report.txt).
 4. Press a key to close the window.
 
+${
+    helper
+      ? `
+Only if you want to test System merge, after the steps above
+This part changes your PC for about two minutes: it installs Mergelane's helper as a Windows service, turns System
+merge on, stops the helper once by force, and then removes it again, whatever happened. Turn any VPN off first.
+5. Right-click "${ADMIN_CMD_NAME}" and choose "Run as administrator".
+6. Read what it says, type YES and wait for the report (it is on the clipboard and in system-merge-report.txt).
+7. Paste that report into the chat too.
+If your internet stops and does not come back, restart the PC: the helper's routes never outlive a restart.
+`
+      : ''
+  }
 To remove the kit afterwards, delete this folder.
 `)
 }
@@ -238,6 +285,7 @@ export async function buildKit({
   arches = Object.keys(ARCHES),
   zip = true,
   apps = false,
+  helper = false,
   packages = GO_PACKAGES,
   runner = run,
   now = () => new Date(),
@@ -245,6 +293,8 @@ export async function buildKit({
 }) {
   const script = readFileSync(join(root, 'scripts', 'windows', 'test-kit.ps1'), 'utf8')
   assertAscii('test-kit.ps1', script)
+  const adminScript = helper ? readFileSync(join(root, 'scripts', 'windows', 'system-merge-test.ps1'), 'utf8') : null
+  if (adminScript) assertAscii('system-merge-test.ps1', adminScript)
   prepareOut(out)
 
   const programs = []
@@ -271,13 +321,25 @@ export async function buildKit({
     }
   }
 
+  const helpers = []
+  if (helper) {
+    for (const arch of arches) {
+      log(`adding the ${arch} helper`)
+      helpers.push(addHelper({ root, out, arch }))
+    }
+  }
+
   const { commit, dirty } = await commitOf(root, runner)
   const built = now().toISOString()
-  const kit = { kit: KIT_VERSION, commit, dirty, built, coverInclude: COVER_INCLUDE, programs, apps: appEntries }
+  const kit = { kit: KIT_VERSION, commit, dirty, built, coverInclude: COVER_INCLUDE, programs, apps: appEntries, helpers }
   writeFileSync(join(out, 'kit.json'), `${JSON.stringify(kit, null, 2)}\n`)
   writeFileSync(join(out, 'test-kit.ps1'), crlf(script))
   writeFileSync(join(out, CMD_NAME), cmdFile())
-  writeFileSync(join(out, 'README.txt'), readme({ commit, built }))
+  if (adminScript) {
+    writeFileSync(join(out, 'system-merge-test.ps1'), crlf(adminScript))
+    writeFileSync(join(out, ADMIN_CMD_NAME), adminCmdFile())
+  }
+  writeFileSync(join(out, 'README.txt'), readme({ commit, built, helper: Boolean(adminScript) }))
 
   let zipFile = null
   if (zip) {
@@ -299,7 +361,7 @@ export async function main(
     options = parseArgs(argv)
   } catch (error) {
     stderr.write(
-      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app | --unpacked]\n`
+      `kit: ${error.message}\nusage: node scripts/windows/kit.mjs [--out <dir>] [--arch x64|arm64]... [--no-zip] [--no-app | --unpacked] [--no-helper]\n`
     )
     return 2
   }

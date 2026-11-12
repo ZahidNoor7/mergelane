@@ -128,6 +128,12 @@ win:
       to: mergelane-daemon.exe
     - from: ../daemon/bin/win-${arch}/mergelane-nmhost.exe
       to: mergelane-nmhost.exe
+    # Wintun's signed DLL for this chip, which the system-wide helper loads from its own folder, and its licence
+    # (ADR-0059). The helper's install copies both into Program Files.
+    - from: ../daemon/bin/win-${arch}/wintun.dll
+      to: wintun.dll
+    - from: ../daemon/bin/win-${arch}/wintun-LICENSE.txt
+      to: licenses/wintun/LICENSE.txt
     # The Windows media tools for this chip, from scripts/media-tools/tools-windows-${arch}.json (W3, ADR-0057):
     # yt-dlp's unpacked Windows build (yt-dlp.exe beside _internal), Mergelane's own LGPL FFmpeg built on the
     # Mac with llvm-mingw, Deno, and their licence texts. app/src/main/media/mux/tools.ts WINDOWS_TOOL_PROGRAM

@@ -98,7 +98,7 @@ mergelane-daemon (LocalSystem Windows service)
 │  IP_UNICAST_IF / IPV6_UNICAST_IF egress
 ├─ VPN detection and a route-conflict guard; marked routes that cleanup can find and remove
 └─ local control API: the same versioned JSON protocol over a named pipe whose ACL allows only
-   the installing user and SYSTEM
+   the installing user, SYSTEM and administrators (as root is allowed on macOS; ADR-0059)
 ```
 
 Rules:

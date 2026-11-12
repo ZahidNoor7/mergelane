@@ -29,7 +29,7 @@ func cmdRun(args []string) error {
 	if err != nil {
 		return err
 	}
-	return runDaemon(c, realRunDeps())
+	return runPlatform(c, realRunDeps())
 }
 
 // runConfig is run's validated flags.
@@ -44,7 +44,8 @@ type runConfig struct {
 	logFile    string
 	stateDir   string
 	pprof      string
-	allowedUID int
+	allowedUID int    // macOS: the user allowed on the socket besides root
+	allowedSID string // Windows: the user allowed on the pipe besides SYSTEM and administrators
 	socketPath string
 }
 
@@ -54,8 +55,9 @@ func parseRunFlags(args []string) (runConfig, error) {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	var c engineFlags
 	c.register(fs)
-	allowedUID := fs.Int("allowed-uid", 0, "the user allowed to drive the daemon besides root")
-	socketPath := fs.String("socket", api.SocketPath, "control socket path")
+	allowedUID := fs.Int("allowed-uid", 0, "the user allowed to drive the daemon besides root (macOS)")
+	allowedSID := fs.String("allowed-sid", "", "the user allowed to drive the daemon besides administrators (Windows)")
+	socketPath := fs.String("socket", api.SocketPath, "control socket path (a named pipe on Windows)")
 	if err := fs.Parse(args); err != nil {
 		return runConfig{}, err
 	}
@@ -82,6 +84,7 @@ func parseRunFlags(args []string) (runConfig, error) {
 		stateDir:   c.stateDir,
 		pprof:      c.pprof,
 		allowedUID: *allowedUID,
+		allowedSID: *allowedSID,
 		socketPath: *socketPath,
 	}, nil
 }
@@ -144,8 +147,8 @@ type runDeps struct {
 	discover      func(include []string, weights map[string]float64) ([]nics.Nic, error)
 	newMerger     func(found []nics.Nic, v6 engine.V6Mode, mtu int, sticky *engine.Sticky) (runEngine, runTunnel)
 	guard         control.Guard
-	listen        func(path string, mode os.FileMode, authorize func(uint32) bool, h api.Handler) (runServer, error)
-	signalContext func() (context.Context, context.CancelFunc) // done on SIGINT or SIGTERM
+	listen        func(c runConfig, h api.Handler) (runServer, error) // the socket or, on Windows, the pipe
+	signalContext func() (context.Context, context.CancelFunc)        // done on SIGINT or SIGTERM, or the service's stop
 }
 
 func realRunDeps() runDeps {
@@ -185,14 +188,6 @@ func newMerger(found []nics.Nic, v6 engine.V6Mode, mtu int, sticky *engine.Stick
 	return sched, t
 }
 
-func listenAPI(path string, mode os.FileMode, authorize func(uint32) bool, h api.Handler) (runServer, error) {
-	srv, err := api.Listen(path, mode, authorize, h)
-	if err != nil {
-		return nil, err
-	}
-	return srv, nil
-}
-
 func signalContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
@@ -211,6 +206,11 @@ func runDaemon(c runConfig, d runDeps) error {
 	if !d.lock() {
 		return fmt.Errorf("mergelane-daemon is already running")
 	}
+	// The state folder first: on Windows the log is inside it (winsvc.PathsFor), and Prepare locks the
+	// folder to SYSTEM and administrators before anything is written there.
+	if err := state.Prepare(c.stateDir); err != nil {
+		return err
+	}
 	if c.logFile != "" {
 		f, err := os.OpenFile(c.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err != nil {
@@ -222,9 +222,6 @@ func runDaemon(c runConfig, d runDeps) error {
 		if err := d.startPprof(c.pprof); err != nil {
 			return err
 		}
-	}
-	if err := state.Prepare(c.stateDir); err != nil {
-		return err
 	}
 	probes4, probes6 := splitProbeTargets(c.probes)
 	engine.SetProbeTargets(engine.Fam4, probes4)
@@ -299,7 +296,7 @@ func runDaemon(c runConfig, d runDeps) error {
 		ApplySticky: sticky.SetOn,
 	})
 	go ctl.Watch(ctx, time.Second)
-	srv, err := d.listen(c.socketPath, 0o666, authorizer(c.allowedUID), ctl)
+	srv, err := d.listen(c, ctl)
 	if err != nil {
 		return err
 	}

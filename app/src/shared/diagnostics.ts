@@ -400,11 +400,11 @@ export function buildDiagnostics(
   )
 }
 
-/** Where the system-wide helper writes its log: macOS's /Library/Logs, or on Windows the
- * ProgramData folder the helper's service writes to (W5). */
+/** Where the system-wide helper writes its log: macOS's /Library/Logs, or on Windows the service's
+ * state folder in ProgramData (daemon/internal/winsvc PathsFor, ADR-0059). */
 export function helperLogPath(platform: string, programData = 'C:\\ProgramData'): string {
   return platform === 'win32'
-    ? `${programData}\\Mergelane\\Logs\\daemon.log`
+    ? `${programData}\\Mergelane\\daemon\\daemon.log`
     : '/Library/Logs/Mergelane/daemon.log'
 }
 

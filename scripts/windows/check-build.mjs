@@ -4,8 +4,8 @@
 //   - each chip's installer, Mergelane-<version>-<arch>-setup.exe, is there and is a Windows program. NSIS
 //     installers are 32-bit x86 programs for both chips (Windows on Arm runs them emulated), so that is what
 //     this expects;
-//   - in each chip's unpacked app, Mergelane.exe and every program inside it (the two helpers, FFmpeg, Deno and
-//     yt-dlp, named by tools-windows-<arch>.json) is built for that chip;
+//   - in each chip's unpacked app, Mergelane.exe and every program inside it (the two helpers, Wintun's DLL,
+//     FFmpeg, Deno and yt-dlp, named by tools-windows-<arch>.json) is built for that chip;
 //   - app.asar's package.json says the release version;
 //   - Mergelane.exe's Electron fuses are the ones electron-builder.yml asks for (audit-fuses.mjs EXPECTED_FUSES),
 //     read with @electron/fuses, which electron-builder itself uses to set them.
@@ -54,9 +54,10 @@ export function parseArgs(argv) {
   return options
 }
 
-/** The programs inside a chip's unpacked app, relative to its folder: Mergelane.exe, the helpers, the media tools. */
+/** The programs inside a chip's unpacked app, relative to its folder: Mergelane.exe, the helpers, Wintun's DLL
+ * (ADR-0059) and the media tools. */
 export function programsOf(manifest) {
-  const programs = [APP_EXE, ...HELPERS.map((helper) => `resources/${helper}`)]
+  const programs = [APP_EXE, ...HELPERS.map((helper) => `resources/${helper}`), 'resources/wintun.dll']
   for (const tool of manifest.tools) {
     programs.push(
       tool.install === 'folder' ? `resources/${tool.name}/${tool.executable}` : `resources/${tool.name}.exe`

@@ -1,3 +1,5 @@
+//go:build !windows
+
 package api
 
 import (
@@ -43,7 +45,7 @@ func TestServerLastLineWithoutNewline(t *testing.T) {
 	s := startServer(t, &fakeHandler{}, allowAll)
 	rc := dialRaw(t, s.Path())
 	rc.send(`{"v":1,"id":"last","method":"status"}`)
-	if err := rc.c.CloseWrite(); err != nil {
+	if err := rc.c.(*net.UnixConn).CloseWrite(); err != nil {
 		t.Fatal(err)
 	}
 	if resp := rc.recv(); resp.ID != "last" || !resp.OK {
@@ -411,7 +413,7 @@ type fakeAcceptor struct {
 	fail        int32
 	holdOnClose bool
 	calls       atomic.Int32
-	conn        *net.UnixConn
+	conn        net.Conn
 	release     chan struct{}
 	closed      chan struct{}
 	once        sync.Once
@@ -421,7 +423,7 @@ func newFakeAcceptor(fail int32) *fakeAcceptor {
 	return &fakeAcceptor{fail: fail, release: make(chan struct{}), closed: make(chan struct{})}
 }
 
-func (f *fakeAcceptor) AcceptUnix() (*net.UnixConn, error) {
+func (f *fakeAcceptor) Accept() (net.Conn, error) {
 	if n := f.calls.Add(1); f.fail < 0 || n <= f.fail {
 		return nil, syscall.EMFILE
 	}
@@ -453,7 +455,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 func TestAcceptErrorsAreRetried(t *testing.T) {
 	fa := newFakeAcceptor(3)
-	s := serve("", fa, allowAll, &fakeHandler{})
+	s := serve("", fa, unixPeerUID, allowAll, &fakeHandler{})
 	waitFor(t, "a fourth Accept", func() bool { return fa.calls.Load() >= 4 })
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -462,7 +464,7 @@ func TestAcceptErrorsAreRetried(t *testing.T) {
 
 func TestCloseDuringAcceptBackoff(t *testing.T) {
 	fa := newFakeAcceptor(-1) // always fails
-	s := serve("", fa, allowAll, &fakeHandler{})
+	s := serve("", fa, unixPeerUID, allowAll, &fakeHandler{})
 	waitFor(t, "backoff to grow", func() bool { return fa.calls.Load() >= 6 })
 	done := make(chan struct{})
 	go func() { s.Close(); close(done) }()

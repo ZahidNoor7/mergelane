@@ -4,11 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
-	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -85,42 +81,17 @@ func (f *fakeHandler) Events(context.Context) (EventsResult, error) {
 	return EventsResult{Events: f.events}, f.err
 }
 
-// sockPath returns a fresh socket path. t.TempDir() is used when the path fits in sun_path (104
-// bytes in <sys/un.h>, so 103 usable); macOS's per-user $TMPDIR is long, so it may not.
-func sockPath(t *testing.T) string {
-	t.Helper()
-	p := filepath.Join(t.TempDir(), "d.sock")
-	if len(p) <= maxSocketPath {
-		return p
-	}
-	dir, err := os.MkdirTemp("/tmp", "mlapi")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	return filepath.Join(dir, "d.sock")
-}
-
-func startServer(t *testing.T, h Handler, authorize func(uint32) bool) *Server {
-	t.Helper()
-	s, err := Listen(sockPath(t), 0o666, authorize, h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	return s
-}
-
 // rawConn speaks the wire format by hand.
 type rawConn struct {
 	t *testing.T
-	c *net.UnixConn
+	c net.Conn
 	r *bufio.Reader
 }
 
+// dialRaw connects to the server at path (dialPath: a Unix socket, or a pipe on Windows).
 func dialRaw(t *testing.T, path string) *rawConn {
 	t.Helper()
-	c, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	c, err := dialPath(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,26 +115,6 @@ func (rc *rawConn) line() []byte {
 		rc.t.Fatalf("reading a response: %v (got %q)", err, b)
 	}
 	return b
-}
-
-func (rc *rawConn) recv() Response {
-	rc.t.Helper()
-	b := rc.line()
-	var resp Response
-	if err := json.Unmarshal(b, &resp); err != nil {
-		rc.t.Fatalf("response %q: %v", b, err)
-	}
-	return resp
-}
-
-// expectEOF checks that the server closed the connection.
-func (rc *rawConn) expectEOF() {
-	rc.t.Helper()
-	rc.c.SetReadDeadline(time.Now().Add(5 * time.Second))
-	b, err := rc.r.ReadByte()
-	if !errors.Is(err, io.EOF) {
-		rc.t.Fatalf("want EOF, got byte %q, err %v", b, err)
-	}
 }
 
 func expectCode(t *testing.T, resp Response, id string, code Code) {

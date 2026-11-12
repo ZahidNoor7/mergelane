@@ -11,6 +11,10 @@ import {
   type ParamsOf,
   type ResultOf
 } from '../../../../shared/daemon-api'
+import { WINDOWS_HELPER_PIPE } from '../../shared/windowsHelper'
+
+/** Where the helper listens on this platform: its Unix socket, or on Windows its named pipe. */
+export const HELPER_SOCKET = process.platform === 'win32' ? WINDOWS_HELPER_PIPE : SOCKET_PATH
 
 /** The daemon answered with an error, or couldn't be reached at all (code 'UNAVAILABLE'). */
 export class DaemonError extends Error {
@@ -45,7 +49,10 @@ function otherProtocol(message: unknown): number | undefined {
 export function callDaemon<M extends Method>(
   method: M,
   params: ParamsOf<M> | undefined,
-  { socketPath = SOCKET_PATH, timeoutMs = 10_000 }: { socketPath?: string; timeoutMs?: number } = {}
+  {
+    socketPath = HELPER_SOCKET,
+    timeoutMs = 10_000
+  }: { socketPath?: string; timeoutMs?: number } = {}
 ): Promise<ResultOf<M>> {
   return new Promise((resolve, reject) => {
     const id = randomUUID()

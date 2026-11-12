@@ -2,16 +2,20 @@ package vpnguard
 
 import (
 	"context"
-	"errors"
 	"testing"
 )
 
-// The guard refuses when it can't read: on Windows both reads fail until W5.
-func TestReadsAreNotAvailableOnWindowsYet(t *testing.T) {
-	if routes, err := ReadRoutes(); routes != nil || !errors.Is(err, errors.ErrUnsupported) {
-		t.Errorf("ReadRoutes = %v, %v; want nil, ErrUnsupported", routes, err)
+// On a real Windows PC (the test kit) both reads work, and the guard can judge what they found.
+func TestReadsOnWindows(t *testing.T) {
+	routes, err := ReadRoutes()
+	if err != nil {
+		t.Fatalf("ReadRoutes: %v", err)
 	}
-	if names, err := ReadNCConnected(context.Background()); names != nil || !errors.Is(err, errors.ErrUnsupported) {
-		t.Errorf("ReadNCConnected = %v, %v; want nil, ErrUnsupported", names, err)
+	services, err := ReadNCConnected(context.Background())
+	if err != nil {
+		t.Fatalf("ReadNCConnected: %v", err)
+	}
+	for _, c := range Conflicts(routes, func(string) bool { return false }, services) {
+		t.Logf("this PC has a VPN on: %s", c.Message())
 	}
 }

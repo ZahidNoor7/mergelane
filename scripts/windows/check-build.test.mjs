@@ -88,6 +88,7 @@ describe('programsOf', () => {
     assert.deepEqual(programsOf(MANIFEST.x64), [
       APP_EXE,
       ...HELPERS.map((helper) => `resources/${helper}`),
+      'resources/wintun.dll',
       'resources/yt-dlp/yt-dlp.exe',
       'resources/ffmpeg.exe',
       'resources/deno.exe'

@@ -46,6 +46,7 @@ up after themselves. `scripts/windows/kit.test.mjs` checks the script for comman
 ```sh
 node scripts/windows/build-helpers.mjs     # mergelane-daemon.exe and mergelane-nmhost.exe, both chips
 cd app && npm run fetch:media-tools:win    # yt-dlp, Deno and FFmpeg for Windows, both chips (ADR-0057)
+                                           # (build-helpers.mjs above also puts wintun.dll beside the helpers)
 npm run build:win && cd ..                 # the two installers, one per chip, in app/dist
 node scripts/windows/check-build.mjs --version "$(node -p 'require("./app/package.json").version')"
 node scripts/windows/kit.mjs
@@ -88,11 +89,37 @@ each test program's result, the coverage of the Windows-only Go files (`*_window
 the install, the window, the bridge, the helpers, Open with and the uninstall went. Exit code 0 means
 everything that must pass passed; 1 means something failed or Downloads changed; 2 means no readable report.
 
+### The System merge test (W5, administrator, opt-in)
+
+The kit also carries `system-merge-test.ps1`, its starter `Run system merge test (administrator).cmd`, and each
+chip's helper and `wintun.dll` in `helper\<chip>\`. Unlike the rest of the kit, it changes the PC, on purpose and
+only after the owner types YES (ADR-0059):
+
+1. it checks it runs as administrator, that the helper files match the kit (SHA-256), that no Mergelane helper is
+   installed already (it leaves an installed one alone), and that the internet works;
+2. it installs the helper as the Windows service, the way the app does after Windows' administrator prompt, and
+   checks the service runs and answers on its pipe;
+3. it turns System merge on, checks the two capture routes on the `mergelane` adapter and that the internet
+   still works, and records `stats` and `links`;
+4. it kills the helper's process: Windows must restart the service, and the restarted helper must remove the
+   crashed run's routes, with the internet working and merging off (auto-resume is off by default);
+5. whatever happened, it removes the helper (`uninstall`, and `cleanup` if routes are left), then checks that no
+   service, program, route or adapter is left, that every adapter's settings are as before, and that the internet
+   works. It writes `system-merge-report.txt` and copies it to the clipboard.
+
+Turn any VPN off first: System merge refuses to start next to one, and the test then reports that step as failed.
+
+**If the internet stops** and doesn't come back: restart the PC, since the helper's routes never outlive a
+restart. Or, in PowerShell as administrator: `& "<kit>\helper\<chip>\mergelane-daemon.exe" cleanup`.
+`route print -4` shows any leftover `0.0.0.0` / `128.0.0.0` routes with mask `128.0.0.0`; Device Manager ›
+Network adapters lists the `Mergelane` (Wintun) adapter if one is left, and Uninstall device removes it.
+
 ### Adding Go packages
 
 `GO_PACKAGES` in `scripts/windows/kit.mjs` lists the daemon packages the kit runs. Add a package once it builds
 for Windows. Give it `until: 'W<n>'` while its tests aren't expected to pass on Windows yet; remove `until` when
-that milestone lands, and from then on a failure fails the run.
+that milestone lands, and from then on a failure fails the run. Since W5 no package waits: the daemon command's and
+the API's tests run over the named pipe on Windows.
 
 ### Known limits
 
@@ -101,5 +128,5 @@ that milestone lands, and from then on a failure fails the run.
 - **No `-race` on Windows:** the race detector needs cgo, which the cross-build leaves off. `go test -race` keeps
   running on the Mac.
 - **x64 programs on an arm64 PC** run only on Windows 11 (emulation); on Windows 10 on Arm the kit skips them.
-- **The PowerShell script is checked statically on the Mac**, not run, until PowerShell 7 is installed here
-  (the owner's decision). Its first real run is on the laptop.
+- **The PowerShell scripts are checked statically on the Mac**, not run, until PowerShell 7 is installed here
+  (the owner's decision). Their first real run is on the laptop.

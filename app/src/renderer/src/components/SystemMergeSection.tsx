@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import type { SystemMergeOutage } from '../../../shared/types'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { words } from '../platformWords'
 import { useSystemMerge } from '../hooks/useSystemMerge'
 import { formatEta, formatWhen } from '../utils/format'
 import {
@@ -276,9 +277,8 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Mergelane&apos;s helper?</AlertDialogTitle>
             <AlertDialogDescription>
-              System merge turns off, and can&apos;t be used until you install the helper again.
-              Your Mac asks for your administrator password. Downloads keep working on every
-              network.
+              System merge turns off, and can&apos;t be used until you install the helper again.{' '}
+              {words().adminPrompt} Downloads keep working on every network.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

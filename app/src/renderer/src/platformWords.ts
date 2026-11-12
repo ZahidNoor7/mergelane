@@ -16,6 +16,11 @@ export interface PlatformWords {
   statusArea: string
   /** The Settings shortcut, as the keyboard shows it. */
   settingsShortcut: string
+  /** What happens when the helper is installed or removed: macOS's password prompt, or Windows' User
+   * Account Control prompt (W5). */
+  adminPrompt: string
+  /** The same, said briefly, where the sentence is already long. */
+  adminPromptShort: string
 }
 
 const MAC: PlatformWords = {
@@ -25,7 +30,9 @@ const MAC: PlatformWords = {
   system: 'macOS',
   revealLabel: 'Show in Finder',
   statusArea: 'the menu bar',
-  settingsShortcut: '⌘,'
+  settingsShortcut: '⌘,',
+  adminPrompt: 'Your Mac asks for your administrator password.',
+  adminPromptShort: 'Your Mac asks for your password.'
 }
 
 const WINDOWS: PlatformWords = {
@@ -35,7 +42,9 @@ const WINDOWS: PlatformWords = {
   system: 'Windows',
   revealLabel: 'Show in File Explorer',
   statusArea: 'the notification area',
-  settingsShortcut: 'Ctrl+,'
+  settingsShortcut: 'Ctrl+,',
+  adminPrompt: 'Windows asks for an administrator’s permission.',
+  adminPromptShort: 'Windows asks for an administrator’s permission.'
 }
 
 /** The words for a platform; anything but Windows gets the Mac's, as before. */

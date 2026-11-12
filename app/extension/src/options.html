@@ -6,74 +6,115 @@
     <link rel="stylesheet" href="ui.css" />
     <style>
       main {
-        max-width: 680px;
+        max-width: 720px;
         margin: 0 auto;
-        padding: 48px 20px 64px;
+        padding: 40px 20px 64px;
         display: flex;
         flex-direction: column;
         gap: 28px;
       }
+      /* Settings' header in the app: the screen's name, and a line under it. */
       header {
         display: flex;
         align-items: center;
         gap: 14px;
+        padding: 0 4px;
       }
       header img {
         width: 36px;
         height: 36px;
       }
+      header .grow {
+        gap: 1px;
+      }
       h1 {
-        margin: 0;
-        font-size: 20px;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 680;
+        letter-spacing: -0.015em;
       }
-      h2 {
-        margin: 0 0 10px;
-        font: 500 11px var(--mono);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text3);
+      header .muted {
+        font-size: 12px;
+        color: var(--text-3);
       }
-      .card {
-        border: 0.5px solid var(--border);
-        border-radius: 12px;
-        background: var(--bg2);
-        overflow: hidden;
+      .row > .grow {
+        flex-basis: 224px;
       }
-      .card .row {
-        flex-wrap: wrap;
-        gap: 16px;
-        padding: 16px 18px;
-      }
-      .card .row:last-child {
-        border-bottom: none;
-      }
-      .card .grow {
-        flex: 1 1 260px;
-      }
-      #sites li {
+      .controls {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 6px 8px 6px 18px;
-        border-top: 0.5px solid var(--border);
-        font: 12.5px var(--mono);
+        gap: 8px;
       }
-      #sites li span {
+      #min-mb {
+        width: 76px;
+        text-align: right;
+      }
+      #add-site {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      #add-site .muted {
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .field {
+        display: flex;
+        gap: 8px;
+      }
+      #site {
         flex: 1;
-        min-width: 0;
-        overflow-wrap: anywhere;
+      }
+      #site-error {
+        padding: 0 4px;
+        font-size: 12.5px;
+        color: var(--color-warning);
       }
       #sites {
         margin: 0;
         padding: 0;
         list-style: none;
       }
+      #sites:empty {
+        display: none;
+      }
+      #sites li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 6px 0;
+        font: 12.5px var(--mono);
+      }
+      #sites li + li {
+        border-top: 1px solid var(--rule);
+      }
+      #sites li span {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      #sites button {
+        height: 28px;
+        padding: 0 12px;
+        font: 580 12.5px var(--sans);
+      }
+      #no-sites {
+        font-size: 12.5px;
+      }
+      #connection-row .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
       .links {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 6px 16px;
+        padding: 0 4px;
         font-size: 12px;
-        color: var(--text3);
+        color: var(--text-3);
       }
     </style>
   </head>
@@ -87,8 +128,8 @@
         </div>
       </header>
 
-      <section>
-        <h2>Capture</h2>
+      <section class="group">
+        <h2 class="group-title">Capture</h2>
         <div class="card">
           <label class="row" for="capture">
             <span class="grow">
@@ -105,56 +146,54 @@
               <span class="title">Skip small files</span>
               <span class="muted">Files smaller than this stay in the browser.</span>
             </label>
-            <input
-              type="number"
-              id="min-mb"
-              min="1"
-              step="1"
-              style="width: 64px"
-              aria-label="Minimum size in megabytes"
-            />
-            <span class="mono muted">MB</span>
-            <input type="checkbox" role="switch" class="switch" id="skip-small" />
+            <span class="controls">
+              <input
+                type="number"
+                id="min-mb"
+                min="1"
+                step="1"
+                aria-label="Minimum size in megabytes"
+              />
+              <span class="muted">MB</span>
+              <input type="checkbox" role="switch" class="switch" id="skip-small" />
+            </span>
           </div>
         </div>
       </section>
 
-      <section>
-        <h2>Sites that keep their downloads</h2>
+      <section class="group">
+        <h2 class="group-title">Sites that keep their downloads</h2>
         <div class="card">
-          <form class="row" id="add-site" style="flex-direction: column; align-items: stretch">
+          <form class="row" id="add-site">
             <span class="muted"
               >Downloads from these sites and their subdomains stay in the browser. Right-click ›
               Download with Mergelane still works on them.</span
             >
-            <span style="display: flex; gap: 8px">
+            <span class="field">
               <input
                 type="text"
                 id="site"
                 placeholder="example.com"
                 aria-label="Site to add"
                 class="mono"
-                style="flex: 1; min-width: 0"
               />
               <button type="submit">Add</button>
             </span>
-            <span id="site-error" role="alert" style="color: var(--warn)" hidden
-              >That isn’t a site name.</span
-            >
+            <span id="site-error" role="alert" hidden>That isn’t a site name.</span>
           </form>
           <ul id="sites"></ul>
-          <div class="row muted" id="no-sites" style="border-top: 0.5px solid var(--border)">
+          <div class="row muted" id="no-sites">
             No sites yet. Every site’s downloads go to Mergelane.
           </div>
         </div>
       </section>
 
-      <section>
-        <h2>Connection</h2>
+      <section class="group">
+        <h2 class="group-title">Connection</h2>
         <div class="card">
-          <div class="row">
+          <div class="row" id="connection-row">
             <span class="grow">
-              <span class="title" style="display: flex; align-items: center; gap: 8px"
+              <span class="title"
                 ><span class="dot" id="dot"></span><span id="connection">…</span></span
               >
             </span>
@@ -164,7 +203,7 @@
       </section>
 
       <div class="links">
-        <span class="mono" id="version"></span>
+        <span id="version"></span>
         <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
           >Website</a
         >

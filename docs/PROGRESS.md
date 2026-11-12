@@ -645,6 +645,16 @@ Last updated: 2026-11-11
     `NewDownloadDialog.test.tsx` checks the placeholder. Vitest: 389 passed. `NewDownloadDialog.tsx` has 99.15% of
     its lines covered and `toggle-group.tsx` 100%. Smoke and extension: 720 passed, 1 skipped. In an earlier run,
     `ui.spec.ts` "New download says why it has no network" failed once under load; it passed 3 of 3 runs alone.
+- **The extension's icon** (branch `extension-icon`, owner's request). The extension still had Plexo's icon. Its
+  16, 32, 48 and 128 px icons and the grey "off" 16 and 32 px icons now come from the design's `icon-default`
+  (details in `design-system/mergelane/redesign/README.md`).
+  - Every other place was already on the new icon: the packaged app's `icon.icns` (its sizes compared pixel for pixel
+    with the design's exports), `build/icon.png`, the window's `resources/icon-dark.png`, Settings › Updates and the
+    menu bar's template icon.
+  - **Tests:** Vitest `shared/brandIcons.test.ts` (5) checks these against the design's files, plus every icon the
+    extension's manifest and `background.ts` name: it exists, at its size, with transparency, and the off icons are
+    grey. It fails on the old icons. Full Vitest: 394 passed. Smoke and extension: 720 passed, 1 skipped. The built
+    Chrome and Firefox extensions carry the new files, and screenshots of the popup and options page show them.
 
 ### Phase 2 (started 2026-11-10, owner-approved)
 

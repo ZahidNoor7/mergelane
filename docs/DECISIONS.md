@@ -1706,3 +1706,46 @@ apply are removed, not greyed.
 - What Windows draws (the icon at each scale, the menu, the flyout's corners and place) is on the laptop checklist.
 - On Windows, Settings no longer has a separate "show the merged speed" switch: the tooltip always shows it while the
   icon is there.
+
+## ADR-0062: Ping through system merge gets the real reply, over a link
+
+**Status:** accepted, 2026-11-13. **Milestone:** fix found by an audit of system merge on the owner's Mac.
+
+### Context
+
+An audit of the owner's Mac with system merge on checked where every socket's traffic went (`netstat -anv`,
+`nettop` by interface for 90 s, the interface counters). Every app's internet traffic went through the TUN; only the
+daemon's own pinned sockets used the link, and only Bonjour, AirDrop and Continuity used `en0` directly, all
+local-network traffic. One thing never reached a network at all: ping.
+
+`ping 1.1.1.1` answered in 0.2 ms over Wi-Fi, and `ping 203.0.113.9` (TEST-NET-3, where nobody is) answered too.
+tun2socks v2.7.0 answers every IPv4 echo request itself when no `ICMPHandler` is given (`core/icmp.go`,
+`handlePacket4`), and upstream net-merge gave none. So while system merge was on, ping said every host was up, even
+with every link dead, and any app or script that checks the internet with ping was told it worked.
+
+### Decision
+
+- **The relay.** `internal/tun/icmp.go` is the TUN's `ICMPHandler`. It takes every IPv4 echo request, sends the app's
+  ICMP message unchanged through a link with `engine.Balancer.Echo`, and writes only the real reply back into the
+  TUN, as from the host. With no reply within 5 s, the app gets none, as without Mergelane.
+- **The link.** Picked like a UDP flow's: balanced, or the site's link while sticky-per-site is on (the address is
+  the site, ADR-0048). A link that can't open the socket is skipped, and sidelined if the error says it is down. The
+  ping is counted on its link's bytes. It holds no balancing slot.
+- **The socket (macOS).** A datagram ICMP socket, the unprivileged kind `ping` itself uses: `IP_BOUND_IF` to the
+  link (as `nics.ForceEgress` pins every other daemon socket, so the capture routes can't take it back), bound to the
+  link's address and connected to the host, with `IP_STRIPHDR` as `golang.org/x/net/icmp` sets it on Darwin.
+- **Limits.** Pings to a multicast or broadcast address are not relayed and get no reply. At most 128 pings are
+  relayed at once; more are dropped, as on a congested link. Other ICMP (timestamps, replies) is left to tun2socks.
+- **Windows** keeps tun2socks' handler for now (`engine.EchoSupported` is false there): it needs another socket
+  (`IcmpSendEcho2Ex` from the link's address is the likely one), and that can only be proven on the laptop.
+
+### Consequences
+
+- Ping, and anything built on it, tells the truth while system merge is on. Measured on the owner's Mac through the
+  new code on the real Wi-Fi: 1.1.1.1 in 28.6 ms and 8.8.8.8 in 41.8 ms (before: 0 s for both), and no reply from
+  203.0.113.9 (before: an instant reply).
+- Still not real through the TUN: traceroute (its probes are UDP or ICMP with a short TTL, which the userland stack
+  ends inside the Mac), ping over IPv6 (no reply, which is honest), and ping on Windows (made up, as before).
+- The tests can't count on the Mac answering its own pings: with the firewall's stealth mode on, as on the owner's
+  Mac, macOS drops every echo request, loopback included. So the round trip is tested with a stand-in socket, and the
+  real socket is tested for opening pinned, sending, deadlines and its failures.

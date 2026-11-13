@@ -581,3 +581,46 @@ describe('Windows in the notes (W4)', () => {
     assert.ok(install < windows && windows < limits)
   })
 })
+
+describe('the browser extension (ADR-0063)', () => {
+  const EXTENSION = JSON.parse(read(join(HERE, '../adblock/ubol.json')))
+  const tool = EXTENSION.tools[0]
+  const source = `ubo-lite-${tool.version}-source.tar.gz`
+  const input = () => ({
+    version: '0.2.0',
+    changes: changelogSection(CHANGELOG, '0.2.0'),
+    limits: honestLimits(README),
+    checksums: parseChecksums(read(fixture('SHA256SUMS'))),
+    manifest: MANIFEST
+  })
+
+  test("uBO Lite's source is one more attached file the checksums must list", () => {
+    assert.deepEqual(sourceAssets(EXTENSION), [source])
+    const entries = parseChecksums(read(fixture('SHA256SUMS')))
+    assert.deepEqual(missingAssets(entries, '0.2.0', MANIFEST, undefined, EXTENSION), [source])
+    const listed = [...entries, { file: source, sha256: SHA_B }]
+    assert.deepEqual(missingAssets(listed, '0.2.0', MANIFEST, undefined, EXTENSION), [])
+  })
+
+  test('the notes say the extension is GPL, after the programs, and name its attached source', () => {
+    const notes = buildNotes({ ...input(), extensionManifest: EXTENSION })
+    assert.ok(notes.includes('## The browser extension'))
+    assert.ok(notes.includes('distributed under GPL-3.0-or-later'))
+    assert.ok(notes.includes(`**uBO Lite ${tool.version}**: GPL-3.0-or-later`))
+    assert.ok(notes.includes(`\`${source}\`, attached to this release (SHA-256 \`${tool.sourceSha256}\`)`))
+    assert.ok(notes.indexOf('## Open-source programs inside the app') < notes.indexOf('## The browser extension'))
+    assert.ok(notes.endsWith('\n'))
+    assert.ok(!buildNotes(input()).includes('## The browser extension'))
+  })
+
+  test('--extension-manifest: refused until the checksums list its source, then added to the notes', () => {
+    const manifest = scratchFile(JSON.stringify(EXTENSION))
+    const missing = run(['--version', '0.2.0', '--checksums', fixture('SHA256SUMS'), '--extension-manifest', manifest])
+    assert.equal(missing.code, 1)
+    assert.ok(missing.err.includes(source), missing.err)
+    const sums = scratchFile(`${read(fixture('SHA256SUMS'))}${SHA_B}  ${source}\n`)
+    const done = run(['--version', '0.2.0', '--checksums', sums, '--extension-manifest', manifest])
+    assert.equal(done.code, 0, done.err)
+    assert.ok(done.out.includes('## The browser extension'))
+  })
+})

@@ -345,6 +345,8 @@ describe('release', () => {
       'npx electron-builder --win --arm64 --config electron-builder.win.yml --publish never',
       'node scripts/windows/check-build.mjs --version 1.0.0',
       `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')}`,
+      // uBO Lite, in the browser extension (ADR-0063).
+      `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')} --manifest scripts/adblock/ubol.json`,
       `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')} --manifest scripts/media-tools/tools-windows-x64.json`,
       `node scripts/media-tools/sources.mjs ${join(repo.dist, 'sources')} --manifest scripts/media-tools/tools-windows-arm64.json`
     ].map((line) => commands.indexOf(line))
@@ -352,6 +354,7 @@ describe('release', () => {
     assert.deepEqual([...windows].sort((a, b) => a - b), windows)
     assert.ok(commands.findIndex((line) => line.startsWith('codesign --verify')) < windows[0])
     assert.match(commands.at(-1), /--windows-manifest scripts\/media-tools\/tools-windows-x64\.json/)
+    assert.match(commands.at(-1), /--extension-manifest scripts\/adblock\/ubol\.json/)
     // A fresh app/dist: nothing from an earlier build is left to upload by mistake.
     assert.deepEqual(readdirSync(repo.dist).sort(), [
       'Mergelane-1.0.0-arm64-mac.zip',

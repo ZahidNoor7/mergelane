@@ -73,6 +73,14 @@ interface AppStore {
   screen: Screen
   /** The section Settings shows. */
   settingsSection: SettingsSection
+  /** The Networks place shows the speed test instead of its list (ADR-0064), with this network
+   * picked when it was opened from one. */
+  speedTest: { open: boolean; networkId?: string }
+  openSpeedTest: (networkId?: string) => void
+  closeSpeedTest: () => void
+  /** Persisted — the speed test's server, as https://host; unset is Cloudflare's (ADR-0064). */
+  speedTestServer: string | undefined
+  setSpeedTestServer: (server: string | undefined) => void
   /** Mergelane's own update, as main/updater.ts reports it; null until it first answers. */
   update: UpdateState | null
   setUpdate: (update: UpdateState) => void
@@ -228,6 +236,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   downloads: {},
   history: [],
   screen: 'downloads',
+  speedTest: { open: false },
+  speedTestServer: initial.speedTestServer,
   settingsSection: 'general',
   update: null,
   setUpdate: (update) => set({ update }),
@@ -330,7 +340,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })
   },
 
-  setScreen: (screen) => set({ screen, detailOpen: false }),
+  setScreen: (screen) => set({ screen, detailOpen: false, speedTest: { open: false } }),
+  openSpeedTest: (networkId) =>
+    set({ screen: 'networks', speedTest: { open: true, ...(networkId ? { networkId } : {}) } }),
+  closeSpeedTest: () => set({ speedTest: { open: false } }),
+  setSpeedTestServer: (speedTestServer) => {
+    set({ speedTestServer })
+    persist({ speedTestServer })
+  },
   openDownload: (id) => set({ screen: 'downloads', selectedId: id, detailOpen: true }),
   closeDownload: () => set({ detailOpen: false }),
   closeDetails: () => set({ selectedId: null, detailOpen: false }),

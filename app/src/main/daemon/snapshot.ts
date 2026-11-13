@@ -256,3 +256,54 @@ export async function afterInstall(
   }
   return readSnapshot(context)
 }
+
+/** What the speed test needs to know before it goes through system merge (ADR-0064): whether
+ * merging is on, why not, whether it keeps each site on one network, and whether any network has a
+ * speed limit in it. Null when the helper can't be asked. */
+export async function readSpeedTestState(context: SnapshotContext): Promise<{
+  on: boolean
+  reason?: string
+  stickySites?: boolean
+  limited: boolean
+} | null> {
+  try {
+    const [status, links] = await Promise.all([
+      callDaemon('status', undefined, socket(context)),
+      callDaemon('links', undefined, socket(context))
+    ])
+    return {
+      on: status.state === 'on',
+      ...(status.reason ? { reason: status.reason } : {}),
+      ...(status.stickySites === undefined ? {} : { stickySites: status.stickySites }),
+      limited: links.links.some((link) => (link.limitMbps ?? 0) > 0)
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Each network's traffic now, by its device name, from the helper's counters: system merge's own,
+ * and everything on the interface. Null when the helper can't be asked. */
+export async function readTraffic(
+  context: SnapshotContext
+): Promise<Record<
+  string,
+  { rxBps: number; txBps: number; linkRxBps: number; linkTxBps: number }
+> | null> {
+  try {
+    const stats = await callDaemon('stats', undefined, { ...socket(context), timeoutMs: 2_000 })
+    return Object.fromEntries(
+      stats.links.map((link) => [
+        link.name,
+        {
+          rxBps: link.rxBps,
+          txBps: link.txBps,
+          linkRxBps: link.linkRxBps,
+          linkTxBps: link.linkTxBps
+        }
+      ])
+    )
+  } catch {
+    return null
+  }
+}

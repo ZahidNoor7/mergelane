@@ -155,6 +155,21 @@ ADR-0061):
   (with the helper installed), Settings and Exit; closing the window leaves Mergelane in the notification area,
   and Exit quits it.
 
+### The speed test (by hand, ADR-0064)
+
+The Mac's suite measures the speed test against a local server on loopback and the LAN address; on Windows a test
+socket is tied to its network by its address alone (ADR-0055), which only the laptop can prove. With two networks
+connected (Wi-Fi and a phone over USB) and nothing else downloading, open Networks › Test speed and check:
+
+- **Each network:** both are tested one after the other, each reaches a plausible speed for that network, and the
+  phone's result is the phone's, not the Wi-Fi's (Task Manager › Performance shows the traffic on the network being
+  tested, and only on it);
+- **All together:** both networks carry part of the test (the bar under the dial and the results' bar), and the
+  total is no more than the two added up;
+- **Other apps,** with the helper installed and System merge on: the test runs, and with "Keep each site on one
+  network" on, one network carries it; with System merge off, the view says to turn it on and Start test is off;
+- a test uses up to 200 MB per network, which counts against the phone's plan.
+
 ### Adding Go packages
 
 `GO_PACKAGES` in `scripts/windows/kit.mjs` lists the daemon packages the kit runs. Add a package once it builds

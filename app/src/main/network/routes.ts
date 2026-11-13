@@ -431,6 +431,14 @@ class RoutedHttpsAgent extends HttpsAgent {
   }
 }
 
+/** A request body of a known length, sent as a POST with that Content-Length. `write` sends it into
+ * the request and ends it, calling `progress` as each piece is handed to the system, which keeps
+ * the request from counting as stalled while the body goes out. */
+export interface RequestBody {
+  length: number
+  write: (req: ClientRequest, progress: () => void) => void
+}
+
 export interface ResponseStart {
   req: ClientRequest
   res: IncomingMessage
@@ -500,9 +508,10 @@ export class StreamConnection {
   request(
     target: URL,
     headers: Record<string, string>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    body?: RequestBody
   ): Promise<ResponseStart> {
-    return this.send(target, headers, signal, true)
+    return this.send(target, headers, signal, true, body)
   }
 
   /** Drops its sockets, in use or kept for reuse, so the next request opens a new one: they may
@@ -524,7 +533,8 @@ export class StreamConnection {
     target: URL,
     headers: Record<string, string>,
     signal: AbortSignal | undefined,
-    retryStale: boolean
+    retryStale: boolean,
+    body?: RequestBody
   ): Promise<ResponseStart> {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(abortError())
@@ -533,11 +543,11 @@ export class StreamConnection {
       let answered = false
       let timedOut = false
       const options: ConnectOptions = {
-        method: 'GET',
+        method: body ? 'POST' : 'GET',
         hostname: targetHost(target),
         port: target.port || undefined,
         path: `${target.pathname}${target.search}`,
-        headers,
+        headers: body ? { ...headers, 'Content-Length': String(body.length) } : headers,
         agent: secure ? this.https : this.http,
         connectSignal: signal
       }
@@ -547,11 +557,16 @@ export class StreamConnection {
         resolve({ req, res, sentAt })
       })
       const onAbort = (): void => void req.destroy(abortError())
-      const timer = setTimeout(() => {
+      const stall = (): void => {
         timedOut = true
         req.destroy(new Error('Connection stalled: no response from server'))
-      }, this.timeoutMs)
+      }
+      // Without a body, the response must start within timeoutMs. With one, the server answers
+      // only once it has the body, so the clock runs again on every piece the body sends.
+      let timer = setTimeout(stall, this.timeoutMs)
+      let settled = false
       const settle = (): void => {
+        settled = true
         clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
       }
@@ -560,14 +575,21 @@ export class StreamConnection {
         settle()
         // A kept-alive socket the server closed while it sat idle only fails once used, so the
         // request gets one more go on a new socket (the retry Node documents for `reusedSocket`).
-        if (retryStale && req.reusedSocket && !timedOut && !signal?.aborted) {
+        // Not with a body: some of it may already have been sent and counted.
+        if (retryStale && !body && req.reusedSocket && !timedOut && !signal?.aborted) {
           resolve(this.send(target, headers, signal, false))
         } else {
           reject(asConnectionError(error))
         }
       })
       signal?.addEventListener('abort', onAbort, { once: true })
-      req.end()
+      if (!body) return void req.end()
+      body.write(req, () => {
+        // Answered or failed: nothing is waiting any more, so no clock to run again.
+        if (settled) return
+        clearTimeout(timer)
+        timer = setTimeout(stall, this.timeoutMs)
+      })
     })
   }
 }

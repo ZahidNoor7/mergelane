@@ -44,6 +44,8 @@ export const testKnobs = {
   slowForMs: positiveNumber('MERGELANE_E2E_SLOW_FOR_MS', 10_000),
   silentAfterMs: positiveNumber('MERGELANE_E2E_SILENT_MS', 5_000),
   hedgeAfterMs: positiveNumber('MERGELANE_E2E_HEDGE_MS', 2_000),
+  /** How long the speed test's download and upload each run, instead of 10 s (ADR-0064). */
+  speedTestMs: positiveNumber('MERGELANE_E2E_SPEEDTEST_MS', 0) || undefined,
   /** How long a magnet link may take to find peers that send its metadata. */
   magnetTimeoutMs: positiveNumber('MERGELANE_E2E_MAGNET_MS', 3 * 60_000),
   /** How long a magnet link only the DHT can help keeps looking once its first search finds no

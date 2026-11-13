@@ -2,6 +2,7 @@ import type { AppUsage } from './appUsage'
 import type { BrowserId, BrowsersReport, ExtensionSaved } from './browsers'
 import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
+import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
 import type { UpdateChannel } from './releases'
 import type {
   AppSettings,
@@ -23,8 +24,8 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, magnetCheckStatus, historyChanged,
- * linkReceived, updateStateChanged, showUpdates, networkActivityChanged, saveDiagnosticsRequested, showPlace and
- * trayStatusChanged) — one source of truth for
+ * linkReceived, updateStateChanged, showUpdates, networkActivityChanged, saveDiagnosticsRequested, showPlace,
+ * trayStatusChanged, speedTestLiveChanged and speedTestFinished) — one source of truth for
  * both mergelaneApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -148,4 +149,13 @@ export interface IpcContract {
   resizeTrayFlyout: { args: [height: number]; result: void }
   /** Hides the flyout (Esc, or after one of its buttons). */
   closeTrayFlyout: { args: []; result: void }
+  /** Starts a speed test and says its id (ADR-0064); throws while one is running. Its progress
+   * comes as speedTestLiveChanged, and its end as speedTestFinished. */
+  speedTestStart: { args: [request: SpeedTestRequest]; result: string }
+  speedTestCancel: { args: []; result: void }
+  /** The test in progress, if any: the window may open on one already running. */
+  speedTestLive: { args: []; result: SpeedTestLive | null }
+  /** Past tests, newest first. */
+  speedTestHistory: { args: []; result: SpeedTestRun[] }
+  speedTestClearHistory: { args: []; result: void }
 }

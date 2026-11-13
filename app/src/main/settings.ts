@@ -16,6 +16,7 @@ import { sanitizeCaptureRules } from '../shared/captureRules'
 import { parseVersion } from '../shared/releases'
 import { sanitizeRole } from '../shared/networkRoles'
 import { sanitizeRouting } from '../shared/routing'
+import { speedTestServer } from '../shared/speedTest'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
 
@@ -185,6 +186,8 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     settings.speedUnit = parsed.speedUnit
   }
   if (parsed.browserExtensionUsed === true) settings.browserExtensionUsed = true
+  const server = speedTestServer(parsed.speedTestServer)
+  if (server) settings.speedTestServer = server
   return settings
 }
 

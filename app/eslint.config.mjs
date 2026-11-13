@@ -16,7 +16,9 @@ export default defineConfig(
       '**/out',
       'resources/bin',
       'resources/bin-win',
-      'extension/.cache'
+      'extension/.cache',
+      // Gauge UI, copied from upstream at a pinned commit (ADR-0064): kept as upstream wrote it.
+      'src/renderer/src/components/gauge'
     ]
   },
   tseslint.configs.recommended,

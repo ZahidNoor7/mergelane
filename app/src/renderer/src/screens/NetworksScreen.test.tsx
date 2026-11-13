@@ -15,6 +15,10 @@ vi.mock('../components/LimitsDialog', () => ({
 vi.mock('../components/SystemMergeSection', () => ({
   SystemMergeSection: () => <p>System merge switch</p>
 }))
+// The speed test has its own tests (components/speedTest/speedTest.test.tsx).
+vi.mock('../components/speedTest/SpeedTestView', () => ({
+  SpeedTestView: () => <p>Speed test view</p>
+}))
 
 const MB = 1024 * 1024
 const NOW = new Date(2026, 10, 11, 15).getTime()
@@ -277,6 +281,25 @@ describe('NetworksScreen', () => {
     expect(screen.getByText('Connected, but can’t reach the server')).toBeTruthy()
     expect(screen.getByText('3 of 3 connected. New downloads use all of them.')).toBeTruthy()
     expect(screen.getAllByText('Connected, idle')).toHaveLength(2)
+  })
+})
+
+describe('the speed test', () => {
+  it('opens for every network from the toolbar, or for one from its line, in place of the list', async () => {
+    const user = userEvent.setup()
+    show()
+    const rows = within(screen.getByRole('list', { name: 'Networks' })).getAllByRole('listitem')
+    // A network that has dropped can't be tested.
+    expect(within(rows[3]).queryByRole('button', { name: /speed$/ })).toBeNull()
+    await user.click(within(rows[1]).getByRole('button', { name: 'Test iPhone’s speed' }))
+    expect(useAppStore.getState().speedTest).toEqual({ open: true, networkId: 'en7' })
+    expect(screen.getByText('Speed test view')).toBeTruthy()
+    act(() => useAppStore.getState().closeSpeedTest())
+    await user.click(screen.getByRole('button', { name: 'Test speed' }))
+    expect(useAppStore.getState().speedTest).toEqual({ open: true })
+    // Going to another place closes it.
+    act(() => useAppStore.getState().setScreen('downloads'))
+    expect(useAppStore.getState().speedTest).toEqual({ open: false })
   })
 })
 

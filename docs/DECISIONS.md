@@ -1836,3 +1836,82 @@ projects were reviewed from their source (gorhill/uBlock `2bc679d`, AdAway/AdAwa
   That is uBO Lite's own design, kept as it is.
 - In Firefox, site access is granted after install, so uBO Lite starts at "basic"; it moves itself to "optimal" once
   the user allows access to all sites (`syncWithBrowserPermissions`), which the popup's Allow access asks for.
+
+## ADR-0064: The connection speed test
+
+**Status:** accepted by the owner, 2026-11-13 (plan approved in chat; questions A to D answered).
+
+### Context
+
+The owner asked for a speed test of each network and of the merged connection: download, upload, latency and
+jitter, live progress, a comparison and a history, with real measurements only. Mergelane has no servers
+(CLAUDE.md), so a test needs someone else's. The app already ties a socket to one network (`deviceBinding.ts`,
+`routes.ts`, ADR-0055), and system merge balances each connection over the networks, keeping each website on one
+network by default (ADR-0048).
+
+### Decision
+
+- **Server (owner, answer A):** Cloudflare's public speed test, `https://speed.cloudflare.com`: `GET /__down?bytes=N`
+  and `POST /__up`, the endpoints Cloudflare's own MIT client uses (github.com/cloudflare/speedtest). It is
+  contacted only when the user presses Start test, never on a schedule. Settings key `speedTestServer` points the test
+  at another server answering the same two paths (Networks › Speed test › Change server…). Cloudflare publishes no
+  terms or rate limits for other apps using these endpoints; if it limits or changes them, the test fails with the
+  server's answer, and the setting is the way round it. Results are never sent anywhere.
+- **Three kinds of test** (`shared/speedTest.ts`, `main/speedTest/`):
+  - *Each network:* networks one after another, never at the same time, so networks behind one router or radio don't
+    slow each other's result. Every connection is tied to the network, as downloads' are, so the result is right
+    whether system merge is on or off.
+  - *All together:* every chosen network at once, each with its own tied connections, as Mergelane's downloads use
+    them. The total is what arrived on all of them together, sampled every 100 ms, not the networks' results added
+    up; a test with two networks behind one 3 MB/s line measures about 3 MB/s (e2e/speedTest.spec.ts proves it).
+    Each network's part is measured on its own connections at the same time.
+  - *Other apps (owner, answer C):* connections tied to no network, so system merge's helper routes them as any
+    other app's. Which networks carried the test comes from the helper's `stats` (no protocol change). With "Keep
+    each site on one network" on, the test is one site and reaches one network; the setting is left alone and the
+    result says so. A speed limit in system merge applies, and the result says so too. Offered only while system
+    merge is on.
+- **How it measures:**
+  - *Latency and jitter:* one request to open the connection, then 20 empty responses (`bytes=0`) one after another on
+    it. Latency is the median time to the first byte, less the server's own time from its Server-Timing header
+    (`cfRequestDuration`, or the first metric with a duration). Jitter is the mean absolute difference between
+    consecutive samples, as Cloudflare describes theirs.
+  - *Download:* 6 connections per network for 10 s, requests starting at 256 KiB and doubling while they finish within
+    a second (to 64 MiB). The first 2 s, or a quarter of the time if shorter, are left out as TCP warm-up.
+  - *Upload:* 4 connections per network for 10 s, random bodies with a Content-Length, starting at 64 KiB. It is
+    measured from the server's answers, which come only once it has the whole body, because Node's count of bytes
+    handed to the system runs ahead of the network by the send buffer (seconds of data on a slow uplink). Each
+    answered request's bytes are spread evenly over the time it took (`spreadTimeline`), and the result ends at the
+    last moment every connection's bytes are known (the earliest of their last answers). Counting a whole request
+    at its answer would put one that began in the warm-up wholly after it, and overstate a slow uplink. The live
+    dial uses the handed-over count, which moves smoothly.
+  - *Caps:* at most 150 MB down and 50 MB up per network; a transfer ends when any network reaches its cap, so every
+    sample has every network in it.
+- **Fairness and safety:** while a test runs, Mergelane's downloads are held as outside the schedule's hours
+  (`DownloadManager.holdForSpeedTest`): running ones go back to the front of the queue, nothing starts, and those
+  waiting keep their turn and their start time (ADR-0044); after the test the queue runs again. A quit during a test
+  leaves them as any quit does. Every byte counts against the network's data limit (`Limits.countUsage`), those
+  arriving after the deadline too; a network whose limit is reached isn't tested, and one that reaches it during the
+  test stops there. Mergelane's own speed limits don't hold the test back: it measures the network. A network that disconnects,
+  or moves nothing for 5 s, fails with that reason, and the others go on. With the helper installed, a network whose
+  interface carried much more than the test (more than 15% more and 128 kB/s) is noted as busy.
+- **Kept:** `speed-tests.json` in userData, `{ version: 1, runs }`, newest first, at most 200 runs and 90 days, read
+  field by field. A cancelled test isn't kept. Runs keep the system's name for a network, never the Wi-Fi network's
+  name. They are not in the diagnostics bundle.
+- **Window (owner, answers B and D):** a view inside Networks (Test speed in its toolbar, and a button on each
+  network's line), with a dial drawn by Gauge UI (MIT), eight files copied from commit `bdd0c85` into
+  `components/gauge/` (docs/UPSTREAM.md). The arc follows each reading with a critically damped spring and snaps under
+  Reduce Motion; its scale only grows during a test. The reading is HTML at its centre, and the dial is a
+  `role="meter"` with its value in words. Results are a table: the total first, each network with Fastest, Slowest
+  and Steadiest, and each figure's change since the last test of the same kind. History lists past tests, filters by
+  network with its download trend, and clears after a confirmation.
+
+### Consequences
+
+- A third thing reaches out, only when asked; the README says so beside the other two.
+- Results depend on Cloudflare's nearest server and its load as much as on the networks; a different server gives
+  different numbers. The test can't see other apps' traffic without the helper.
+- Tests: `shared/speedTest.test.ts` (Vitest, 100% of lines), `e2e/speedTest.spec.ts` (26, real transfers paced per
+  network by `e2e/speedServer.ts`, a slow uplink among them), `e2e/speedTestUi.spec.ts` (5, the app end to end
+  against the local server, with downloads held and released, and a quit mid-test),
+  `e2e/daemonApi.spec.ts` (3 more for the helper reads), and the view's Vitest specs. Nothing in the suite contacts
+  Cloudflare.

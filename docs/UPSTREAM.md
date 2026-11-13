@@ -100,3 +100,22 @@ Mergelane's changes are applied at build time and listed in `scripts/adblock/ubo
 page and the `uBlock` submodule commit at its tag (`gh api repos/uBlockOrigin/uBOL-home/contents/uBlock?ref=<tag>`)
 into `ubol.json`, with the SHA-256 of that commit's source archive; then run `npm run build:extension` and
 `node --test scripts/adblock/ubol.test.mjs`, which fails if a patch no longer applies.
+
+## Gauge UI (the speed test's dial, ADR-0064)
+
+| Upstream | Commit | Licence | Used in |
+|---|---|---|---|
+| https://github.com/thordursk/gauge-ui | `bdd0c857a112d5e8b9921b7ee03075dc78be7cb9` (2026-11-12) | MIT, Copyright (c) 2026 Thordur | `app/src/renderer/src/components/gauge/` |
+
+- **What was copied:** `components/gauge/{gauge.tsx, context.tsx, scale.ts, math.ts, utils.ts, transition.ts,
+  use-animated-value.ts, arcs.tsx}` and `LICENSE`. They are identical to the shadcn registry item
+  `https://gauge-ui.dev/r/gauge.json` as served on 2026-11-14 (compared file by file).
+- **What was changed:** `gauge.tsx` imports `cn` from the `cn` package instead of `@/lib/utils`, as Mergelane's other
+  shadcn components do. `index.ts` is Mergelane's own: it exports only the files copied. Nothing else.
+- **Left out:** the tooltip (it needs `tw-animate-css`, which Mergelane doesn't use), the slider control, the linear
+  and inset gauges, the ticks, needle, dot and text parts.
+- **Kept as upstream wrote it:** the folder is excluded from Prettier and ESLint, so a later commit can be compared
+  and copied over directly.
+- **To update:** fetch the same files at the new commit (`gh api repos/thordursk/gauge-ui/contents/components/gauge/
+  <file>?ref=<sha>`), copy them over, redo the `cn` import, and run the speed test's Vitest and e2e specs.
+

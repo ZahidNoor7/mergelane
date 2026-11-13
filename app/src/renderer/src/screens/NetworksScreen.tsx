@@ -2,6 +2,7 @@ import { roleOf } from '@shared/networkRoles'
 import type { NetworkInterfaceKind } from '@shared/types'
 import { cn } from 'cn'
 import {
+  Activity,
   ArrowUp,
   CircleCheck,
   CircleDashed,
@@ -21,6 +22,7 @@ import { RoutingPanel } from '../components/RoutingPanel'
 import { Sparkline } from '../components/Sparkline'
 import { SpeedText } from '../components/SpeedText'
 import { SystemMergeSection } from '../components/SystemMergeSection'
+import { SpeedTestView } from '../components/speedTest/SpeedTestView'
 import { Button } from '../components/ui/button'
 import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useNetworkUsage } from '../hooks/useNetworks'
@@ -57,6 +59,12 @@ const CONNECTION_TYPE: Record<NetworkInterfaceKind, string> = {
 }
 
 export function NetworksScreen(): React.JSX.Element {
+  const speedTest = useAppStore((store) => store.speedTest.open)
+  return speedTest ? <SpeedTestView /> : <NetworkList />
+}
+
+function NetworkList(): React.JSX.Element {
+  const openSpeedTest = useAppStore((store) => store.openSpeedTest)
   const interfaces = useAppStore((store) => store.interfaces)
   const downloads = Object.values(useAppStore((store) => store.downloads))
   const preferences = useAppStore((store) => store.networkPreferences)
@@ -92,6 +100,10 @@ export function NetworksScreen(): React.JSX.Element {
                 }${standby > 0 ? `, ${standby} more on standby` : ''}.`}
           </p>
         </div>
+        <Button type="button" variant="secondary" onClick={() => openSpeedTest()}>
+          <Activity data-icon="inline-start" />
+          Test speed
+        </Button>
         <Button type="button" variant="secondary" onClick={() => openLimits(null)}>
           <Gauge data-icon="inline-start" />
           Speed &amp; data limits
@@ -177,6 +189,7 @@ function NetworkLine({
   onLimits: () => void
 }): React.JSX.Element {
   const networkVisual = useNetworkVisuals()
+  const openSpeedTest = useAppStore((store) => store.openSpeedTest)
   const formatSpeedLimit = useFormatSpeedLimit()
   const preference = useAppStore((store) => store.networkPreferences[network.id])
   const downloads = useAppStore((store) => store.downloads)
@@ -316,6 +329,18 @@ function NetworkLine({
             </span>
           )}
         </div>
+        {!out && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Test ${visual.name}’s speed`}
+            title={`Test ${visual.name}’s speed`}
+            onClick={() => openSpeedTest(network.id)}
+          >
+            <Activity />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"

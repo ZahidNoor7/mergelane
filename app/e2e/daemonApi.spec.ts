@@ -25,6 +25,8 @@ import {
   mergeIsOn,
   outagesFrom,
   readSnapshot,
+  readSpeedTestState,
+  readTraffic,
   switchAutoResume,
   switchMerge,
   switchStickySites,
@@ -675,5 +677,47 @@ test.describe('helper removal @smoke', () => {
     )
     expect(removal.outcome).toBe('removed')
     expect(scripts).toEqual([uninstallCommand(TRICKY)])
+  })
+})
+
+test.describe('what the speed test reads from the helper @smoke', () => {
+  test('whether system merge is on, keeps sites on one network, and has a limit', async () => {
+    await withFake(async (fake, context) => {
+      expect(await readSpeedTestState(context)).toEqual({
+        on: false,
+        stickySites: true,
+        limited: false
+      })
+      fake.state = 'on'
+      fake.stickySites = false
+      fake.limitMbps = 20
+      expect(await readSpeedTestState(context)).toEqual({
+        on: true,
+        stickySites: false,
+        limited: true
+      })
+      // A helper from before sticky sites says nothing of them.
+      fake.legacy = true
+      expect(await readSpeedTestState(context)).toEqual({ on: true, limited: true })
+    })
+  })
+
+  test('each network’s traffic, by its device name', async () => {
+    await withFake(async (_fake, context) => {
+      expect(await readTraffic(context)).toEqual({
+        feth10: { rxBps: 2_500_000, txBps: 100_000, linkRxBps: 2_600_000, linkTxBps: 110_000 }
+      })
+    })
+  })
+
+  test('nothing, without a helper to ask', async () => {
+    const gone = {
+      socketPath: '/tmp/mlfd-none',
+      installed: false,
+      appVersion: 'fake',
+      compareVersions: true
+    }
+    expect(await readSpeedTestState(gone)).toBeNull()
+    expect(await readTraffic(gone)).toBeNull()
   })
 })

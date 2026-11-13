@@ -45,6 +45,8 @@ export interface FakeDaemon {
   rawReply?: string
   /** When true, connections are accepted and never answered. */
   silent?: boolean
+  /** A speed limit `links` reports on feth20, in Mbit/s (none unless set). */
+  limitMbps?: number
   close: () => Promise<void>
 }
 
@@ -150,7 +152,14 @@ export async function startFakeDaemon(): Promise<FakeDaemon> {
             line = ok({
               links: [
                 { name: 'feth10', index: 12, ipv4: '10.77.1.2', up: true, state: 'up' },
-                { name: 'feth20', index: 14, ipv4: '10.77.2.2', up: true, state: 'down' }
+                {
+                  name: 'feth20',
+                  index: 14,
+                  ipv4: '10.77.2.2',
+                  up: true,
+                  state: 'down',
+                  ...(fake.limitMbps === undefined ? {} : { limitMbps: fake.limitMbps })
+                }
               ]
             })
             break

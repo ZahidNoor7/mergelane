@@ -459,6 +459,8 @@ export class DownloadManager {
   private pausedInSession = new Set<string>()
   private readonly initialization: Promise<void>
   private suspending = false
+  /** A speed test is running (ADR-0064): nothing downloads, as outside the schedule's hours. */
+  private speedTestHold = false
   private scheduleLoaded = false
   private downloadSchedule?: DownloadSchedule
   private scheduleTimer?: NodeJS.Timeout
@@ -625,7 +627,38 @@ export class DownloadManager {
   }
 
   private scheduleAllowsDownloads(): boolean {
-    return this.scheduleLoaded && scheduleWindow(this.downloadSchedule).allowed
+    return (
+      !this.speedTestHold && this.scheduleLoaded && scheduleWindow(this.downloadSchedule).allowed
+    )
+  }
+
+  /** Holds every download while a speed test runs (ADR-0064), as the schedule's closing hour does:
+   * running downloads go back to the front of the queue, and nothing starts until
+   * releaseSpeedTestHold. Waiting downloads keep their place, their turn and their start time.
+   * The queue is saved as it is, so after a quit mid-test they carry on as any queue does.
+   * Says which downloads were running. */
+  async holdForSpeedTest(): Promise<string[]> {
+    await this.initialization
+    this.speedTestHold = true
+    const running = [...this.runtimes.values()]
+      .filter((runtime) => runtime.state.status === 'downloading')
+      .sort((a, b) => (a.state.queuedAt ?? 0) - (b.state.queuedAt ?? 0))
+    await Promise.all(running.map((runtime) => this.pause(runtime.state.id, true)))
+    // Ahead of those that were waiting, in the order they were running.
+    for (const runtime of [...running].reverse()) {
+      if (runtime.state.status !== 'queued') continue
+      this.enqueue(runtime, true)
+      this.pushUpdate(runtime)
+      await this.persistNow(runtime)
+    }
+    return running.map((runtime) => runtime.state.id)
+  }
+
+  /** Lets the queue run again after a speed test. */
+  releaseSpeedTestHold(): void {
+    if (!this.speedTestHold) return
+    this.speedTestHold = false
+    this.pump()
   }
 
   /** Close transfers before the queue can start anything else. The queued intent is persisted,

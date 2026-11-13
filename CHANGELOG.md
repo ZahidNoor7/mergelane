@@ -7,6 +7,13 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Added
 
+- **Speed test.** Networks › Test speed measures each network's download, upload, ping and jitter, for real. Test
+  the networks one at a time, all together as Mergelane's downloads use them (the total is what actually arrives,
+  not the networks added up), or through system merge as other apps get it. A live dial shows each step, the
+  results name the fastest, slowest and steadiest network and how each figure changed since your last test, and
+  past tests are kept for 90 days. Tests use Cloudflare's public speed test, only when you start one; you can
+  choose your own server instead. Your downloads pause while a test runs.
+
 - **The browser extension blocks ads and trackers.** uBO Lite (uBlock Origin Lite) is now built into Mergelane's
   extension, so one extension does both jobs. It is on for every site; turn it off for one site with **Block ads on
   this site** in the toolbar button's panel, and find filter lists, the blocking level and your own filters in the

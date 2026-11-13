@@ -11,3 +11,5 @@ resources/bin-win
 coverage
 # uBO Lite's pinned builds (scripts/adblock/ubol.mjs, ADR-0063): not ours to format.
 extension/.cache
+# Gauge UI, copied from upstream at a pinned commit (ADR-0064): kept as upstream wrote it.
+src/renderer/src/components/gauge

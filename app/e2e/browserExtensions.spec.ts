@@ -141,7 +141,10 @@ test.describe('Browser extensions @smoke', () => {
       MERGELANE_E2E_EXTENSION_BUILD: build
     })
     for (const updated of [folder, earlier]) {
-      await expect.poll(() => readFile(join(updated, '.mergelane-version'), 'utf8')).toBe(VERSION)
+      // Polled from launch: for an instant while the new copy is swapped in, the folder isn't there.
+      await expect
+        .poll(() => readFile(join(updated, '.mergelane-version'), 'utf8').catch(() => 'missing'))
+        .toBe(VERSION)
       expect(existsSync(join(updated, 'left-over.js'))).toBe(false)
       expect(existsSync(join(updated, 'manifest.json'))).toBe(true)
     }

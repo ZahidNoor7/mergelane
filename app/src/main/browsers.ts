@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { app, shell } from 'electron'
@@ -91,9 +91,19 @@ async function copyExtension(kind: ExtensionKind, target: string): Promise<boole
     const inside = await readdir(target).catch(() => null)
     if (inside === null || inside.length > 0) throw new FolderTaken()
   }
-  await rm(target, { recursive: true, force: true })
-  await cp(source, target, { recursive: true })
-  await writeFile(join(target, STAMP), version)
+  // Copied next to it first and swapped in whole: the browser loads the extension from this folder,
+  // and with uBO Lite in it (ADR-0063) a copy takes long enough that a half-made folder could be seen.
+  const staging = `${target}.part`
+  await rm(staging, { recursive: true, force: true })
+  try {
+    await cp(source, staging, { recursive: true })
+    await writeFile(join(staging, STAMP), version)
+    await rm(target, { recursive: true, force: true })
+    await rename(staging, target)
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true })
+    throw error
+  }
   return true
 }
 

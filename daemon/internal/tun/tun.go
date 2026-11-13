@@ -214,6 +214,7 @@ func (t *Tun) open() error {
 	stk, err := core.CreateStack(&core.Config{
 		LinkEndpoint:     dev,
 		TransportHandler: tunnel.T(),
+		ICMPHandler:      icmpHandler(t.B), // real ping replies over a link, not tun2socks' made-up ones (icmp.go)
 		Options:          []option.Option{option.WithTCPModerateReceiveBuffer(true)},
 	})
 	if err != nil {

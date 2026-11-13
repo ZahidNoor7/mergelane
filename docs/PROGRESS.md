@@ -840,6 +840,32 @@ Last updated: 2026-11-11
   and Archivo; `render.mjs` there redraws it). GitHub has no API for it: the owner uploads it in Settings.
 - **0.4.0** (2026-11-13, owner's go-ahead to merge everything and publish once all is green): the first release with
   Windows, as a preview not yet tried on a Windows PC. `windows` (W1–W7, PRs #74–#84) merged into `main`.
+- **System merge audit and real ping** (branch `fix-system-merge-ping`, owner's request, 2026-11-13, ADR-0062).
+  - **Audit, owner's Mac, helper 0.3.5, merging on:** every socket classified by its source address (`netstat -anv`)
+    and by interface over 90 s (`nettop`). Every app's internet traffic went through the TUN (`utun0`): browsers,
+    VS Code, `nsurlsessiond`, `apsd`, DNS (encrypted, to 8.8.4.4:443). On `en0` there was only the daemon's own
+    egress plus Bonjour, AirDrop and Continuity, all local network. Payload in step: the daemon took 72.6 MB from the
+    internet while apps got 73.2 MB through the TUN in the same 30 s.
+  - **Only one network that day:** Wi-Fi. The iPhone wasn't plugged in and no Ethernet was connected, so merged and
+    single-link speed were the same (18.5 against 18.3 Mbit/s).
+  - **Found and fixed:** ping never left the Mac. tun2socks answered every echo request itself (0.2 ms to 1.1.1.1,
+    and a reply from 203.0.113.9, where nobody is). `internal/tun/icmp.go` now relays each ping over a link with
+    `engine.Balancer.Echo` and passes back only the real reply. Live, on the real Wi-Fi: 28.6 ms to 1.1.1.1,
+    41.8 ms to 8.8.8.8, nothing from 203.0.113.9. Windows keeps the old handler until it can be tried on the laptop.
+  - **Tests:** 23 new (`engine/echo_test.go`, `echo_darwin_test.go`, `tun/icmp_test.go`). Full daemon suite
+    `go test -race ./...`: 364 passed, 0 failed, 7 skipped (the upstream SOCKS tests that need the `127.0.0.2`
+    loopback alias, as before). Statement coverage: `tun/icmp.go` 100%, `engine/echo.go` 98.1%,
+    `engine/echo_darwin.go` 92.6% (left: the kernel refusing `IP_STRIPHDR` and `connect`). Windows: builds, vets,
+    passes staticcheck and compiles its test programs for both chips.
+  - **Not proven yet:** the new helper on the owner's Mac. It needs installing, which asks for the admin password.
+  - **Seen, not Mergelane's:** programs started from VS Code can't reach the local network ("No route to host" to
+    the router), because VS Code has no Local Network permission (Apple TN3179). The capture routes leave the local
+    network on `en0`. `utun0`'s byte counter showed about twice what the links carry (388 MB against 200 MB in
+    88 s) while apps got exactly the payload. Not re-sending: the kernel's TCP counters (`sudo netstat -s -p tcp`,
+    run by the owner) show 73 MB of duplicate segments since boot against 2.9 GB received in order, about 2.5%. And
+    `utun0`'s packet count fits the payload: in 30 s, 26,446 packets carrying 73.2 MB plus 52-byte headers is
+    74.6 MB, half of the 149.8 MB its byte counter showed. So macOS counts `utun0`'s received bytes twice. Mergelane
+    never reads `utun0`'s counters (`nics.Octets` reads only the links'), so its speeds are unaffected.
 - **0.3.5** (2026-11-12, owner's go-ahead): PRs #70 and #71.
 - **0.3.4** (2026-11-12, owner's go-ahead): PR #66, the helper update offered at launch.
 - **0.3.3** (2026-11-12, owner's go-ahead): PR #63, the sticky first-burst fix, for the second M3.8 run.

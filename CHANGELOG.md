@@ -20,6 +20,13 @@ All notable changes to Mergelane are recorded here. The format follows
   Mergelane's own code stay MIT. Each release attaches uBO Lite's source.
 - Mergelane replaces a saved copy of the extension in one step, so a browser never sees a half-copied folder.
 
+### Fixed
+
+- **Ping tells the truth while system merge is on.** Mergelane used to answer every ping itself, instantly, so
+  `ping` said any address was up, even one that doesn't exist or with every network down. Each ping now goes out
+  over one of your networks, and you see the real reply and the real time, or no reply. On Windows, ping through
+  system merge still isn't real yet.
+
 ## [0.4.0] - 2026-11-13
 
 Mergelane now runs on Windows too. This first Windows version is a preview: it was built and tested on a Mac,

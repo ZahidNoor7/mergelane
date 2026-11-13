@@ -38,6 +38,35 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Connection speed test (2026-11-14, branch `speed-test`)
+
+- **Done (ADR-0064):** Networks › Test speed. Each network on its own, all together (the real total of every
+  network at once, as downloads use them), and other apps through system merge (the helper's counters say which
+  network carried it). Latency (median of 20), jitter, download (6 connections) and upload (4, from the server's
+  answers, each request spread over its time), live on a Gauge UI dial; results with Fastest, Slowest and Steadiest
+  and the change since the last test; history in `speed-tests.json` (200 runs, 90 days). Cloudflare's public speed
+  test by default (owner, answer A), only on Start; another server in Change server…. Downloads are held during a
+  test as outside the schedule's hours (running ones wait at the front of the queue; waiting ones keep their turn
+  and time); a test's bytes count against data limits, and a network that reaches its limit mid-test stops. Gauge
+  UI's eight files pinned at `bdd0c85` (docs/UPSTREAM.md, THIRD-PARTY-NOTICES.md).
+- **Review (second pass, 2026-11-14):** an independent review and a re-read found and fixed: queued downloads lost
+  their turn and start time and were started by the test (now held instead of paused); the live share bar never
+  filled during "All together"; a test could be refused just after the last ended, or a new one unlocked by the old
+  one's cleanup; upload overstated on slow uplinks and a slow uplink declared stalled while its body waited in the
+  send buffer; data limits checked only before a test; destroyed upload writes counted; an orphan timer per
+  request; the server note stale after reopening; results flicking back to the previous test. Each has a test.
+- **Tests:** Vitest 568 passed (59 files; `shared/speedTest.ts` and `utils/speedTest.ts` 100% lines, the view's
+  components 98.9 to 100%, `useSpeedTest.ts` 100%); `e2e/speedTest.spec.ts` 26 and `speedTestUi.spec.ts` 5 passed
+  (93 of 93 over three repeats), `daemonApi.spec.ts` 33 passed; main-process line coverage with c8: `measure.ts`,
+  `runner.ts`, `history.ts`, `snapshot.ts` 100%, every changed line of `routes.ts` covered. The download manager's
+  hold runs in Electron, where c8 doesn't reach; `speedTestUi.spec.ts` drives it (held, released, quit mid-test).
+  Full e2e smoke: 769 passed, 1 skipped (as before).
+- **Found, not changed:** on a checkout whose `extension/.cache` is empty, the parallel `browserExtensions` specs race
+  to download uBO Lite (`EEXIST … chrome.zip.part`) and fail; they pass once one build has filled the cache.
+- **Not yet tried:** a real test against Cloudflare (the suite never contacts it), the netsim shaped links (root),
+  and Windows by hand (docs/WINDOWS-TESTING.md › The speed test).
+- **Next:** the owner tries it on the Mac and on the Windows laptop; a PR into `main` when the owner asks.
+
 ### Ad blocking in the browser extension (2026-11-13, branch `extension-adblock`)
 
 - **Done:** uBO Lite 2026.1110.1816 merged into the one extension (ADR-0063): pinned builds fetched and checked by

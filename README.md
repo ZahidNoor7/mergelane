@@ -46,6 +46,12 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
   you why. Mergelane never installs its routes over a VPN's. Downloads inside Mergelane keep working where they can.
 - **Video:** only what your own browser could play. Protected (DRM) videos, live streams, playlists and channels
   are refused, and Mergelane never uses your cookies or signs in anywhere.
+- **The speed test measures your networks for real** (Networks › Test speed). "Each network" tests them one at a time;
+  "All together" uses them at once, as Mergelane's downloads do, and measures what arrives, so two networks behind
+  one slow line show the line's speed, not the two added up. "Other apps" goes through system merge, which keeps
+  each website on one network, so it usually shows one network's speed. Mergelane's own downloads pause while a
+  test runs. A test uses up to 200 MB on each network, which counts against a phone's data plan and against the
+  network's data limit in Mergelane.
 - **No account, no servers, no telemetry.** Everything runs on your Mac, and nothing about you is sent anywhere. Two
   things reach out on their own:
   - Once installed, the system-wide helper checks every 1 to 2 seconds that each network still reaches the
@@ -54,6 +60,10 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
   - Once a day, the app asks GitHub's public Releases API whether a newer Mergelane is out. GitHub sees your IP
     address and the app's version, nothing else. You can turn this off in Settings › Updates. A new version is
     downloaded from GitHub only when you ask, or by itself if you turn on "Download updates in the background".
+
+  One more reaches out only when you ask: the speed test downloads from and uploads to Cloudflare's public speed
+  test (speed.cloudflare.com) when you press **Start test**, never on its own. Cloudflare sees your IP address, as any
+  website does; Mergelane sends it nothing else. You can point the test at your own server instead.
 
 The app says the same on its Dashboard, under **About combined speed**, next to the speeds it describes.
 

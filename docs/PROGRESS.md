@@ -65,7 +65,8 @@ Last updated: 2026-11-11
   to download uBO Lite (`EEXIST … chrome.zip.part`) and fail; they pass once one build has filled the cache.
 - **Not yet tried:** a real test against Cloudflare (the suite never contacts it), the netsim shaped links (root),
   and Windows by hand (docs/WINDOWS-TESTING.md › The speed test).
-- **Next:** the owner tries it on the Mac and on the Windows laptop; a PR into `main` when the owner asks.
+- **Merged:** PR #90 into `main` (2026-11-14); released in 0.5.0.
+- **Next:** the owner tries it on the Mac and on the Windows laptop.
 
 ### Ad blocking in the browser extension (2026-11-13, branch `extension-adblock`)
 

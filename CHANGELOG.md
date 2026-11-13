@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-14
+
+A speed test for your networks, ad blocking in the browser extension, and ping that tells the truth while system
+merge is on.
+
 ### Added
 
 - **Speed test.** Networks › Test speed measures each network's download, upload, ping and jitter, for real. Test

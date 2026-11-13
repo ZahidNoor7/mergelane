@@ -1,7 +1,9 @@
 # Third-party notices
 
 Mergelane is MIT-licensed (see `LICENSE`). It includes or derives from the software below. This file is
-copied into the app bundle at `Mergelane.app/Contents/Resources/THIRD-PARTY-NOTICES.md`.
+copied into the app bundle at `Mergelane.app/Contents/Resources/THIRD-PARTY-NOTICES.md`. The browser extension
+that ships inside the app includes uBO Lite, so the extension as a whole is GPL-3.0-or-later (the last section,
+and `app/extension/LICENSE.md`).
 
 Sections are added as each component lands. Dependency licences for the Electron app and the Go daemon
 are listed in their own sections once those components are imported.
@@ -424,3 +426,45 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 - Source: https://github.com/denoland/deno/releases/download/v2.9.8/deno_src.tar.gz.
+
+## The browser extension's ad blocker (ADR-0063)
+
+### uBO Lite 2026.1110.1816
+
+- What: uBO Lite (uBlock Origin Lite), https://github.com/uBlockOrigin/uBOL-home. Copyright (C) 2022-present
+  Raymond Hill and contributors.
+- Program: its official release builds, fetched at build time by `scripts/adblock/ubol.mjs` and checked against the
+  SHA-256s pinned in `scripts/adblock/ubol.json`; never committed:
+  - Chrome, Edge and Chromium: `uBOLite_2026.1110.1816.chromium.zip`
+    (SHA-256 `85fe5909366e8ada66c5b331bbdbf69cf5100245ed6161b1e4e2f1f848ec7d03`);
+  - Firefox: `uBOLite_2026.1110.1816.firefox.signed.xpi`
+    (SHA-256 `3838bf88742ab921f553795b5b96f21e6429e198c1db3865c414402e5fe55059`), without Mozilla's signature files.
+- Changes made by Mergelane: the `PATCHES` in `ubol.mjs` (blocked-request count off by default, so the toolbar badge
+  keeps counting videos; the toolbar icon left to Mergelane; the settings page's logo text), the name "Mergelane" in
+  place of "uBO Lite" in its pages' words in every language, and Mergelane's icons and mark in place of its own. Its
+  popup is replaced by Mergelane's, which shows its per-site switch. Its credits and links are unchanged.
+- Licence: GNU General Public License, version 3 or later. Because the extension includes it, the extension as built
+  is distributed under GPL-3.0-or-later; Mergelane's own code in it stays MIT. The full text is `LICENSE.txt` in the
+  extension folder.
+- Source: the gorhill/uBlock commit `2bc679d99afe5bddd8fe3ab60137966a12123f41` those builds were made from, attached
+  to every Mergelane release as `ubo-lite-2026.1110.1816-source.tar.gz`
+  (SHA-256 `aa6c921acaa384b7d007db1c44cefbed2bdcc57369f0d930a37f9d44aeb3373d`), the same file as
+  https://github.com/gorhill/uBlock/archive/2bc679d99afe5bddd8fe3ab60137966a12123f41.tar.gz.
+
+### Filter lists inside uBO Lite
+
+uBO Lite's build compiles these lists into its rules; Mergelane ships them as that build has them, and they change
+only when the pinned version does. On by default:
+
+- **uBlock filters** and **uBlock filters – Badware risks** (uAssets, https://github.com/uBlockOrigin/uAssets):
+  GNU General Public License, version 3.
+- **EasyList** and **EasyPrivacy** (https://easylist.to/): the EasyList repository is dual licensed under the GNU
+  General Public License, version 3 or later, and Creative Commons Attribution-ShareAlike 3.0 Unported or later.
+  Source: The EasyList authors (https://easylist.to/).
+- **Peter Lowe's ad server list** (https://pgl.yoyo.org/adservers/): no licence is stated. Its page says "Feel free to
+  combine this list with yours or lists from other sites and put it up on the web".
+- **Online Malicious URL Blocklist** (https://gitlab.com/malware-filter/urlhaus-filter): the project states the MIT
+  licence. The pages checked don't say whether that covers the URLhaus data it is built from.
+
+The other lists in uBO Lite's settings (Filter lists), off unless the user turns them on, keep the licences their
+home pages state, linked from that screen. They have not been reviewed one by one.

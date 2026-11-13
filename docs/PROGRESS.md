@@ -38,6 +38,20 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Ad blocking in the browser extension (2026-11-13, branch `extension-adblock`)
+
+- **Done:** uBO Lite 2026.1110.1816 merged into the one extension (ADR-0063): pinned builds fetched and checked by
+  `scripts/adblock/ubol.mjs`, one service worker for both backgrounds, the popup's **Block ads on this site**, Options ›
+  Ad-blocking settings, the extension's GPL-3.0-or-later licence, uBO Lite's source attached to releases, and the
+  extension copy swapped in whole.
+- **Tests:** `ubol.test.mjs` 28 passed (100% lines of `ubol.mjs`); Vitest `adblock.test.ts` and `settings.test.ts`
+  20 passed (100% of both); release scripts 73 passed (`notes.mjs` 99.6%, `local-release.mjs` 99.7%); e2e:
+  `extensionAdblock.spec.ts` 10 passed (30 of 30 over three repeats), and `extension`, `extensionMedia` and `browserExtensions` specs 20 passed with
+  uBO Lite inside.
+- **Not yet tried:** Firefox by hand (the e2e suite drives Chromium only), Edge, and the Windows build of the extension.
+- **Next:** the owner tries it in Chrome and Firefox; a PR into `main` when the owner asks; pin newer uBO Lite releases
+  as they come.
+
 ### Phase 3 (proposed 2026-11-11)
 
 - Plan: `docs/PHASE-3.md` (PR #16). The owner answered its four questions on 2026-11-11; it waits for approval.

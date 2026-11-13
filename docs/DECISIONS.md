@@ -1706,3 +1706,90 @@ apply are removed, not greyed.
 - What Windows draws (the icon at each scale, the menu, the flyout's corners and place) is on the laptop checklist.
 - On Windows, Settings no longer has a separate "show the merged speed" switch: the tooltip always shows it while the
   icon is there.
+
+## ADR-0063: The browser extension blocks ads with uBO Lite, and is GPL-3.0-or-later
+
+**Status:** accepted, 2026-11-13. Owner's decision: "go with option 1 with your recommendations" (one extension,
+built on uBlock Origin's code, the extension licensed GPL-3.0-or-later).
+
+### Context
+
+The owner wants ad and tracker blocking in Mergelane's one browser extension rather than a second extension. Two
+projects were reviewed from their source (gorhill/uBlock `2bc679d`, AdAway/AdAway `928cda7`):
+
+- **AdAway** is an Android app (Java), blocking by host name through the hosts file (root) or a local VPN's DNS
+  proxy. Nothing in it runs in a browser, on macOS or on Windows. Only its hosts list (CC BY 3.0) would be useful,
+  and uBO Lite already carries comparable host lists.
+- **uBlock Origin**'s classic engine needs blocking `webRequest`, which Chrome removed with Manifest V2 (Chrome 138,
+  Chrome's MV2 deprecation timeline). Its Manifest V3 edition, **uBO Lite**, compiles filter lists into Chrome's own
+  blocker (`declarativeNetRequest`) at build time, hides leftover ad boxes and runs scriptlets through
+  `scripting.registerContentScripts`, and has Chromium, Edge, Firefox and Safari builds. Mergelane's extension is
+  already MV3.
+- Both are GPL-3.0. CLAUDE.md said app code is MIT; the owner approved the extension becoming GPL-3.0-or-later.
+
+### Decision
+
+- **One extension, uBO Lite inside.** `scripts/adblock/ubol.mjs` fetches uBO Lite's official release builds (the
+  `.chromium.zip` for Chrome, Edge and Chromium; the `.firefox.signed.xpi` for Firefox), pinned by version and SHA-256
+  in `scripts/adblock/ubol.json` as the media tools are (ADR-0027), into `app/extension/.cache` (gitignored).
+  `build.mjs` copies the build into each browser folder, puts Mergelane's files on top and writes one manifest from
+  both. uBO Lite's files keep their places (`js/`, `rulesets/`, ...), because they refer to each other by absolute
+  paths; no Mergelane file has the same name (checked at build time). Its popup is left out.
+- **Why the release build, not building from source:** uBO Lite's own build downloads the live filter lists, which
+  change every few hours, so it can't be pinned. Its release builds can, and each names the gorhill/uBlock commit it
+  was made from (uBOL-home's `uBlock` submodule at the release tag). That commit's source is attached to every
+  Mergelane release by `sources.mjs`, and the release notes have a section for the extension.
+- **One service worker.** Chrome: `service-worker.js` imports Mergelane's background, then uBO Lite's, both as modules
+  (Chrome's service-worker docs: static `import` with `"type": "module"`; no dynamic `import()`). Firefox: both in
+  `background.scripts` with `"type": "module"`, as uBO Lite's own Firefox build does. Mergelane's comes first so it
+  still runs if uBO Lite's fails to start.
+- **Shared messages and storage.** uBO Lite's `runtime.onMessage` listener reads `request.what` and skips any whose
+  `what` holds a colon, so every message Mergelane's pages send carries `what: 'mergelane:ask'` (`extension/src/ask.ts`).
+  uBO Lite keeps its state in `storage.local` next to Mergelane's settings; Mergelane's listeners react only to their
+  own keys (`ownChange`).
+- **Mergelane's changes to uBO Lite** (`PATCHES`, each must match exactly once or the build stops): the blocked-request
+  count on the toolbar badge is off by default, so the badge keeps counting a page's videos; uBO Lite doesn't change
+  the toolbar icon, which keeps saying whether downloads go to Mergelane; its pages say "Mergelane" in place of "uBO
+  Lite" in every language, with Mergelane's icons and mark. Its credits, links and About pane are unchanged.
+- **The user's controls:** the popup's **Block ads on this site** switch sets that site's mode through uBO Lite's own
+  messages (`popupPanelData`, `setFilteringMode`): off is "no filtering", on is the default mode (or "optimal" when
+  blocking is off everywhere). The tab reloads, as uBO Lite's own popup does. Options › **Ad-blocking settings** opens
+  uBO Lite's settings page (lists, default mode, custom filters, picker). Blocking is on by default, with uBO Lite's
+  default lists.
+- **No downloading of lists.** The extension uses the lists compiled into the pinned build; they change only when
+  Mergelane pins a newer uBO Lite. The extension contacts no list servers, so "no servers" in CLAUDE.md still holds.
+  uBO Lite's "imported lists" feature stays available: a list the user imports is downloaded from the address they
+  give, and fetched again when it says it expires (`imported-lists.js`). Nothing is fetched unless they import one.
+- **Licence:** the extension as built is GPL-3.0-or-later (`app/extension/LICENSE.md`, `LICENSE.txt` in each built
+  folder). The app and Mergelane's own source stay MIT. The filter lists' licences are in `THIRD-PARTY-NOTICES.md`.
+- **Version and minimums:** the extension is 1.1.0. Firefox needs 128 or later (uBO Lite's minimum); Chrome stays 123.
+- **Saving the extension:** a copy is now about 39 MB and 1,000 files. Mergelane writes a saved copy next to its
+  folder and swaps it in (`browsers.ts copyExtension`), so a browser never loads a half-copied folder.
+
+### Consequences
+
+- Each Mergelane release should pin the newest uBO Lite: take the two digests from its release page and the `uBlock`
+  submodule commit at its tag, then run `node --test scripts/adblock/ubol.test.mjs` (it checks that every patch
+  still applies to the cached builds) and the extension e2e specs.
+- Filter lists are as fresh as the last Mergelane release; uBO Lite itself ships about weekly.
+- The app bundle carries the extension twice (Chrome and Firefox), about 78 MB more before compression.
+- The Chrome Web Store asks for one purpose per extension; that doesn't apply while the extension is loaded by hand
+  (ADR-0038, ADR-0047), but would be a question for a store listing.
+- Ad blocking on YouTube (uBO Lite's scriptlets) joins the lawyer's review before 1.0 (ADR-0026).
+- Peter Lowe's list states no licence and the URLhaus filter's MIT may not cover its data; both are recorded as such.
+- Custom filters that hide elements or run scriptlets need Chrome's per-extension "Allow User Scripts" switch
+  (Chrome 138 and later; Chrome's `userScripts` docs). Network filters work without it.
+- Tests: `scripts/adblock/ubol.test.mjs` (28, 100% of `ubol.mjs`), `extension/src/adblock.test.ts` and
+  `settings.test.ts` (Vitest, 100% of both files), `e2e/extensionAdblock.spec.ts` (10 checks in Chromium: a
+  request to an ad server is blocked and the site loads; Mergelane's and uBO Lite's messages both answer; the popup
+  switch lets a site's ads through and blocks them again; the settings page opens as Mergelane with uBO Lite credited;
+  the hiding scripts and scriptlets are registered for every site; at the complete level an ad box is hidden and the
+  page's content isn't; the badge doesn't count blocked requests; a badware site is stopped on a block page that says
+  Mergelane; the popup has no switch on the browser's own pages; uBO Lite's error log and the extension's pages stay
+  free of errors), and the existing extension specs, which now run with uBO Lite in the extension. Firefox is not
+  driven by the e2e suite.
+- uBO Lite applies generic hiding rules (such as `#AdBillboard`) only at its "complete" level; at the default,
+  "optimal", it hides with rules written for particular sites, and blocks requests and runs scriptlets everywhere.
+  That is uBO Lite's own design, kept as it is.
+- In Firefox, site access is granted after install, so uBO Lite starts at "basic"; it moves itself to "optimal" once
+  the user allows access to all sites (`syncWithBrowserPermissions`), which the popup's Allow access asks for.

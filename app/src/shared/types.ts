@@ -716,6 +716,9 @@ export interface AppSettings {
   glassLook?: GlassLook
   /** Liquid Glass drawn solid, as Reduce Transparency does; only ever saved as true. */
   solidGlass?: boolean
+  /** The speed test's server, as https://host (ADR-0064). Missing: Cloudflare's public one
+   * (shared/speedTest.ts DEFAULT_SPEED_TEST_SERVER). */
+  speedTestServer?: string
 }
 
 export type GlassLook = 'clear' | 'tinted'
@@ -735,6 +738,8 @@ export interface InitialState {
   /** The platform the window is drawn for, when a test run asks for another (main/testKnobs.ts
    * rendererPlatform); absent, it is this computer's. */
   rendererPlatform?: string
+  /** The speed test's server, when the user picked one (ADR-0064). */
+  speedTestServer?: string
   downloadSchedule?: DownloadSchedule
   homeDir: string
   downloadsDir: string

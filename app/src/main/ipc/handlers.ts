@@ -78,6 +78,19 @@ import { applyMenuBarSettings } from '../menuBar'
 import { applyClipboardSettings } from '../clipboardOffers'
 import { NetworkActivityLog, networkActivityPath } from '../networkActivity'
 import { registerDiagnostics, revealDiagnostics, saveDiagnostics } from '../diagnostics'
+import { join } from 'node:path'
+import { app } from 'electron'
+import { StreamConnection } from '../network/routes'
+import { DirectConnection } from '../speedTest/measure'
+import { SpeedTester } from '../speedTest/runner'
+import { SpeedTestHistory } from '../speedTest/history'
+import { systemMergeForSpeedTest, systemMergeTraffic } from '../daemon/daemon'
+import {
+  DEFAULT_SPEED_TEST_SERVER,
+  type SpeedTestRequest,
+  type SpeedTestScope
+} from '../../shared/speedTest'
+import type { AppSettings } from '../../shared/types'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -219,7 +232,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         offerCopiedLinks: settings.offerCopiedLinks === true,
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
-        destinationDir: destinationExists ? destinationDir : undefined
+        destinationDir: destinationExists ? destinationDir : undefined,
+        ...(settings.speedTestServer ? { speedTestServer: settings.speedTestServer } : {})
       } satisfies InitialState
     } catch (error) {
       console.error('[mergelane] failed to read initial state', error)
@@ -414,5 +428,64 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('cancelUpdateDownload', () => cancelUpdateDownload())
   handle('installUpdate', () => installUpdate())
 
+  registerSpeedTest(send, manager, networks)
+
   return manager
+}
+
+const SPEED_TEST_SCOPES: readonly SpeedTestScope[] = ['link', 'combined', 'system']
+/** How long a speed test's request may wait for its reply, and for its connection to open. */
+const SPEED_TEST_TIMEOUT_MS = 15_000
+const SPEED_TEST_CONNECT_MS = 5_000
+
+/** The speed test (docs/DECISIONS.md ADR-0064): one at a time, run in the main process with the
+ * downloads' own pinned connections, its results kept in speed-tests.json. */
+function registerSpeedTest(
+  send: (channel: string, value: unknown) => void,
+  manager: DownloadManager,
+  networks: NetworkMonitor
+): void {
+  const history = new SpeedTestHistory(join(app.getPath('userData'), 'speed-tests.json'))
+  // Read when a test starts, so it uses the server and proxies as they are then.
+  let settings: AppSettings = {}
+  const short = testKnobs.speedTestMs
+  const tester = new SpeedTester({
+    find: (id) => networks.find(id),
+    limitReached: (id) => manager.limits.limitReached(id),
+    countUsage: (id, bytes) => manager.limits.countUsage(id, bytes),
+    server: () => settings.speedTestServer ?? DEFAULT_SPEED_TEST_SERVER,
+    connect: (id) =>
+      id === null
+        ? new DirectConnection(SPEED_TEST_TIMEOUT_MS)
+        : new StreamConnection(() => networks.find(id), {
+            timeoutMs: SPEED_TEST_TIMEOUT_MS,
+            connectTimeoutMs: Math.min(testKnobs.connectTimeoutMs, SPEED_TEST_CONNECT_MS),
+            // Through the network's proxy, if it has one, as its downloads go.
+            proxy: () => settings.networkPreferences?.[id]?.proxy
+          }),
+    pauseDownloads: () => manager.holdForSpeedTest(),
+    resumeDownloads: () => manager.releaseSpeedTestHold(),
+    systemMerge: () => systemMergeForSpeedTest(),
+    traffic: () => systemMergeTraffic(),
+    save: (run) => history.add(run),
+    onLive: (live) => send(IpcChannels.speedTestLiveChanged, live),
+    onFinished: (run) => send(IpcChannels.speedTestFinished, run),
+    ...(short ? { timing: { downloadMs: short, uploadMs: short, latencySamples: 5 } } : {})
+  })
+
+  handle('speedTestStart', async (_event, request: SpeedTestRequest) => {
+    if (
+      !SPEED_TEST_SCOPES.includes(request?.scope) ||
+      !Array.isArray(request.networkIds) ||
+      request.networkIds.some((id) => typeof id !== 'string')
+    ) {
+      throw new Error('That isn’t a speed test Mergelane can run')
+    }
+    settings = await loadSettings()
+    return tester.start({ scope: request.scope, networkIds: request.networkIds })
+  })
+  handle('speedTestCancel', () => tester.cancel())
+  handle('speedTestLive', () => tester.current())
+  handle('speedTestHistory', () => history.list())
+  handle('speedTestClearHistory', () => history.clear())
 }

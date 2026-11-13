@@ -21,6 +21,8 @@ import {
   afterInstall,
   mergeIsOn,
   readSnapshot,
+  readSpeedTestState,
+  readTraffic,
   switchAutoResume,
   switchStickySites,
   switchMerge,
@@ -100,6 +102,16 @@ export function systemMergeSnapshot(error?: string): Promise<SystemMergeSnapshot
 }
 
 /** Turns system-wide merging on or off. */
+/** Whether the speed test can go through system merge, and how (ADR-0064). */
+export function systemMergeForSpeedTest(): ReturnType<typeof readSpeedTestState> {
+  return readSpeedTestState(context())
+}
+
+/** Each network's traffic now, from the helper, for the speed test. */
+export function systemMergeTraffic(): ReturnType<typeof readTraffic> {
+  return readTraffic(context())
+}
+
 export function setSystemMerge(on: boolean): Promise<SystemMergeSnapshot> {
   return switchMerge(context(), on)
 }

@@ -75,5 +75,12 @@ export const IpcChannels = {
   trayStatus: 'tray:status',
   trayStatusChanged: 'tray:status-changed',
   resizeTrayFlyout: 'tray:resize',
-  closeTrayFlyout: 'tray:close'
+  closeTrayFlyout: 'tray:close',
+  speedTestStart: 'speedtest:start',
+  speedTestCancel: 'speedtest:cancel',
+  speedTestLive: 'speedtest:live',
+  speedTestHistory: 'speedtest:history',
+  speedTestClearHistory: 'speedtest:clear-history',
+  speedTestLiveChanged: 'speedtest:live-changed',
+  speedTestFinished: 'speedtest:finished'
 } as const

@@ -3,6 +3,7 @@ import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { BrowserId } from '../shared/browsers'
 import type { NetworkActivity } from '../shared/networkActivity'
+import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from '../shared/speedTest'
 import type { UpdateChannel } from '../shared/releases'
 import type { TrayStatus } from '../shared/trayFlyout'
 import type {
@@ -111,6 +112,25 @@ const mergelaneApi = {
   trayStatus: () => invoke('trayStatus'),
   resizeTrayFlyout: (height: number) => invoke('resizeTrayFlyout', height),
   closeTrayFlyout: () => invoke('closeTrayFlyout'),
+  speedTestStart: (request: SpeedTestRequest) => invoke('speedTestStart', request),
+  speedTestCancel: () => invoke('speedTestCancel'),
+  speedTestLive: () => invoke('speedTestLive'),
+  speedTestHistory: () => invoke('speedTestHistory'),
+  speedTestClearHistory: () => invoke('speedTestClearHistory'),
+
+  /** The speed test as it goes; null once it's over. */
+  onSpeedTestLive: (callback: (live: SpeedTestLive | null) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, live: SpeedTestLive | null): void => callback(live)
+    ipcRenderer.on(IpcChannels.speedTestLiveChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.speedTestLiveChanged, listener)
+  },
+
+  /** A speed test ended: done, failed, unavailable or cancelled. */
+  onSpeedTestFinished: (callback: (run: SpeedTestRun) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, run: SpeedTestRun): void => callback(run)
+    ipcRenderer.on(IpcChannels.speedTestFinished, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.speedTestFinished, listener)
+  },
 
   /** The notification area's menu: show Settings, or the Networks place. */
   onShowPlace: (callback: (place: 'settings' | 'networks') => void): (() => void) => {

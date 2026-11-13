@@ -1,7 +1,8 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
+import { fetchBuild, loadPin, mergeInto } from '../../scripts/adblock/ubol.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 // `node extension/build.mjs <dir>` builds somewhere else: e2e specs running side by side each
@@ -11,7 +12,8 @@ const scripts = join(out, 'scripts')
 
 await rm(out, { recursive: true, force: true })
 
-// One self-contained script each: Firefox's background script can't load modules.
+// One self-contained script each. The background is loaded as a module next to uBO Lite's
+// (ADR-0063), which a self-contained script is too; the popup and options pages load classic scripts.
 for (const name of ['background', 'popup', 'options']) {
   await build({
     configFile: false,
@@ -56,6 +58,14 @@ const manifests = {
   }
 }
 
+// uBO Lite, the ad blocker (ADR-0063): its pinned build for each browser, fetched and checked once
+// into app/extension/.cache, then merged under Mergelane's files with one manifest for both.
+const ubol = await loadPin()
+const brand = {
+  icons: join(root, 'icons'),
+  mark: join(root, '../../design-system/mergelane/redesign/brand/svg/mark.svg')
+}
+
 for (const [browser, manifest] of Object.entries(manifests)) {
   const dir = join(out, browser)
   await mkdir(dir, { recursive: true })
@@ -65,7 +75,10 @@ for (const [browser, manifest] of Object.entries(manifests)) {
   }
   await cp(join(root, 'icons'), join(dir, 'icons'), { recursive: true })
   await cp(join(root, '../src/renderer/src/assets/fonts'), join(dir, 'fonts'), { recursive: true })
-  await writeFile(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  const buildDir = await fetchBuild(ubol, browser, { log: (line) => console.log(line) })
+  await mergeInto(dir, browser, manifest, { buildDir, ...brand })
 }
 await rm(scripts, { recursive: true })
-console.log(`Built ${Object.keys(manifests).join(' and ')} into ${out}`)
+console.log(
+  `Built ${Object.keys(manifests).join(' and ')} with uBO Lite ${ubol.version} into ${out}`
+)

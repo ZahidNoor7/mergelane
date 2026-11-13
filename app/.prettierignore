@@ -9,3 +9,5 @@ playwright-report
 resources/bin
 resources/bin-win
 coverage
+# uBO Lite's pinned builds (scripts/adblock/ubol.mjs, ADR-0063): not ours to format.
+extension/.cache

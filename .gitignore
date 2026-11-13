@@ -25,6 +25,8 @@ coverage.out
 /app/resources/bin-win/
 
 # Caches
+# uBO Lite's pinned builds, fetched and checked by scripts/adblock/ubol.mjs (ADR-0063).
+/app/extension/.cache/
 .eslintcache
 .turbo/
 *.tsbuildinfo

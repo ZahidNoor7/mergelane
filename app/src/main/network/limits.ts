@@ -129,6 +129,12 @@ export class Limits {
     )
   }
 
+  /** Counts `bytes` a speed test moved on `networkId`, either way, against its data limit
+   * (ADR-0064). The test measures the network, so no speed limit holds it back. */
+  countUsage(networkId: string, bytes: number): void {
+    this.count(networkId, bytes, Date.now())
+  }
+
   /** Counts `bytes` just sent to a torrent peer on `networkId` against its data limit. Sent, not
    * asked for in takeUpload: a block held back and then refused (the peer choked meanwhile) never
    * goes out. */

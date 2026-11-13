@@ -133,7 +133,14 @@ export const COVERED = [
   'src/shared/tunnels.ts',
   // ADR-0063: the browser extension's ad blocking (uBO Lite) and the settings it shares storage with.
   'extension/src/adblock.ts',
-  'extension/src/settings.ts'
+  'extension/src/settings.ts',
+  // ADR-0064: the speed test's numbers and its saved history, and its view in Networks.
+  'src/shared/speedTest.ts',
+  'src/renderer/src/utils/speedTest.ts',
+  'src/renderer/src/hooks/useSpeedTest.ts',
+  ...['SpeedGauge', 'SpeedTestView', 'SpeedTestResults', 'SpeedTestHistory'].map(
+    (name) => `src/renderer/src/components/speedTest/${name}.tsx`
+  )
 ]
 
 export default defineConfig({

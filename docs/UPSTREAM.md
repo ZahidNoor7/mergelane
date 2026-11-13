@@ -72,6 +72,9 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
 - New VPN guard.
 - Routes the daemon adds are marked with `RTF_PROTO2`, and cleanup removes only marked routes.
 - Health probing tightened (ADR-0008). Probe targets are configurable.
+- Ping through the TUN gets the real reply over a link (`internal/tun/icmp.go`, `internal/engine/echo.go`,
+  ADR-0062). Upstream passed no `ICMPHandler` to tun2socks, whose own handler answers every IPv4 echo request at
+  once for any address.
 
 ## Change log of imports
 

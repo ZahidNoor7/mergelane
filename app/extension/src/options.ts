@@ -1,6 +1,7 @@
 import { api } from './api'
+import { ASK } from './ask'
 import { reach } from './mergelane'
-import { loadSettings, saveSettings, siteOf } from './settings'
+import { loadSettings, ownChange, saveSettings, siteOf } from './settings'
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
 
@@ -70,11 +71,18 @@ element<HTMLFormElement>('add-site').addEventListener('submit', async (event) =>
 
 element('open-mergelane').addEventListener('click', () => {
   void api.runtime
-    .sendMessage({ wakeMergelane: true })
+    .sendMessage({ what: ASK, wakeMergelane: true })
     .then(() => setTimeout(renderConnection, 4000))
 })
 
+// uBO Lite's own settings page (ADR-0063): lists, the default blocking level, custom filters.
+element('open-blocking').addEventListener('click', () => {
+  void api.tabs.create({ url: api.runtime.getURL('dashboard.html') })
+})
+
 element('version').textContent = `Extension ${api.runtime.getManifest().version}`
-api.storage.onChanged.addListener(() => void render())
+api.storage.onChanged.addListener((changes) => {
+  if (ownChange(changes)) void render()
+})
 void render()
 void renderConnection()

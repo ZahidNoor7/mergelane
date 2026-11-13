@@ -1,5 +1,7 @@
 import { youtubeLink } from '../../src/shared/youtube'
+import { blockingHint, setSiteBlocking, siteBlocking, type Send } from './adblock'
 import { api } from './api'
+import { ASK } from './ask'
 import {
   describe,
   samePage,
@@ -10,7 +12,7 @@ import {
   type PageMedia
 } from './media'
 import { reach } from './mergelane'
-import { excluded, loadSettings, saveSettings } from './settings'
+import { excluded, loadSettings, ownChange, saveSettings } from './settings'
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
 const ALL_SITES = { origins: ['<all_urls>'] }
@@ -72,6 +74,45 @@ async function render(): Promise<void> {
   }
 }
 
+// --- Block ads on this site (uBO Lite, ADR-0063) -------------------------------------------------
+
+const ubol: Send = (message) => api.runtime.sendMessage(message)
+
+/** The tab's web address, for a page on the web; null for the browser's own pages. */
+async function webPage(): Promise<URL | null> {
+  const tab = await targetTab()
+  if (!tab?.url || !/^https?:/i.test(tab.url)) return null
+  return new URL(tab.url)
+}
+
+async function renderBlocking(): Promise<void> {
+  const page = await webPage()
+  const state = page && (await siteBlocking(ubol, page))
+  element('blocking').hidden = state === null
+  if (!state) return
+  element<HTMLInputElement>('block').checked = state.level > 0
+  element('block-hint').textContent = blockingHint(state)
+}
+
+element<HTMLInputElement>('block').addEventListener('change', async (event) => {
+  const toggle = event.target as HTMLInputElement
+  const page = await webPage()
+  const before = page && (await siteBlocking(ubol, page))
+  if (!page || !before) return void renderBlocking()
+  toggle.disabled = true
+  const level = await setSiteBlocking(ubol, page.hostname, toggle.checked, before.defaultLevel)
+  toggle.disabled = false
+  const after = { ...before, level: level ?? before.level }
+  toggle.checked = after.level > 0
+  element('block-hint').textContent = blockingHint(after)
+  toggle.focus()
+  // The page keeps what it already loaded until it reloads, as uBO Lite's own popup does.
+  const tab = await targetTab()
+  if (level !== null && level !== before.level && after.autoReload && tab?.id !== undefined) {
+    void api.tabs.reload(tab.id)
+  }
+})
+
 // --- Videos on this page (the background lists them: mediaWatch.ts) -----------------------------
 
 /** The tab whose list is shown, so its changes are the ones that redraw it. */
@@ -94,7 +135,7 @@ async function renderMedia(): Promise<void> {
     tab?.id === undefined
       ? null
       : ((await api.runtime
-          .sendMessage({ mediaOf: tab.id } satisfies MediaRequest)
+          .sendMessage({ what: ASK, mediaOf: tab.id } satisfies MediaRequest)
           .catch(() => null)) as PageMedia | null)
   const items = media && tab?.url && samePage(media.page, tab.url) ? media.items : []
   const urls = new Set(items.map(({ url }) => url))
@@ -159,7 +200,7 @@ async function download(tabId: number, url: string, button: HTMLButtonElement): 
   // The background sends it, so it still arrives if this popup closes meanwhile; it starts
   // Mergelane first if needed, as the link menu does.
   const result = ((await api.runtime
-    .sendMessage({ sendMedia: { tabId, url } } satisfies MediaRequest)
+    .sendMessage({ what: ASK, sendMedia: { tabId, url } } satisfies MediaRequest)
     .catch(() => null)) ?? 'kept') as HandOver
   if (result === 'sent') handed.set(url, 'sent')
   else handed.delete(url)
@@ -213,7 +254,7 @@ element('video-send').addEventListener('click', async () => {
   showVideo()
   element('video-status').textContent = ''
   const result = ((await api.runtime
-    .sendMessage({ sendVideo: { tabId: tab.id } } satisfies MediaRequest)
+    .sendMessage({ what: ASK, sendVideo: { tabId: tab.id } } satisfies MediaRequest)
     .catch(() => null)) ?? 'kept') as HandOver
   video = result === 'sent' ? 'sent' : undefined
   showVideo()
@@ -241,23 +282,24 @@ element<HTMLInputElement>('site').addEventListener('change', async (event) => {
 })
 
 element('grant').addEventListener('click', () => {
-  void api.permissions.request(ALL_SITES).then(render)
+  void api.permissions.request(ALL_SITES).then(() => Promise.all([render(), renderBlocking()]))
 })
 element('open-mergelane').addEventListener('click', () => {
-  void api.runtime.sendMessage({ wakeMergelane: true })
+  void api.runtime.sendMessage({ what: ASK, wakeMergelane: true })
 })
 element('options').addEventListener('click', () => void api.runtime.openOptionsPage())
 
 // Settings only: the session area is the background's stream lists, which announce themselves.
-api.storage.onChanged.addListener((_changes, area) => {
-  if (area !== 'session') void render()
+api.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'session' && ownChange(changes)) void render()
 })
 api.runtime.onMessage.addListener((message) => {
   const changed = (message as Partial<MediaChanged>).mediaChanged
   if (changed !== undefined && changed === shownTab) void renderMedia()
 })
 void render()
+void renderBlocking()
 void renderVideo()
 void renderMedia()
 // So the toolbar icon agrees with the popup now, not at its next check.
-void api.runtime.sendMessage({ checkMergelane: true }).catch(() => {})
+void api.runtime.sendMessage({ what: ASK, checkMergelane: true }).catch(() => {})

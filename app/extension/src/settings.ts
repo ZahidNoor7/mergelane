@@ -17,6 +17,12 @@ export async function loadSettings(): Promise<Settings> {
   return { ...DEFAULTS, ...(await api.storage.local.get(DEFAULTS)) } as Settings
 }
 
+/** Whether a storage change touched Mergelane's own settings. uBO Lite (ADR-0063) keeps its state in
+ * the same storage area, and its writes don't change anything Mergelane shows. */
+export function ownChange(changes: Record<string, unknown>): boolean {
+  return Object.keys(changes).some((key) => key in DEFAULTS || key === 'appRules')
+}
+
 export function saveSettings(patch: Partial<Settings>): Promise<void> {
   return api.storage.local.set(patch)
 }

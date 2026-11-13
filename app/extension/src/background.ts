@@ -4,7 +4,7 @@ import { youtubeLink } from '../../src/shared/youtube'
 import type { HandOver, MediaRequest } from './media'
 import { mediaOf, styleBadge, watchMedia } from './mediaWatch'
 import { browserContext, confirm, reach, send, storeOf, wake, type Reach } from './mergelane'
-import { excluded, loadAppRules, loadSettings } from './settings'
+import { excluded, loadAppRules, loadSettings, ownChange } from './settings'
 
 const MENU_ID = 'download-with-mergelane'
 // Mergelane can't tell the extension it has quit, so the toolbar icon checks on a timer.
@@ -169,9 +169,10 @@ api.contextMenus.onClicked.addListener((info, tab) => {
 api.tabs.onCreated.addListener((tab) => {
   if (tab.id !== undefined) openedAt.set(tab.id, Date.now())
 })
-// Settings only: the session area holds the pages' stream lists (mediaWatch.ts).
-api.storage.onChanged.addListener((_changes, area) => {
-  if (area !== 'session') void showState()
+// Settings only: the session area holds the pages' stream lists (mediaWatch.ts), and uBO Lite keeps
+// its own state next to Mergelane's.
+api.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'session' && ownChange(changes)) void showState()
 })
 watchMedia()
 

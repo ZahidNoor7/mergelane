@@ -3,6 +3,8 @@
 // specific to a site, reads a response body, or changes a request. No extension APIs either, so
 // e2e/extensionMedia.spec.ts tests it in Node.
 
+import type { ASK } from './ask'
+
 export type MediaKind = 'HLS' | 'DASH'
 
 export interface MediaItem {
@@ -20,6 +22,7 @@ export interface PageMedia {
  * null), hand one of its streams to Mergelane, or hand it the YouTube video the tab shows (both
  * answered with HandOver). */
 export interface MediaRequest {
+  what: typeof ASK
   mediaOf?: number
   sendMedia?: { tabId: number; url: string }
   sendVideo?: { tabId: number }

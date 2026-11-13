@@ -1,6 +1,8 @@
 # Upstream sources
 
-All three upstreams are MIT. Mergelane does not depend on any of them at runtime. Code is imported once at
+The three code upstreams are MIT. Mergelane does not depend on any of them at runtime. uBO Lite, the browser
+extension's ad blocker (GPL-3.0-or-later, ADR-0063), is not imported as source: its pinned release builds are merged
+into the extension at build time (below). Code is imported once at
 a pinned commit, and every Mergelane change is a separate commit on top. This keeps it possible to replay
 later upstream fixes.
 
@@ -86,3 +88,15 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
 | 2026-11-12 | Net Merge | `2b333a3` (Windows files) | W5 (branch `w5-system-helper`) | Re-imported `internal/tun/tun_windows.go`: the adapter type `Mergelane` with its own GUID, `route` and `netsh` run by their System32 path, the strong-host record kept in the daemon's state folder instead of `%TEMP%`, and the pure strong-host helpers moved to `internal/tun/weakhost.go`. |
 | 2026-11-10 | Awesome Downloader | — (logic only) at `d99dbe0` | M2.2 (branch `m2.2-media`) | HLS logic from `core/hls.mjs` rewritten in TypeScript as `app/src/main/media/hls/` (no code copied verbatim); each file credits it. |
 | 2026-11-10 | Awesome Downloader | — (logic only) at `d99dbe0` | M2.2 (branch `m2.2-media`) | FFmpeg muxing idea from `core/mux.mjs` rewritten as `app/src/main/media/mux/`; files credit it. |
+
+## uBO Lite (the browser extension's ad blocker, ADR-0063)
+
+| Upstream | Pinned | Source commit | Licence | Used in |
+|---|---|---|---|---|
+| https://github.com/uBlockOrigin/uBOL-home (built from https://github.com/gorhill/uBlock) | release `2026.1110.1816`, its `.chromium.zip` and `.firefox.signed.xpi` by SHA-256 (`scripts/adblock/ubol.json`) | `2bc679d99afe5bddd8fe3ab60137966a12123f41` | GPL-3.0-or-later, Copyright (C) 2022-present Raymond Hill | `app/extension/dist/*` at build time, never committed |
+
+Mergelane's changes are applied at build time and listed in `scripts/adblock/ubol.mjs` (`PATCHES`, `brandLocales`,
+`brandImages`, and its popup left out). To move to a newer release: put its version, the two digests from its release
+page and the `uBlock` submodule commit at its tag (`gh api repos/uBlockOrigin/uBOL-home/contents/uBlock?ref=<tag>`)
+into `ubol.json`, with the SHA-256 of that commit's source archive; then run `npm run build:extension` and
+`node --test scripts/adblock/ubol.test.mjs`, which fails if a patch no longer applies.

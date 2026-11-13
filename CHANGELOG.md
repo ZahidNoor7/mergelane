@@ -5,6 +5,21 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The browser extension blocks ads and trackers.** uBO Lite (uBlock Origin Lite) is now built into Mergelane's
+  extension, so one extension does both jobs. It is on for every site; turn it off for one site with **Block ads on
+  this site** in the toolbar button's panel, and find filter lists, the blocking level and your own filters in the
+  extension's Options › Ad-blocking settings. Its filter lists come with each Mergelane version: the extension never
+  downloads lists itself.
+
+### Changed
+
+- The browser extension is now version 1.1.0 and needs Firefox 128 or later (Chrome 123 or later, as before).
+- Because it includes uBO Lite, the extension as a whole is distributed under GPL-3.0-or-later. The app and
+  Mergelane's own code stay MIT. Each release attaches uBO Lite's source.
+- Mergelane replaces a saved copy of the extension in one step, so a browser never sees a half-copied folder.
+
 ### Fixed
 
 - **Ping tells the truth while system merge is on.** Mergelane used to answer every ping itself, instantly, so

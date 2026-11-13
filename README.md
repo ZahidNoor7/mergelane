@@ -13,8 +13,8 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
 - **Network merging:** Mergelane's own downloads spread their connections across all your networks, and you choose
   which network carries what (Networks › Which network carries what). An optional system-wide mode, **System
   merge**, lets other apps' connections use every network too.
-- **Browser extension** for Chrome, Edge, Chromium and Firefox: the downloads you click go to Mergelane, and it lists
-  the videos a page plays.
+- **Browser extension** for Chrome, Edge, Chromium and Firefox: the downloads you click go to Mergelane, it lists
+  the videos a page plays, and it blocks ads and trackers (with uBO Lite).
 - **Everyday:** a menu-bar speed, Open at login, a notification when a download finishes, offering links you copy (off
   by default), seven themes with Liquid Glass, and updates from GitHub that it downloads and checks for you.
 
@@ -144,6 +144,13 @@ choosing it in the browser stays one step of your own.
 - **Brave and Vivaldi** don't document where they look for Mergelane's helper, so they aren't supported yet.
   **Safari** needs its own kind of extension, which comes later.
 
+**Ad blocking:** the extension also blocks ads and trackers, with uBO Lite (uBlock Origin Lite) built in, so you
+need only one extension. It is on for every site. Click the toolbar button and switch **Block ads on this site** off
+where a site needs its ads, or breaks without them; the page reloads. The extension's Options open the ad-blocking
+settings: filter lists, how thoroughly it blocks, and your own filters. The filter lists are the ones in the version
+of uBO Lite that came with your Mergelane, and they update when Mergelane does: the extension never downloads lists
+itself. It needs Chrome 123 or Firefox 128, or later.
+
 **What it sends** is set once for every browser, in the same screen: sending on or off, a minimum size (1 MB by
 default), the file types (by default video, archives, disk images, apps, and any type Mergelane doesn't recognise),
 and whether to list the videos on a page. Mergelane checks each download against these rules itself.
@@ -187,3 +194,7 @@ MIT. See `LICENSE`. Mergelane builds on the MIT-licensed projects Plexo, Net Mer
 notices are in `THIRD-PARTY-NOTICES.md`. The app bundles yt-dlp (GPL 3 as built), Deno (MIT) and an LGPL
 build of FFmpeg as separate programs. Their licences are in `THIRD-PARTY-NOTICES.md` and inside the app, and every
 release attaches their source.
+
+The browser extension includes uBO Lite, which is GPL 3 or later, so the extension as a whole is distributed under
+GPL 3 or later; Mergelane's own code in it stays MIT (`app/extension/LICENSE.md`). Every release attaches uBO Lite's
+source too.

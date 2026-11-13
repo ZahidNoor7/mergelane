@@ -21,7 +21,7 @@
 //      helpers (build-helpers.mjs), the Windows media tools (fetch.mjs with both Windows manifests),
 //      electron-builder --win for each chip, and check-build.mjs (each program's chip, the version,
 //      the fuses). They can't be opened here: the laptop test kit does that (docs/WINDOWS-TESTING.md);
-//   6. the release files: the bundled programs' sources (sources.mjs, with the Windows manifests too),
+//   6. the release files: the bundled programs' sources (sources.mjs, with the Windows manifests and uBO Lite's too),
 //      SHA256SUMS of everything attached, and the notes (notes.mjs, with the Windows install steps);
 //   7. it prints what would be uploaded, and stops. Only with --upload does it run
 //      `gh release create v<version> --draft --target <commit> ...`, as release.yml does. It never
@@ -90,7 +90,8 @@ export const MIRRORS = {
   'Build the Windows helpers (x64 and arm64)': 'the same command; left out with --mac-only',
   'Fetch the Windows media tools, and build FFmpeg for Windows (pinned SHA-256s, docs/MEDIA-TOOLS.md)':
     'the same command; left out with --mac-only',
-  'Build the Windows installers (x64 and arm64, unsigned)': 'the same commands; left out with --mac-only',
+  'Build the Windows installers (x64 and arm64, unsigned)':
+    'the same commands; left out with --mac-only',
   'Check the Windows build': 'the same command; left out with --mac-only',
   'Collect the source of the bundled programs': 'the same command',
   'Compute the checksums': 'the same list, computed by this script',
@@ -389,9 +390,8 @@ export async function release(options, { run, print }) {
       .stdout
     problems.push(...treeProblems(status))
   }
-  const open = (
-    await run('pgrep', ['-f', OPEN_APP], { cwd: root, capture: true, allowFail: true })
-  ).stdout
+  const open = (await run('pgrep', ['-f', OPEN_APP], { cwd: root, capture: true, allowFail: true }))
+    .stdout
   problems.push(...openAppProblems(open))
   const localTag = (
     await run('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`], {
@@ -524,6 +524,17 @@ export async function release(options, { run, print }) {
 
   stepTitle('Collect the source of the bundled programs')
   await run('node', ['scripts/media-tools/sources.mjs', join(dist, 'sources')], { cwd: root })
+  // uBO Lite, in the browser extension the app ships (ADR-0063): GPL, so its source goes too.
+  await run(
+    'node',
+    [
+      'scripts/media-tools/sources.mjs',
+      join(dist, 'sources'),
+      '--manifest',
+      'scripts/adblock/ubol.json'
+    ],
+    { cwd: root }
+  )
   if (options.windows) {
     for (const arch of WINDOWS_ARCHES) {
       await run(
@@ -556,6 +567,8 @@ export async function release(options, { run, print }) {
       join(dist, 'SHA256SUMS'),
       '--out',
       notes,
+      '--extension-manifest',
+      'scripts/adblock/ubol.json',
       ...(options.windows
         ? ['--windows-manifest', 'scripts/media-tools/tools-windows-x64.json']
         : []),

@@ -38,11 +38,12 @@ export const USAGE = [
   'usage: node scripts/release/notes.mjs --version <x.y.z> --check',
   '       node scripts/release/notes.mjs --version <x.y.z> --checksums <SHA256SUMS> [--out <file>]',
   'options: --changelog <file> --readme <file> --manifest <tools.json> --windows-manifest <tools-windows-x64.json>',
-  '         --package <package.json>'
+  '         --extension-manifest <ubol.json> --package <package.json>'
 ].join('\n')
 
 /** A Semantic Versioning version without build metadata: 1.2.3 or 1.2.3-beta.1. */
-export const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
+export const VERSION =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
 
 /** Wrong use of the command line: exit code 2 instead of 1. */
 export class UsageError extends Error {}
@@ -97,7 +98,10 @@ export function sections(markdown) {
 /** Drops leading and trailing blank lines and Keep a Changelog's trailing link definitions. */
 function tidy(lines) {
   let end = lines.length
-  while (end > 0 && (lines[end - 1].trim() === '' || VERSION_LINK_DEFINITION.test(lines[end - 1]))) {
+  while (
+    end > 0 &&
+    (lines[end - 1].trim() === '' || VERSION_LINK_DEFINITION.test(lines[end - 1]))
+  ) {
     end--
   }
   let start = 0
@@ -134,7 +138,9 @@ export function checkRelease({ version, packageVersion, changelog }) {
   }
   const section = changelogSection(changelog, version)
   if (section === null) {
-    problems.push(`CHANGELOG.md has no "## [${version}]" section: add one with this release's changes`)
+    problems.push(
+      `CHANGELOG.md has no "## [${version}]" section: add one with this release's changes`
+    )
   } else if (section === '') {
     problems.push(`CHANGELOG.md's "## [${version}]" section is empty`)
   }
@@ -150,11 +156,15 @@ export function parseChecksums(text) {
     if (line.trim() === '') return
     const match = CHECKSUM_LINE.exec(line)
     if (!match) {
-      throw new Error(`checksum line ${index + 1} is not "<sha256>  <file>": ${JSON.stringify(line)}`)
+      throw new Error(
+        `checksum line ${index + 1} is not "<sha256>  <file>": ${JSON.stringify(line)}`
+      )
     }
     const [, sha256, file] = match
     if (file.includes('/')) {
-      throw new Error(`checksum line ${index + 1} names a path, ${file}: run shasum next to the files`)
+      throw new Error(
+        `checksum line ${index + 1} names a path, ${file}: run shasum next to the files`
+      )
     }
     entries.push({ file, sha256 })
   })
@@ -164,15 +174,17 @@ export function parseChecksums(text) {
 
 /**
  * The files the notes point to that the checksum file doesn't list: the DMG and the zip, and, given
- * the media-tools manifest, every source archive and build script the notes say are attached.
+ * the media-tools manifest, every source archive and build script the notes say are attached. The
+ * extension manifest (scripts/adblock/ubol.json, ADR-0063) adds uBO Lite's source.
  */
-export function missingAssets(entries, version, manifest, windowsManifest) {
+export function missingAssets(entries, version, manifest, windowsManifest, extensionManifest) {
   const listed = new Set(entries.map(({ file }) => file))
   const expected = Object.values(assetNames(version))
   if (manifest !== undefined) expected.push(...sourceAssets(manifest))
   if (windowsManifest !== undefined) {
     expected.push(...Object.values(windowsAssetNames(version)), ...sourceAssets(windowsManifest))
   }
+  if (extensionManifest !== undefined) expected.push(...sourceAssets(extensionManifest))
   return [...new Set(expected)].filter((file) => !listed.has(file))
 }
 
@@ -184,7 +196,7 @@ export function checksumTable(entries) {
   ].join('\n')
 }
 
-const DISPLAY_NAMES = { ffmpeg: 'FFmpeg', deno: 'Deno' }
+const DISPLAY_NAMES = { ffmpeg: 'FFmpeg', deno: 'Deno', 'ubo-lite': 'uBO Lite' }
 
 /** The media-tools manifest's tools, or an error when it has none. */
 function toolsOf(manifest) {
@@ -213,7 +225,9 @@ export function bundledPrograms(manifest) {
   return toolsOf(manifest)
     .map((tool) => {
       if (typeof tool?.sourceUrl !== 'string' || !tool.sourceUrl.startsWith('https://')) {
-        throw new Error(`${tool?.name ?? 'a tool'} has no https sourceUrl in the media-tools manifest`)
+        throw new Error(
+          `${tool?.name ?? 'a tool'} has no https sourceUrl in the media-tools manifest`
+        )
       }
       const names = releaseSourceNames(tool)
       if (names === null && isCopyleft(tool.license)) {
@@ -221,9 +235,13 @@ export function bundledPrograms(manifest) {
           `${tool.name} is ${tool.license}, but the media-tools manifest pins no sourceSha256, so its source would not be attached (ADR-0027)`
         )
       }
-      const lines = [`- **${DISPLAY_NAMES[tool.name] ?? tool.name} ${tool.version}**: ${tool.license}`]
+      const lines = [
+        `- **${DISPLAY_NAMES[tool.name] ?? tool.name} ${tool.version}**: ${tool.license}`
+      ]
       if (names === null) {
-        lines.push(`  - Source code: <${tool.sourceUrl}> (not attached: its licence does not ask for it)`)
+        lines.push(
+          `  - Source code: <${tool.sourceUrl}> (not attached: its licence does not ask for it)`
+        )
       } else {
         lines.push(
           `  - Source code: \`${names.source}\`, attached to this release (SHA-256 \`${tool.sourceSha256}\`)`
@@ -289,8 +307,31 @@ Later versions install from inside the app (Settings › Updates). To remove Mer
 **Add or remove programs** and uninstall it there.`
 }
 
+/**
+ * The browser extension's section (ADR-0063): it blocks ads with uBO Lite, so the extension as built
+ * is under the GPL, and uBO Lite's source is attached like the media tools'.
+ */
+export function extensionSection(extensionManifest) {
+  return `## The browser extension
+
+The browser extension that comes with the app (Settings › Browser extensions) blocks ads and trackers
+with uBO Lite, by Raymond Hill and contributors. Because uBO Lite is under the GPL, the extension as a
+whole is distributed under GPL-3.0-or-later; Mergelane's own code in it stays MIT-licensed. uBO Lite's
+filter lists are the ones in the version below, and they update with Mergelane.
+
+${bundledPrograms(extensionManifest)}`
+}
+
 /** The complete release notes, as Markdown. */
-export function buildNotes({ version, changes, limits, checksums, manifest, windows = false }) {
+export function buildNotes({
+  version,
+  changes,
+  limits,
+  checksums,
+  manifest,
+  extensionManifest,
+  windows = false
+}) {
   return `## What's new
 
 ${changes}
@@ -328,7 +369,7 @@ upstream links are given as well.${
   }
 
 ${bundledPrograms(manifest)}
-`
+${extensionManifest === undefined ? '' : `\n${extensionSection(extensionManifest)}\n`}`
 }
 
 function readText(path, what) {
@@ -363,6 +404,7 @@ function parseCli(argv) {
         readme: { type: 'string' },
         manifest: { type: 'string' },
         'windows-manifest': { type: 'string' },
+        'extension-manifest': { type: 'string' },
         package: { type: 'string' }
       }
     })
@@ -379,7 +421,10 @@ function parseCli(argv) {
 }
 
 /** CLI entry point. Returns the exit code. */
-export function main(argv = process.argv.slice(2), { log = console.log, error = console.error } = {}) {
+export function main(
+  argv = process.argv.slice(2),
+  { log = console.log, error = console.error } = {}
+) {
   try {
     const options = parseCli(argv)
     const { version } = options
@@ -400,8 +445,12 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
     const windowsManifest = options['windows-manifest']
       ? readJson(options['windows-manifest'], 'the Windows media-tools manifest')
       : undefined
-    const missing = missingAssets(checksums, version, manifest, windowsManifest)
-    if (missing.length > 0) throw new Error(`the checksum file does not list ${missing.join(' or ')}`)
+    const extensionManifest = options['extension-manifest']
+      ? readJson(options['extension-manifest'], 'the extension manifest')
+      : undefined
+    const missing = missingAssets(checksums, version, manifest, windowsManifest, extensionManifest)
+    if (missing.length > 0)
+      throw new Error(`the checksum file does not list ${missing.join(' or ')}`)
     const limits = honestLimits(readText(options.readme, 'the README'))
     if (!limits) throw new Error('README.md has no "## ... (honest limits)" section to copy')
     const notes = buildNotes({
@@ -410,6 +459,7 @@ export function main(argv = process.argv.slice(2), { log = console.log, error = 
       limits,
       checksums,
       manifest,
+      extensionManifest,
       windows: windowsManifest !== undefined
     })
     if (options.out) {

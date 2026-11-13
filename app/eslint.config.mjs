@@ -7,8 +7,18 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
   // resources/bin and resources/bin-win hold the fetched media tools (scripts/media-tools/fetch.mjs): yt-dlp's folder
-  // carries third-party JavaScript that is not ours to lint.
-  { ignores: ['**/node_modules', '**/dist', '**/out', 'resources/bin', 'resources/bin-win'] },
+  // carries third-party JavaScript that is not ours to lint, as does extension/.cache, uBO Lite's pinned builds
+  // (scripts/adblock/ubol.mjs, ADR-0063).
+  {
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      'resources/bin',
+      'resources/bin-win',
+      'extension/.cache'
+    ]
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],

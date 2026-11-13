@@ -16,6 +16,7 @@ import {
   withItem,
   type MediaItem
 } from '../extension/src/media'
+import { ASK } from '../extension/src/ask'
 import { CHROME_EXTENSION_ID, NATIVE_HOST } from '../src/shared/browserBridge'
 import { hostManifest } from '../src/main/nativeHost'
 import { expect, PROJECT_ROOT, test } from './fixtures'
@@ -248,9 +249,13 @@ async function openPopup(tabId: number): Promise<Page> {
 /** The background's list for `tabId`, once everything it has seen so far is on it. */
 const listedBy = (popup: Page, tabId: number): Promise<unknown> =>
   popup.evaluate(
-    (id) =>
-      (globalThis as unknown as { chrome: Chrome }).chrome.runtime.sendMessage({ mediaOf: id }),
-    tabId
+    // Tagged as the popup tags its messages, so uBO Lite's listener leaves it alone (ADR-0063).
+    ({ id, what }) =>
+      (globalThis as unknown as { chrome: Chrome }).chrome.runtime.sendMessage({
+        what,
+        mediaOf: id
+      }),
+    { id: tabId, what: ASK }
   )
 
 async function newPage(): Promise<Page> {

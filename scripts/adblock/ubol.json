@@ -1,0 +1,24 @@
+{
+  "$comment": "uBO Lite, the ad blocker built into Mergelane's browser extension (ADR-0063). Its official release builds are fetched at build time by scripts/adblock/ubol.mjs, checked against these SHA-256s, and merged into the extension; nothing of it is committed. sourceUrl is the gorhill/uBlock commit those builds were made from (uBOL-home's uBlock submodule at the release tag), attached to every Mergelane release by scripts/media-tools/sources.mjs. To update: pick a uBOL-home release, take the .chromium.zip and .firefox.signed.xpi digests from its release page, and the uBlock submodule commit at its tag.",
+  "tools": [
+    {
+      "name": "ubo-lite",
+      "version": "2026.1110.1816",
+      "license": "GPL-3.0-or-later",
+      "licenseUrl": "https://github.com/gorhill/uBlock/blob/2bc679d99afe5bddd8fe3ab60137966a12123f41/LICENSE.txt",
+      "home": "https://github.com/uBlockOrigin/uBOL-home",
+      "sourceUrl": "https://github.com/gorhill/uBlock/archive/2bc679d99afe5bddd8fe3ab60137966a12123f41.tar.gz",
+      "sourceSha256": "aa6c921acaa384b7d007db1c44cefbed2bdcc57369f0d930a37f9d44aeb3373d",
+      "builds": {
+        "chrome": {
+          "url": "https://github.com/uBlockOrigin/uBOL-home/releases/download/2026.1110.1816/uBOLite_2026.1110.1816.chromium.zip",
+          "sha256": "85fe5909366e8ada66c5b331bbdbf69cf5100245ed6161b1e4e2f1f848ec7d03"
+        },
+        "firefox": {
+          "url": "https://github.com/uBlockOrigin/uBOL-home/releases/download/2026.1110.1816/uBOLite_2026.1110.1816.firefox.signed.xpi",
+          "sha256": "3838bf88742ab921f553795b5b96f21e6429e198c1db3865c414402e5fe55059"
+        }
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 
 // Unit tests for renderer code (ADR-0034): React components and hooks in jsdom, with V8 coverage.
 // Playwright keeps the end-to-end tests in e2e/; it never runs these files, and Vitest never runs
-// those (its include is only *.test.* files under src/renderer and src/shared).
+// those (its include is only *.test.* files under src/renderer, src/shared and extension/src).
 //
 // Coverage is enforced per file on the files listed here, at 90% of lines: a renderer file joins
 // the list in the pull request that changes it, so new and reworked code is held to the floor
@@ -130,7 +130,10 @@ export const COVERED = [
   // ADR-0051: the sidebar offers the helper's update as soon as Mergelane opens.
   'src/renderer/src/components/HelperUpdateNotice.tsx',
   // ADR-0052: tunnels aren't offered as networks.
-  'src/shared/tunnels.ts'
+  'src/shared/tunnels.ts',
+  // ADR-0063: the browser extension's ad blocking (uBO Lite) and the settings it shares storage with.
+  'extension/src/adblock.ts',
+  'extension/src/settings.ts'
 ]
 
 export default defineConfig({
@@ -143,7 +146,11 @@ export default defineConfig({
   },
   test: {
     root: '.',
-    include: ['src/renderer/**/*.test.{ts,tsx}', 'src/shared/**/*.test.ts'],
+    include: [
+      'src/renderer/**/*.test.{ts,tsx}',
+      'src/shared/**/*.test.ts',
+      'extension/src/**/*.test.ts'
+    ],
     environment: 'jsdom',
     setupFiles: ['src/renderer/src/test/setup.ts'],
     coverage: {

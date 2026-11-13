@@ -47,14 +47,20 @@ Read this file at the start of every session. Keep `docs/PROGRESS.md` up to date
   `THIRD-PARTY-NOTICES.md` and the app bundle, and every GitHub release attaches their source (ADR-0027).
   The same holds for the Windows builds of these tools. Wintun (the Windows virtual network adapter) ships only
   as its authors' prebuilt, signed DLL; read the licence inside its ZIP and record it before bundling it.
+- **The browser extension is GPL-3.0-or-later (owner, 2026-11-13, ADR-0063).** It includes uBO Lite (uBlock Origin
+  Lite, GPL), merged in at build time from its official release builds, pinned by SHA-256 in
+  `scripts/adblock/ubol.json`, never committed. Mergelane's own code in it stays MIT. Every release attaches the
+  uBlock source commit those builds came from. The extension never downloads filter lists by itself: the lists are
+  the ones in the pinned build, updated with Mergelane.
 
-## Upstream sources (all MIT)
+## Upstream sources
 
 | Upstream | What we take | Where it goes |
 |---|---|---|
 | github.com/anmolkapil/plexo | Electron/React app shell, download engine, torrents, scheduler, limits, browser extension, e2e suite, macOS packaging | `app/`, `extension/` |
 | github.com/rohit267/net-merge | Go engine: utun + tun2socks/gVisor, balancer, scheduler, probes, adapter discovery, per-link limits | `daemon/` |
 | github.com/Ahmadkhattak1/awesome-downloader | Ideas and logic only: HLS, YouTube SABR via `googlevideo`, FFmpeg mux, media detection in the extension. Windows-only code is rewritten, not copied | `app/src/main/media/`, `extension/` |
+| github.com/uBlockOrigin/uBOL-home (built from github.com/gorhill/uBlock), **GPL-3.0-or-later** | uBO Lite's release builds: ad and tracker blocking in the browser extension (ADR-0063). Not imported as source; merged at build time | `app/extension/dist/*` |
 
 Record the exact upstream commit SHAs you imported in `docs/UPSTREAM.md`, with what you changed, so
 upstream fixes can be cherry-picked later. Do not depend on upstream at runtime.

@@ -38,7 +38,8 @@ Each line becomes an actual entry, with the Mergelane commit, once the change la
 - macOS arm64 only: removed the Windows and Linux builder targets, x64, NSIS, the sparse-file module, and the
   Windows/Linux branches.
 - `electron-builder.yml`:
-  - Ad-hoc signing (`identity: "-"`), `minimumSystemVersion: "27.0"`, `notarize: false`.
+  - Ad-hoc signing (`identity: "-"`), `minimumSystemVersion: "13.0"` (it was `"27.0"` until ADR-0065),
+    `notarize: false`.
   - Keep koffi's `darwin_arm64` prebuild.
 - `src/main/network/deviceBinding.ts`: pin per-link sockets on darwin with `IP_BOUND_IF` / `IPV6_BOUND_IF` through
   koffi, replacing the `localAddress`-only path.

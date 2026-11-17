@@ -35,7 +35,8 @@ until the owner overrides it.
 - Context: There is no Apple Developer account. electron-builder's `MacConfiguration` documents
   `identity: "-"` as ad-hoc signing, and `notarize` defaults on when credentials exist.
 - Decision:
-  - `mac.identity: "-"`, `mac.notarize: false`, `minimumSystemVersion: "27.0"`, arm64 only.
+  - `mac.identity: "-"`, `mac.notarize: false`, `minimumSystemVersion: "27.0"`, arm64 only. (The minimum is
+    `"13.0"` since ADR-0065.)
   - Developer ID signing will later be switched on by setting `CSC_*` / `APPLE_*` secrets and flipping those
     two fields.
 - Consequences: Gatekeeper asks users to confirm once ("Open Anyway"). Auto-update is affected, see ADR-0010.
@@ -1322,7 +1323,7 @@ until the owner overrides it.
     have their own licence inside the ZIP.
 - Decision:
   - **Platforms:** Windows 10 and 11, x64 and arm64, plus macOS 27 on Apple silicon as before. Windows 10 22H2 is
-    the oldest version tested, because it is the last Windows 10 release.
+    the oldest version tested, because it is the last Windows 10 release. (The macOS minimum is 13 since ADR-0065.)
   - **Branch:** all Windows work is on the long-lived `windows` branch, made from `main` at 0.3.5 + #73. Work there
     in milestone branches made from `windows`, with pull requests into `windows`. `main` keeps receiving Mac fixes,
     and `windows` merges `main` in regularly. Merging `windows` into `main` is the owner's decision.
@@ -1915,3 +1916,64 @@ network by default (ADR-0048).
   against the local server, with downloads held and released, and a quit mid-test),
   `e2e/daemonApi.spec.ts` (3 more for the helper reads), and the view's Vitest specs. Nothing in the suite contacts
   Cloudflare.
+
+## ADR-0065: The Mac app runs on macOS 13 Ventura and later (amends ADR-0003 and ADR-0053)
+
+**Status:** Owner, 2026-11-17. The owner asked for macOS 11 Big Sur as the minimum. Shown the audit below, they chose
+macOS 13 Ventura ("go with macOS 13").
+
+### Context
+
+- The app required macOS 27 (`minimumSystemVersion: '27.0'`). Every Apple-silicon Mac, the first M1s included, can
+  run macOS 27 (Apple Support, "macOS 27 Golden Gate is compatible with these computers"). A lower minimum therefore
+  adds no Macs, only Macs that have not been updated.
+- What the programs in the app actually need (`vtool -show-build`, the 0.5.0 build):
+  - Electron 44.4.4 and its helpers: macOS 13.0.
+  - `mergelane-daemon` and `mergelane-nmhost`, built by Go 1.27: macOS 13.0.
+  - Native modules: koffi 11.0; utp-native, bufferutil, utf-8-validate and fs-native-extensions 13.0. All of these
+    except koffi are optional and fall back when they can't load.
+  - yt-dlp 11.0, Deno 2.9.8 12.0.
+  - Our FFmpeg 27.0, only because `build-ffmpeg.sh` set `MACOSX_DEPLOYMENT_TARGET=27.0`.
+- What Electron and Go support, from their own documentation:
+  - Electron 38 dropped macOS 11 and Electron 44 dropped macOS 12 (electronjs.org, Breaking Changes). Electron 37, the
+    last for macOS 11, reached end of life on 2026-01-15 (releases.electronjs.org/schedule).
+  - Go 1.24 was the last for macOS 11, Go 1.26 the last for macOS 12, and Go 1.27 requires macOS 13 (go.dev release
+    notes). Go 1.24 has had no fixes since 2026-02-10 (go.dev/doc/devel/release).
+  - So macOS 11 would mean an Electron and a Go that no longer get security fixes. That includes the root helper
+    that carries the Mac's traffic, and the same Go code is the Windows helper. macOS 12 would need Electron 43 and
+    Go 1.26, whose support ends in early 2027.
+- Apple's last security update for macOS 11 was 11.7.10, in September 2023 (Apple security releases).
+- The daemon's system calls, route messages, `IP_BOUND_IF`, `LOCAL_PEERCRED` and `scutil --nc list` format are all
+  present in macOS 11.0.1's open-source XNU, network_cmds and configd, so nothing in the helper's own code needs a newer
+  macOS. Open at login uses `SMAppService` (macOS 13), and the app's wording ("System Settings › Privacy & Security")
+  is macOS 13's, so neither needs a fallback.
+
+### Decision
+
+- `minimumSystemVersion: '13.0'` (`app/electron-builder.yml`), arm64 only as before.
+- FFmpeg is built with `MACOSX_DEPLOYMENT_TARGET=13.0`.
+- No program in the app may need a newer macOS than the minimum:
+  - `scripts/media-tools/fetch.mjs` (`MACOS_MINIMUM`) refuses a fetched or built program whose arm64 code needs a
+    newer macOS (`vtool -show-build`).
+  - `scripts/ci/package-test.sh` (`MACOS_MINIMUM`) checks the same for every Mach-O file in the packaged app, and that
+    `LSMinimumSystemVersion` is the minimum. Files with no macOS arm64 code (Intel-only and iOS prebuilds that npm
+    packages ship) are counted and passed, because an Apple-silicon Mac never loads them.
+  - A test (`fetch.test.mjs`) keeps those two, `electron-builder.yml` and `build-ffmpeg.sh` at the same version.
+- `scripts/ci/local-root.sh` runs on macOS 13 or later.
+- Builds are still made and tested on macOS 27 (the owner's Mac, ADR-0032). The README's requirements, the release
+  notes and the READMEs say macOS 13 Ventura or later.
+
+### Consequences
+
+- The minimum follows Electron and Go. When a future Electron or Go drops macOS 13, updating it raises the minimum
+  again. The checks above fail at fetch or packaging time instead of shipping an app that won't start.
+- Not yet run on macOS 13 itself. GitHub has no hosted runner older than macOS 15 any more, and CI is paused
+  (ADR-0020). Apple doesn't say whether a Mac VM can run older macOS versions. Behaviour first seen on macOS 27 needs
+  checking on macOS 13 by hand:
+  - `launchctl print` parsing;
+  - `networksetup -listallhardwareports` output;
+  - how macOS keeps default routes for secondary links (`tun_darwin.go`);
+  - the quarantined helper being killed before approval (ADR-0019);
+  - Open Anyway's place in System Settings;
+  - the clipboard reading (ADR-0043);
+  - the Liquid Glass theme, whose under-window material looks different before macOS 26.

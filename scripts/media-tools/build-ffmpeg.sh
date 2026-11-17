@@ -44,7 +44,8 @@ SRC=$(find "$WORK" -mindepth 1 -maxdepth 1 -type d -name 'ffmpeg-*' | head -1)
 [ -n "$SRC" ] || { echo "build-ffmpeg.sh: no ffmpeg-* folder in $TARBALL" >&2; exit 1; }
 
 cd "$SRC"
-export MACOSX_DEPLOYMENT_TARGET=27.0
+# The oldest macOS Mergelane runs on (fetch.mjs MACOS_MINIMUM, ADR-0065).
+export MACOSX_DEPLOYMENT_TARGET=13.0
 ./configure \
   --arch=arm64 --target-os=darwin --cc=clang \
   --extra-version=mergelane \

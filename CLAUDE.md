@@ -15,7 +15,9 @@ Read this file at the start of every session. Keep `docs/PROGRESS.md` up to date
 ## Hard constraints (do not change without the owner's explicit approval)
 
 - **Platform (owner, 2026-11-12, ADR-0053):**
-  - **macOS:** macOS 27 and later, Apple Silicon only (arm64). No Intel Mac builds.
+  - **macOS (owner, 2026-11-17, ADR-0065):** macOS 13 Ventura and later, Apple Silicon only (arm64). No Intel Mac
+    builds. macOS 13 is the oldest that Electron and Go still support; no program in the app may need a newer
+    macOS (`scripts/media-tools/fetch.mjs` and `scripts/ci/package-test.sh` check every one).
   - **Windows:** Windows 10 and Windows 11, on both x64 (Intel/AMD) and arm64 (Snapdragon and other ARM) PCs.
   - No Linux builds.
 - **No Apple Developer account yet.** Every build is ad-hoc signed (`codesign --sign -`). Users must be

@@ -263,7 +263,7 @@ export function installSection(version) {
   const { dmg, zip } = assetNames(version)
   return `## Requirements
 
-macOS 27 or later, Apple silicon only (M1 or later). Intel Macs are not supported.
+macOS 13 Ventura or later, Apple silicon only (M1 or later). Intel Macs are not supported.
 
 ## Install
 

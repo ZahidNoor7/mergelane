@@ -46,6 +46,8 @@ exit 0'
 stub ps 'while read -r pid _; do [ -n "$pid" ] && [ "$pid" = "${4:-}" ] && { echo 99999; exit 0; }; done <<<"${STUB_PROCS:-}"; echo 1'
 stub dnctl 'exit 0'
 stub pfctl 'exit 0'
+# The fake Mac runs the oldest macOS Mergelane supports (ADR-0065), unless a test says otherwise.
+stub sw_vers 'echo "${STUB_MACOS:-13.0}"'
 
 # The fake helper answers like mergelane-daemon 0.1.0 does.
 cat >"$T/helper" <<'EOF'
@@ -121,7 +123,8 @@ lacks() {
   if grep -qF -- "$2" <<<"$OUT"; then bad "$1: output has '$2'" "$OUT"; else ok "$1"; fi
 }
 reset() {
-  unset STUB_ROUTES STUB_SCUTIL STUB_IFACES STUB_PROCS STUB_LOADED STUB_MERGE STUB_HELPER_DOWN FAKE_PLIST FAKE_HELPER
+  unset STUB_ROUTES STUB_SCUTIL STUB_IFACES STUB_PROCS STUB_LOADED STUB_MERGE STUB_HELPER_DOWN FAKE_PLIST FAKE_HELPER \
+    STUB_MACOS
   rm -rf "$T/backup" "$T/support"
 }
 
@@ -171,6 +174,15 @@ lacks "... not the app suite" "Suite app"
 lacks "... not the netsim suite" "Suite netsim"
 
 # --- refusals ----------------------------------------------------------------------------------
+reset
+export STUB_MACOS=12.7.6
+runner --dry-run
+expect "a macOS older than Mergelane's oldest (13) is refused" 2 \
+  "NOT STARTING. Nothing was changed." "needs macOS 13 or later, as Mergelane does (found 12.7.6)"
+reset
+export STUB_MACOS=27.2.1
+runner --dry-run
+expect "a newer macOS passes the version check" 0 "all checks passed"
 reset
 STUB_ROUTES=$VPN
 runner --dry-run

@@ -71,7 +71,9 @@ mac:
       arch: [arm64]
     - target: zip
       arch: [arm64]
-  minimumSystemVersion: '27.0'
+  # macOS 13 Ventura, the oldest that Electron and Go still support (ADR-0065). scripts/media-tools/fetch.mjs
+  # (MACOS_MINIMUM) and scripts/ci/package-test.sh refuse any program in the app that needs a newer macOS.
+  minimumSystemVersion: '13.0'
   # Ad-hoc signature ("-"): no Apple Developer ID yet (docs/DECISIONS.md ADR-0003). Every nested
   # binary is signed too, which Apple silicon requires before anything can run.
   # To switch to Developer ID later: set identity to the certificate name (or remove it and set

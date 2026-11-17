@@ -25,10 +25,11 @@
 //
 // A folder or a build is skipped when its stamp (<output-dir>/.stamps/<name>.json) still matches:
 // the pinned hashes, the build script's hash, and the hash of what is installed. In every case
-// `lipo -archs` must list arm64, the licence texts are copied to <output-dir>/licenses/<name>/
-// first, and the program is installed with mode 0755. Any failure exits 1 with a message and
-// leaves no partial program behind.
-// Needs macOS with the Xcode command line tools (/usr/bin/lipo, and clang and make for a build).
+// `lipo -archs` must list arm64, `vtool` must show that its arm64 code runs on MACOS_MINIMUM, the
+// licence texts are copied to <output-dir>/licenses/<name>/ first, and the program is installed
+// with mode 0755. Any failure exits 1 with a message and leaves no partial program behind.
+// Needs macOS with the Xcode command line tools (/usr/bin/lipo and /usr/bin/vtool, and clang and
+// make for a build).
 // Node.js built-ins only.
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -445,6 +446,40 @@ export async function archsOf(path) {
   }
 }
 
+/** The oldest macOS Mergelane runs on: app/electron-builder.yml's minimumSystemVersion (ADR-0065).
+ * Every program in the app must run there too. */
+export const MACOS_MINIMUM = '13.0'
+
+/** The oldest macOS a Mach-O file's arm64 code runs on: the minos of its macOS build version, as
+ * `vtool -show-build` prints it. */
+export async function macosMinimumOf(path) {
+  let stdout
+  try {
+    ;({ stdout } = await execFileAsync('/usr/bin/vtool', ['-arch', 'arm64', '-show-build', path]))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        '/usr/bin/vtool is missing: run this on macOS with the Xcode command line tools'
+      )
+    }
+    throw new Error(`vtool cannot read the arm64 code of ${path} (${error.stderr?.trim()})`)
+  }
+  const minos = /^\s*platform MACOS\n\s*minos (\d+(?:\.\d+)*)$/m.exec(stdout)?.[1]
+  if (!minos) throw new Error(`${path} names no oldest macOS version (no macOS build version)`)
+  return minos
+}
+
+/** Compares dotted version numbers part by part: negative, zero or positive, as sort expects. */
+export function compareVersions(a, b) {
+  const left = a.split('.').map(Number)
+  const right = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const difference = (left[i] ?? 0) - (right[i] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
 /** Extracts a verified archive into an empty directory with the macOS tools. */
 export async function extract(archive, format, dir) {
   if (format === 'zip') {
@@ -635,20 +670,27 @@ async function downloadPinned(tool, url, expected, dest, log, network) {
   return bytes
 }
 
-async function requireArm64(tool, path) {
+/** Checks a macOS program has arm64 code that runs on MACOS_MINIMUM. */
+async function requireMacProgram(tool, path) {
   const archs = await archsOf(path)
   if (!archs.includes('arm64')) {
     throw new Error(
       `${tool.name}: not built for Apple silicon: lipo -archs reports "${archs.join(' ')}", expected arm64`
     )
   }
+  const minimum = await macosMinimumOf(path)
+  if (compareVersions(minimum, MACOS_MINIMUM) > 0) {
+    throw new Error(
+      `${tool.name}: needs macOS ${minimum} or later, but Mergelane runs on macOS ${MACOS_MINIMUM} or later (ADR-0065)`
+    )
+  }
   return archs
 }
 
-/** Checks the program is built for the manifest's target: arm64 Mach-O on macOS, the target chip's PE on
- * Windows. Returns what it found, for the log. */
+/** Checks the program is built for the manifest's target: arm64 Mach-O that runs on MACOS_MINIMUM on macOS, the
+ * target chip's PE on Windows. Returns what it found, for the log. */
 async function requireTarget(tool, path, target) {
-  if (target.platform !== 'win32') return requireArm64(tool, path)
+  if (target.platform !== 'win32') return requireMacProgram(tool, path)
   const machine = await peMachineOf(path)
   if (machine !== target.arch) {
     throw new Error(`${tool.name}: built for ${machine}, expected Windows ${target.arch}`)

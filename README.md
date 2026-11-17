@@ -24,9 +24,12 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
 
 ## Requirements
 
-- macOS 27 or later
+- macOS 13 Ventura or later, from the first release after 0.5.0. Mergelane 0.5.0 and earlier need macOS 27.
 - A Mac with Apple silicon (M1 or later). Intel Macs are not supported.
 - Or, for the Windows preview: Windows 10 or 11 on an Intel, AMD or Arm PC.
+
+Mergelane is built and tested on macOS 27. It hasn't been tried on a real Mac with macOS 13 to 26 yet, so please
+report anything that doesn't work there.
 
 ## What to expect (honest limits)
 
@@ -171,7 +174,8 @@ You can also paste any direct download link into **New download** without the ex
 
 ## Building from source
 
-You need a Mac with Apple silicon and macOS 27, Node.js 22, Go 1.27 and the Xcode command line tools.
+You need a Mac with Apple silicon, Node.js 22, Go 1.27 and the Xcode command line tools. Builds are made and tested
+on macOS 27; the app they make runs on macOS 13 or later.
 
 ```sh
 cd app

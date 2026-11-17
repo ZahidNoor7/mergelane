@@ -24,7 +24,7 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
 
 ## Requirements
 
-- macOS 13 Ventura or later, from the first release after 0.5.0. Mergelane 0.5.0 and earlier need macOS 27.
+- macOS 13 Ventura or later (from Mergelane 0.5.1; 0.5.0 and earlier need macOS 27)
 - A Mac with Apple silicon (M1 or later). Intel Macs are not supported.
 - Or, for the Windows preview: Windows 10 or 11 on an Intel, AMD or Arm PC.
 

@@ -16,6 +16,7 @@ import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useFormatSpeed, useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 import { useMergeLanes } from '../hooks/useMergeLanes'
+import { useNetworkTraffic } from '../hooks/useNetworkTraffic'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals, type ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useSystemMerge } from '../hooks/useSystemMerge'
@@ -165,11 +166,29 @@ function DashboardHero(): React.JSX.Element {
   const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
   const networkVisual = useNetworkVisuals()
   const { lanes, summaries, active, progress } = useMergeLanes()
+  const formatSpeed = useFormatSpeed()
   const running = active.running.length > 0
   const history = combinedHistory(downloads)
+  // Total speed, all apps (ADR-0070): every byte crossing each network, in and out, from every app on the Mac,
+  // Mergelane's downloads and uploads included. It keeps moving when nothing downloads. Where the computer's
+  // counters can't be read (null: Windows, for now), the merged download speed, as before.
+  const { traffic, history: trafficHistory } = useNetworkTraffic(true)
+  const totalLanes =
+    traffic === null
+      ? null
+      : lanes.map((lane) => {
+          const rate = traffic?.[lane.id]
+          const speed = lane.down || !rate ? 0 : rate.rx + rate.tx
+          return { ...lane, speed, on: speed > 0, limited: false, note: 'Idle' }
+        })
 
-  // The chart draws the networks that carried something in the last minute, in the list's order.
-  const charted = summaries.filter((network) => history[network.id]?.some((value) => value > 0))
+  // The chart follows the card (ADR-0071): every app's traffic while the counters are read, Mergelane's downloads
+  // otherwise. It draws the networks that carried something in the last minute, in the list's order.
+  const allApps = traffic !== null
+  const chartHistory = allApps ? trafficHistory : history
+  const charted = summaries.filter((network) =>
+    chartHistory[network.id]?.some((value) => value > 0)
+  )
   const speedCap = slowMode
     ? `Slow mode: ${formatSpeedLimit(slowModeSpeed)}`
     : speedLimit !== undefined
@@ -180,36 +199,58 @@ function DashboardHero(): React.JSX.Element {
     <div className="pt-5">
       <div className="flex items-center gap-[14px]">
         <div className="min-w-0 flex-[1.4]">
-          <Confluence
-            lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}
-            idle={!running || lanes.length === 0}
-            total={active.totalSpeed}
-            caption={
-              <span className="flex flex-col gap-0.5">
-                <span>{progress}</span>
-                {speedCap && <span>{speedCap}</span>}
-              </span>
-            }
-          />
+          {totalLanes ? (
+            <Confluence
+              lanes={totalLanes.length > 0 ? totalLanes : PLACEHOLDER_LANES}
+              idle={traffic === undefined || totalLanes.length === 0}
+              label="Total speed, all apps"
+              caption={
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    {running
+                      ? `Includes ${formatSpeed(active.totalSpeed)} of downloads`
+                      : 'No downloads running. This is other apps.'}
+                  </span>
+                  {speedCap && <span>{speedCap}</span>}
+                </span>
+              }
+            />
+          ) : (
+            <Confluence
+              lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}
+              idle={!running || lanes.length === 0}
+              total={active.totalSpeed}
+              caption={
+                <span className="flex flex-col gap-0.5">
+                  <span>{progress}</span>
+                  {speedCap && <span>{speedCap}</span>}
+                </span>
+              }
+            />
+          )}
         </div>
         <div className="relative ml-auto max-w-[640px] min-w-0 flex-1">
           <div
-            className={`transition-opacity duration-200 ${running ? 'opacity-100' : 'opacity-45'}`}
+            className={`transition-opacity duration-200 ${running || allApps ? 'opacity-100' : 'opacity-45'}`}
           >
-            <h3 className="text-[12.5px] leading-none font-[620] text-ink-2">Last minute</h3>
+            <h3 className="text-[12.5px] leading-none font-[620] text-ink-2">
+              {allApps ? 'Last minute, all apps' : 'Last minute'}
+            </h3>
             <ThroughputChart
               order={charted.map((network) => {
                 const visual = networkVisual(network.id, network.kind, network.osName)
                 return { interfaceId: network.id, solid: visual.solid, name: visual.name }
               })}
-              historyByInterface={history}
+              historyByInterface={chartHistory}
             />
           </div>
           {/* An empty grid alone reads as broken: say what will be drawn there. Not dimmed with
               the chart, so it stays readable. */}
           {charted.length === 0 && (
             <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[12px] text-[var(--text-secondary)]">
-              Each network’s speed is drawn here while something downloads.
+              {allApps
+                ? 'Each network’s speed, from every app, is drawn here as it moves.'
+                : 'Each network’s speed is drawn here while something downloads.'}
             </p>
           )}
         </div>
@@ -656,8 +697,8 @@ function OtherAppsSection({
     <section aria-label="Other apps">
       <SectionHeading label="Other apps" />
       <p className={`max-w-[62ch] pt-3 ${bodyClass}`}>
-        Mergelane’s own downloads use every network without this. System merge lets other apps’
-        connections use them too.
+        Mergelane’s own downloads always use all your networks. System merge spreads your other
+        apps’ connections, like your browser’s, across them too.
       </p>
       {/* The section's own top rule would double the well's border. */}
       <div className="mt-3 overflow-hidden rounded-lg border-[0.5px] border-border bg-card [&>*:first-child]:border-t-0">

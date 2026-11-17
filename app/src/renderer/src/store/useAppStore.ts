@@ -20,6 +20,7 @@ import { create } from 'zustand'
 import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
 import type { CaptureRules } from '@shared/captureRules'
 import { themeOnPlatform, type ThemeId } from '@shared/themes'
+import type { MenuBarSpeedText } from '@shared/menuBarPanel'
 import { fadeTheme } from '../theme/appearance'
 import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
 
@@ -169,6 +170,9 @@ interface AppStore {
   /** Settings › General › On this Mac (ADR-0037). */
   menuBarSpeed: boolean
   setMenuBarSpeed: (on: boolean) => void
+  /** The speed beside the menu bar icon (ADR-0069). */
+  menuBarSpeedText: MenuBarSpeedText
+  setMenuBarSpeedText: (mode: MenuBarSpeedText) => void
   notifyWhenDone: boolean
   setNotifyWhenDone: (on: boolean) => void
   /** Settings › Browser extensions › What the extension does (ADR-0039). */
@@ -440,6 +444,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ menuBarSpeed })
     // Only ever saved as false: on clears it.
     persist({ menuBarSpeed: menuBarSpeed ? undefined : false })
+  },
+  menuBarSpeedText: initial.menuBarSpeedText,
+  setMenuBarSpeedText: (menuBarSpeedText) => {
+    set({ menuBarSpeedText })
+    // Automatic is saved as nothing.
+    persist({ menuBarSpeedText: menuBarSpeedText === 'auto' ? undefined : menuBarSpeedText })
   },
   notifyWhenDone: initial.notifyWhenDone,
   captureRules: initial.captureRules,

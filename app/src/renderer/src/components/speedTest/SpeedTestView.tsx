@@ -14,6 +14,7 @@ import { useSpeedTest } from '../../hooks/useSpeedTest'
 import { useSystemMerge } from '../../hooks/useSystemMerge'
 import { useAppStore } from '../../store/useAppStore'
 import { formatBytes, formatSpeed } from '../../utils/format'
+import { SPEED_UNIT_LABELS } from '@shared/speedText'
 import {
   dialMax,
   formatMs,
@@ -166,7 +167,7 @@ export function SpeedTestView(): React.JSX.Element {
                 >
                   <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />
                   {systemWhy ??
-                    'With “Keep each site on one network” on, the test reaches one network, as one website would.'}
+                    'With “Keep each website on one network” on, the test reaches one network, as one website would.'}
                 </p>
               ) : interfaces.length === 0 ? (
                 <p className="text-[12.5px] text-ink-2">
@@ -310,7 +311,7 @@ function LivePanel({
         ? formatSpeed(live.bytesPerSec, unit).split(' ')
         : headline !== undefined
           ? formatSpeed(headline, unit).split(' ')
-          : ['—', unit === 'bits' ? 'Mbps' : 'MB/s']
+          : ['—', SPEED_UNIT_LABELS[unit]]
   const caption = live ? phaseLabel(live.phase) : headline !== undefined ? 'Last download' : 'Ready'
   const doing = !live
     ? ''

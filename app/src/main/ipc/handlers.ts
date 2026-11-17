@@ -49,6 +49,14 @@ import {
   resizeTrayFlyout,
   trayStatus
 } from '../notificationArea'
+import {
+  chooseFromMenuBar,
+  closeMenuBarPanel,
+  menuBarPanelData,
+  resizeMenuBarPanel
+} from '../menuBarPanel'
+import { sendToOtherPages } from '../otherPages'
+import { NetworkTraffic } from '../network/trafficCounters'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
 import { DEFAULT_THEME_ID, isThemeId, validThemeSource } from '../../shared/themes'
@@ -139,6 +147,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send(channel, value)
   }
+  /** To the window and to the menu bar's menu, which keeps its own network list (otherPages.ts). */
+  const sendEverywhere = (channel: string, value: unknown): void => {
+    send(channel, value)
+    sendToOtherPages(channel, value)
+  }
   // Networks that dropped or came back, and the day's fastest merged speed, kept across restarts.
   const activity = new NetworkActivityLog(networkActivityPath(), (value) =>
     send(IpcChannels.networkActivityChanged, value)
@@ -147,7 +160,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   const networks = new NetworkMonitor((list) => {
     manager.networksChanged()
     activity.networksChanged(list)
-    send(IpcChannels.networksChanged, list)
+    sendEverywhere(IpcChannels.networksChanged, list)
   })
   const manager = new DownloadManager(getWindow, networks)
   setInterval(() => activity.sample(manager.totalSpeed()), 1000).unref()
@@ -228,6 +241,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         glassLook: settings.glassLook ?? 'clear',
         solidGlass: settings.solidGlass ?? false,
         menuBarSpeed: settings.menuBarSpeed !== false,
+        menuBarSpeedText: settings.menuBarSpeedText ?? 'auto',
         notifyWhenDone: settings.notifyWhenDone !== false,
         offerCopiedLinks: settings.offerCopiedLinks === true,
         captureRules: sanitizeCaptureRules(settings.captureRules),
@@ -251,6 +265,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         glassLook: 'clear',
         solidGlass: false,
         menuBarSpeed: true,
+        menuBarSpeedText: 'auto',
         notifyWhenDone: true,
         offerCopiedLinks: false,
         captureRules: DEFAULT_CAPTURE_RULES,
@@ -370,6 +385,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('trayStatus', () => trayStatus())
   handle('resizeTrayFlyout', (_event, height) => resizeTrayFlyout(height))
   handle('closeTrayFlyout', () => closeTrayFlyout())
+
+  // Each network's speed from every app, for the Dashboard's total (network/trafficCounters.ts, ADR-0070).
+  const traffic = new NetworkTraffic()
+  handle('networkTraffic', () => traffic.sample((networks.current ?? []).map((each) => each.id)))
+
+  // The menu under the macOS menu bar icon (menuBarPanel.ts, ADR-0067).
+  handle('menuBarPanel', () => menuBarPanelData())
+  handle('menuBarChoose', (_event, command) => chooseFromMenuBar(command))
+  handle('resizeMenuBarPanel', (_event, height) => resizeMenuBarPanel(height))
+  handle('closeMenuBarPanel', () => closeMenuBarPanel())
 
   handle('resumeDownload', async (_event, id) => {
     manager.resume(id)

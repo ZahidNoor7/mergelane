@@ -15,18 +15,11 @@ import type {
 export { formatBytes, formatSpeed } from '@shared/speedText'
 import { formatBytes, formatSpeed, UNITS } from '@shared/speedText'
 
-// Bytes a second in each unit formatSpeed reads in.
+// Bytes a second in each unit formatSpeed reads in, counted in 1,000s (ADR-0071).
 const SPEED_UNIT_BYTES: Record<string, number> = {
-  'B/s': 1,
-  'KB/s': 1024,
-  'MB/s': 1024 ** 2,
-  'GB/s': 1024 ** 3,
-  'TB/s': 1024 ** 4,
-  bps: 1 / 8,
-  Kbps: 1e3 / 8,
-  Mbps: 1e6 / 8,
-  Gbps: 1e9 / 8,
-  Tbps: 1e12 / 8
+  'KB/s': 1e3,
+  'MB/s': 1e6,
+  Mbps: 1e6 / 8
 }
 
 /** A speed axis for speeds up to `max`: 2 or 3 gridlines at round steps (1, 2, 2.5 or 5 × 10ⁿ) in
@@ -40,11 +33,18 @@ export function speedTicks(
   const size = SPEED_UNIT_BYTES[label]
   const third = max / size / 3
   const power = 10 ** Math.floor(Math.log10(third))
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => s >= third)!
+  // Labels keep two decimals: a step under a hundredth of the unit would label every line "0 KB/s".
+  const step = Math.max(
+    0.01,
+    [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => s >= third)!
+  )
   const count = Math.ceil(max / size / step)
   const ticks = Array.from({ length: count }, (_, i) => {
     const value = Number(((i + 1) * step).toFixed(2))
-    return { value: value * size, label: `${value} ${label}` }
+    return {
+      value: value * size,
+      label: `${value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${label}`
+    }
   })
   return { top: count * step * size, ticks }
 }
@@ -53,8 +53,10 @@ export function speedTicks(
  * reads as something measured; 59 Mbps as something chosen. */
 export function formatSpeedLimit(bytesPerSec: number, unit: SpeedUnit): string {
   const [value, label] = formatSpeed(bytesPerSec, unit).split(' ')
-  const number = Number(value)
-  return `${number >= 10 ? Math.round(number) : number} ${label}`
+  // KB/s sets thousands apart ("27,900"), and is whole already.
+  const number = Number(value.replace(/,/g, ''))
+  const round = number >= 10 ? Math.round(number) : number
+  return `${label === 'KB/s' ? round.toLocaleString('en-US') : round} ${label}`
 }
 
 /** "11.7 of 50 GB": data used against a data limit, the unit said once when both share it. The

@@ -149,6 +149,9 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const routing = sanitizeRouting(parsed.routing)
   if (routing) settings.routing = routing
   if (parsed.menuBarSpeed === false) settings.menuBarSpeed = false
+  if (parsed.menuBarSpeedText === 'on' || parsed.menuBarSpeedText === 'off') {
+    settings.menuBarSpeedText = parsed.menuBarSpeedText
+  }
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.offerCopiedLinks === true) settings.offerCopiedLinks = true
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
@@ -182,7 +185,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
     settings.glassLook = parsed.glassLook
   }
   if (parsed.solidGlass === true) settings.solidGlass = true
-  if (parsed.speedUnit === 'bytes' || parsed.speedUnit === 'bits') {
+  if (parsed.speedUnit === 'kb' || parsed.speedUnit === 'bytes' || parsed.speedUnit === 'bits') {
     settings.speedUnit = parsed.speedUnit
   }
   if (parsed.browserExtensionUsed === true) settings.browserExtensionUsed = true

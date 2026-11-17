@@ -22,6 +22,7 @@ import {
   mergeIsOn,
   readSnapshot,
   readSpeedTestState,
+  readSystemTraffic,
   readTraffic,
   switchAutoResume,
   switchStickySites,
@@ -101,7 +102,6 @@ export function systemMergeSnapshot(error?: string): Promise<SystemMergeSnapshot
   return readSnapshot(context(), error)
 }
 
-/** Turns system-wide merging on or off. */
 /** Whether the speed test can go through system merge, and how (ADR-0064). */
 export function systemMergeForSpeedTest(): ReturnType<typeof readSpeedTestState> {
   return readSpeedTestState(context())
@@ -112,6 +112,15 @@ export function systemMergeTraffic(): ReturnType<typeof readTraffic> {
   return readTraffic(context())
 }
 
+/** Each network's whole traffic while System merge is on, for the menu bar and its menu (ADR-0066,
+ * ADR-0067); null otherwise. A test run asks only a fake helper (MERGELANE_E2E_DAEMON_SOCKET), never the
+ * Mac's real one. */
+export function systemMergeLinkTraffic(): ReturnType<typeof readSystemTraffic> {
+  if (testKnobs.userDataDir && !testKnobs.daemonSocket) return Promise.resolve(null)
+  return readSystemTraffic(context())
+}
+
+/** Turns system-wide merging on or off. */
 export function setSystemMerge(on: boolean): Promise<SystemMergeSnapshot> {
   return switchMerge(context(), on)
 }

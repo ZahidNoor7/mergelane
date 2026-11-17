@@ -19,7 +19,8 @@ vi.mock('../components/UsenetServerDialog', () => ({
     open ? <div role="dialog">Usenet</div> : null
 }))
 
-const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const initial = useAppStore.getState()
 let dark = false
 let observed: Array<(entries: Array<{ contentRect: { width: number } }>) => void> = []
@@ -96,7 +97,7 @@ afterEach(() => {
 
 describe('Settings, General', () => {
   it('shows speeds in the units chosen, with slow mode and the total speed', async () => {
-    useAppStore.setState({ speedLimit: 5 * MB, slowModeSpeed: 2 * MB })
+    useAppStore.setState({ speedLimit: 5 * MBPS, slowModeSpeed: 2 * MBPS })
     show()
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy()
     expect(screen.getByText(/Megabytes per second/)).toBeTruthy()
@@ -108,6 +109,10 @@ describe('Settings, General', () => {
     await user.click(screen.getByRole('button', { name: 'Mbps' }))
     expect(useAppStore.getState().speedUnit).toBe('bits')
     expect(screen.getByText(/Megabits per second/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'KB/s' }))
+    expect(useAppStore.getState().speedUnit).toBe('kb')
+    expect(screen.getByText('Kilobytes per second, always. 1,000 KB/s is 1 MB/s.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Mbps' }))
     expect(screen.getByText(/All downloads together are limited to/)).toBeTruthy()
     await user.click(screen.getByRole('switch', { name: 'Slow mode' }))
     expect(useAppStore.getState().slowMode).toBe(true)
@@ -307,7 +312,10 @@ describe('Settings on Windows', () => {
     cleanup()
     useAppStore.setState({ settingsSection: 'general', speedUnit: 'bytes' })
     show()
-    expect(screen.getByText('Megabytes per second, dropping to KB/s below 1 MB/s.')).toBeTruthy()
+    expect(
+      screen.getByText('Megabytes per second, always. 1 MB/s is 1,000 KB/s, or 8 Mbps.')
+    ).toBeTruthy()
+    expect(screen.queryByText(/Finder/)).toBeNull()
     cleanup()
     useAppStore.setState({ settingsSection: 'downloads' })
     show()

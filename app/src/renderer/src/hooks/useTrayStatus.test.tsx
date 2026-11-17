@@ -1,4 +1,4 @@
-import type { TrayStatus } from '@shared/trayFlyout'
+import type { ShowPlace, TrayStatus } from '@shared/trayFlyout'
 import type { DownloadState, NetworkInterfaceInfo } from '@shared/types'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,12 +34,18 @@ function download(
   } as unknown as DownloadState
 }
 
-let showPlace: ((place: 'settings' | 'networks') => void) | null
+let showPlace: ((place: ShowPlace) => void) | null
 const stopShowPlace = vi.fn()
 const publishTrayStatus = vi.fn<(status: TrayStatus) => Promise<void>>(() => Promise.resolve())
-const onShowPlace = vi.fn((callback: (place: 'settings' | 'networks') => void) => {
+const onShowPlace = vi.fn((callback: (place: ShowPlace) => void) => {
   showPlace = callback
   return stopShowPlace
+})
+
+let speedTextChanged: ((mode: 'auto' | 'on' | 'off') => void) | null = null
+const onMenuBarSpeedTextChanged = vi.fn((callback: (mode: 'auto' | 'on' | 'off') => void) => {
+  speedTextChanged = callback
+  return vi.fn()
 })
 
 function Probe(): null {
@@ -58,7 +64,8 @@ beforeEach(() => {
     ...window.mergelane,
     platform: 'win32',
     publishTrayStatus,
-    onShowPlace
+    onShowPlace,
+    onMenuBarSpeedTextChanged
   } as unknown as typeof window.mergelane
   useAppStore.setState({
     interfaces: [iface('en0', 'Wi-Fi', 'wifi'), iface('en7', 'iPhone USB', 'usb')],
@@ -123,14 +130,23 @@ describe('useTrayStatus', () => {
     expect(useAppStore.getState().screen).toBe('settings')
     act(() => showPlace!('networks'))
     expect(useAppStore.getState().screen).toBe('networks')
+    act(() => showPlace!('newDownload'))
+    expect(useAppStore.getState().newDownloadOpen).toBe(true)
     unmount()
     expect(stopShowPlace).toHaveBeenCalled()
   })
 
-  it('does nothing on the Mac, which has no flyout', () => {
+  it('publishes nothing on the Mac, which has no flyout, but opens what the menu bar’s menu asks for', () => {
     window.mergelane.platform = 'darwin'
     render(<Probe />)
     expect(publishTrayStatus).not.toHaveBeenCalled()
-    expect(onShowPlace).not.toHaveBeenCalled()
+    // The menu bar's Settings… and New download… (ADR-0067).
+    act(() => showPlace!('settings'))
+    expect(useAppStore.getState().screen).toBe('settings')
+    act(() => showPlace!('newDownload'))
+    expect(useAppStore.getState().newDownloadOpen).toBe(true)
+    // The menu's switch for the speed beside the icon: Settings shows the new choice.
+    act(() => speedTextChanged!('off'))
+    expect(useAppStore.getState().menuBarSpeedText).toBe('off')
   })
 })

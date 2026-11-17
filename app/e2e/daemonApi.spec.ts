@@ -26,6 +26,7 @@ import {
   outagesFrom,
   readSnapshot,
   readSpeedTestState,
+  readSystemTraffic,
   readTraffic,
   switchAutoResume,
   switchMerge,
@@ -34,7 +35,7 @@ import {
   type SnapshotContext
 } from '../src/main/daemon/snapshot'
 import type { SystemMergeLinkEvent } from '../src/shared/types'
-import { startFakeDaemon, type FakeDaemon } from './fakeDaemon'
+import { startFakeDaemon, type FakeDaemon, type FakeLinkStats } from './fakeDaemon'
 
 // The app's side of the daemon contract (CLAUDE.md: shared/daemon-api.ts, tested from both
 // sides). The Go side round-trips the same fixtures in daemon/internal/api.
@@ -719,5 +720,77 @@ test.describe('what the speed test reads from the helper @smoke', () => {
     }
     expect(await readSpeedTestState(gone)).toBeNull()
     expect(await readTraffic(gone)).toBeNull()
+  })
+})
+
+test.describe('what the menu bar reads from the helper @smoke', () => {
+  const link = (name: string, linkRxBps: number, rxBps: number, linkTxBps = 0): FakeLinkStats => ({
+    name,
+    rxBps,
+    txBps: 0,
+    linkRxBps,
+    linkTxBps,
+    activeFlows: 0,
+    totalFlows: 0,
+    weight: 1,
+    failed: 0
+  })
+
+  test('while merging is on: each network’s own counters', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      // Each network's whole counter, not only what system merge carried on it (rxBps): Mergelane's own
+      // downloads leave on their network directly, and are in its counter once.
+      fake.traffic = [link('en0', 3_000_000, 1_000_000, 200_000), link('en7', 1_500_000, 500_000)]
+      expect(await readSystemTraffic(context)).toEqual({
+        links: [
+          { name: 'en0', down: 3_000_000, up: 200_000 },
+          { name: 'en7', down: 1_500_000, up: 0 }
+        ]
+      })
+      fake.traffic = []
+      expect(await readSystemTraffic(context)).toEqual({ links: [] })
+    })
+  })
+
+  test('nothing while merging is off, and stats aren’t asked for', async () => {
+    await withFake(async (fake, context) => {
+      expect(await readSystemTraffic(context)).toBeNull()
+      expect(fake.requests.map((request) => request.method)).toEqual(['status'])
+    })
+  })
+
+  test('nothing when the helper can’t say', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      fake.refuse = { stats: { code: 'INTERNAL', message: 'no counters' } }
+      expect(await readSystemTraffic(context)).toBeNull()
+      // An answer that isn't stats at all.
+      fake.refuse = undefined
+      fake.traffic = [{ name: 'en0' } as FakeLinkStats]
+      expect(await readSystemTraffic(context)).toBeNull()
+      // One that doesn't answer in time: the menu bar asks again a second later.
+      fake.traffic = undefined
+      fake.silent = true
+      const started = Date.now()
+      expect(await readSystemTraffic(context)).toBeNull()
+      expect(Date.now() - started).toBeLessThan(5_000)
+    })
+  })
+
+  test('nothing without a helper, which isn’t asked', async () => {
+    await withFake(async (fake, context) => {
+      fake.state = 'on'
+      expect(await readSystemTraffic({ ...context, installed: false })).toBeNull()
+      expect(fake.requests).toEqual([])
+    })
+    expect(
+      await readSystemTraffic({
+        socketPath: '/tmp/mlfd-none',
+        installed: true,
+        appVersion: 'fake',
+        compareVersions: true
+      })
+    ).toBeNull()
   })
 })

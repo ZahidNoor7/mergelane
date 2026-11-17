@@ -138,10 +138,11 @@ export function RoutingPanel({ networks }: { networks: NetworkSummary[] }): Reac
       <div className="flex items-start justify-between gap-4 py-3">
         <div className="flex flex-col gap-0.5">
           <label htmlFor={fallbackId} className="text-[13.5px] font-[600]">
-            Use the other networks if the chosen one drops
+            If the chosen network disconnects, use the others
           </label>
-          <p className="text-[12.5px] leading-[1.5] text-ink-2">
-            Off: transfers wait for the chosen network to come back.
+          <p className="max-w-[60ch] text-[12.5px] leading-[1.5] text-ink-2">
+            Only matters when downloads or uploads are set to one network. On: they carry on over
+            your other networks until it’s back. Off: they pause until it’s back.
           </p>
         </div>
         <Switch

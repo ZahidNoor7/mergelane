@@ -38,6 +38,79 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### The menu bar: the whole Mac's speeds, download and upload, and a menu (2026-11-17, branch `menu-bar-system-speed`)
+
+- **Done (ADR-0066):** the owner asked why the menu bar showed no speed: it only showed Mergelane's own downloads.
+  While System merge is on, the menu bar now shows the whole Mac's traffic: each network's own counters
+  (`linkRxBps`, `linkTxBps` from the helper's existing `stats`), added up. When merging is off, there is no helper,
+  or the helper can't answer within 0.9 s, it shows Mergelane's downloads and torrent uploads. A test run asks only a
+  fake helper. No helper (Go) change and no protocol change.
+- **Done (ADR-0067), after the design's "The menu bar menu"** (the owner's published prototype):
+  - the title shows "↓27.9 ↑2.8 MB/s", download and upload in one unit;
+  - a click on the icon opens a 360px menu: "Merged across X of Y networks", the merged download and upload, a bar of
+    each network's share, every network with its speeds, its share and what it brought in today ("Off" or "Out" and
+    "Not connected" instead), "… downloaded today", then Open Mergelane ⌘O, Pause all downloads, New download… ⌘N,
+    Settings… ⌘, and Quit Mergelane ⌘Q;
+  - the commands are a real menu (pointer or arrow keys, Return or Space, ⌘ keys, Esc);
+  - it is its own window (`main/menuBarPanel.ts`, page `#menubar`). Download, history and network updates now go to
+    it as well as to the window (`main/otherPages.ts`), so it works with the window closed;
+  - the Settings hint says which numbers the menu bar shows. Windows is unchanged.
+- **Tests:**
+  - Vitest: all 61 files, 595 passed, and the per-file 90% gate passed. New or changed: `menuBarPanel.test.ts` (13),
+    `speedText.test.ts` (`formatSpeedPair`), `MenuBarPanel.test.tsx` (11), `useTrayStatus.test.tsx`,
+    `OnThisMacSettings.test.tsx`. `menuBarPanel.ts`, `MenuBarPanel.tsx`, `useMenuBarData.ts`, `useTrayStatus.ts`
+    and `OnThisMacSettings.tsx`: 100% lines.
+  - Playwright: `onThisMac.spec.ts` (the title; the menu against the real window and page: its numbers, the fake
+    helper on, Pause all, ⌘N, the arrow keys and Return to Settings, opening and closing), `daemonApi.spec.ts`
+    (`readSystemTraffic`: on, off, refusals, unreadable or silent helper, no helper), `systemMerge.spec.ts` (one
+    wait now waits for `events`, since the menu bar asks for `status` every second), `notificationArea.spec.ts`:
+    65 passed.
+  - The main-process files are covered by those Playwright tests. Vitest's coverage doesn't include them.
+  - Full smoke suite (`--grep @smoke`, 3 workers): 775 passed, 1 skipped, none failed.
+  - Typecheck, ESLint and Prettier clean on the changed files.
+  - Screenshots of the menu in light and dark mode, with three networks shaped like the design's, match it.
+- **Fixed (ADR-0068): the menu over full-screen apps.** The owner found no menu over VS Code or Chrome in full
+  screen (on 0.5.1's native menu). The new menu is now a `panel` window on every Space, the full-screen ones
+  included, at the pop-up menu level, shown without activating Mergelane, and placed under the icon. Tests:
+  `menuBarPanel.test.ts` 14 passed (100% lines and branches), `onThisMac.spec.ts` and `notificationArea.spec.ts`
+  12 passed.
+- **Checked by hand (owner):** the menu opens over VS Code in full screen.
+- **Done (ADR-0069): the speed beside the icon, and plainer wording.** Automatic by default (shows only while 2 or
+  more networks are connected, Don't use left out), Always or Never in Settings › General ("Show Mergelane in the
+  menu bar", then "Speed beside the icon"), and a switch row in the menu. Fixed on the way: a title that became
+  empty after a settings change wasn't cleared. Networks' System merge and routing options reworded; networks named
+  as in the window; "65 connections" instead of "· 65". Tests: Vitest all passing (see below); Playwright
+  `onThisMac.spec.ts` 7 passed, `systemMerge.spec.ts`, `dashboard.spec.ts`, `notificationArea.spec.ts`,
+  `routing.spec.ts`, `speedTestUi.spec.ts` passed.
+- **Done (ADR-0070), after the owner's updated design:** the Dashboard shows "Total speed, all apps", every byte on
+  each network from every app, read from macOS's own adapter counters (sysctl NET_RT_IFLIST2 through koffi, as the
+  helper reads them; no helper needed), even with no downloads ("Includes X of downloads" / "No downloads running.
+  This is other apps."). The Downloads view says "Download speed". The Confluence has the design's glass lens,
+  "N× your fastest network", a swatch and share per network, and picks a lane out when pointed at. Windows keeps
+  the merged download speed on the Dashboard for now.
+- **Done (ADR-0071):**
+  - three speed units, KB/s, MB/s and Mbps, all counting in 1,000s, used everywhere;
+  - the Dashboard's card frosted instead of refracting: no flicker, readable on Liquid Glass, and the markings stop
+    at its edge;
+  - "Last minute, all apps" charts the same total as the card.
+
+  Measured with `top`: the Dashboard takes about 2% of one core, with or without a download.
+- **Done (ADR-0072):** the chosen unit is the only one shown (MB/s no longer drops to KB/s). A new end-to-end test
+  reads every place in each unit, and fails when the old rule is put back.
+- **Re-verified, 2026-11-17:**
+  - all 73 IPC channels have a handler, a preload method and a channel name;
+  - typecheck, ESLint and Prettier (whole app) clean;
+  - Vitest 620 passed, with the coverage gate;
+  - `npm run build` passed;
+  - Playwright smoke 781 passed, 1 skipped;
+  - no helper (Go) change.
+
+  Packaging (DMG) was not run again.
+- **Not yet checked by hand:** the menu on the second display, with the real helper merging, and the Dashboard's total
+  on the owner's own networks. The owner's merging was off: the Mac restarted at 18:32, and
+  auto-resume found no network with internet yet, so it stayed off.
+- **Next:** the owner reviews; commit and pull request when they say so.
+
 ### macOS 13 Ventura as the minimum (2026-11-17, branch `macos-13-minimum`)
 
 - **Done (ADR-0065):** the owner asked for macOS 11 Big Sur. The audit found that macOS 11 needs Electron 37 and

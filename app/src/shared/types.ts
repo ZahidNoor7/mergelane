@@ -1,6 +1,7 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
 import type { BrowserContact, BrowserId, ExtensionKind } from './browsers'
 import type { CaptureRules } from './captureRules'
+import type { MenuBarSpeedText } from './menuBarPanel'
 import type { Release, UpdateChannel } from './releases'
 import type { ThemeId } from './themes'
 
@@ -677,8 +678,11 @@ export interface AppSettings {
   extensionCopies?: Array<{ kind: ExtensionKind; path: string }>
   /** Networks › Which network carries what. Missing: every network, with fallback. */
   routing?: DownloadRouting
-  /** Only ever saved as false: the menu bar shows the merged speed unless turned off (ADR-0037). */
+  /** Only ever saved as false: Mergelane is in the menu bar, with its menu, unless turned off (ADR-0037).
+   * The name is older than the menu (ADR-0067). */
   menuBarSpeed?: boolean
+  /** The speed beside the menu bar icon: 'on' or 'off' when chosen; missing, automatic (ADR-0069). */
+  menuBarSpeedText?: 'on' | 'off'
   /** Only ever saved as false: a finished download posts a notification unless turned off. */
   notifyWhenDone?: boolean
   /** Only ever saved as true: a link copied elsewhere is offered when the user switches to
@@ -723,14 +727,17 @@ export interface AppSettings {
 
 export type GlassLook = 'clear' | 'tinted'
 
-/** bytes: MB/s. bits: Mbps, as internet plans and speed tests count them. */
-export type SpeedUnit = 'bytes' | 'bits'
+/** The unit every speed is shown in (the design's three, ADR-0071), counted in 1,000s as macOS counts:
+ * kb: always KB/s. bytes: MB/s, dropping to KB/s below 1 MB/s. bits: always Mbps, as internet plans and speed
+ * tests quote speeds. 8 Mbps is 1 MB/s is 1,000 KB/s. */
+export type SpeedUnit = 'kb' | 'bytes' | 'bits'
 
 export const DOWNLOADS_AT_ONCE = { default: 2, min: 1, max: 4 }
 /** Seconds of speed history a download keeps (a sample a second), and so the span the throughput
  * chart always shows. */
 export const SPEED_HISTORY_SECONDS = 60
-export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
+/** 2 MB/s, counted as speeds are (ADR-0071). */
+export const DEFAULT_SLOW_MODE_SPEED = 2_000_000
 
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
@@ -755,6 +762,7 @@ export interface InitialState {
   glassLook: GlassLook
   solidGlass: boolean
   menuBarSpeed: boolean
+  menuBarSpeedText: MenuBarSpeedText
   notifyWhenDone: boolean
   offerCopiedLinks: boolean
   captureRules: CaptureRules

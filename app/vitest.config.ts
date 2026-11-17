@@ -140,7 +140,15 @@ export const COVERED = [
   'src/renderer/src/hooks/useSpeedTest.ts',
   ...['SpeedGauge', 'SpeedTestView', 'SpeedTestResults', 'SpeedTestHistory'].map(
     (name) => `src/renderer/src/components/speedTest/${name}.tsx`
-  )
+  ),
+  // ADR-0067: the menu under the macOS menu bar icon.
+  'src/shared/menuBarPanel.ts',
+  'src/renderer/src/components/MenuBarPanel.tsx',
+  'src/renderer/src/hooks/useMenuBarData.ts',
+  // ADR-0070: the Dashboard's total speed, all apps, and the glass lens.
+  'src/shared/interfaceCounters.ts',
+  'src/renderer/src/components/GlassLens.tsx',
+  'src/renderer/src/hooks/useNetworkTraffic.ts'
 ]
 
 export default defineConfig({

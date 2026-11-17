@@ -6,6 +6,8 @@ import { todayTotals } from '../utils/dashboard'
 import { DashboardToday } from './DashboardToday'
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const at = (day: number, hour: number): number => new Date(2026, 10, day, hour).getTime()
 const NOW = at(11, 15)
 
@@ -44,7 +46,7 @@ describe('todayTotals', () => {
   it('adds up today’s downloads by network, biggest first, with the fastest', () => {
     const today = todayTotals(
       [
-        item({ networks: [net('en0', 3 * MB), net('en7', MB)], peakSpeedBytesPerSec: 2 * MB }),
+        item({ networks: [net('en0', 3 * MB), net('en7', MB)], peakSpeedBytesPerSec: 2 * MBPS }),
         // Started yesterday, still going: not today's.
         item({ startedAt: at(10, 9), networks: [net('en0', 50 * MB)] }),
         // Cancelled: nothing it brought counts.
@@ -62,7 +64,7 @@ describe('todayTotals', () => {
           startedAt: at(11, 10),
           completedAt: at(11, 11),
           networks: [net('en5', 2 * MB)],
-          peakSpeedBytesPerSec: 5 * MB
+          peakSpeedBytesPerSec: 5 * MBPS
         } as unknown as FinishedDownload,
         {
           startedAt: at(9, 10),
@@ -78,7 +80,7 @@ describe('todayTotals', () => {
       ['en5', 2]
     ])
     expect(today.total).toBe(10 * MB)
-    expect(today.fastest).toBe(5 * MB)
+    expect(today.fastest).toBe(5 * MBPS)
   })
 
   it('is nothing on a day with no downloads', () => {
@@ -90,7 +92,7 @@ describe('DashboardToday', () => {
   it('shows today’s total, each network’s share, the fastest and the dropouts', () => {
     useAppStore.setState({
       downloads: {
-        a: item({ networks: [net('en0', 3 * MB), net('en7', MB)], peakSpeedBytesPerSec: 2 * MB })
+        a: item({ networks: [net('en0', 3 * MB), net('en7', MB)], peakSpeedBytesPerSec: 2 * MBPS })
       },
       history: [],
       networkEvents: [
@@ -138,10 +140,10 @@ describe('DashboardToday', () => {
 
   it('the fastest merged speed of today, kept across restarts, beats one download’s own', () => {
     useAppStore.setState({
-      downloads: { a: item({ networks: [net('en0', MB)], peakSpeedBytesPerSec: 2 * MB }) },
+      downloads: { a: item({ networks: [net('en0', MB)], peakSpeedBytesPerSec: 2 * MBPS }) },
       history: [],
       networkEvents: [],
-      fastestMerged: { day: '2026-11-11', bytesPerSec: 7 * MB }
+      fastestMerged: { day: '2026-11-11', bytesPerSec: 7 * MBPS }
     })
     render(<DashboardToday />)
     expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe(
@@ -151,7 +153,7 @@ describe('DashboardToday', () => {
     // Yesterday's fastest doesn't count today; with no download today there's none at all.
     useAppStore.setState({
       downloads: {},
-      fastestMerged: { day: '2026-11-10', bytesPerSec: 9 * MB }
+      fastestMerged: { day: '2026-11-10', bytesPerSec: 9 * MBPS }
     })
     render(<DashboardToday />)
     expect(screen.getByText('Fastest merged speed').nextElementSibling!.textContent).toBe('—')

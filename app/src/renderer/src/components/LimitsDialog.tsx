@@ -59,13 +59,16 @@ const GENERAL_DEFAULTS = {
   downloadsAtOnce: DOWNLOADS_AT_ONCE.default
 } satisfies Partial<Draft>
 
-const MB = 1024 ** 2
 const GB = 1024 ** 3
+/** A megabyte a second, as speeds count it (ADR-0071); sizes keep counting in 1024s. */
+const SPEED_MB = 1e6
 
-/** A speed is typed in the unit picked in the footer; anything under one is a decimal. */
+/** A speed is typed in the unit picked in Settings, counted in 1,000s as speeds are everywhere (ADR-0071);
+ * anything under one is a decimal. */
 const SPEED_UNITS = {
-  bytes: { label: 'MB/s', bytes: MB },
-  bits: { label: 'Mbps', bytes: 1000 ** 2 / 8 }
+  kb: { label: 'KB/s', bytes: 1e3 },
+  bytes: { label: 'MB/s', bytes: 1e6 },
+  bits: { label: 'Mbps', bytes: 1e6 / 8 }
 }
 
 const sectionClass = 'flex flex-col gap-2.5 border-t-[0.5px] border-border py-3'
@@ -91,9 +94,9 @@ function NumberInput({
   onChange: (bytes: number) => void
 }): React.JSX.Element {
   // Keep the draft as typed; changing units remounts it using the same byte value. Rounded, as
-  // bytes saved in one unit rarely come out whole in another (20 MB/s is 167.77216 Mbps) — but
-  // under one by significant digits, not decimals: 1 KB/s is 0.000977 MB/s, and two decimals read
-  // that as a 0 MB/s limit that still applies.
+  // bytes saved in one unit rarely come out whole in another (a limit saved before speeds counted in
+  // 1,000s: 20 MiB/s is 167.77216 Mbps) — but under one by significant digits, not decimals: 1 KB/s is
+  // 0.001 MB/s, and two decimals read that as a 0 MB/s limit that still applies.
   const [text, setText] = useState(() => {
     const value = bytes / unitBytes
     return String(Number(value >= 1 ? value.toFixed(2) : value.toPrecision(3)))
@@ -250,7 +253,7 @@ function GeneralPage({
         <LimitChoice
           label="Total speed"
           value={speedLimit}
-          fallback={20 * MB}
+          fallback={20 * SPEED_MB}
           onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
@@ -263,7 +266,7 @@ function GeneralPage({
         <LimitChoice
           label="Total upload speed"
           value={uploadLimit}
-          fallback={2 * MB}
+          fallback={2 * SPEED_MB}
           onChange={(uploadLimit) => change({ uploadLimit })}
         />
       </section>
@@ -413,7 +416,7 @@ function NetworkPage({
         <LimitChoice
           label={`${name} speed`}
           value={preference?.speedLimit}
-          fallback={10 * MB}
+          fallback={10 * SPEED_MB}
           onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
@@ -424,7 +427,7 @@ function NetworkPage({
         <LimitChoice
           label={`${name} upload speed`}
           value={preference?.uploadLimit}
-          fallback={1 * MB}
+          fallback={SPEED_MB}
           onChange={(uploadLimit) => change({ uploadLimit })}
         />
       </section>

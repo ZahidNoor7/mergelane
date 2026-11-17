@@ -38,7 +38,8 @@ vi.mock('./UsenetServerDialog', () => ({
   UsenetServerDialog: ({ open }: { open: boolean }) => (open ? <p>News server window</p> : null)
 }))
 
-const MB = 1024 * 1024
+/** A megabyte a second, as speed limits count it (1,000s; ADR-0071). */
+const MB = 1_000_000
 const GB = 1024 ** 3
 
 const iface = (

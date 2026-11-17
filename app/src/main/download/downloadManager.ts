@@ -54,6 +54,7 @@ import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
 import { addToHistory, findInHistory, removeFromHistory } from './history'
 import { testKnobs, testRecord, testStreamsPerNetwork } from '../testKnobs'
+import { otherPagesListening, sendToOtherPages } from '../otherPages'
 import { DownloadFile } from './downloadFile'
 import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
 import { normalizeEtag } from './fileVersion'
@@ -511,6 +512,22 @@ export class DownloadManager {
       if (runtime.state.status === 'downloading') total += runtime.state.speedBytesPerSec || 0
     }
     return total
+  }
+
+  /** Bytes a second every torrent is sending right now, together: the upload the menu bar shows
+   * (main/menuBar.ts, ADR-0067). */
+  totalUploadSpeed(): number {
+    let total = 0
+    for (const runtime of this.runtimes.values()) {
+      const state = runtime.state
+      if (state.kind === 'torrent') total += state.uploadSpeedBytesPerSec || 0
+    }
+    return total
+  }
+
+  /** The computer's networks as last seen (NetworkMonitor); none until the first look. */
+  currentNetworks(): NetworkInterfaceInfo[] {
+    return this.networks.current ?? []
   }
 
   /** How many downloads are currently downloading or queued. */
@@ -1098,6 +1115,7 @@ export class DownloadManager {
   private historyChanged(): void {
     const window = this.getWindow()
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.historyChanged)
+    sendToOtherPages(IpcChannels.historyChanged)
   }
 
   /** Forgets every finished download. Their files are the user's: they stay. */
@@ -2702,12 +2720,18 @@ export class DownloadManager {
     if (this.runtimes.get(runtime.state.id) !== runtime) return
     if (persist) this.schedulePersistence(runtime)
     const window = this.getWindow()
-    if (!window || window.isDestroyed()) return
+    const shown = window !== null && !window.isDestroyed()
+    // The menu bar's menu keeps its own list, while the window is closed too (otherPages.ts).
+    if (!shown && !otherPagesListening()) return
     if (runtime.state.status === 'paused' || runtime.state.status === 'cancelled') {
       clearSpeeds(runtime.state)
     }
-    this.updateTaskbarProgress()
-    window.webContents.send(IpcChannels.downloadUpdated, this.takeUpdate(runtime))
+    const update = this.takeUpdate(runtime)
+    if (shown) {
+      this.updateTaskbarProgress()
+      window.webContents.send(IpcChannels.downloadUpdated, update)
+    }
+    sendToOtherPages(IpcChannels.downloadUpdated, update)
   }
 
   /** What the window hasn't been sent yet: the download's state, and the work units that moved. */

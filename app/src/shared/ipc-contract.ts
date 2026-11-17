@@ -1,5 +1,7 @@
 import type { AppUsage } from './appUsage'
 import type { BrowserId, BrowsersReport, ExtensionSaved } from './browsers'
+import type { TrafficRate } from './interfaceCounters'
+import type { MenuBarCommand, MenuBarPanelData } from './menuBarPanel'
 import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
@@ -149,6 +151,17 @@ export interface IpcContract {
   resizeTrayFlyout: { args: [height: number]; result: void }
   /** Hides the flyout (Esc, or after one of its buttons). */
   closeTrayFlyout: { args: []; result: void }
+  /** Each network's speed from every app, by its id, for the Dashboard's total (ADR-0070); null where the
+   * counters can't be read (Windows, for now). */
+  networkTraffic: { args: []; result: Record<string, TrafficRate> | null }
+  /** What the macOS menu bar's menu shows besides its own data (shared/menuBarPanel.ts, ADR-0067). */
+  menuBarPanel: { args: []; result: MenuBarPanelData }
+  /** One of the menu bar menu's commands; the menu closes first. */
+  menuBarChoose: { args: [command: MenuBarCommand]; result: void }
+  /** The menu bar menu's content is this tall: main sizes and places its window to fit. */
+  resizeMenuBarPanel: { args: [height: number]; result: void }
+  /** Hides the menu bar menu (Esc). */
+  closeMenuBarPanel: { args: []; result: void }
   /** Starts a speed test and says its id (ADR-0064); throws while one is running. Its progress
    * comes as speedTestLiveChanged, and its end as speedTestFinished. */
   speedTestStart: { args: [request: SpeedTestRequest]; result: string }

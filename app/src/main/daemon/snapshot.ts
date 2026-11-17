@@ -1,3 +1,4 @@
+import type { SystemTraffic } from '../../shared/menuBarPanel'
 import type {
   SystemMergeLink,
   SystemMergeLinkEvent,
@@ -276,6 +277,33 @@ export async function readSpeedTestState(context: SnapshotContext): Promise<{
       ...(status.reason ? { reason: status.reason } : {}),
       ...(status.stickySites === undefined ? {} : { stickySites: status.stickySites }),
       limited: links.links.some((link) => (link.limitMbps ?? 0) > 0)
+    }
+  } catch {
+    return null
+  }
+}
+
+/** How long the menu bar waits for each answer: it asks once a second. */
+const MENU_BAR_TIMEOUT_MS = 900
+
+/** What the menu bar shows while System merge is on (ADR-0066, ADR-0067): each network's whole traffic, from
+ * the OS's own counters for its adapter (`linkRxBps`, `linkTxBps`), so every byte is counted once, on the
+ * network it came in or went out on, whichever app asked for it: system merge's traffic and Mergelane's own
+ * downloads alike. Null while merging is off or turning on, without a helper, and whenever the helper can't
+ * be asked; the menu bar then shows Mergelane's own downloads. */
+export async function readSystemTraffic(context: SnapshotContext): Promise<SystemTraffic | null> {
+  if (!context.installed) return null
+  const ask = { ...socket(context), timeoutMs: MENU_BAR_TIMEOUT_MS }
+  try {
+    const { state } = await callDaemon('status', undefined, ask)
+    if (state !== 'on') return null
+    const stats = await callDaemon('stats', undefined, ask)
+    return {
+      links: stats.links.map((link) => ({
+        name: link.name,
+        down: link.linkRxBps,
+        up: link.linkTxBps
+      }))
     }
   } catch {
     return null

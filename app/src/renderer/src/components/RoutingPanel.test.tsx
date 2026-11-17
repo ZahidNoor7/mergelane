@@ -70,7 +70,7 @@ describe('Which network carries what', () => {
       'Ethernet isn’t connected, so downloads use their other networks meanwhile.'
     )
     await user.click(
-      screen.getByRole('switch', { name: 'Use the other networks if the chosen one drops' })
+      screen.getByRole('switch', { name: 'If the chosen network disconnects, use the others' })
     )
     expect(updateSettings).toHaveBeenLastCalledWith({
       routing: { down: 'en5', up: 'all', fallback: false }
@@ -127,7 +127,7 @@ describe('Uploads use', () => {
       'Ethernet isn’t connected, so uploads go out over their downloads’ networks meanwhile.'
     )
     await user.click(
-      screen.getByRole('switch', { name: 'Use the other networks if the chosen one drops' })
+      screen.getByRole('switch', { name: 'If the chosen network disconnects, use the others' })
     )
     expect(updateSettings).toHaveBeenLastCalledWith({
       routing: { down: 'all', up: 'en5', fallback: false }
@@ -136,7 +136,9 @@ describe('Uploads use', () => {
       'Ethernet isn’t connected. Uploads wait until it’s back.'
     )
     expect(
-      screen.getByText('Off: transfers wait for the chosen network to come back.')
+      screen.getByText(
+        /^Only matters when downloads or uploads are set to one network\. On: they carry on/
+      )
     ).toBeTruthy()
   })
 

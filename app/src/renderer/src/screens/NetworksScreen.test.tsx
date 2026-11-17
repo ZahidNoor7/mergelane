@@ -21,6 +21,8 @@ vi.mock('../components/speedTest/SpeedTestView', () => ({
 }))
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const NOW = new Date(2026, 10, 11, 15).getTime()
 
 const iface = (
@@ -53,9 +55,13 @@ const running = {
   kind: 'torrent',
   streams: [],
   peers: [],
-  speedHistory: { en0: [MB, 2 * MB] },
+  speedHistory: { en0: [MBPS, 2 * MBPS] },
   networks: [
-    network('en0', { speedBytesPerSec: 2 * MB, transfer: 'torrent', uploadSpeedBytesPerSec: MB }),
+    network('en0', {
+      speedBytesPerSec: 2 * MBPS,
+      transfer: 'torrent',
+      uploadSpeedBytesPerSec: MBPS
+    }),
     // Gone from the Mac: it dropped.
     network('en9', { kind: 'ethernet', label: 'Dock' })
   ]
@@ -93,7 +99,7 @@ beforeEach(() => {
     ],
     downloads: { d: running },
     networkPreferences: {
-      en7: { dataLimit: 5 * MB, speedLimit: 2 * MB },
+      en7: { dataLimit: 5 * MB, speedLimit: 2 * MBPS },
       en5: { off: true }
     },
     networkEvents: []

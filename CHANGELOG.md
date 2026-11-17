@@ -5,6 +5,11 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
+Your Mac's total speed on the Dashboard, a menu under the menu bar icon, and speeds in the unit you choose,
+everywhere.
+
 ### Added
 
 - **A menu under the menu bar icon.** Click Mergelane's icon in the menu bar to see the merged download and upload,

@@ -60,7 +60,8 @@ Last updated: 2026-11-11
   its FFmpeg (27.0) and nothing else.
 - **Not yet tried on macOS 13 itself:** no Mac or VM with macOS 13 here, GitHub has no runner older than macOS 15,
   and CI is paused. ADR-0065 lists what to check there by hand.
-- **Next:** the owner tries the build on a Mac with macOS 13 (or 14) if one is at hand; a PR into `main`.
+- **Merged:** PR #92 into `main` (2026-11-17); released in 0.5.1.
+- **Next:** the owner tries 0.5.1 on a Mac with macOS 13 (or 14) if one is at hand.
 
 ### Connection speed test (2026-11-14, branch `speed-test`)
 

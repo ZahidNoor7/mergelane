@@ -5,6 +5,10 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-17
+
+Mergelane now runs on macOS 13 Ventura and later, not only macOS 27.
+
 ### Changed
 
 - **Mergelane now runs on macOS 13 Ventura and later**, not only macOS 27, still on Apple silicon (M1 or later). macOS

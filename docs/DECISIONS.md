@@ -1977,3 +1977,388 @@ macOS 13 Ventura ("go with macOS 13").
   - Open Anyway's place in System Settings;
   - the clipboard reading (ADR-0043);
   - the Liquid Glass theme, whose under-window material looks different before macOS 26.
+
+## ADR-0066: While System merge is on, the menu bar shows the whole Mac's download speed (amends ADR-0037)
+
+**Status:** Owner, 2026-11-17. The owner asked why the menu bar showed no speed. The speed only appeared while
+Mergelane's own downloads ran, so on a Mac using System merge for everything else it stayed empty. Offered the
+change, the owner said "yes, show system-wide speed when merge is on".
+
+### Context
+
+- ADR-0037: while bytes move, the menu bar item's title is the merged speed, which was
+  `DownloadManager.totalSpeed()`: Mergelane's own downloads only.
+- The helper's `stats` already reports, for each network it knows, two receive rates (`shared/daemon-api.ts`
+  `LinkStats`):
+  - `rxBps`: what system merge carried on that network;
+  - `linkRxBps`: everything on the network adapter, from the OS's own counters (`daemon/internal/nics`, on macOS and
+    on Windows).
+- Mergelane's own downloads pin their sockets to a network (`IP_BOUND_IF`, CLAUDE.md), so they don't pass through
+  system merge and are not in `rxBps`. Adding `rxBps` to the downloads' speed would still count twice anything of
+  Mergelane's that does go through system merge, such as yt-dlp or a torrent that isn't pinned.
+
+### Decision
+
+- While System merge is **on** (status `on`, not `starting`), the macOS menu bar shows the sum of `linkRxBps` over
+  the helper's networks. Each byte is counted once, on the network adapter it came in on, whichever app asked for it.
+  That includes Mergelane's own downloads, and also traffic inside the home network on those adapters, such as
+  copying files from another computer over Wi-Fi.
+- Otherwise it shows Mergelane's own downloads, as before. That covers: merging off or starting, no helper installed,
+  and a helper that refuses, gives an answer the app can't read, or doesn't answer within 0.9 s.
+- It shows receive (download) speed only, like before. Upload speed is not shown. (Amended by ADR-0067: the title
+  now shows download and upload, and a click opens a menu.)
+- Read once a second, the same rate as before: `status`, then `stats` only while merging is on. Without a helper
+  nothing is asked. A tick still waiting for the helper makes the next one skip rather than queue
+  (`main/menuBar.ts`). Code: `readSystemSpeed` in `main/daemon/snapshot.ts`, `systemMergeSpeed` in
+  `main/daemon/daemon.ts`.
+- A test run asks only a fake helper (`MERGELANE_E2E_DAEMON_SOCKET`), never the Mac's real one, so a developer's own
+  System merge can't change a test's result.
+- Settings › General › "Show the merged speed in the menu bar" gets a hint: "Mergelane’s download and upload speed.
+  While System merge is on, this Mac’s, in every app." (as amended by ADR-0067)
+- **Windows is unchanged.** Its notification-area tooltip and its flyout both show the window's merged speed
+  (Mergelane's downloads). Changing only the tooltip would make the two disagree. Doing it on Windows too is a later
+  choice, once the Windows helper has been tested on the laptop.
+
+### Consequences
+
+- With System merge on, the menu bar now nearly always shows a number, because a Mac rarely receives nothing at all.
+  It goes blank only when nothing is received in a whole second.
+- The menu bar's number and the window's "Merged" can differ while System merge is on: the window still shows
+  Mergelane's downloads only.
+- While the menu bar item is shown and a helper is installed, the helper gets one small request a second over its
+  local socket, or two while merging is on. They are the same requests the Networks screen already makes.
+- Tests: `e2e/daemonApi.spec.ts` ("what the menu bar reads from the helper": on, off, refusals, an unreadable or silent
+  helper, no helper) and `e2e/onThisMac.spec.ts` (the app's menu bar title against the fake helper, switching on and
+  off, in bytes and bits, and the fall-back to Mergelane's downloads). The real menu bar with a real helper on real
+  networks is a check by hand.
+
+## ADR-0067: The menu bar shows download and upload, and a click opens Mergelane's menu (amends ADR-0037 and ADR-0066)
+
+**Status:** Owner, 2026-11-17. The owner asked to match the design's "In the menu bar" and "The menu bar menu" (the
+redesign prototype, published as a claude.ai artifact, `MenuBarMock` and `MenuBarMenu`).
+
+### Context
+
+- ADR-0037 gave the menu bar item a title (the merged download speed) and a two-item context menu: Open Mergelane,
+  Quit Mergelane. ADR-0066 made the title the whole Mac's download speed while System merge is on.
+- The design shows "↓27.9 ↑2.8 MB/s": download and upload in one unit. A click opens a 360px menu:
+  - "Merged across 3 of 3 networks", the merged download and upload, and a bar of each network's share;
+  - every network with its download and upload speed, its share, and what it brought in today, or "Out" with
+    "Not connected", or "Off";
+  - "28 GB downloaded today";
+  - the commands: Open Mergelane ⌘O, Pause all downloads, New download… ⌘N, then Settings… ⌘, and Quit
+    Mergelane ⌘Q. The design says it is a real menu that works with the arrow keys and Return.
+- On the Mac the main window can be closed while Mergelane runs in the menu bar, and closing it ends its page. So
+  the menu can't take its numbers from the window, as Windows' flyout does (ADR-0061).
+- Electron 44.4.4 (its `electron.d.ts`): the Tray's `click` event gives the icon's bounds; `setTitle` takes
+  `fontType: 'monospacedDigit'`; frameless windows have rounded corners by default (`roundedCorners`).
+  `setVisibleOnAllWorkspaces` briefly hides the window and the Dock on every call for an app with a Dock icon, so
+  it is not used.
+
+### Decision
+
+- **Title:** `formatSpeedPair` (`shared/speedText.ts`): "↓27.9 ↑2.8 MB/s", both in the unit the faster one needs,
+  in the window's units (bytes or bits). It is empty when nothing moves either way. The source follows ADR-0066:
+  - System merge on: the sum of each network's `linkRxBps` and `linkTxBps`;
+  - otherwise: Mergelane's downloads (`DownloadManager.totalSpeed`) and its torrents' uploads
+    (`totalUploadSpeed`).
+- **The menu** is a frameless, always-on-top window without a taskbar or Mission Control entry
+  (`main/menuBarPanel.ts`). It draws the app's page at `#menubar` (`renderer/components/MenuBarPanel.tsx`).
+  - It opens on a click or right-click on the icon, just under the menu bar, with its right edge at the icon's,
+    and stays on screen (`menuBarPanelBounds`). There is no context menu any more: the menu has the commands.
+  - Another click on the icon, a click anywhere else, Esc or a command closes it. It is kept hidden between uses,
+    so it opens at once. It is made on the first click.
+  - It keeps its own list of downloads and networks. The main process now sends download, history and network
+    updates to it as well as to the window (`main/otherPages.ts`), including while the window is closed. While it
+    is open it asks the main process once a second for the helper's traffic and for the saved units, theme and
+    network names (`menuBarPanel` IPC), so it matches the window.
+  - Each network's speeds follow the same rule as the title. "Today" is what Mergelane's downloads brought in
+    today, the Dashboard's Today (`todayTotals`): the helper keeps no daily totals.
+  - The share is each network's part of the merged download. "Merged across X of Y": X is the networks receiving
+    now, and not off or out; Y is all the networks listed.
+  - "Off" is a network set to Don't use (ADR-0045). "Out" is a network a download still lists but the Mac no
+    longer has.
+  - The commands are buttons with `role="menuitem"`. The pointer or the arrow keys move one highlight, and the
+    arrow keys skip a disabled command. Return or Space chooses. ⌘O, ⌘N, ⌘, and ⌘Q work while the menu is open
+    (`aria-keyshortcuts`). Pause all downloads is greyed out while nothing is downloading or waiting, as macOS
+    greys out menu items that don't apply. The menu reopens with nothing highlighted.
+  - New download… and Settings… open the window there (the existing `showPlace`, now with `newDownload`, heard on
+    the Mac too).
+- Speeds use the app's own formatting, the same as in the window, rather than the prototype's approximations. The
+  highlighted command uses the theme's accent and its text colour.
+- **Windows is unchanged:** the notification-area icon, tooltip and flyout stay as ADR-0061 has them.
+
+### Consequences
+
+- The menu bar's numbers and the window's "Merged" agree while System merge is off. While it is on, the menu bar and
+  its menu show the whole Mac, and the window shows Mergelane's downloads.
+- A network the helper counts but the window doesn't list adds to the title but has no row in the menu.
+- The hidden menu window costs a page in memory, and its list follows every download update.
+- Tests:
+  - unit: `menuBarPanel.test.ts` (13), `speedText.test.ts` (`formatSpeedPair`), `MenuBarPanel.test.tsx` (11),
+    `useTrayStatus.test.tsx` (New download on the Mac);
+  - end to end, against the real window and page: `e2e/onThisMac.spec.ts` (the title, the menu's numbers with the
+    fake helper on, Pause all, ⌘N, the arrow keys and Return, opening and closing) and `e2e/daemonApi.spec.ts`
+    (`readSystemTraffic`).
+- To check by hand: the menu's place under a real icon, its corners and shadow, opening over a full-screen app or
+  another Space, and the icon's highlight while the menu is open.
+
+## ADR-0068: The menu bar's menu opens over full-screen apps
+
+**Status:** Owner, 2026-11-17. The owner reported that a click on Mergelane's menu bar icon showed no menu while
+another app (VS Code, Chrome) was in full screen, and that it worked otherwise.
+
+### Context
+
+- The owner was running 0.5.1, whose icon has Electron's native context menu (ADR-0037), not the menu of
+  ADR-0067. Why that native menu doesn't show over a full-screen app was not confirmed from Electron's tray source
+  (`tray_icon_cocoa.mm`): fetching it was blocked while the Mac was busy. It is replaced by ADR-0067's menu.
+- ADR-0067's menu, as first written, would fail there too. Electron 44.4.4, from its docs and from
+  `shell/browser/native_window_mac.mm` at tag v44.4.4:
+  - A full-screen app has its own Space. An ordinary window belongs to one Space, so it can't appear there. Electron
+    itself notes that Apple changed this in macOS 10.14 "to disallow NSWindows from floating on top of fullscreen
+    apps".
+  - `show()` and `focus()` call `[NSApplication activateIgnoringOtherApps:]` unless the window is a panel. Activating
+    Mergelane lets macOS switch to the Space with Mergelane's window, out of the full-screen app.
+  - BaseWindowOptions `type: 'panel'` "enables the window to float on top of full-screened apps by adding the
+    `NSWindowStyleMaskNonactivatingPanel` style mask … Also, the window will appear on all spaces (desktops)."
+  - `setVisibleOnAllWorkspaces(visible, { visibleOnFullScreen, skipTransformProcessType })` sets
+    `NSWindowCollectionBehaviorCanJoinAllSpaces` and `NSWindowCollectionBehaviorFullScreenAuxiliary`. Without
+    `skipTransformProcessType` it hides the Dock icon (`DockHide`) on every call.
+  - `setAlwaysOnTop(true, 'pop-up-menu')` sets `NSPopUpMenuWindowLevel`; the docs say that level and higher are
+    "shown above the Dock on macOS".
+- Over a full-screen app the menu bar slides in over the app, and the display's work area starts at the top of the
+  screen. The menu was placed a fixed 4 px under the work area's top, so there it would have covered the menu bar
+  and the icon.
+- A first reproduction here (two Electron stand-ins: one full screen, one showing the menu window) showed an
+  ordinary, activating window leaving the full-screen app's Space. The runs were stopped, unfinished, while the
+  owner was working in full screen; the fixed window was not measured that way.
+
+### Decision
+
+- The menu's window (`main/menuBarPanel.ts`) is `type: 'panel'`, with `setAlwaysOnTop(true, 'pop-up-menu')` and
+  `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })`, so the Dock icon
+  stays.
+- It is shown with `show()` alone. For a panel, Electron makes it the key window without activating Mergelane, so
+  the arrow keys and Esc work and the Mac stays in the full-screen app's Space.
+- It is placed under the icon (`menuBarPanelBounds`: the larger of the work area's top and the icon's bottom, plus
+  the gap), on the display that has the icon.
+
+### Consequences
+
+- Tests: `menuBarPanel.test.ts` (full screen, and a display above another); `e2e/onThisMac.spec.ts` checks that the
+  real menu window is on every Space and on top.
+- To check by hand, on the owner's Mac: the menu over VS Code and Chrome in full screen, in windowed mode, on the
+  second display, and that a click elsewhere or Esc closes it.
+
+## ADR-0069: The speed beside the menu bar icon is automatic, and Networks' options say plainly what they do
+
+**Status:** Owner, 2026-11-17. The owner asked for a way to turn the speed beside the icon on and off, so it takes
+less room in the menu bar: off by default, turning on by itself when there is more than one network. They also
+asked for the System merge and routing options to be reworded so users aren't confused.
+
+### Decision
+
+- **The speed beside the icon** has three choices: Automatic (the default), Always and Never. The setting is
+  `menuBarSpeedText`, saved as 'on' or 'off', and absent means Automatic (`shared/menuBarPanel.ts`
+  `speedBesideIcon`).
+  - Automatic shows it only while two or more networks are connected, counting the networks Mergelane lists and
+    leaving out any set to Don't use (ADR-0045). With one network there's nothing to combine, so just the icon
+    shows.
+  - The icon and its menu stay whatever the choice. Settings › General's switch is now "Show Mergelane in the menu
+    bar" (still `menuBarSpeed`, the name older than the menu), with "Speed beside the icon" under it: Automatic,
+    Always, Never, greyed out while the icon is off.
+  - The menu has a switch for it, "Speed beside the icon", above Settings…: a `menuitemcheckbox` drawn as a small
+    switch, as macOS's own menu bar menus show one. It shows whether the speed shows now. Choosing it saves the
+    opposite as Always or Never, and the window's Settings hears the new choice. Automatic is chosen again in
+    Settings.
+  - When the choice changes, the menu bar says its title again even when the title is now empty. Before this, an
+    empty title after a change was taken for no change, and the old speed stayed.
+- **Wording** (Networks, and the Dashboard's Other apps):
+  - "Other apps": "Mergelane’s own downloads always use all your networks. System merge spreads your other apps’
+    connections, like your browser’s, across them too."
+  - System merge: "On. Your other apps’ connections are spread across all your networks." / "Off. Your other apps
+    use only the network macOS picks." (Windows on a PC.)
+  - "Turn back on after a crash" becomes "Turn back on if the helper crashes": "If Mergelane’s helper stops
+    unexpectedly while system merge is on, it turns system merge back on by itself when it starts again." (ADR-0024:
+    only after a crash.)
+  - "Keep each site on one network" becomes "Keep each website on one network": "Recommended. Sign-ins, bank sites and
+    video calls can break when a website sees you switch networks. Each website then gets one network’s speed;
+    Mergelane’s own downloads still use them all." (ADR-0048.)
+  - The traffic list is headed "Your other apps right now", names each network as the window does (Wi-Fi, iPhone USB)
+    rather than by its device name (en0), and says "65 connections" rather than "· 65".
+  - The dropout history names networks the same way, and says "lost internet" rather than "dropped".
+  - The helper's line: "System merge needs Mergelane’s helper. Mergelane’s own downloads work without it."
+  - Routing's fallback becomes "If the chosen network disconnects, use the others": "Only matters when downloads or
+    uploads are set to one network. On: they carry on over your other networks until it’s back. Off: they pause
+    until it’s back."
+
+### Consequences
+
+- With one network, the menu bar now shows just the icon by default. A user who wants the speed anyway chooses
+  Always, in the menu or in Settings.
+- Tests: `menuBarPanel.test.ts` (`speedBesideIcon`), `OnThisMacSettings.test.tsx` (the three choices, and greyed out
+  while the icon is off), `MenuBarPanel.test.tsx` (the switch row), `useTrayStatus.test.tsx` (the menu's choice
+  reaches Settings), `SystemMergeSection.test.tsx`, `RoutingPanel.test.tsx`; end to end, `onThisMac.spec.ts`
+  (Automatic with one network, then two, the menu's switch, Settings showing Never, and Automatic again),
+  `systemMerge.spec.ts` and `dashboard.spec.ts` for the wording.
+
+## ADR-0070: The Dashboard shows the total speed of all apps; the Downloads view, the download speed
+
+**Status:** Owner, 2026-11-17. The owner updated the design (the published prototype, "Mergelane Redesign"): "In the
+dashboard, display the combined overall speed of all system activity, even when no downloads are in progress. In
+the Downloads route, show only the active download speed. Keep these metrics separate so users can clearly
+distinguish overall system speed from download speed." They also asked for the design's look: the speed on a glass
+card over the lanes.
+
+### Context
+
+- The design's Dashboard Confluence is labelled "Total speed, all apps". Each network's lane is "every byte crossing
+  each network, in and out, from every app on the Mac, Mergelane's downloads and uploads included. It keeps moving
+  when nothing is downloading." Its caption is "Includes … of downloads", or "No downloads running. This is other
+  apps." The Downloads view's Confluence is labelled "Download speed".
+- The design's Confluence floats the speed on a glass lens over the merged road (GlassLens: an SVG displacement map
+  in a backdrop filter, with a specular rim and a sheen), says "N× your fastest network", puts a swatch beside each
+  network's name and its share beside its speed, and picks a network's lane out when it is pointed at or focused.
+  The app's Confluence (M3.1) was built before those.
+- Only the helper read each adapter's counters, and only while System merge is on (ADR-0066). The Dashboard needs
+  them always, without a helper.
+- The macOS SDK (`<sys/sysctl.h>`, `<sys/socket.h>`, `<net/route.h>`, `<net/if.h>`, `<net/if_var.h>`) gives
+  `sysctl {CTL_NET 4, PF_ROUTE 17, 0, 0, NET_RT_IFLIST2 6, 0}`: one `RTM_IFINFO2` (0x12) message per adapter, an
+  `if_msghdr2` with `ifm_index` at byte 12 and `if_data64` at 32, whose 64-bit `ifi_ibytes` and `ifi_obytes` sit at 64
+  and 72 within it. This is what `daemon/internal/nics/counters_darwin.go` reads. It needs no privileges. On the
+  owner's Mac the parsed counters for `en0` matched `netstat -ibn` to within a few hundred bytes between the two
+  reads. koffi 2.16.3 declares `size_t` (`index.d.ts`).
+
+### Decision
+
+- **Counters** (`shared/interfaceCounters.ts`, `main/network/trafficCounters.ts`): the main process reads every
+  adapter's counters through libc (koffi `sysctl`, then `if_nametoindex` per network). When asked (IPC
+  `networkTraffic`), it returns each listed network's received and sent bytes a second since the last reading.
+  - Readings closer than 0.9 s share one.
+  - Readings more than 5 s apart start again, rather than average over the gap.
+  - Counters that go back (an adapter reconnected) give no speed for that reading.
+  - The Mac only for now: Windows answers null, and its Dashboard keeps the merged download speed. The Windows
+    equivalent (GetIfEntry2, as `counters_windows.go`) is a later change, to be tested on the laptop.
+- **Dashboard** (`DashboardScreen`): "Total speed, all apps". Each network's lane is its received plus sent speed,
+  from every app; the speed is their sum. It is never idle once the first reading is in. The caption is "Includes
+  X of downloads" (Mergelane's merged download speed) or "No downloads running. This is other apps.", with the
+  speed limit's line under it when one applies. "1 downloading, about … left" is now the Downloads view's alone.
+- **Downloads** (`DownloadsScreen`, its empty state too): "Download speed", Mergelane's downloads alone, as before.
+- **Confluence**:
+  - the speed sits on the glass lens (`components/GlassLens.tsx`; main.css `.mergelane-lens`), floating over the
+    road at its right, 220px wide (188px compact). The road's merge point moves left to leave the lens room. The
+    drawing is at least 152px tall (124px compact), so the lens doesn't spill out of it. A narrow layout has no
+    lens: the speed sits above the lanes, as before;
+  - "N× your fastest network" is shown when two or more lanes carry bytes and the merged speed is at least 1.05×
+    the fastest single lane;
+  - each lane has a swatch beside its name and its share of the total beside its speed. Pointing at a network or
+    its lane, or focusing it (each is focusable, and named with its speed and share), dims the others;
+  - the glass is a plain card with solid glass (`data-solid`), Reduce Transparency and Increase Contrast. Dark mode
+    follows the system's colour scheme, which is how the app sets it.
+
+### Consequences
+
+- The Dashboard's number is no longer what Mergelane downloads, and says so. It moves whenever anything on the Mac
+  uses a network, Mergelane or not. The Downloads view and the menu bar are unchanged.
+- Loopback, local copies and anything else on a listed adapter count: it is the adapter's own counter.
+- Tests:
+  - Vitest: `interfaceCounters.test.ts`, `GlassLens.test.tsx`, `useNetworkTraffic.test.tsx`, and
+    `Confluence.test.tsx` (lens, gain, share, picking a lane out);
+  - Playwright: `networkTraffic.spec.ts` (the sampler with stand-in counters, and this Mac's loopback) and
+    `dashboard.spec.ts` (with this Mac's loopback as the only network: no downloads, then a download over it with
+    "Includes … of downloads" and the lane at 100% of the total, and the Downloads view's "Download speed" with
+    "1 downloading").
+
+## ADR-0071: Three speed units, counted in 1,000s; a frosted card; the last minute of all apps
+
+**Status:** Owner, 2026-11-17. On Liquid Glass the Dashboard's card flickered, its text was hard to read, and it
+was "too glassy: make it a little glassy or frosted". The owner asked what the "Last minute" beside it was. And:
+"Ensure the application consistently supports all three speed units: Mbps, MB/s, and KB/s. Apply the selected unit
+consistently across the entire application… Ensure unit conversions and formatting are accurate and consistent."
+
+### Context
+
+- **Units.** The app had two units:
+  - MB/s counted in 1024s (formatBytes), switching to KB/s and B/s at the bottom;
+  - Mbps counted in 1000s, switching to Kbps, bps and Gbps by itself (the owner saw "106 Kbps").
+  - So Settings' "8 Mbps is 1 MB/s" was about 5% off.
+  - The design (`UNIT_OPTIONS`, `fmtSpeed`) has three: KB/s always in KB/s; MB/s, dropping to KB/s below 1 MB/s;
+    Mbps always in Mbps. All count in 1,000s, "as macOS counts".
+- **The card.** ADR-0070's lens bent the lanes with an SVG displacement filter in a backdrop filter, and glowed its
+  text. Both were redrawn for every frame of the lane markings moving under it. Over Liquid Glass's clear window the
+  text showed doubled and ghosted.
+- **Last minute.** Beside the card, the chart was Mergelane's downloads over the last minute, so it was empty
+  without a download while the card showed all apps.
+
+### Decision
+
+- **Units** (`shared/speedText.ts` `formatSpeed`, `formatSpeedPair`, `SPEED_UNITS`, `SPEED_UNIT_LABELS`): `SpeedUnit`
+  is `'kb' | 'bytes' | 'bits'`. Every speed counts in 1,000s.
+  - KB/s: whole KB/s, with a thousands separator ("27,900 KB/s").
+  - MB/s: one decimal, whole from 100 MB/s; whole KB/s below 1 MB/s, and from 999.5 KB/s up it is "1.0 MB/s".
+    (Amended by ADR-0072: MB/s is always MB/s.)
+  - Mbps: one decimal, whole from 100 Mbps, never another unit.
+  - Settings › General offers KB/s, MB/s and Mbps, in the design's order, each with a hint that gives the
+    conversion. Every place uses the one choice: the window, the Dashboard and Downloads, the speed test, limits and
+    the chart axes, the menu bar item and its menu, and Windows' tooltip and flyout.
+  - The axis labels share the separators, and never step below a hundredth of the unit.
+  - Speed limits are typed in the chosen unit, KB/s included, counted in 1,000s. Slow mode's default is 2,000,000
+    bytes a second, so it still reads 2 MB/s.
+  - Sizes (formatBytes: files, today's totals, data limits) still count in 1024s; this is about speeds. A video's
+    quality (`streamQuality`, "2.5 Mbps") is a bitrate, not a transfer speed, and keeps its own unit.
+- **The card** (`GlassLens.tsx`, main.css `.mergelane-lens`) is frosted:
+  - a 16px blur and a mostly solid fill (white 74% in light mode, a dark grey at 80% in dark mode), the same on
+    every theme, so the figure reads over Liquid Glass's clear window;
+  - a faint rim, no refraction, no glow on the text;
+  - the lane markings stop where the card begins (`markEnd`), so nothing moves behind it;
+  - solid glass, Reduce Transparency and Increase Contrast get a plain card.
+- **Last minute, all apps:** while the counters are read, `useNetworkTraffic` keeps a minute of each network's
+  speed, received and sent together, and the chart beside the card draws that. Its heading says so. Where the
+  counters can't be read (Windows), it is the downloads' last minute, as before.
+
+### Consequences
+
+- MB/s figures are about 5% higher than before for the same speed, since they now count in 1,000s. Limits saved
+  before are the same bytes a second, so a 20 MiB/s limit now reads 21 MB/s.
+- Measured on the owner's Mac with the window shown, Liquid Glass and dark mode, using `top` (percent of one core):
+  the Dashboard took 1.9% with nothing downloading and 2.3% with a 3 MB/s download under the card. The Downloads
+  screen took 4.7–6.0%. Electron's per-process readings in the same setup fell from 11.6% to 7.9% against the
+  refracting lens; those count against all cores, not one, so only the drop compares. The owner's 61% was not
+  reproduced.
+- Tests:
+  - `speedText.test.ts` (each unit, the edges, the pair);
+  - `format.spec.ts` (axes in each unit);
+  - `chrome.test.tsx` (the three-way switch) and `SettingsScreen.test.tsx` (the hints);
+  - `GlassLens.test.tsx` and `Confluence.test.tsx` (the markings stop at the card);
+  - `useNetworkTraffic.test.tsx` (the minute kept);
+  - `dashboard.spec.ts` (the chart draws real loopback traffic).
+  - Tests that gave speeds in MiB now give them in 1,000s.
+
+## ADR-0072: The chosen speed unit is the only one shown (amends ADR-0071)
+
+**Status:** Owner, 2026-11-17: "i have selected MB/s still seeing kbs fix this". ADR-0071 followed the design, where
+MB/s drops to KB/s below 1 MB/s. The owner wants the unit chosen to be the unit seen, everywhere.
+
+### Decision
+
+- `formatSpeed` shows a speed only in the chosen unit: KB/s, MB/s or Mbps, still counted in 1,000s.
+  - KB/s: whole, with a thousands separator.
+  - MB/s and Mbps share one rule, so a slow speed still reads in the chosen unit instead of switching unit or
+    showing zero:
+    - whole from 100;
+    - one decimal from 1 ("27.9 MB/s");
+    - two decimals below 1 ("0.05 MB/s");
+    - three below a hundredth ("0.002 MB/s");
+    - "0" for nothing.
+  - The menu bar's pair says the chosen unit once: "↓0.05 ↑0.002 MB/s".
+- Settings' MB/s hint: "Megabytes per second, always. 1 MB/s is 1,000 KB/s, or 8 Mbps."
+- Chart axes follow the same unit, down to a hundredth of it ("0.02 MB/s").
+
+### Verification
+
+- `e2e/speedUnits.spec.ts`, new: with a 0.3 MB/s download running, it chooses each unit in Settings, then reads the
+  Dashboard, the downloads list, the download's details, Networks, the menu bar item and its menu. It fails if any
+  other unit appears. Brought back, the old drop to KB/s below 1 MB/s made it fail; with this rule it passes.
+- `speedText.test.ts` (every unit only ever in itself, at slow and fast speeds, and the pair) and `format.spec.ts`
+  (axes in each unit).

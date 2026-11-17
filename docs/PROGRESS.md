@@ -97,6 +97,7 @@ Last updated: 2026-11-11
   Measured with `top`: the Dashboard takes about 2% of one core, with or without a download.
 - **Done (ADR-0072):** the chosen unit is the only one shown (MB/s no longer drops to KB/s). A new end-to-end test
   reads every place in each unit, and fails when the old rule is put back.
+- **Merged:** PR #94 into `main` (2026-11-17); released in 0.6.0.
 - **Re-verified, 2026-11-17:**
   - all 73 IPC channels have a handler, a preload method and a channel name;
   - typecheck, ESLint and Prettier (whole app) clean;

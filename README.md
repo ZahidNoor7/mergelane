@@ -12,13 +12,15 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
   with your own news server), HLS and DASH video, and YouTube videos through yt-dlp.
 - **Network merging:** Mergelane's own downloads spread their connections across all your networks, and you choose
   which network carries what (Networks › Which network carries what). An optional system-wide mode, **System
-  merge**, lets other apps' connections use every network too.
+  merge**, lets other apps' connections use every network too. The Dashboard shows your Mac's total speed on each
+  network, from every app; the Downloads view, the download speed alone. Speeds read in KB/s, MB/s or Mbps, as you
+  choose.
 - **Browser extension** for Chrome, Edge, Chromium and Firefox: the downloads you click go to Mergelane, it lists
   the videos a page plays, and it blocks ads and trackers (with uBO Lite).
-- **Everyday:** a menu-bar speed, Open at login, a notification when a download finishes, offering links you copy (off
+- **Everyday:** your speeds in the menu bar and a menu under its icon (over full-screen apps too), Open at login, a notification when a download finishes, offering links you copy (off
   by default), seven themes with Liquid Glass, and updates from GitHub that it downloads and checks for you.
 
-> **Status: beta (0.5.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
+> **Status: beta (0.6.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
 > Windows is a preview from 0.4.0 (below). The Safari extension and the 1.0 hardening come next. See
 > `docs/PROGRESS.md` for the details.
 
@@ -36,11 +38,14 @@ report anything that doesn't work there.
 - **One connection always uses one link.** Merging adds speed only when something opens several connections
   at once. Mergelane's own downloads do this. In system-wide mode, other apps gain speed only if they open
   several connections themselves; a single video call or a single-connection download will not get faster.
-- **In system-wide mode, each website stays on one network** (on by default; Networks › Other apps › Keep each site
-  on one network). Every network has its own public address, and a site that sees you arrive from several at once
+- **In system-wide mode, each website stays on one network** (on by default; Networks › Other apps › Keep each
+  website on one network). Every network has its own public address, and a site that sees you arrive from several at once
   may sign you out, ask "are you a robot?", or break a call. So one site gets one network's speed, while different
   sites spread over all of them. Mergelane's own downloads still use every network. Turn it off to spread a site's
   connections too.
+- **The Dashboard's total speed counts everything each network carries**, from every app on your Mac, copies to and
+  from other computers in your home network included: it reads each network adapter's own counters. On Windows, the
+  Dashboard still shows Mergelane's download speed.
 - **Connections on a link that drops must reconnect.** New connections move to the remaining links, but a
   connection that was already open on the lost link breaks, as it would without Mergelane.
 - **Links must be genuinely separate internet connections.** Two Wi-Fi networks from the same router, or a

@@ -1,5 +1,5 @@
 import type { LoginItemState } from '@shared/types'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store/useAppStore'
@@ -107,11 +107,14 @@ describe('On this Mac', () => {
     expect(loginSwitch().hasAttribute('data-disabled')).toBe(true)
   })
 
-  it('turns the menu bar speed and the notifications off and on, and saves them', async () => {
+  it('turns Mergelane in the menu bar and the notifications off and on, and saves them', async () => {
     const user = userEvent.setup()
     await show()
-    const menuBar = screen.getByRole('switch', { name: 'Show the merged speed in the menu bar' })
+    const menuBar = screen.getByRole('switch', { name: 'Show Mergelane in the menu bar' })
     const notify = screen.getByRole('switch', { name: 'Notify me when a download finishes' })
+    expect(menuBar.closest('div.border-b')!.querySelector('p')!.textContent).toBe(
+      'Click its icon to see each network’s speed, and to pause or start downloads.'
+    )
     expect(menuBar.getAttribute('aria-checked')).toBe('true')
     expect(notify.getAttribute('aria-checked')).toBe('true')
     await user.click(menuBar)
@@ -123,6 +126,36 @@ describe('On this Mac', () => {
     await user.click(notify)
     expect(updateSettings).toHaveBeenCalledWith({ menuBarSpeed: undefined })
     expect(updateSettings).toHaveBeenCalledWith({ notifyWhenDone: undefined })
+  })
+
+  it('the speed beside the icon: automatic by default, or always, or never (ADR-0069)', async () => {
+    const user = userEvent.setup()
+    await show()
+    const group = screen.getByRole('group', { name: 'Speed beside the icon' })
+    const hint = (): string => group.closest('div.border-b')!.querySelector('p')!.textContent!
+    const choice = (name: string): HTMLElement => within(group).getByRole('button', { name })
+    expect(choice('Automatic').getAttribute('aria-pressed')).toBe('true')
+    expect(hint()).toBe(
+      'Shows only while 2 or more networks are connected, so it takes no room when there’s nothing to combine. With System merge on, it’s this Mac’s whole speed; otherwise Mergelane’s.'
+    )
+    await user.click(choice('Always'))
+    expect(updateSettings).toHaveBeenLastCalledWith({ menuBarSpeedText: 'on' })
+    expect(hint()).toMatch(/^Always shows the download and upload speed beside the icon\./)
+    await user.click(choice('Never'))
+    expect(updateSettings).toHaveBeenLastCalledWith({ menuBarSpeedText: 'off' })
+    expect(hint()).toMatch(/^Just the icon\. Click it to see the speeds\./)
+    // Automatic is saved as nothing.
+    await user.click(choice('Automatic'))
+    expect(updateSettings).toHaveBeenLastCalledWith({ menuBarSpeedText: undefined })
+    expect(useAppStore.getState().menuBarSpeedText).toBe('auto')
+
+    // Without Mergelane in the menu bar, there's no icon to put it beside.
+    await user.click(screen.getByRole('switch', { name: 'Show Mergelane in the menu bar' }))
+    expect(hint()).toBe('Turn on Show Mergelane in the menu bar first.')
+    expect(
+      choice('Always').hasAttribute('disabled') ||
+        choice('Always').getAttribute('aria-disabled') === 'true'
+    ).toBe(true)
   })
 })
 

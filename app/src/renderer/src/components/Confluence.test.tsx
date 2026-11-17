@@ -1,8 +1,9 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Confluence, PLACEHOLDER_LANES, type ConfluenceLane } from './Confluence'
 
-const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). */
+const MB = 1_000_000
 
 // jsdom measures nothing and has no media queries: the test sets the width and Reduce Motion, and
 // runs animation frames by hand.
@@ -87,8 +88,9 @@ describe('Confluence', () => {
     const list = screen.getByRole('list', { name: 'Networks in this merge' })
     const rows = within(list).getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual([
-      'Wi-Fi4.0 MB/sen0',
-      'iPhone USB2.0 MB/sen7',
+      // Each carrying lane's share of the merged speed.
+      'Wi-Fi4.0 MB/s67%en0',
+      'iPhone USB2.0 MB/s33%en7',
       'EthernetDroppeden5',
       'OfficeNot useden9'
     ])
@@ -185,6 +187,79 @@ describe('Confluence', () => {
   it('an idle lane that is on, while the diagram is idle, says Idle; a lone dash when nothing is drawn', () => {
     render(<Confluence lanes={[{ id: 'x', name: 'X', color: 'red', speed: 0 }]} />)
     measure(600)
-    expect(screen.getByText('0 B/s')).toBeTruthy()
+    expect(screen.getByText('0 MB/s')).toBeTruthy()
+  })
+
+  it('floats the speed on the glass lens over the road, with what merging buys over the fastest network', () => {
+    const { container } = render(<Confluence lanes={lanes} label="Total speed, all apps" />)
+    measure(600)
+    const lens = container.querySelector('.mergelane-lens') as HTMLElement
+    expect(lens).toBeTruthy()
+    // Over the drawing, at its right.
+    expect(lens.parentElement!.className).toContain('relative')
+    expect(lens.className).toContain('absolute')
+    expect(lens.style.width).toBe('220px')
+    expect(lens.textContent).toContain('Total speed, all apps')
+    // 6 MB/s merged against Wi-Fi's 4 MB/s.
+    expect(lens.textContent).toContain('1.5× your fastest network')
+    // The moving markings stop where the card begins (600 wide: 600 - 20 - 220), so nothing moves behind it.
+    const marking = container.querySelector('[data-lane="en0"] .mergelane-lane-flow')!
+    expect(marking.getAttribute('d')).toMatch(/ L360,[\d.]+$/)
+  })
+
+  it('says nothing of a gain with one network carrying, or while idle', () => {
+    render(<Confluence lanes={[lanes[0], lanes[2]]} />)
+    measure(600)
+    expect(screen.queryByText(/your fastest network/)).toBeNull()
+    render(<Confluence lanes={lanes} idle />)
+    expect(screen.queryByText(/your fastest network/)).toBeNull()
+  })
+
+  it('a compact lens is narrower; a narrow layout has no lens', () => {
+    const { container, unmount } = render(<Confluence lanes={lanes} compact />)
+    measure(600)
+    expect((container.querySelector('.mergelane-lens') as HTMLElement).style.width).toBe('188px')
+    unmount()
+    const narrow = render(<Confluence lanes={lanes} />)
+    measure(400)
+    expect(narrow.container.querySelector('.mergelane-lens')).toBeNull()
+  })
+
+  it('pointing at a network, or focusing it, picks its lane out', () => {
+    const { container } = render(<Confluence lanes={lanes} />)
+    measure(600)
+    const rows = within(screen.getByRole('list', { name: 'Networks in this merge' })).getAllByRole(
+      'listitem'
+    )
+    expect(rows[0].getAttribute('aria-label')).toBe('Wi-Fi: 4.0 MB/s, 67% of the total')
+    expect(rows[2].getAttribute('aria-label')).toBe('Ethernet: dropped')
+    expect(rows[3].getAttribute('aria-label')).toBe('Office: not used')
+    const opacity = (id: string): string =>
+      (container.querySelector(`[data-lane="${id}"]`) as SVGGElement).style.opacity
+    fireEvent.mouseEnter(rows[0])
+    expect(rows[1].style.opacity).toBe('0.45')
+    expect(opacity('en0')).toBe('1')
+    expect(opacity('en7')).toBe('0.25')
+    expect(opacity('en5')).toBe('0.3')
+    fireEvent.mouseLeave(rows[0])
+    expect(rows[1].style.opacity).toBe('1')
+    // The lane itself, too.
+    fireEvent.mouseEnter(container.querySelector('[data-lane="en7"]')!)
+    expect(opacity('en0')).toBe('0.25')
+    fireEvent.mouseLeave(container.querySelector('[data-lane="en7"]')!)
+    expect(opacity('en0')).toBe('1')
+    fireEvent.focus(rows[1])
+    expect(rows[0].style.opacity).toBe('0.45')
+    fireEvent.blur(rows[1])
+    expect(rows[0].style.opacity).toBe('1')
+  })
+
+  it('an idle diagram’s lanes say idle to assistive tech', () => {
+    render(<Confluence lanes={PLACEHOLDER_LANES} idle />)
+    measure(600)
+    const rows = within(screen.getByRole('list', { name: 'Networks in this merge' })).getAllByRole(
+      'listitem'
+    )
+    expect(rows[0].getAttribute('aria-label')).toBe('Wi-Fi: idle')
   })
 })

@@ -165,10 +165,10 @@ function GeneralSettings(): React.JSX.Element {
           label="Show speeds in"
           hint={
             speedUnit === 'bits'
-              ? 'Megabits per second, the way internet providers quote speeds. 8 Mbps is 1 MB/s.'
-              : onWindows()
-                ? 'Megabytes per second, dropping to KB/s below 1 MB/s.'
-                : 'Megabytes per second, dropping to KB/s below 1 MB/s. Matches the sizes Finder shows.'
+              ? 'Megabits per second, always, the way internet providers quote speeds. 8 Mbps is 1 MB/s.'
+              : speedUnit === 'kb'
+                ? 'Kilobytes per second, always. 1,000 KB/s is 1 MB/s.'
+                : 'Megabytes per second, always. 1 MB/s is 1,000 KB/s, or 8 Mbps.'
           }
         >
           <SpeedUnitToggle />

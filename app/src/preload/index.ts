@@ -5,7 +5,8 @@ import type { BrowserId } from '../shared/browsers'
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from '../shared/speedTest'
 import type { UpdateChannel } from '../shared/releases'
-import type { TrayStatus } from '../shared/trayFlyout'
+import type { MenuBarCommand, MenuBarSpeedText } from '../shared/menuBarPanel'
+import type { ShowPlace, TrayStatus } from '../shared/trayFlyout'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -112,6 +113,11 @@ const mergelaneApi = {
   trayStatus: () => invoke('trayStatus'),
   resizeTrayFlyout: (height: number) => invoke('resizeTrayFlyout', height),
   closeTrayFlyout: () => invoke('closeTrayFlyout'),
+  networkTraffic: () => invoke('networkTraffic'),
+  menuBarPanel: () => invoke('menuBarPanel'),
+  menuBarChoose: (command: MenuBarCommand) => invoke('menuBarChoose', command),
+  resizeMenuBarPanel: (height: number) => invoke('resizeMenuBarPanel', height),
+  closeMenuBarPanel: () => invoke('closeMenuBarPanel'),
   speedTestStart: (request: SpeedTestRequest) => invoke('speedTestStart', request),
   speedTestCancel: () => invoke('speedTestCancel'),
   speedTestLive: () => invoke('speedTestLive'),
@@ -132,12 +138,32 @@ const mergelaneApi = {
     return () => ipcRenderer.removeListener(IpcChannels.speedTestFinished, listener)
   },
 
-  /** The notification area's menu: show Settings, or the Networks place. */
-  onShowPlace: (callback: (place: 'settings' | 'networks') => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, place: 'settings' | 'networks'): void =>
-      callback(place)
+  /** The notification area's or the menu bar's menu: show Settings, the Networks place, or New download. */
+  onShowPlace: (callback: (place: ShowPlace) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, place: ShowPlace): void => callback(place)
     ipcRenderer.on(IpcChannels.showPlace, listener)
     return () => ipcRenderer.removeListener(IpcChannels.showPlace, listener)
+  },
+
+  /** The menu bar's menu opened: its page reads the latest at once. */
+  onMenuBarPanelShown: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.menuBarPanelShown, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.menuBarPanelShown, listener)
+  },
+
+  /** The menu bar's menu showed or hid the speed beside the icon: Settings shows the new choice. */
+  onMenuBarSpeedTextChanged: (callback: (mode: MenuBarSpeedText) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, mode: MenuBarSpeedText): void => callback(mode)
+    ipcRenderer.on(IpcChannels.menuBarSpeedTextChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.menuBarSpeedTextChanged, listener)
+  },
+
+  /** The menu bar's menu closed: its page stops asking for numbers until it opens again. */
+  onMenuBarPanelHidden: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.menuBarPanelHidden, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.menuBarPanelHidden, listener)
   },
 
   /** The flyout's content changed (the window published a new status). */

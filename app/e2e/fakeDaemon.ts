@@ -17,6 +17,19 @@ export interface FakeLinkEvent {
   reason: 'found' | 'lost' | 'returned' | 'address' | 'probe-ok' | 'probe-failed'
 }
 
+/** One link of the fake's `stats` answer (shared/daemon-api.ts LinkStats). */
+export interface FakeLinkStats {
+  name: string
+  rxBps: number
+  txBps: number
+  linkRxBps: number
+  linkTxBps: number
+  activeFlows: number
+  totalFlows: number
+  weight: number
+  failed: number
+}
+
 /** A stand-in for mergelane-daemon's control socket: protocol v1, with switchable answers. */
 export interface FakeDaemon {
   path: string
@@ -47,6 +60,8 @@ export interface FakeDaemon {
   silent?: boolean
   /** A speed limit `links` reports on feth20, in Mbit/s (none unless set). */
   limitMbps?: number
+  /** What `stats` reports for each link, instead of its one busy feth10. */
+  traffic?: FakeLinkStats[]
   close: () => Promise<void>
 }
 
@@ -166,7 +181,7 @@ export async function startFakeDaemon(): Promise<FakeDaemon> {
           case 'stats':
             line = ok({
               at: new Date().toISOString(),
-              links: [
+              links: fake.traffic ?? [
                 {
                   name: 'feth10',
                   rxBps: 2_500_000,

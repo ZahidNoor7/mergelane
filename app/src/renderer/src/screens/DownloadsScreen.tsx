@@ -370,6 +370,7 @@ export function DownloadsScreen({
                 lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}
                 idle={active.running.length === 0 || lanes.length === 0}
                 total={active.totalSpeed}
+                label="Download speed"
                 caption={progress}
               />
             </div>
@@ -569,7 +570,7 @@ function EmptyState(): React.JSX.Element {
             : PLACEHOLDER_LANES
         }
         idle
-        label="Merged speed"
+        label="Download speed"
       />
       {noNetworks ? (
         <div className="flex max-w-[46ch] flex-col items-start gap-2">

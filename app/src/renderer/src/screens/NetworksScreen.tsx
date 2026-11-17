@@ -142,8 +142,8 @@ function NetworkList(): React.JSX.Element {
                 Other apps
               </h2>
               <p className="max-w-[60ch] text-[12.5px] leading-[1.5] text-ink-2">
-                Mergelane’s own downloads use every network without this. System merge lets other
-                apps’ connections use them too.
+                Mergelane’s own downloads always use all your networks. System merge spreads your
+                other apps’ connections, like your browser’s, across them too.
               </p>
             </div>
             <SystemMergeSection open />

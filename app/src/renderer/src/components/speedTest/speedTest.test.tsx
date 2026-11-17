@@ -11,6 +11,8 @@ import { SpeedTestView } from './SpeedTestView'
 // and what it shows of the pushes the main process sends while a test runs.
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const NOW = new Date(2026, 10, 14, 15).getTime()
 
 const iface = (
@@ -45,12 +47,17 @@ const run = (overrides: Partial<SpeedTestRun> = {}): SpeedTestRun => ({
   status: 'done',
   links: [
     link('en0', {
-      downloadBytesPerSec: 10 * MB,
-      uploadBytesPerSec: 2 * MB,
+      downloadBytesPerSec: 10 * MBPS,
+      uploadBytesPerSec: 2 * MBPS,
       latencyMs: 12,
       jitterMs: 1
     }),
-    link('en7', { downloadBytesPerSec: 4 * MB, uploadBytesPerSec: MB, latencyMs: 40, jitterMs: 6 })
+    link('en7', {
+      downloadBytesPerSec: 4 * MBPS,
+      uploadBytesPerSec: MBPS,
+      latencyMs: 40,
+      jitterMs: 6
+    })
   ],
   notes: [],
   ...overrides
@@ -64,8 +71,8 @@ const live = (overrides: Partial<SpeedTestLive> = {}): SpeedTestLive => ({
   networkId: 'en0',
   phase: 'download',
   fraction: 0.4,
-  bytesPerSec: 5 * MB,
-  peakBytesPerSec: 6 * MB,
+  bytesPerSec: 5 * MBPS,
+  peakBytesPerSec: 6 * MBPS,
   results: [],
   share: {},
   pausedDownloads: 0,
@@ -343,7 +350,7 @@ describe('results', () => {
       id: 'before',
       startedAt: NOW - 3_600_000,
       links: [
-        link('en0', { downloadBytesPerSec: 8 * MB, uploadBytesPerSec: 2 * MB, latencyMs: 15 })
+        link('en0', { downloadBytesPerSec: 8 * MBPS, uploadBytesPerSec: 2 * MBPS, latencyMs: 15 })
       ]
     })
     show([run(), before])
@@ -395,8 +402,8 @@ describe('results', () => {
       run({
         scope: 'combined',
         combined: {
-          downloadBytesPerSec: 12 * MB,
-          uploadBytesPerSec: 3 * MB,
+          downloadBytesPerSec: 12 * MBPS,
+          uploadBytesPerSec: 3 * MBPS,
           share: { en0: 30, en7: 10 }
         },
         notes: ['downloads-paused', 'busy-network']
@@ -414,7 +421,7 @@ describe('results', () => {
   })
 
   it('through system merge: the total is named for it', async () => {
-    show([run({ scope: 'system', combined: { downloadBytesPerSec: MB, share: {} }, links: [] })])
+    show([run({ scope: 'system', combined: { downloadBytesPerSec: MBPS, share: {} }, links: [] })])
     expect(await screen.findByText('Through system merge')).toBeTruthy()
   })
 })
@@ -428,13 +435,13 @@ describe('history', () => {
         id: 'b',
         scope: 'combined',
         startedAt: NOW - 86_400_000,
-        combined: { downloadBytesPerSec: 20 * MB, share: {} },
+        combined: { downloadBytesPerSec: 20 * MBPS, share: {} },
         links: [link('en0', { latencyMs: 9 })]
       }),
       run({
         id: 'c',
         startedAt: NOW - 5 * 86_400_000,
-        links: [link('en0', { downloadBytesPerSec: 7 * MB })]
+        links: [link('en0', { downloadBytesPerSec: 7 * MBPS })]
       })
     ]
     show(runs)

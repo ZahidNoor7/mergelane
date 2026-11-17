@@ -10,7 +10,8 @@ import { SpeedUnitToggle } from './SpeedUnitToggle'
 // The window frame's small parts (M3.1 pull request 5a): a network's tile, a speed in a line of
 // text, the units control, and the width the frame switches layout on.
 
-const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const initial = useAppStore.getState()
 const updateSettings = vi.fn(() => Promise.resolve())
 
@@ -54,7 +55,7 @@ describe('NetworkTile', () => {
 
 describe('SpeedText', () => {
   it('sets the unit apart from the figure', () => {
-    render(<SpeedText bytesPerSecond={4 * MB} className="extra" />)
+    render(<SpeedText bytesPerSecond={4 * MBPS} className="extra" />)
     const unit = screen.getByText('MB/s')
     expect(unit.parentElement!.textContent).toBe('4.0MB/s')
     expect(unit.parentElement!.className).toContain('extra')
@@ -62,12 +63,12 @@ describe('SpeedText', () => {
 
   it('follows the units chosen', () => {
     useAppStore.setState({ speedUnit: 'bits' })
-    render(<SpeedText bytesPerSecond={4 * MB} />)
+    render(<SpeedText bytesPerSecond={4 * MBPS} />)
     expect(screen.getByText('Mbps').parentElement!.textContent).toMatch(/^[\d.]+Mbps$/)
   })
 
   it('shows a dash for a speed that isn’t there', () => {
-    render(<SpeedText bytesPerSecond={4 * MB} dash className="extra" />)
+    render(<SpeedText bytesPerSecond={4 * MBPS} dash className="extra" />)
     const dash = screen.getByText('—')
     expect(dash.className).toContain('extra')
     expect(screen.queryByText('MB/s')).toBeNull()
@@ -75,8 +76,15 @@ describe('SpeedText', () => {
 })
 
 describe('SpeedUnitToggle', () => {
-  it('switches between MB/s and Mbps, and saves the choice', async () => {
+  it('switches between KB/s, MB/s and Mbps, and saves the choice', async () => {
     render(<SpeedUnitToggle />)
+    // The design's three, in its order (ADR-0071).
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'KB/s',
+      'MB/s',
+      'Mbps'
+    ])
+    const kb = screen.getByRole('button', { name: 'KB/s' })
     const bytes = screen.getByRole('button', { name: 'MB/s' })
     const bits = screen.getByRole('button', { name: 'Mbps' })
     expect(bytes.getAttribute('aria-pressed')).toBe('true')
@@ -89,6 +97,9 @@ describe('SpeedUnitToggle', () => {
     // The one chosen can't be unpressed into no units at all.
     await user.click(bits)
     expect(useAppStore.getState().speedUnit).toBe('bits')
+    await user.click(kb)
+    expect(useAppStore.getState().speedUnit).toBe('kb')
+    expect(updateSettings).toHaveBeenCalledWith({ speedUnit: 'kb' })
   })
 })
 

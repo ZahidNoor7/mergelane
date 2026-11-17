@@ -1,9 +1,10 @@
+import { SPEED_UNIT_LABELS, SPEED_UNITS } from '@shared/speedText'
 import type { SpeedUnit } from '@shared/types'
 import { useAppStore } from '../store/useAppStore'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
-/** MB/s or Mbps for every speed in the app: a segmented control. It moves to Settings › General
- * with the Settings screen (M3.1 pull request 5e). */
+/** KB/s, MB/s or Mbps for every speed in the app (the design's three, ADR-0071): a segmented control, in
+ * Settings › General. */
 export function SpeedUnitToggle(): React.JSX.Element {
   const speedUnit = useAppStore((store) => store.speedUnit)
   const setSpeedUnit = useAppStore((store) => store.setSpeedUnit)
@@ -17,9 +18,9 @@ export function SpeedUnitToggle(): React.JSX.Element {
       size="xs"
       spacing={0.5}
     >
-      {(['bytes', 'bits'] as const).map((unit) => (
+      {SPEED_UNITS.map((unit) => (
         <ToggleGroupItem key={unit} value={unit}>
-          {unit === 'bytes' ? 'MB/s' : 'Mbps'}
+          {SPEED_UNIT_LABELS[unit]}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

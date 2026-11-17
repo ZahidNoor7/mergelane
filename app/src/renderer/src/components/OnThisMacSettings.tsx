@@ -1,18 +1,33 @@
+import type { MenuBarSpeedText } from '@shared/menuBarPanel'
 import type { LoginItemState } from '@shared/types'
 import { useEffect, useId, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { onWindows, words } from '../platformWords'
 import { SettingRow, SettingsGroup } from './settingsParts'
 import { Switch } from './ui/switch'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
 // Settings › General › "On this Mac", from the final design (prototype.html, GeneralSettings):
-// Open at login, the merged speed in the menu bar, and a notification when a download finishes
-// (docs/DECISIONS.md ADR-0037). Open at login reports what macOS says, since an app that isn't
+// Open at login, Mergelane in the menu bar and the speed beside its icon, and a notification when a
+// download finishes (docs/DECISIONS.md ADR-0037, ADR-0067, ADR-0069). Open at login reports what macOS says, since an app that isn't
 // notarized may not be taken. On Windows it is "On this PC", with the notification area for the
 // menu bar (whose switch there also keeps Mergelane running when the window is closed), and Windows'
 // own places to look.
 
 const LOGIN_ITEMS = 'System Settings › General › Login Items'
+
+/** The speed beside the menu bar icon (ADR-0069). */
+const SPEED_TEXT_CHOICES: { value: MenuBarSpeedText; label: string }[] = [
+  { value: 'auto', label: 'Automatic' },
+  { value: 'on', label: 'Always' },
+  { value: 'off', label: 'Never' }
+]
+
+const SPEED_TEXT_HINTS: Record<MenuBarSpeedText, string> = {
+  auto: 'Shows only while 2 or more networks are connected, so it takes no room when there’s nothing to combine.',
+  on: 'Always shows the download and upload speed beside the icon.',
+  off: 'Just the icon. Click it to see the speeds.'
+}
 
 function loginHint(state: LoginItemState | null): string {
   const starts = `Starts in ${words().statusArea}, so scheduled downloads begin on time.`
@@ -39,6 +54,8 @@ function loginHint(state: LoginItemState | null): string {
 export function OnThisMacSettings(): React.JSX.Element {
   const menuBarSpeed = useAppStore((store) => store.menuBarSpeed)
   const setMenuBarSpeed = useAppStore((store) => store.setMenuBarSpeed)
+  const menuBarSpeedText = useAppStore((store) => store.menuBarSpeedText)
+  const setMenuBarSpeedText = useAppStore((store) => store.setMenuBarSpeedText)
   const notifyWhenDone = useAppStore((store) => store.notifyWhenDone)
   const setNotifyWhenDone = useAppStore((store) => store.setNotifyWhenDone)
   const [login, setLogin] = useState<LoginItemState | null>(null)
@@ -95,9 +112,40 @@ export function OnThisMacSettings(): React.JSX.Element {
           <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
         </SettingRow>
       ) : (
-        <SettingRow label={`Show the merged speed in ${words().statusArea}`} htmlFor={menuBarId}>
-          <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
-        </SettingRow>
+        <>
+          {/* The icon and its menu (ADR-0067); the speed beside it, automatic by default (ADR-0069). */}
+          <SettingRow
+            label={`Show Mergelane in ${words().statusArea}`}
+            hint="Click its icon to see each network’s speed, and to pause or start downloads."
+            htmlFor={menuBarId}
+          >
+            <Switch id={menuBarId} checked={menuBarSpeed} onCheckedChange={setMenuBarSpeed} />
+          </SettingRow>
+          <SettingRow
+            label="Speed beside the icon"
+            hint={
+              menuBarSpeed
+                ? `${SPEED_TEXT_HINTS[menuBarSpeedText]} With System merge on, it’s ${words().thisComputer}’s whole speed; otherwise Mergelane’s.`
+                : `Turn on Show Mergelane in ${words().statusArea} first.`
+            }
+          >
+            <ToggleGroup
+              aria-label="Speed beside the icon"
+              disabled={!menuBarSpeed}
+              value={[menuBarSpeedText]}
+              onValueChange={(values) => {
+                const next = values[0] as MenuBarSpeedText | undefined
+                if (next) setMenuBarSpeedText(next)
+              }}
+            >
+              {SPEED_TEXT_CHOICES.map((choice) => (
+                <ToggleGroupItem key={choice.value} value={choice.value}>
+                  {choice.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </SettingRow>
+        </>
       )}
       <SettingRow
         label="Notify me when a download finishes"

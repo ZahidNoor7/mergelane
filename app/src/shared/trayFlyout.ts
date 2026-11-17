@@ -84,6 +84,9 @@ export function trayToolTip(speedText: string): string {
   return speedText ? `Mergelane: ${speedText} merged` : 'Mergelane'
 }
 
+/** A place in the window that the notification area's or the menu bar's menu asks for. */
+export type ShowPlace = 'settings' | 'networks' | 'newDownload'
+
 export type TrayMenuId = 'open' | 'pauseAll' | 'merge' | 'settings' | 'exit'
 
 export type TrayMenuEntry =

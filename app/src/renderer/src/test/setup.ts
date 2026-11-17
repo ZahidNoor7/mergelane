@@ -22,6 +22,7 @@ const initialState: InitialState = {
   glassLook: 'clear',
   solidGlass: false,
   menuBarSpeed: true,
+  menuBarSpeedText: 'auto',
   notifyWhenDone: true,
   offerCopiedLinks: false,
   captureRules: DEFAULT_CAPTURE_RULES,

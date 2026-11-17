@@ -49,6 +49,8 @@ test.describe('System merge @smoke', () => {
     await expect(section.getByRole('status')).toHaveText(/^On\./)
     const traffic = section.getByRole('list', { name: 'Merged traffic per network' })
     await expect(traffic.getByText('feth10')).toBeVisible()
+    // Each network's connections, said as such.
+    await expect(traffic.getByRole('listitem').first()).toHaveText(/ · \d+ connections?$/)
     await expect(traffic.getByText(/no internet/)).toBeVisible()
     expect(fake.requests.some((r) => r.method === 'enable')).toBe(true)
 
@@ -151,7 +153,8 @@ test.describe('System merge @smoke', () => {
       MERGELANE_E2E_APP_VERSION: '0.3.3'
     })
     await expect(mergelane.page.getByRole('navigation').first()).toBeVisible()
-    await expect.poll(() => fake.requests.some((r) => r.method === 'status')).toBe(true)
+    // The window has read the helper (the menu bar asks `status` too, but never `events`).
+    await expect.poll(() => fake.requests.some((r) => r.method === 'events')).toBe(true)
     await expect(mergelane.page.getByRole('status', { name: 'Helper update' })).toHaveCount(0)
     fake.version = '0.1.0'
     await mergelane.relaunch({
@@ -175,10 +178,12 @@ test.describe('System merge @smoke', () => {
   }) => {
     fake.autoResume = true
     const section = await openSection(mergelane)
-    const autoResume = section.getByRole('switch', { name: 'Turn back on after a crash' })
+    const autoResume = section.getByRole('switch', { name: 'Turn back on if the helper crashes' })
     await expect(autoResume).toBeChecked()
     await expect(autoResume).toBeEnabled()
-    await expect(section.getByText('After an unexpected stop, merging comes back on')).toBeVisible()
+    await expect(
+      section.getByText(/^If Mergelane’s helper stops unexpectedly while system merge is on/)
+    ).toBeVisible()
 
     await autoResume.click()
     await expect(autoResume).not.toBeChecked()
@@ -198,10 +203,12 @@ test.describe('System merge @smoke', () => {
     mergelane
   }) => {
     const section = await openSection(mergelane)
-    const sticky = section.getByRole('switch', { name: 'Keep each site on one network' })
+    const sticky = section.getByRole('switch', { name: 'Keep each website on one network' })
     await expect(sticky).toBeChecked()
     await expect(sticky).toBeEnabled()
-    await expect(section.getByText(/Sign-ins and calls stay steady/)).toBeVisible()
+    await expect(
+      section.getByText(/^Recommended\. Sign-ins, bank sites and video calls/)
+    ).toBeVisible()
     await sticky.click()
     await expect(sticky).not.toBeChecked()
     expect(fake.stickySites).toBe(false)
@@ -218,12 +225,12 @@ test.describe('System merge @smoke', () => {
   }) => {
     fake.legacy = true
     const section = await openSection(mergelane)
-    const autoResume = section.getByRole('switch', { name: 'Turn back on after a crash' })
+    const autoResume = section.getByRole('switch', { name: 'Turn back on if the helper crashes' })
     await expect(autoResume).toBeDisabled()
     await expect(autoResume).not.toBeChecked()
     await expect(section.getByText('Needs the updated helper.')).toHaveCount(2)
     await expect(
-      section.getByRole('switch', { name: 'Keep each site on one network' })
+      section.getByRole('switch', { name: 'Keep each website on one network' })
     ).toBeDisabled()
     // Missing methods mark it out of date even in a development build.
     await expect(
@@ -247,7 +254,7 @@ test.describe('System merge @smoke', () => {
     const rows = history.getByRole('listitem')
     await expect(rows).toHaveText([
       'en7 disconnected just now · still out',
-      'en5 dropped 2 min ago · back after 40s'
+      'en5 lost internet 2 min ago · back after 40s'
     ])
     await expect(rows.nth(1).locator('time')).toHaveAttribute('datetime', dropped)
 
@@ -260,7 +267,7 @@ test.describe('System merge @smoke', () => {
     await expect(history).toHaveCount(0)
     // With it on, older ones are shown too.
     fake.state = 'on'
-    await expect(rows).toHaveText([/^en5 dropped .+ · back after 1m 40s$/])
+    await expect(rows).toHaveText([/^en5 lost internet .+ · back after 1m 40s$/])
   })
 })
 

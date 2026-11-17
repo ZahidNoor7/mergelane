@@ -24,6 +24,8 @@ vi.mock('../UsenetServerDialog', () => ({
 vi.mock('../LimitsDialog', () => ({ LimitsDialog: () => null }))
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const NOW = new Date(2026, 10, 11, 15).getTime()
 
 const network = (id: string, fields: Record<string, unknown> = {}): unknown => ({
@@ -76,13 +78,13 @@ function download(fields: Record<string, unknown>): DownloadState {
 const running = download({
   id: 'run',
   fileName: 'Holiday film.mkv',
-  speedBytesPerSec: 3 * MB,
+  speedBytesPerSec: 3 * MBPS,
   timeLeftSeconds: 5,
-  peakSpeedBytesPerSec: 4 * MB,
+  peakSpeedBytesPerSec: 4 * MBPS,
   diskLimited: true,
   networks: [
-    network('en0', { speedBytesPerSec: 2 * MB, bytesDownloaded: 3 * MB, retries: 1 }),
-    network('en5', { kind: 'ethernet', speedBytesPerSec: 1 * MB, bytesDownloaded: 1 * MB }),
+    network('en0', { speedBytesPerSec: 2 * MBPS, bytesDownloaded: 3 * MB, retries: 1 }),
+    network('en5', { kind: 'ethernet', speedBytesPerSec: 1 * MBPS, bytesDownloaded: 1 * MB }),
     network('en7', {
       enabled: false,
       status: 'failed',
@@ -95,7 +97,7 @@ const running = download({
       id: 1,
       interfaceId: 'en0',
       status: 'downloading',
-      speedBytesPerSec: 2 * MB,
+      speedBytesPerSec: 2 * MBPS,
       bytesDownloaded: 3 * MB,
       currentBlockIndex: 0,
       split: true,
@@ -130,14 +132,14 @@ const torrent = download({
   kind: 'torrent',
   fileName: 'Trio',
   folder: true,
-  speedBytesPerSec: 1 * MB,
-  uploadSpeedBytesPerSec: 0.5 * MB,
+  speedBytesPerSec: 1 * MBPS,
+  uploadSpeedBytesPerSec: 0.5 * MBPS,
   networks: [
     network('en0', {
       transfer: 'torrent',
-      speedBytesPerSec: 1 * MB,
+      speedBytesPerSec: 1 * MBPS,
       bytesUploaded: 1 * MB,
-      uploadSpeedBytesPerSec: 0.5 * MB
+      uploadSpeedBytesPerSec: 0.5 * MBPS
     })
   ],
   peers: [
@@ -147,9 +149,9 @@ const torrent = download({
       status: 'receiving',
       client: 'WebTorrent',
       bytesDownloaded: 2 * MB,
-      speedBytesPerSec: 1 * MB,
+      speedBytesPerSec: 1 * MBPS,
       bytesUploaded: MB,
-      uploadSpeedBytesPerSec: 0.5 * MB
+      uploadSpeedBytesPerSec: 0.5 * MBPS
     },
     {
       id: 1,
@@ -345,7 +347,7 @@ describe('Inspector, running', () => {
           id: 1,
           interfaceId: 'en0',
           status: 'downloading',
-          speedBytesPerSec: MB,
+          speedBytesPerSec: MBPS,
           bytesDownloaded: MB,
           hedge: true,
           currentBlockIndex: 0,
@@ -367,11 +369,11 @@ describe('Inspector, running', () => {
 
   it('shows a torrent’s peers, upload, files and trackers', async () => {
     show(<Inspector download={torrent} />)
-    expect(screen.getByText('Uploading').nextElementSibling!.textContent).toBe('512.0 KB/s')
+    expect(screen.getByText('Uploading').nextElementSibling!.textContent).toBe('0.50 MB/s')
     expect(screen.getByText('Peers').nextElementSibling!.textContent).toBe('2')
     const networks = screen.getByRole('list', { name: 'Networks' })
     expect(networks.textContent).toContain('2.0 MB received, 1.0 MB sent')
-    expect(networks.textContent).toContain('Uploading at 512.0 KB/s')
+    expect(networks.textContent).toContain('Uploading at 0.50 MB/s')
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: '2 peers' }))
     const peers = within(screen.getByRole('list', { name: 'en0 label peers' })).getAllByRole(
@@ -488,7 +490,7 @@ describe('Inspector, finished and failed', () => {
     bytesDownloaded: 10 * MB,
     bytesUploaded: 2 * MB,
     completedAt: NOW - 10_000 + 5000,
-    peakSpeedBytesPerSec: 3 * MB,
+    peakSpeedBytesPerSec: 3 * MBPS,
     peakPeers: 4,
     files: { chosen: 2, total: 3, selected: [0, 2] },
     networks: [
@@ -504,7 +506,8 @@ describe('Inspector, finished and failed', () => {
     expect(screen.getByRole('status').textContent).toBe('Download complete: Trio')
     expect(screen.getByText('Saved to ~/Downloads')).toBeTruthy()
     expect(screen.getByText('Time').nextElementSibling!.textContent).toBe('0:05')
-    expect(screen.getByText('Average').nextElementSibling!.textContent).toBe('2.0 MB/s')
+    // 10 MiB in 5 s, counted as speeds are (1,000s): 2.1 MB/s.
+    expect(screen.getByText('Average').nextElementSibling!.textContent).toBe('2.1 MB/s')
     expect(screen.getByText('Networks').nextElementSibling!.textContent).toBe('2')
     expect(screen.getByText('Peers').nextElementSibling!.textContent).toBe('4')
     const networks = screen.getByRole('list', { name: 'Networks' })

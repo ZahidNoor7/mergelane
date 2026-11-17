@@ -19,7 +19,12 @@ import { keepsRunningForBrowser, markAppReady, startBridge } from './browserBrid
 import { registerNativeHost, registerNativeHostWindows } from './nativeHost'
 import { installedWindowsHosts, refreshExtensionCopies } from './browsers'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
-import { loadSettings, loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
+import {
+  loadSettings,
+  loadThemeSource,
+  migrateLegacyNetworkPreferences,
+  saveSettings
+} from './settings'
 import {
   applyWindowMaterial,
   CLEAR,
@@ -31,10 +36,15 @@ import {
   titleBarOverlay
 } from './windowBackground'
 import { openedAtLogin } from './loginItem'
-import { startMenuBar, statusItemShown } from './menuBar'
+import { applyMenuBarSettings, startMenuBar, statusItemShown } from './menuBar'
 import { windowsShell } from './notificationArea'
-import { setSystemMerge, systemMergeSnapshot } from './daemon/daemon'
+import { setSystemMerge, systemMergeLinkTraffic, systemMergeSnapshot } from './daemon/daemon'
+import { startMenuBarPanel } from './menuBarPanel'
 import { IpcChannels } from '../shared/ipc-channels'
+import { speedBesideIcon } from '../shared/menuBarPanel'
+import { DEFAULT_THEME_ID } from '../shared/themes'
+import type { AppSettings } from '../shared/types'
+import type { ShowPlace } from '../shared/trayFlyout'
 import { startClipboardOffers } from './clipboardOffers'
 import { startUpdater } from './updater'
 import { testKnobs } from './testKnobs'
@@ -93,6 +103,15 @@ function ensureTray(): void {
   )
 }
 
+/** Whether the menu bar shows the speed beside its icon now, by `settings` and the networks (ADR-0069). */
+function speedShownNow(settings: AppSettings): boolean {
+  return speedBesideIcon(
+    settings.menuBarSpeedText,
+    (downloadManager?.currentNetworks() ?? []).map((network) => network.id),
+    settings.networkPreferences ?? {}
+  )
+}
+
 /** Only once the app is ready. */
 function ensureWindow(): BrowserWindow {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
@@ -101,7 +120,7 @@ function ensureWindow(): BrowserWindow {
 
 /** The window, brought forward on one of its places: the notification area's Settings, or Networks when
  * System merge was refused there (notificationArea.ts). A window opened just now hears it once loaded. */
-function showPlace(place: 'settings' | 'networks'): void {
+function showPlace(place: ShowPlace): void {
   const window = ensureWindow()
   bringForward(window)
   const send = (): void => {
@@ -321,9 +340,45 @@ app.whenReady().then(async () => {
   const settings = await loadSettings()
   startUpdater(() => mainWindow, settings)
   startClipboardOffers(settings)
+  // The menu under the menu bar icon (ADR-0067): it reads the settings afresh, as the window may change them.
+  startMenuBarPanel({
+    open: () => bringForward(ensureWindow()),
+    pauseAll: async () => {
+      await downloadManager?.pauseAll()
+    },
+    newDownload: () => showPlace('newDownload'),
+    settings: () => showPlace('settings'),
+    quit: () => {
+      isQuitting = true
+      app.quit()
+    },
+    // The menu's switch: the opposite of what shows now, kept as a choice (ADR-0069).
+    toggleSpeedBesideIcon: async () => {
+      const saved = await loadSettings()
+      const mode = speedShownNow(saved) ? 'off' : 'on'
+      await saveSettings({ menuBarSpeedText: mode })
+      applyMenuBarSettings(await loadSettings())
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcChannels.menuBarSpeedTextChanged, mode)
+      }
+    },
+    data: async () => {
+      const [system, saved] = await Promise.all([systemMergeLinkTraffic(), loadSettings()])
+      return {
+        system,
+        speedUnit: saved.speedUnit ?? 'bytes',
+        appearanceTheme: saved.appearanceTheme ?? DEFAULT_THEME_ID,
+        networkPreferences: saved.networkPreferences ?? {},
+        speedBesideIcon: speedShownNow(saved)
+      }
+    }
+  })
   startMenuBar(
     {
       totalSpeed: () => downloadManager?.totalSpeed() ?? 0,
+      totalUploadSpeed: () => downloadManager?.totalUploadSpeed() ?? 0,
+      systemTraffic: () => systemMergeLinkTraffic(),
+      networks: () => downloadManager?.currentNetworks() ?? [],
       open: () => bringForward(ensureWindow()),
       quit: () => {
         isQuitting = true

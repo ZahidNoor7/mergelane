@@ -13,6 +13,8 @@ import { CompactBar, NAV_PITCH, NavPill, Sidebar, WinTitleBar } from './WindowCh
 import { TooltipProvider } from './ui/tooltip'
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 
 function iface(
   id: string,
@@ -93,10 +95,10 @@ beforeEach(() => {
     interfaces: [iface('en0', 'Wi-Fi', 'wifi'), iface('en7', 'iPhone USB', 'usb')],
     downloads: {
       a: download('a', 'downloading', [
-        { id: 'en0', speed: 4 * MB },
-        { id: 'en7', speed: 2 * MB },
+        { id: 'en0', speed: 4 * MBPS },
+        { id: 'en7', speed: 2 * MBPS },
         // Gone from the Mac: out, and not counted in the merged speed.
-        { id: 'en5', speed: 1 * MB, kind: 'ethernet' }
+        { id: 'en5', speed: 1 * MBPS, kind: 'ethernet' }
       ]),
       b: download('b', 'queued'),
       c: download('c', 'paused'),

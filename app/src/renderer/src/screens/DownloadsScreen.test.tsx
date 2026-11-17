@@ -20,6 +20,8 @@ vi.mock('../components/LimitsDialog', () => ({
 }))
 
 const MB = 1024 * 1024
+/** A megabyte a second, as speeds count it (1,000s; ADR-0071). Sizes keep MB. */
+const MBPS = 1_000_000
 const NOW = new Date(2026, 10, 11, 15).getTime()
 
 function iface(id: string, displayName: string): NetworkInterfaceInfo {
@@ -67,11 +69,11 @@ function network(id: string, fields: Record<string, unknown> = {}): DownloadStat
 const running = download('film', {
   status: 'downloading',
   fileName: 'Holiday film.mkv',
-  speedBytesPerSec: 2 * MB,
+  speedBytesPerSec: 2 * MBPS,
   timeLeftSeconds: 3,
   // Not on every network: the row shows which ones.
   networks: [
-    network('en0', { speedBytesPerSec: 2 * MB }),
+    network('en0', { speedBytesPerSec: 2 * MBPS }),
     network('en7', { enabled: false, bytesDownloaded: 0 }),
     network('en5', { status: 'limit' })
   ]
@@ -88,7 +90,7 @@ const muxing = download('talk', {
   protocol: 'youtube',
   muxing: true,
   fileName: 'Talk.mp4',
-  speedBytesPerSec: 1 * MB,
+  speedBytesPerSec: 1 * MBPS,
   networks: [network('en0')]
 })
 const waiting = download('waiting', {

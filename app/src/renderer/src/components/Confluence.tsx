@@ -1,13 +1,15 @@
 import { cn } from 'cn'
-import { Gauge, Unplug } from 'lucide-react'
+import { ArrowUp, Gauge, Unplug } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { GlassLens } from './GlassLens'
 
 // The Confluence: the final design's signature (design-system/mergelane/redesign/prototype.html,
 // Confluence; MASTER.md, "The idea"). Each network is a lane drawn as thick as its speed; the lanes
-// merge into one road whose width is the merged speed, beside the merged speed in figures. Lane
-// markings drift along a lane only while it carries bytes, and stop under Reduce Motion.
+// merge into one road whose width is the merged speed. The speed floats over the road on a frosted card, with
+// how many times the fastest single network it is (ADR-0070). Lane markings drift along a lane only while it
+// carries bytes, and stop under Reduce Motion. Pointing at a network, or focusing it, picks its lane out.
 
 export interface ConfluenceLane {
   /** Tells the lanes apart; never shown. */
@@ -130,7 +132,9 @@ export function Confluence({
   const stacked = outerWidth > 0 && outerWidth < 440
 
   const rowHeight = compact ? 32 : 40
-  const height = Math.max(lanes.length * rowHeight, compact ? 64 : 104)
+  // Tall enough for the lens over the road: its label, figure, gain and a caption of two lines.
+  const lensRoom = stacked ? 0 : compact ? 124 : 152
+  const height = Math.max(lanes.length * rowHeight, compact ? 64 : 104, lensRoom)
   const pad = (height - lanes.length * rowHeight) / 2
   const carrying = (lane: ConfluenceLane): boolean => lane.on !== false && !lane.down
   const sum = lanes.reduce((acc, lane) => acc + (carrying(lane) ? lane.speed : 0), 0)
@@ -148,8 +152,14 @@ export function Confluence({
   const width = Math.max(60, drawingWidth)
   // Room for the widest round cap at each lane's start, inside the drawing.
   const x0 = maxLane / 2 + 2
-  const mergeX = Math.round(width * 0.6)
+  // The merged road runs to the far edge; the speed floats over it on the lens, so the lanes meet before it.
+  const lensWidth = compact ? 188 : 220
+  const mergeX = stacked
+    ? Math.round(width * 0.6)
+    : Math.round(Math.max(width * 0.36, Math.min(width * 0.6, width - lensWidth - 40)))
   const xEnd = width - 1
+  // The markings stop where the card begins: nothing moves behind it, so its frosted glass is never redrawn.
+  const markEnd = stacked ? xEnd : Math.max(mergeX, width - 20 - lensWidth)
   const xMid = (x0 + mergeX) / 2
   const gap = 2
   const drawn = thickness.map((t) => (t > 0.8 ? t : 0))
@@ -170,7 +180,7 @@ export function Confluence({
     return {
       t,
       start,
-      centre: `M${x0},${start} C${xMid},${start} ${xMid},${centre} ${mergeX},${centre} L${xEnd},${centre}`,
+      centre: `M${x0},${start} C${xMid},${start} ${xMid},${centre} ${mergeX},${centre} L${markEnd},${centre}`,
       approach: `M${x0},${start} C${xMid},${start} ${xMid},${height / 2} ${mergeX},${height / 2}`,
       ribbon: t
         ? `M${x0},${start - half} C${xMid},${start - half} ${xMid},${centre - half} ${mergeX},${centre - half} L${xEnd},${centre - half} L${xEnd},${centre + half} L${mergeX},${centre + half} C${xMid},${centre + half} ${xMid},${start + half} ${x0},${start + half} Z`
@@ -178,9 +188,23 @@ export function Confluence({
     }
   })
   const flowing = !idle && !reduced
+  // Point at a network (its label or its lane) to pick it out: the other lanes step back.
+  const [hot, setHot] = useState<string | null>(null)
+  const shareOf = (lane: ConfluenceLane): number =>
+    sum > 0 && carrying(lane) ? Math.round((lane.speed / sum) * 100) : 0
+  // What merging buys: the merged speed against the fastest single network.
+  const fastest = Math.max(0, ...lanes.map((lane) => (carrying(lane) ? lane.speed : 0)))
+  const gain = !idle && live > 1 && fastest > 0 ? sum / fastest : 0
 
   const totalBlock = (
-    <div className="flex min-w-[7.5rem] flex-col gap-1">
+    <GlassLens
+      off={stacked}
+      className={cn(
+        'flex min-w-[7.5rem] flex-col gap-1',
+        !stacked && 'absolute top-1/2 right-5 z-[1] -translate-y-1/2 px-4 py-3'
+      )}
+      style={stacked ? undefined : { width: lensWidth }}
+    >
       <span className="inline-flex items-center gap-1.5 text-[12px] font-[580] text-ink-2">
         {label}
         {labelNote}
@@ -196,17 +220,20 @@ export function Confluence({
           )}
         />
       )}
+      {gain >= 1.05 && (
+        <span className="flex items-center gap-1 text-[12px] font-[600] text-primary">
+          <ArrowUp aria-hidden className="size-3" strokeWidth={2.5} />
+          {gain.toFixed(1)}× your fastest network
+        </span>
+      )}
       {caption && <div className="text-[12px] leading-snug text-ink-2">{caption}</div>}
-    </div>
+    </GlassLens>
   )
 
   return (
     <div
       ref={outerRef}
-      className={cn(
-        'grid items-center gap-x-4 gap-y-3',
-        stacked ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[auto_minmax(0,1fr)_auto]'
-      )}
+      className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3"
     >
       {stacked && <div className="col-span-2">{totalBlock}</div>}
       <ul
@@ -217,11 +244,32 @@ export function Confluence({
         {lanes.map((lane) => (
           <li
             key={lane.id}
-            style={{ height: rowHeight }}
-            className="flex flex-col items-end justify-center text-right"
+            tabIndex={0}
+            style={{ height: rowHeight, opacity: hot && hot !== lane.id ? 0.45 : 1 }}
+            onMouseEnter={() => setHot(lane.id)}
+            onMouseLeave={() => setHot(null)}
+            onFocus={() => setHot(lane.id)}
+            onBlur={() => setHot(null)}
+            aria-label={`${lane.name}: ${
+              lane.down
+                ? 'dropped'
+                : idle || !carrying(lane)
+                  ? (lane.note ?? (idle ? 'idle' : 'off')).toLowerCase()
+                  : `${formatSpeed(lane.speed)}, ${shareOf(lane)}% of the total`
+            }`}
+            className="flex cursor-default flex-col items-end justify-center rounded-[6px] text-right transition-opacity duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring,var(--color-primary))]"
           >
-            <span className="text-[12.5px] leading-tight font-[620] whitespace-nowrap">
+            <span className="flex items-center gap-1.5 text-[12.5px] leading-tight font-[620] whitespace-nowrap">
               {lane.name}
+              <span
+                aria-hidden
+                data-swatch
+                className={cn(
+                  'inline-block h-1.5 w-2 shrink-0 rounded-full',
+                  (idle || lane.down || !carrying(lane)) && 'opacity-40'
+                )}
+                style={{ background: lane.color }}
+              />
             </span>
             <span className="flex items-center gap-1.5 text-[11.5px] leading-tight whitespace-nowrap text-ink-3">
               {lane.down ? (
@@ -243,6 +291,7 @@ export function Confluence({
                   <span className="figures text-[12px] font-[600] text-ink-2">
                     {formatSpeed(lane.speed)}
                   </span>
+                  {sum > 0 && <span className="figures">{shareOf(lane)}%</span>}
                 </>
               )}
               {!compact && lane.interfaceName && (
@@ -252,7 +301,7 @@ export function Confluence({
           </li>
         ))}
       </ul>
-      <div ref={drawingRef} className="min-w-0">
+      <div ref={drawingRef} className="relative min-w-0">
         <svg
           width={width}
           height={height}
@@ -269,7 +318,11 @@ export function Confluence({
                 : lane.color
             if (!shape.t) {
               return (
-                <g key={lane.id} data-lane={lane.id}>
+                <g
+                  key={lane.id}
+                  data-lane={lane.id}
+                  style={{ opacity: hot && hot !== lane.id ? 0.3 : 1, transition: 'opacity 150ms' }}
+                >
                   <path
                     d={shape.approach}
                     fill="none"
@@ -287,7 +340,13 @@ export function Confluence({
             const pixelsPerSecond = 6 + (lane.speed / 1e6) * 1.8
             const duration = Math.round((12 / pixelsPerSecond) * 20) / 20
             return (
-              <g key={lane.id} data-lane={lane.id}>
+              <g
+                key={lane.id}
+                data-lane={lane.id}
+                onMouseEnter={() => setHot(lane.id)}
+                onMouseLeave={() => setHot(null)}
+                style={{ opacity: hot && hot !== lane.id ? 0.25 : 1, transition: 'opacity 150ms' }}
+              >
                 <path d={shape.ribbon!} fill={color} />
                 <circle cx={x0} cy={shape.start} r={shape.t / 2} fill={color} />
                 {shape.t >= 5 && (
@@ -315,8 +374,8 @@ export function Confluence({
             />
           )}
         </svg>
+        {!stacked && totalBlock}
       </div>
-      {!stacked && totalBlock}
     </div>
   )
 }

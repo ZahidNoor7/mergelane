@@ -64,7 +64,7 @@ test.describe('Dashboard @smoke', () => {
     await expect(downloads.getByText(/Paste a link/)).toBeVisible()
     await expect(downloads.getByRole('button', { name: /New download/ })).toBeVisible()
     await expect(
-      page.getByText('Each network’s speed is drawn here while something downloads.')
+      page.getByText('Each network’s speed, from every app, is drawn here as it moves.')
     ).toBeVisible()
     await expect(page.getByText('Nothing downloading', { exact: true }).first()).toBeVisible()
 
@@ -82,9 +82,7 @@ test.describe('Dashboard @smoke', () => {
 
     // No helper: system merge offers the install, and says downloads don't need it.
     const otherApps = page.getByRole('region', { name: 'Other apps' })
-    await expect(otherApps).toContainText(
-      'Mergelane’s own downloads use every network without this.'
-    )
+    await expect(otherApps).toContainText('Mergelane’s own downloads always use all your networks.')
     const merge = otherApps.getByRole('region', { name: 'System merge' })
     await expect(merge.getByText('Needs a one-time install of a small helper.')).toBeVisible()
     await expect(merge.getByRole('button', { name: 'Install' })).toBeVisible()
@@ -140,7 +138,7 @@ test.describe('Dashboard @smoke', () => {
     await expect(page.getByRole('button', { name: 'Downloads', exact: true })).toBeInViewport({
       ratio: 1
     })
-    await expect(page.getByText('Merged speed', { exact: true })).toBeInViewport()
+    await expect(page.getByText('Total speed, all apps', { exact: true })).toBeInViewport()
     const about = page.getByRole('region', { name: 'About combined speed' })
     await about.getByText('VPNs come first.').scrollIntoViewIfNeeded()
     await expect(about.getByText('VPNs come first.')).toBeInViewport()
@@ -169,7 +167,9 @@ test.describe('Dashboard @smoke', () => {
       .toBeGreaterThan(0)
     await expect(row).toContainText(/\d+% · [\d.]+ [KM]B of 2\.0 MB/)
     await expect(row).toContainText(/[\d.]+ [KM]B\/s/)
-    await expect(page.getByText(/^1 downloading/)).toBeVisible()
+    // The total speed, all apps, counts the downloads in (ADR-0070); "1 downloading, about … left" is the
+    // Downloads view's now.
+    await expect(page.getByText(/^Includes [\d.]+ (B|KB|MB)\/s of downloads$/)).toBeVisible()
     await expect(
       page.getByRole('img', {
         name: /^Merged throughput over the last minute, split by network\. Now /
@@ -181,9 +181,9 @@ test.describe('Dashboard @smoke', () => {
       .getByRole('region', { name: 'Networks' })
       .getByRole('listitem', { name: 'a' })
     await expect(network).toContainText(/[\d.]+ [KM]B\/s/)
-    await expect(
-      page.getByText('Each network’s speed is drawn here while something downloads.')
-    ).toBeHidden()
+    // The chart beside the card follows the card: every app's traffic (ADR-0071). The test's networks have no
+    // counters of their own; e2e "the total speed, all apps" draws real ones.
+    await expect(page.getByRole('heading', { name: 'Last minute, all apps' })).toBeVisible()
 
     // The row opens the download's details.
     await row.getByRole('button', { name: 'test.bin' }).click()
@@ -195,6 +195,54 @@ test.describe('Dashboard @smoke', () => {
     await places.getByRole('button', { name: 'Downloads', exact: true }).click()
     await places.getByRole('button', { name: 'Dashboard', exact: true }).click()
     await expect(downloads.getByText('Nothing downloading')).toBeVisible()
+  })
+
+  test('the total speed, all apps: every byte on each network, with downloads or without (ADR-0070)', async ({
+    mergelane,
+    serve
+  }) => {
+    test.skip(process.platform !== 'darwin', 'the Mac’s counters')
+    // This Mac's loopback, whose real counters move as the test's server sends to the app.
+    await mergelane.relaunch({ MERGELANE_E2E_INTERFACES: 'lo0=127.0.0.1' })
+    const page = mergelane.page
+    await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
+    await expect(page.getByText('Total speed, all apps', { exact: true })).toBeVisible()
+    await expect(page.getByText('No downloads running. This is other apps.')).toBeVisible()
+
+    // One connection at 1 MB/s: about a minute, so it runs through every check below.
+    const origin = await serve({ size: 1024 * BLOCK, bytesPerSecond: 1_000_000 })
+    const id = await mergelane.start(origin.url(), origin.sha256, {
+      networks: ['lo0'],
+      connections: 1
+    })
+    await mergelane.waitForHttpStatus('downloading')
+
+    // The Downloads view: the download speed alone, with how long is left. (Its button says "1 in progress".)
+    const places = page.getByRole('navigation', { name: 'Mergelane' })
+    await places.getByRole('button', { name: /^Downloads/ }).click()
+    const card = page.getByText('Download speed', { exact: true }).locator('..')
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('1 downloading', { timeout: 15_000 })
+
+    // The Dashboard: everything on the network, the download included.
+    await places.getByRole('button', { name: 'Dashboard', exact: true }).click()
+    await expect(page.getByText(/^Includes [\d.]+ (B|KB|MB)\/s of downloads$/)).toBeVisible({
+      timeout: 15_000
+    })
+    // Loopback carries the download both ways, in and out: its lane is all of the total.
+    const lane = page
+      .getByRole('list', { name: 'Networks in this merge' })
+      .getByRole('listitem')
+      .first()
+    await expect(lane).toHaveAttribute('aria-label', /: [\d.]+ (KB|MB)\/s, 100% of the total$/, {
+      timeout: 15_000
+    })
+    // The last minute beside it draws the same traffic.
+    await expect(page.getByRole('heading', { name: 'Last minute, all apps' })).toBeVisible()
+    await expect(
+      page.getByText('Each network’s speed, from every app, is drawn here as it moves.')
+    ).toBeHidden()
+    await mergelane.api.cancelDownload(id)
   })
 
   test('a network that drops and comes back is logged, and what was left is said', async ({
@@ -251,8 +299,8 @@ test.describe('Dashboard with system merge @smoke', () => {
       const traffic = otherApps.getByRole('region', { name: 'Merged traffic by network' })
       const up = traffic.getByRole('listitem').filter({ hasText: 'feth10' })
       const down = traffic.getByRole('listitem').filter({ hasText: 'feth20' })
-      await expect(up).toContainText('peak 2.4 MB/s')
-      await expect(up.getByRole('img', { name: /^feth10: 2\.4 MB\/s merged now/ })).toBeVisible()
+      await expect(up).toContainText('peak 2.5 MB/s')
+      await expect(up.getByRole('img', { name: /^feth10: 2\.5 MB\/s merged now/ })).toBeVisible()
       await expect(down).toContainText('No internet')
       // Failover says what a link without internet means for other apps.
       await expect(page.getByRole('region', { name: 'Failover' })).toContainText(

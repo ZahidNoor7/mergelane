@@ -1,6 +1,8 @@
 import { useId, useState } from 'react'
 import type { SystemMergeOutage } from '../../../shared/types'
 import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { useAppStore } from '../store/useAppStore'
 import { words } from '../platformWords'
 import { useSystemMerge } from '../hooks/useSystemMerge'
 import { formatEta, formatWhen } from '../utils/format'
@@ -17,12 +19,19 @@ import {
 import { Button, buttonVariants } from './ui/button'
 import { Switch } from './ui/switch'
 
-const STATE_TEXT = {
-  on: 'On',
-  off: 'Off',
-  starting: 'Turning on…',
-  stopping: 'Turning off…'
-} as const
+/** What the switch's state means, in plain words (ADR-0069). */
+function stateText(state: 'on' | 'off' | 'starting' | 'stopping'): string {
+  switch (state) {
+    case 'on':
+      return 'On. Your other apps’ connections are spread across all your networks.'
+    case 'off':
+      return `Off. Your other apps use only the network ${words().system} picks.`
+    case 'starting':
+      return 'Turning on…'
+    case 'stopping':
+      return 'Turning off…'
+  }
+}
 
 /** With merging off, link changes older than this aren't worth a line. */
 const RECENT_MS = 10 * 60_000
@@ -37,13 +46,31 @@ function when(at: string, now: number): string {
     : text
 }
 
-/** "en5 dropped 2 min ago · back after 40s", the way the failover history reads. */
-function OutageRow({ outage, now }: { outage: SystemMergeOutage; now: number }): React.JSX.Element {
+/** A network's name as the window shows it (Wi-Fi, iPhone USB), from its device name (en0). */
+function useNetworkName(): (device: string) => string {
+  const interfaces = useAppStore((store) => store.interfaces)
+  const visual = useNetworkVisuals()
+  return (device) => {
+    const network = interfaces.find((each) => each.id === device)
+    return visual(device, network?.kind ?? 'ethernet', network?.displayName ?? device).name
+  }
+}
+
+/** "Wi-Fi lost internet 2 min ago · back after 40s", the way the failover history reads. */
+function OutageRow({
+  outage,
+  now,
+  name
+}: {
+  outage: SystemMergeOutage
+  now: number
+  name: string
+}): React.JSX.Element {
   const back = outage.backAt ? Date.parse(outage.backAt) - Date.parse(outage.at) : null
   return (
     <li className="text-[12px] text-muted-foreground">
-      <span className="font-mono text-[11.5px]">{outage.link}</span>{' '}
-      {outage.kind === 'gone' ? 'disconnected' : 'dropped'}{' '}
+      <span className="font-[560]">{name}</span>{' '}
+      {outage.kind === 'gone' ? 'disconnected' : 'lost internet'}{' '}
       <time dateTime={outage.at}>{when(outage.at, now)}</time>
       {back === null ? (
         <span className="text-[var(--color-danger)]"> · still out</span>
@@ -62,6 +89,7 @@ function OutageRow({ outage, now }: { outage: SystemMergeOutage; now: number }):
  * (ADR-0046). */
 export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Element {
   const formatSpeed = useFormatSpeed()
+  const networkName = useNetworkName()
   const { snapshot, now, busy, pending, removal, run, remove } = useSystemMerge(open)
   const [confirmingRemoval, setConfirmingRemoval] = useState(false)
   const descriptionId = useId()
@@ -98,7 +126,7 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
           <span className="text-[13.5px] font-medium">System merge</span>
           <span id={descriptionId} className="text-[12px] text-muted-foreground" role="status">
             {snapshot.reachable
-              ? `${STATE_TEXT[snapshot.state]}. Other apps' connections use every network.`
+              ? stateText(snapshot.state)
               : snapshot.helperOutdated
                 ? 'Off until the helper is updated.'
                 : snapshot.installed
@@ -176,12 +204,12 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <span id={autoResumeId} className="text-[12.5px]">
-              Turn back on after a crash
+              Turn back on if the helper crashes
             </span>
             <span id={autoResumeHelpId} className="text-[12px] text-muted-foreground">
               {snapshot.autoResume === undefined
                 ? 'Needs the updated helper.'
-                : 'After an unexpected stop, merging comes back on by itself if it was on.'}
+                : 'If Mergelane’s helper stops unexpectedly while system merge is on, it turns system merge back on by itself when it starts again.'}
             </span>
           </div>
           <Switch
@@ -204,12 +232,12 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <span id={stickyId} className="text-[12.5px]">
-              Keep each site on one network
+              Keep each website on one network
             </span>
             <span id={stickyHelpId} className="text-[12px] text-muted-foreground">
               {snapshot.stickySites === undefined
                 ? 'Needs the updated helper.'
-                : 'Sign-ins and calls stay steady. One site then gets one network’s speed; Mergelane’s own downloads still use every network.'}
+                : 'Recommended. Sign-ins, bank sites and video calls can break when a website sees you switch networks. Each website then gets one network’s speed; Mergelane’s own downloads still use them all.'}
             </span>
           </div>
           <Switch
@@ -227,38 +255,50 @@ export function SystemMergeSection({ open }: { open: boolean }): React.JSX.Eleme
         </div>
       )}
       {snapshot.reachable && on && snapshot.links.length > 0 && (
-        <ul aria-label="Merged traffic per network" className="flex flex-col gap-1">
-          {snapshot.links.map((link) => (
-            <li
-              key={link.name}
-              className="flex items-center justify-between font-mono text-[11.5px] text-muted-foreground"
-            >
-              <span>
-                {link.name}
-                {link.state !== 'up' && (
-                  <span className="text-[var(--color-danger)]">
-                    {link.state === 'down' ? ' · no internet' : ' · checking'}
-                  </span>
-                )}
-              </span>
-              <span>
-                ↓ {formatSpeed(link.rxBps)} ↑ {formatSpeed(link.txBps)} · {link.activeFlows}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-1">
+          <span className="text-[12px] font-[560] text-muted-foreground">
+            Your other apps right now
+          </span>
+          <ul aria-label="Merged traffic per network" className="flex flex-col gap-1">
+            {snapshot.links.map((link) => (
+              <li
+                key={link.name}
+                className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground"
+              >
+                <span className="min-w-0 truncate">
+                  {networkName(link.name)}
+                  {link.state !== 'up' && (
+                    <span className="text-[var(--color-danger)]">
+                      {link.state === 'down' ? ' · no internet' : ' · checking'}
+                    </span>
+                  )}
+                </span>
+                <span className="figures shrink-0 whitespace-nowrap">
+                  ↓ {formatSpeed(link.rxBps)} ↑ {formatSpeed(link.txBps)} · {link.activeFlows}{' '}
+                  {link.activeFlows === 1 ? 'connection' : 'connections'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {outages.length > 0 && (
         <ul aria-label="Recent network dropouts" className="flex flex-col gap-0.5">
           {outages.map((outage) => (
-            <OutageRow key={`${outage.link} ${outage.at}`} outage={outage} now={now} />
+            <OutageRow
+              key={`${outage.link} ${outage.at}`}
+              outage={outage}
+              now={now}
+              name={networkName(outage.link)}
+            />
           ))}
         </ul>
       )}
       {snapshot.installed && (
         <div className="flex items-center justify-between gap-3 border-t-[0.5px] border-border pt-2">
           <span id={removeHelpId} className="min-w-0 text-[12px] text-muted-foreground">
-            Mergelane&apos;s helper runs system merge. Downloads don&apos;t need it.
+            System merge needs Mergelane&apos;s helper. Mergelane&apos;s own downloads work without
+            it.
           </span>
           <Button
             type="button"

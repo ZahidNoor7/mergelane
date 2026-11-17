@@ -21,18 +21,47 @@ test.describe('formatting @smoke', () => {
     expect(formatPercent(0, 0)).toBe(0)
   })
 
-  test('less than a byte a second is still in bytes', () => {
+  test('a size under a byte is still bytes; a speed is always in the unit chosen (ADR-0072)', () => {
     expect(formatBytes(0.5)).toBe('1 B')
-    expect(formatSpeed(1 / 3, 'bytes')).toBe('0 B/s')
+    expect(formatSpeed(1 / 3, 'bytes')).toBe('0.000 MB/s')
+    expect(formatSpeed(1 / 3, 'kb')).toBe('0 KB/s')
     expect(formatBytes(1536)).toBe('1.5 KB')
   })
 
-  test('a speed axis for a sub-byte speed is finite', () => {
+  test('a speed axis for a sub-byte speed is finite, and its lines say different speeds', () => {
     const { top, ticks } = speedTicks(0.5, 'bytes')
     expect(Number.isFinite(top)).toBe(true)
     expect(top).toBeGreaterThanOrEqual(0.5)
     expect(ticks.length).toBeGreaterThan(0)
-    for (const tick of ticks) expect(tick.label).toMatch(/ B\/s$/)
+    for (const tick of ticks) expect(tick.label).toMatch(/^0\.01 MB\/s$/)
+    // A few KB/s: round steps, each line its own figure, in the unit chosen.
+    expect(speedTicks(2_600, 'kb').ticks.map((tick) => tick.label)).toEqual([
+      '1 KB/s',
+      '2 KB/s',
+      '3 KB/s'
+    ])
+    expect(speedTicks(46_000, 'bytes').ticks.map((tick) => tick.label)).toEqual([
+      '0.02 MB/s',
+      '0.04 MB/s',
+      '0.06 MB/s'
+    ])
+    // In every unit.
+    expect(speedTicks(27_900_000, 'kb').ticks.map((tick) => tick.label)).toEqual([
+      '10,000 KB/s',
+      '20,000 KB/s',
+      '30,000 KB/s'
+    ])
+    expect(speedTicks(27_900_000, 'bytes').ticks.map((tick) => tick.label)).toEqual([
+      '10 MB/s',
+      '20 MB/s',
+      '30 MB/s'
+    ])
+    // 223.2 Mbps.
+    expect(speedTicks(27_900_000, 'bits').ticks.map((tick) => tick.label)).toEqual([
+      '100 Mbps',
+      '200 Mbps',
+      '300 Mbps'
+    ])
   })
 
   test('a countdown never reads 60s', () => {

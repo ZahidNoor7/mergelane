@@ -1,8 +1,11 @@
 import type { SystemMergeRemoval, SystemMergeSnapshot } from '@shared/types'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '../store/useAppStore'
 import { SystemMergeSection } from './SystemMergeSection'
+
+const initialStore = useAppStore.getState()
 
 // The System merge section (and its hook, useSystemMerge) against a stand-in for the preload
 // bridge: what each helper state shows, what each control sends, and "Remove helper…" with its
@@ -55,10 +58,20 @@ beforeEach(() => {
     )
   }
   Object.assign(window.mergelane, bridge)
+  // Network names come with the theme's network colours, which follow light and dark.
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  }))
 })
 
 afterEach(() => {
+  // Unmounted before matchMedia goes, which a still-polling section would ask for.
+  cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
+  useAppStore.setState(initialStore, true)
   for (const key of Object.keys(bridge))
     delete (window.mergelane as unknown as Record<string, unknown>)[key]
 })
@@ -80,14 +93,19 @@ describe('SystemMergeSection', () => {
     expect(bridge.systemMerge).not.toHaveBeenCalled()
   })
 
-  it('switches merging on, and shows each link’s merged traffic', async () => {
+  it('switches merging on, and shows each network’s merged traffic by its name', async () => {
+    useAppStore.setState({
+      interfaces: [{ id: 'en0', device: 'en0', displayName: 'Wi-Fi', addresses: [], kind: 'wifi' }]
+    })
     const region = await section()
-    expect(within(region).getByRole('status').textContent).toMatch(/^Off\./)
+    expect(within(region).getByRole('status').textContent).toBe(
+      'Off. Your other apps use only the network macOS picks.'
+    )
     current = snapshot({
       state: 'on',
       links: [
         { name: 'en0', state: 'up', rxBps: 2_000_000, txBps: 1000, activeFlows: 3 },
-        { name: 'en5', state: 'down', rxBps: 0, txBps: 0, activeFlows: 0 },
+        { name: 'en5', state: 'down', rxBps: 0, txBps: 0, activeFlows: 1 },
         { name: 'en7', state: 'unknown', rxBps: 0, txBps: 0, activeFlows: 0 }
       ]
     })
@@ -95,8 +113,15 @@ describe('SystemMergeSection', () => {
     await userEvent.click(within(region).getByRole('switch', { name: 'System merge' }))
     expect(bridge.setSystemMerge).toHaveBeenCalledWith(true)
     const traffic = await within(region).findByRole('list', { name: 'Merged traffic per network' })
-    expect(within(traffic).getByText(/no internet/)).toBeTruthy()
-    expect(within(traffic).getByText(/checking/)).toBeTruthy()
+    expect(within(region).getByRole('status').textContent).toBe(
+      'On. Your other apps’ connections are spread across all your networks.'
+    )
+    expect(within(region).getByText('Your other apps right now')).toBeTruthy()
+    const rows = within(traffic).getAllByRole('listitem')
+    // The window's name for a network it knows; the device's for one it doesn't.
+    expect(rows[0].textContent).toMatch(/^Wi-Fi↓ .+ ↑ .+ · 3 connections$/)
+    expect(rows[1].textContent).toMatch(/^en5 · no internet↓ .+ · 1 connection$/)
+    expect(rows[2].textContent).toMatch(/^en7 · checking↓ .+ · 0 connections$/)
   })
 
   it('shows a refusal as an alert, and a reason while on as news', async () => {
@@ -148,17 +173,19 @@ describe('SystemMergeSection', () => {
     expect(within(region).getByText('This app needs a newer helper.')).toBeTruthy()
     // Both settings say so, and can't be changed.
     expect(within(region).getAllByText('Needs the updated helper.')).toHaveLength(2)
-    const sticky = within(region).getByRole('switch', { name: 'Keep each site on one network' })
+    const sticky = within(region).getByRole('switch', { name: 'Keep each website on one network' })
     expect(sticky.hasAttribute('data-disabled')).toBe(true)
     expect(sticky.className).toContain('cursor-not-allowed')
   })
 
-  it('keeps each site on one network by default, and turns it off', async () => {
+  it('keeps each website on one network by default, and turns it off', async () => {
     const region = await section()
     const sticky = (): HTMLElement =>
-      within(region).getByRole('switch', { name: 'Keep each site on one network' })
+      within(region).getByRole('switch', { name: 'Keep each website on one network' })
     expect(sticky().getAttribute('aria-checked')).toBe('true')
-    expect(within(region).getByText(/Sign-ins and calls stay steady/)).toBeTruthy()
+    expect(
+      within(region).getByText(/^Recommended\. Sign-ins, bank sites and video calls/)
+    ).toBeTruthy()
     await userEvent.click(sticky())
     expect(bridge.setSystemMergeStickySites).toHaveBeenCalledWith(false)
     await waitFor(() => expect(sticky().getAttribute('aria-checked')).toBe('false'))
@@ -167,13 +194,13 @@ describe('SystemMergeSection', () => {
   it('turns auto-resume on', async () => {
     const region = await section()
     await userEvent.click(
-      within(region).getByRole('switch', { name: 'Turn back on after a crash' })
+      within(region).getByRole('switch', { name: 'Turn back on if the helper crashes' })
     )
     expect(bridge.setSystemMergeAutoResume).toHaveBeenCalledWith(true)
     await waitFor(() =>
       expect(
         within(region)
-          .getByRole('switch', { name: 'Turn back on after a crash' })
+          .getByRole('switch', { name: 'Turn back on if the helper crashes' })
           .getAttribute('aria-checked')
       ).toBe('true')
     )
@@ -195,7 +222,7 @@ describe('SystemMergeSection', () => {
     ).getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual([
       'en7 disconnected just now · still out',
-      'en5 dropped 2 min ago · back after 40s'
+      'en5 lost internet 2 min ago · back after 40s'
     ])
   })
 
@@ -209,7 +236,7 @@ describe('SystemMergeSection', () => {
     const region = await section()
     expect(
       within(region).getByRole('list', { name: 'Recent network dropouts' }).textContent
-    ).toMatch(/^en5 dropped yesterday /)
+    ).toMatch(/^en5 lost internet yesterday /)
   })
 
   it('keeps polling while open', async () => {
@@ -235,7 +262,11 @@ describe('Remove helper', () => {
     const region = await section()
     const button = within(region).getByRole('button', { name: 'Remove helper…' })
     expect(button.getAttribute('aria-describedby')).toBeTruthy()
-    expect(within(region).getByText(/Downloads don't need it\./)).toBeTruthy()
+    expect(
+      within(region).getByText(
+        "System merge needs Mergelane's helper. Mergelane's own downloads work without it."
+      )
+    ).toBeTruthy()
     await userEvent.click(button)
     const dialog = await screen.findByRole('alertdialog', { name: "Remove Mergelane's helper?" })
     expect(dialog.textContent).toContain(

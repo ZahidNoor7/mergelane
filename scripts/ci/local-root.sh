@@ -185,7 +185,7 @@ preflight() {
   [ "$(uname -m)" = arm64 ] || refuse "Apple silicon (arm64) only"
   local major
   major=$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)
-  [ "${major:-0}" -ge 27 ] 2>/dev/null || refuse "needs macOS 27 or later (found $(sw_vers -productVersion 2>/dev/null))"
+  [ "${major:-0}" -ge 13 ] 2>/dev/null || refuse "needs macOS 13 or later, as Mergelane does (found $(sw_vers -productVersion 2>/dev/null))"
   [ "$(id -u)" != 0 ] || refuse "run it as yourself, not with sudo: it asks for your password once, and Playwright must run as you"
   if [ "$DRY" != 1 ] && ! [ -t 0 ]; then refuse "run it in a terminal: sudo asks for your password there"; fi
 

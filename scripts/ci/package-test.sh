@@ -2,9 +2,10 @@
 # Packaging test (Phase 1 acceptance criterion 1, docs/DECISIONS.md ADR-0013).
 #
 # Installs the DMG the way a user does and checks that the app reaches its ready state:
-#   mount -> copy the app out -> mark it quarantined -> verify every signature and the bundle
-#   metadata -> check Gatekeeper's verdict is "unnotarised" (Open Anyway), not "damaged" ->
-#   remove quarantine (the README's install step) -> open -> ask the bridge socket's health until ready -> quit.
+#   mount -> copy the app out -> mark it quarantined -> verify every signature, that every program runs on
+#   the oldest macOS Mergelane supports, and the bundle metadata -> check Gatekeeper's verdict is
+#   "unnotarised" (Open Anyway), not "damaged" -> remove quarantine (the README's install step) -> open ->
+#   ask the bridge socket's health until ready -> quit.
 #
 # Local mode (--local, or MERGELANE_PACKAGE_TEST_LOCAL=1) is for the owner's Mac, where CI's way of
 # testing would reach the owner's own Mergelane (docs/RELEASING.md, "Checking a build on this Mac"):
@@ -37,6 +38,8 @@ fi
 DMG=${1:?usage: package-test.sh [--local] <dmg> [expected-version]}
 EXPECTED_VERSION=${2:-}
 BUNDLE_ID=io.github.zahidnoor7.mergelane
+# The oldest macOS Mergelane runs on (app/electron-builder.yml, ADR-0065). No program in the app may need a newer one.
+MACOS_MINIMUM=13.0
 # The browser bridge's socket (docs/BROWSER-BRIDGE.md); its health message reports readiness.
 BRIDGE_SOCKET="$HOME/Library/Application Support/Mergelane/browser.sock"
 READY_TIMEOUT_S=${READY_TIMEOUT_S:-90}
@@ -62,6 +65,18 @@ fail() {
   exit 1
 }
 skipped() { echo "SKIPPED (local mode): $*"; }
+
+# A macOS version as one number that compares in order: 13.0 -> 130000, 11.0.1 -> 110001.
+version_number() { awk -F. '{ printf "%d\n", $1 * 10000 + $2 * 100 + $3 }' <<<"$1"; }
+
+# The oldest macOS a Mach-O file's arm64 code runs on, as vtool reports it; empty when the file has no arm64 code
+# (an Intel-only prebuild an npm package ships, which an Apple-silicon Mac never loads), or its arm64 code is for
+# another platform (an iOS prebuild). vtool's report is read whole first, so awk stopping early can't cut it off.
+macos_minimum() {
+  local report
+  report=$(vtool -arch arm64 -show-build "$1" 2>/dev/null) || return 0
+  awk '$1 == "platform" { platform = $2 } $1 == "minos" && platform == "MACOS" { print $2; exit }' <<<"$report"
+}
 
 # --- Local mode: what the launch must leave alone -------------------------------------------------
 
@@ -213,6 +228,8 @@ signature=$(codesign -dv "$APP" 2>&1)
 grep -q '^Signature=adhoc$' <<<"$signature" || fail "expected an ad-hoc signature"
 bad=0
 checked=0
+too_new=0
+other=0
 while IFS= read -r -d '' f; do
   if file -b "$f" | grep -q 'Mach-O'; then
     checked=$((checked + 1))
@@ -220,16 +237,25 @@ while IFS= read -r -d '' f; do
       echo "not validly signed: ${f#"$APP"/}"
       bad=$((bad + 1))
     fi
+    minimum=$(macos_minimum "$f")
+    if [ -z "$minimum" ]; then
+      other=$((other + 1))
+    elif [ "$(version_number "$minimum")" -gt "$(version_number "$MACOS_MINIMUM")" ]; then
+      echo "needs macOS $minimum: ${f#"$APP"/}"
+      too_new=$((too_new + 1))
+    fi
   fi
 done < <(find "$APP" -type f -print0)
-echo "Mach-O files checked: $checked"
+echo "Mach-O files checked: $checked ($other of them hold no macOS arm64 code, so they never load)"
 [ "$checked" -gt 0 ] || fail "found no Mach-O files to check"
 [ "$bad" -eq 0 ] || fail "$bad Mach-O files are not validly signed"
+[ "$too_new" -eq 0 ] || fail "$too_new Mach-O files need a newer macOS than $MACOS_MINIMUM, the oldest Mergelane runs on"
+echo "every macOS arm64 Mach-O file runs on macOS $MACOS_MINIMUM"
 
 step "Bundle metadata"
 PLIST="$APP/Contents/Info.plist"
 [ "$(plutil -extract CFBundleIdentifier raw "$PLIST")" = "$BUNDLE_ID" ] || fail "wrong bundle identifier"
-[ "$(plutil -extract LSMinimumSystemVersion raw "$PLIST")" = "27.0" ] || fail "LSMinimumSystemVersion is not 27.0"
+[ "$(plutil -extract LSMinimumSystemVersion raw "$PLIST")" = "$MACOS_MINIMUM" ] || fail "LSMinimumSystemVersion is not $MACOS_MINIMUM"
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$PLIST")
 echo "version $VERSION"
 if [ -n "$EXPECTED_VERSION" ] && [ "$VERSION" != "$EXPECTED_VERSION" ]; then

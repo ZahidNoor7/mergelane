@@ -327,7 +327,7 @@ describe('the notes', () => {
   test('the install section names the version, the steps and the requirements', () => {
     const text = installSection('1.2.3')
     for (const expected of [
-      'macOS 27 or later, Apple silicon only',
+      'macOS 13 Ventura or later, Apple silicon only',
       'Download `Mergelane-1.2.3-arm64.dmg`',
       'drag **Mergelane** to **Applications**',
       '**System Settings › Privacy & Security**',

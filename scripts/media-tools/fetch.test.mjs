@@ -27,6 +27,7 @@ import { after, before, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
   archsOf,
+  compareVersions,
   DEFAULT_MANIFEST,
   DEFAULT_OUT_DIR,
   download,
@@ -40,6 +41,8 @@ import {
   targetOf,
   isTransient,
   loadManifest,
+  MACOS_MINIMUM,
+  macosMinimumOf,
   main,
   REQUIRED_FIELDS,
   sha256File,
@@ -60,10 +63,13 @@ let base // http://127.0.0.1:<port>
 const bodies = {}
 const hits = {}
 
-function compile(arch, out) {
-  execFileSync('/usr/bin/clang', ['-arch', arch, '-x', 'c', '-', '-o', out], {
-    input: 'int main(void) { return 0; }\n'
-  })
+/** A real Mach-O program, for the oldest macOS given (fetch.mjs refuses one newer than MACOS_MINIMUM). */
+function compile(arch, out, macos = '11.0') {
+  execFileSync(
+    '/usr/bin/clang',
+    ['-arch', arch, `-mmacosx-version-min=${macos}`, '-x', 'c', '-', '-o', out],
+    { input: 'int main(void) { return 0; }\n' }
+  )
 }
 
 /** A valid tool entry for the arm64 fixture, with overrides. */
@@ -132,6 +138,22 @@ before(async () => {
   bodies.arm64 = readFileSync(join(build, 'pkg', 'bin', 'tool'))
   bodies.x86_64 = readFileSync(join(build, 'x86_64'))
   bodies.text = Buffer.from('not an executable\n')
+  // Programs for exactly the oldest macOS Mergelane runs on, and for one newer.
+  compile('arm64', join(build, 'at-minimum'), MACOS_MINIMUM)
+  compile('arm64', join(build, 'newer'), '14.0')
+  bodies.atMinimum = readFileSync(join(build, 'at-minimum'))
+  bodies.newer = readFileSync(join(build, 'newer'))
+  // arm64 code for iOS, not macOS: vtool rewrites the build version, so no iOS SDK is needed.
+  execFileSync('/usr/bin/vtool', [
+    '-set-build-version',
+    'ios',
+    '14.0',
+    '17.0',
+    '-replace',
+    '-output',
+    join(build, 'ios'),
+    join(build, 'pkg', 'bin', 'tool')
+  ])
 
   // Archives, made with the same macOS tools fetch.mjs extracts with.
   execFileSync('/usr/bin/ditto', [
@@ -308,6 +330,8 @@ before(async () => {
 
   const routes = {
     '/arm64': (res) => res.end(bodies.arm64),
+    '/at-minimum': (res) => res.end(bodies.atMinimum),
+    '/newer': (res) => res.end(bodies.newer),
     '/x86_64': (res) => res.end(bodies.x86_64),
     '/text': (res) => res.end(bodies.text),
     '/tool.zip': (res) => res.end(bodies.zip),
@@ -385,6 +409,20 @@ describe('the committed manifest', () => {
 
   test('installs into app/resources/bin by default', () => {
     assert.ok(DEFAULT_OUT_DIR.endsWith(join('app', 'resources', 'bin')), DEFAULT_OUT_DIR)
+  })
+})
+
+describe('the oldest macOS Mergelane runs on (ADR-0065)', () => {
+  const read = (path) => readFileSync(join(HERE, path), 'utf8')
+
+  test('is the app’s minimumSystemVersion, the packaging test’s and FFmpeg’s build target', () => {
+    assert.equal(MACOS_MINIMUM, '13.0')
+    const builder = read('../../app/electron-builder.yml')
+    assert.equal(/^ {2}minimumSystemVersion: '([\d.]+)'$/m.exec(builder)?.[1], MACOS_MINIMUM)
+    const packageTest = read('../ci/package-test.sh')
+    assert.equal(/^MACOS_MINIMUM=([\d.]+)$/m.exec(packageTest)?.[1], MACOS_MINIMUM)
+    const ffmpeg = read('build-ffmpeg.sh')
+    assert.equal(/^export MACOSX_DEPLOYMENT_TARGET=([\d.]+)$/m.exec(ffmpeg)?.[1], MACOS_MINIMUM)
   })
 })
 
@@ -778,6 +816,40 @@ describe('tools', () => {
     await assert.rejects(archsOf(join(dir, 'text')), /lipo cannot read .* not a Mach-O executable/)
   })
 
+  test('macosMinimumOf reads the oldest macOS of the arm64 code, and nothing else', async () => {
+    const build = join(root, 'build')
+    assert.equal(await macosMinimumOf(join(build, 'at-minimum')), MACOS_MINIMUM)
+    assert.equal(await macosMinimumOf(join(build, 'newer')), '14.0')
+    // A universal file: the arm64 code's version, whatever the other slice says.
+    const universal = join(freshOut(), 'universal')
+    execFileSync('/usr/bin/lipo', [
+      '-create',
+      join(build, 'newer'),
+      join(build, 'x86_64'),
+      '-output',
+      universal
+    ])
+    assert.equal(await macosMinimumOf(universal), '14.0')
+    await assert.rejects(
+      macosMinimumOf(join(build, 'x86_64')),
+      /vtool cannot read the arm64 code of .*x86_64 \(.*does not contain architecture: arm64\)/
+    )
+    await assert.rejects(macosMinimumOf(join(build, 'ios')), /names no oldest macOS version/)
+    const text = join(freshOut(), 'text')
+    writeFileSync(text, bodies.text)
+    await assert.rejects(macosMinimumOf(text), /vtool cannot read the arm64 code of .*text/)
+  })
+
+  test('compareVersions compares each part as a number', () => {
+    assert.equal(compareVersions('13.0', '13.0'), 0)
+    assert.equal(compareVersions('13', '13.0.0'), 0)
+    assert.ok(compareVersions('13.5', '13.0') > 0)
+    assert.ok(compareVersions('12.0', '13.0') < 0)
+    assert.ok(compareVersions('13.0.1', '13.0') > 0)
+    assert.ok(compareVersions('10.15', '11.0') < 0)
+    assert.ok(compareVersions('27.0', '9.0') > 0, 'not compared as text')
+  })
+
   test('extract refuses unknown formats', async () => {
     await assert.rejects(extract('a.rar', 'rar', freshOut()), /unknown archive format: rar/)
   })
@@ -944,6 +1016,24 @@ describe('fetchTool', () => {
       /lipo cannot read/
     )
     assert.deepEqual(readdirSync(outDir), [], 'nothing executable is installed')
+  })
+
+  test('refuses a program that needs a newer macOS than Mergelane, and takes one for exactly its oldest', async () => {
+    const outDir = freshOut()
+    await assert.rejects(
+      fetchTool(tool({ url: `${base}/newer`, sha256: hashOf(bodies.newer) }), {
+        outDir,
+        manifestDir
+      }),
+      new RegExp(
+        `^Error: tiny: needs macOS 14\\.0 or later, but Mergelane runs on macOS ${MACOS_MINIMUM.replace('.', '\\.')} or later \\(ADR-0065\\)$`
+      )
+    )
+    assert.deepEqual(readdirSync(outDir), [], 'nothing executable is installed')
+
+    const at = tool({ url: `${base}/at-minimum`, sha256: hashOf(bodies.atMinimum) })
+    assert.equal(await fetchTool(at, { outDir, manifestDir }), 'installed')
+    assert.equal(await sha256File(join(outDir, 'tiny')), hashOf(bodies.atMinimum))
   })
 
   test('a missing licence file stops the install before the binary is placed', async () => {

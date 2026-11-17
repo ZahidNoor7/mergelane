@@ -5,6 +5,12 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Mergelane now runs on macOS 13 Ventura and later**, not only macOS 27, still on Apple silicon (M1 or later). macOS
+  13 is the oldest that the app's foundations (Electron and Go) still support with security fixes. Mergelane's own
+  FFmpeg is now built for macOS 13, and building the app checks that every program inside it runs there.
+
 ## [0.5.0] - 2026-11-14
 
 A speed test for your networks, ad blocking in the browser extension, and ping that tells the truth while system

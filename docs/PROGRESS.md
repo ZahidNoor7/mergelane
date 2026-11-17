@@ -38,6 +38,30 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### macOS 13 Ventura as the minimum (2026-11-17, branch `macos-13-minimum`)
+
+- **Done (ADR-0065):** the owner asked for macOS 11 Big Sur. The audit found that macOS 11 needs Electron 37 and
+  Go 1.24, which no longer get security fixes, and that every Apple-silicon Mac can run macOS 27 anyway, so the owner
+  chose macOS 13 Ventura, the oldest Electron 44 and Go 1.27 support. `minimumSystemVersion: '13.0'`; FFmpeg built
+  for 13.0 (it was 27.0, the only program in the app that needed more than 13); `fetch.mjs` refuses any fetched or
+  built program that needs a newer macOS (`MACOS_MINIMUM`, read with `vtool`); `package-test.sh` checks every Mach-O
+  file in the app the same way; `local-root.sh` runs on 13 or later. README, release notes, the three READMEs, CLAUDE.md
+  and ADR-0003/0053 updated.
+- **Tests:** `fetch.test.mjs` 75 passed (4 new: the version reader, the comparison, a program for macOS 14 refused
+  and one for exactly 13 taken, and the four places that state the minimum kept equal), `fetch.mjs` 99.0% lines;
+  `notes.test.mjs` 49 passed (`notes.mjs` 99.6%); `local-root.test.sh` 34 passed (2 new: macOS 12.7.6 refused, 27.2.1
+  accepted; the fake Mac now runs 13.0); `check-repo` 18 passed; `scripts/ci/*.test.mjs` 95 passed,
+  `local-release.test.mjs` 24 passed, the Windows script tests 95 passed, `sources.test.mjs` 18 passed; app typecheck
+  clean and Vitest 568 passed (no app code changed). The daemon's code is unchanged, so its Go tests were not re-run.
+- **Packaging test (local mode), on a DMG built from this branch:** passed. `LSMinimumSystemVersion` 13.0; 139 Mach-O
+  files, every one with macOS arm64 code runs on 13.0 (Electron and the native modules 13.0, Deno 12.0, yt-dlp 11.0,
+  FFmpeg now 13.0); 8 Intel-only or iOS prebuilds inside npm packages hold no macOS arm64 code and are passed. The app
+  reached ready, and the owner's Mergelane and `~/Downloads` were unchanged. The same check run on the 0.5.0 app flags
+  its FFmpeg (27.0) and nothing else.
+- **Not yet tried on macOS 13 itself:** no Mac or VM with macOS 13 here, GitHub has no runner older than macOS 15,
+  and CI is paused. ADR-0065 lists what to check there by hand.
+- **Next:** the owner tries the build on a Mac with macOS 13 (or 14) if one is at hand; a PR into `main`.
+
 ### Connection speed test (2026-11-14, branch `speed-test`)
 
 - **Done (ADR-0064):** Networks › Test speed. Each network on its own, all together (the real total of every

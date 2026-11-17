@@ -8,7 +8,7 @@ How it works: a `utun` interface with `0.0.0.0/1` and `128.0.0.0/1` capture rout
 a user-space TCP/IP stack (gVisor, through tun2socks). Each new flow is dialled out through one physical link,
 pinned with `IP_BOUND_IF`, and links are weighted by measured throughput.
 
-Requirements: macOS 27 or later on Apple silicon, Go 1.27.
+Requirements: macOS 13 or later on Apple silicon (the oldest macOS Go 1.27 supports), Go 1.27.
 
 ```sh
 go build ./cmd/mergelane-daemon

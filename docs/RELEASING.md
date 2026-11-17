@@ -147,7 +147,7 @@ If any step fails, nothing is uploaded.
 The release notes contain:
 
 - your `CHANGELOG.md` section for the version;
-- the requirements (macOS 27 or later, Apple silicon only) and the install steps, including **Open Anyway** and
+- the requirements (macOS 13 Ventura or later, Apple silicon only) and the install steps, including **Open Anyway** and
   the `xattr` command (CLAUDE.md requires them on the release page);
 - the honest limits, copied from `README.md`'s "What to expect (honest limits)" section;
 - the checksums of every attached file;

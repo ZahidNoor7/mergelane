@@ -16,33 +16,30 @@ everywhere.
   a bar of each network's share, and every network's own speeds with what it brought in today. From there you can
   open Mergelane, pause all downloads, start a new download, open Settings or quit, with the mouse, the arrow keys
   or ⌘O, ⌘N, ⌘, and ⌘Q. It opens over apps in full screen too, which 0.5.1's menu didn't.
-
 - **The Dashboard shows your Mac's total speed, all apps.** Each network shows everything crossing it, in and out,
-  from every app, even when nothing is downloading, and says how much of it is Mergelane's downloads. The Downloads
-  view shows the download speed alone. No helper needed. Mac only for now.
-- **The speed sits on a glass card over the lanes**, with how many times faster than your fastest network the merged
-  speed is. Each network shows its share, and pointing at one picks its lane out.
-
-- **KB/s as a speed unit**, beside MB/s and Mbps (Settings › General). The unit you choose is used everywhere: the
-  window, the Dashboard, Downloads, the speed test, limits, charts, the menu bar and its menu.
+  from every app, even when nothing is downloading, and says how much of it is Mergelane's downloads. "Last minute,
+  all apps" beside it charts the same total. The Downloads view shows the download speed alone. No helper needed.
+  Mac only for now.
+- **The speed sits on a frosted card over the lanes**, easy to read on every theme, Liquid Glass included, with how
+  many times faster than your fastest network the merged speed is. Each network shows its share, and pointing at
+  one picks its lane out.
+- **KB/s as a speed unit**, beside MB/s and Mbps (Settings › General). The unit you choose is the only one shown,
+  everywhere: the window, the Dashboard, Downloads, the speed test, limits, charts, the menu bar and its menu.
 
 ### Changed
 
 - **Speeds count in 1,000s, as macOS does**, so 8 Mbps is exactly 1 MB/s and 1,000 KB/s. Mbps always shows Mbps (no
   more switching to Kbps), KB/s always shows KB/s, and MB/s always shows MB/s ("0.05 MB/s" for a slow speed). MB/s
   figures read about 5% higher than before for the same speed.
-- **The Dashboard's speed card is frosted** rather than clear glass: easy to read on Liquid Glass, with no
-  flicker, and cheaper to draw.
-- **"Last minute, all apps"** beside it now charts the same total, so it moves even when nothing is downloading.
 - **The menu bar shows download and upload together**, in one unit: "↓27.9 ↑2.8 MB/s". By default the speed shows
   only while 2 or more networks are connected, so with one network you see just the icon. Choose Always or Never in
   Settings › General, or flip "Speed beside the icon" in the menu.
+- **The menu bar shows your whole Mac's speeds while System merge is on**, from every app, not only Mergelane's own
+  downloads: how fast each network is receiving and sending, added up. With System merge off, it shows Mergelane's
+  downloads and torrent uploads. Windows is unchanged.
 - **Clearer wording in Networks.** System merge and its options say plainly what they do, networks are called by
   their names (Wi-Fi, iPhone USB) instead of en0 or en7, and the number after each network's speed now says
   "connections".
-- **The menu bar shows your whole Mac's speeds while System merge is on**, from every app, not only Mergelane's own
-  downloads: how fast each network is receiving and sending, added up. With System merge off, it shows Mergelane's
-  downloads and torrent uploads. Settings › General now says which numbers they are. Windows is unchanged.
 
 ## [0.5.1] - 2026-11-17
 

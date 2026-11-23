@@ -2,8 +2,9 @@ import { expect as unitExpect, test as unit } from '@playwright/test'
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, type RequestListener, type Server } from 'node:http'
+import { createServer as createTlsServer, type Server as TlsServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,6 +114,9 @@ const PAGE = `<!doctype html><title>loading</title><script>
 
 let server: Server
 let port: number
+/** The same answers over HTTPS, for YOUTUBE_HOST (see `at`). */
+let tlsServer: TlsServer
+let tlsPort: number
 /** Host and path of every manifest the server answered. */
 const served: string[] = []
 let profile: string
@@ -122,7 +126,7 @@ let worker: Worker
 const opened: Page[] = []
 
 function startServer(): Promise<void> {
-  server = createServer((request, response) => {
+  const answer: RequestListener = (request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host}`)
     const headers = {
       'Cache-Control': 'no-store',
@@ -155,16 +159,43 @@ function startServer(): Promise<void> {
       response.writeHead(404, headers)
       response.end()
     }
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      port = (server.address() as AddressInfo).port
-      resolve()
+  }
+  server = createServer(answer)
+  // A throwaway self-signed certificate, made in `dir`; the test browser ignores certificate errors.
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-days',
+      '1',
+      '-subj',
+      `/CN=${YOUTUBE_HOST}`
+    ].concat(['-keyout', join(dir, 'tls.key'), '-out', join(dir, 'tls.crt')]),
+    { stdio: 'ignore' }
+  )
+  tlsServer = createTlsServer(
+    { key: readFileSync(join(dir, 'tls.key')), cert: readFileSync(join(dir, 'tls.crt')) },
+    answer
+  )
+  const listen = (on: Server | TlsServer): Promise<number> =>
+    new Promise((resolve) => {
+      on.listen(0, '127.0.0.1', () => resolve((on.address() as AddressInfo).port))
     })
+  return Promise.all([listen(server), listen(tlsServer)]).then(([plain, tls]) => {
+    port = plain
+    tlsPort = tls
   })
 }
 
-const at = (host: string, path: string): string => `http://${host}:${port}${path}`
+/** `host`'s test address. YOUTUBE_HOST goes over HTTPS, as the real site does: since Chromium 159
+ * (Playwright 1.65), `http://www.youtube.com` is switched to HTTPS before the request leaves, so a
+ * plain-HTTP stand-in fails with ERR_SSL_PROTOCOL_ERROR. */
+const at = (host: string, path: string): string =>
+  host === YOUTUBE_HOST ? `https://${host}:${tlsPort}${path}` : `http://${host}:${port}${path}`
 /** The test page on `host`, loading each of `loads` in turn. */
 const pageAt = (host: string, ...loads: string[]): string =>
   at(host, `/page?${loads.map((load) => `load=${encodeURIComponent(load)}`).join('&')}`)
@@ -297,6 +328,8 @@ test.describe('Videos on this page @extension', () => {
     )
     browser = await chromium.launchPersistentContext(profile, {
       channel: 'chromium',
+      // The YouTube stand-in's certificate is self-signed (startServer).
+      ignoreHTTPSErrors: true,
       args: [
         `--disable-extensions-except=${EXTENSION}`,
         `--load-extension=${EXTENSION}`,
@@ -316,6 +349,7 @@ test.describe('Videos on this page @extension', () => {
   test.afterAll(async () => {
     await browser?.close()
     await new Promise((resolve) => server?.close(resolve))
+    await new Promise((resolve) => tlsServer?.close(resolve))
     if (profile) rmSync(profile, { recursive: true, force: true })
     rmSync(dir, { recursive: true, force: true })
   })

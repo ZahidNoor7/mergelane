@@ -525,7 +525,7 @@ describe('the app in the kit', () => {
     for (const line of SCRIPT.split('\n').filter((l) => /Stop-Process/.test(l))) {
       assert.match(line, /\$process\.Id|\$leftover\.Id/, line)
     }
-    assert.match(SCRIPT, /\$_\.Path\.StartsWith\(\$appDir/)
+    assert.match(SCRIPT, /\$path = \$_\.Path\s+\$path -and \$path\.StartsWith\(\$appDir/)
   })
 
   it('the script asks the browser bridge on the pipe the app names (shared/fixtures/browser-pipe.json)', () => {

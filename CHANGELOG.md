@@ -13,6 +13,11 @@ All notable changes to Mergelane are recorded here. The format follows
 - Newer patch and minor versions of the libraries Mergelane is built with, which clear advisories in its build
   tools. Nothing you can see changes.
 
+### Changed
+
+- **Mergelane takes about 76 MB less disk space.** The libraries its window is drawn with were already built into
+  the app, but a second, unused copy shipped beside them. That copy is gone.
+
 ## [0.6.0] - 2026-11-17
 
 Your Mac's total speed on the Dashboard, a menu under the menu bar icon, and speeds in the unit you choose,

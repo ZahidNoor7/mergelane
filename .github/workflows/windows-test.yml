@@ -1,0 +1,152 @@
+name: windows-test
+
+# Runs Mergelane's Windows test kit on GitHub's own Windows machines, x64 and arm64 (ADR-0075), while the owner has
+# no Windows PC. CI stays paused (ADR-0020): this workflow only runs when started by hand, which the owner allowed for
+# Windows testing on 2026-11-23:
+#   gh workflow run windows-test.yml --ref <branch>
+# GitHub's standard runners are free and unlimited for public repositories (docs: "Billing for GitHub Actions").
+# A macOS job builds the kit as the release does (release.yml); a Windows job per chip runs it. Each Windows machine
+# is thrown away after its job, so the system merge test, which changes the network, is safe to run there.
+on:
+  workflow_dispatch:
+    inputs:
+      system-merge:
+        description: "Also run the system merge test (helper as a service, System merge on, then removed)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The installers, the Windows helpers and the Go test programs, built on the Mac as for a release, and packed
+  # into one kit per chip (scripts/windows/kit.mjs).
+  kit:
+    runs-on: xcode-27
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Node 24: npm 11 reads package.json's allowScripts, which keeps install scripts the app doesn't want from
+      # running (npm 10, in Node 22, ignores that list).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache: false
+      - run: npm ci
+      # The Windows FFmpeg takes long to build; it only changes with its manifests and build scripts.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: app/resources/bin-win
+          key: media-tools-win-${{ hashFiles('scripts/media-tools/tools-windows-*.json', 'scripts/media-tools/licenses/**', 'scripts/media-tools/build-ffmpeg*.sh', 'scripts/media-tools/fetch.mjs') }}
+      - name: Build the Windows helpers (x64 and arm64)
+        working-directory: .
+        run: node scripts/windows/build-helpers.mjs
+      - name: Fetch the Windows media tools, and build FFmpeg for Windows (pinned SHA-256s, docs/MEDIA-TOOLS.md)
+        run: npm run fetch:media-tools:win
+      - name: Build the Windows installers (x64 and arm64, unsigned)
+        run: |
+          npm run build:extension
+          npx electron-vite build
+          npx electron-builder --win --x64 --config electron-builder.win.yml --publish never
+          npx electron-builder --win --arm64 --config electron-builder.win.yml --publish never
+      - name: Check the Windows build
+        working-directory: .
+        run: node scripts/windows/check-build.mjs --version "$(node -p "require('./app/package.json').version")"
+      - name: Build a test kit per chip
+        working-directory: .
+        run: |
+          for arch in x64 arm64; do
+            node scripts/windows/kit.mjs --arch "$arch" --no-zip --out "$RUNNER_TEMP/kit-$arch"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kit-x64
+          path: ${{ runner.temp }}/kit-x64
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kit-arm64
+          path: ${{ runner.temp }}/kit-arm64
+          retention-days: 1
+          if-no-files-found: error
+
+  # The kit on Windows: the Go test programs, then Mergelane installed, opened and uninstalled (test-kit.ps1), then,
+  # if asked, the system merge test (system-merge-test.ps1). Both scripts run in Windows PowerShell 5.1, as on a PC.
+  windows:
+    needs: kit
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/windows
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: kit-${{ matrix.arch }}
+          path: kit
+      - name: About this machine
+        shell: pwsh
+        run: |
+          "RUNNER_ENVIRONMENT=$env:RUNNER_ENVIRONMENT GITHUB_ACTIONS=$env:GITHUB_ACTIONS"
+          "user: $(whoami)"
+          powershell.exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString(); (Get-CimInstance Win32_OperatingSystem).Caption'
+      - name: Run the test kit
+        shell: cmd
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File kit\test-kit.ps1
+      - name: Read the kit's report
+        shell: pwsh
+        run: node scripts/windows/report.mjs kit/report.txt
+      - name: Run the system merge test
+        if: ${{ !cancelled() && inputs.system-merge }}
+        timeout-minutes: 15
+        shell: cmd
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File kit\system-merge-test.ps1
+      - name: Keep the reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-${{ matrix.arch }}
+          path: |
+            kit/report.txt
+            kit/system-merge-report.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  # The kits are large: remove them as soon as both Windows jobs are done, so they don't count against storage.
+  remove-kits:
+    needs: windows
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete the kit artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name | startswith("kit-")) | .id' |
+            while read -r id; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"; done

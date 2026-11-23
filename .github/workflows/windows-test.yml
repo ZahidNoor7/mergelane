@@ -132,6 +132,8 @@ jobs:
           path: |
             kit/report.txt
             kit/system-merge-report.txt
+            kit/results/**/*.txt
+            kit/results/**/*.log
           retention-days: 14
           if-no-files-found: warn
 

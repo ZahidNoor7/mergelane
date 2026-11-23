@@ -352,8 +352,11 @@ function Test-AppWindow($Result, [string]$Exe, [string]$ProfileDir) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         }
     }
+    # Path is read once per process: a process still quitting can lose it between two reads (seen on GitHub's
+    # Windows runners, where the second read failed on a null path).
     $left = @(Get-Process -Name 'Mergelane' -ErrorAction SilentlyContinue | Where-Object {
-            $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
+            $path = $_.Path
+            $path -and $path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
         })
     foreach ($leftover in $left) { Stop-Process -Id $leftover.Id -Force -ErrorAction SilentlyContinue }
     $Result.leftRunning = $left.Count

@@ -5,9 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,20 +13,11 @@ import (
 
 const pong = `{"ok":true,"app":"mergelane","version":"t","api":2}`
 
-// app listens on a short temp socket path (sun_path is 104 bytes on macOS) and answers every request
-// with pong, sending each request line it received to got.
+// app listens where the host looks for the app (listenApp) and answers every request with pong, sending each
+// request line it received to got.
 func app(t *testing.T) (path string, got <-chan string) {
 	t.Helper()
-	dir, err := os.MkdirTemp(socketBase(), "nmh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	path = filepath.Join(dir, "browser.sock")
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ln, path := listenApp(t)
 	lines := make(chan string, 8)
 	done := make(chan struct{})
 	go func() {
@@ -90,7 +78,7 @@ func TestRun(t *testing.T) {
 	parentApp = func() string { return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }
 	const browser = `"browser":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",`
 	path, got := app(t)
-	missing := filepath.Join(filepath.Dir(path), "missing.sock")
+	missing := missingApp(path)
 	const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
 	tests := []struct {
 		name     string

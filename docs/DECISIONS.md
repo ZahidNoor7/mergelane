@@ -2395,3 +2395,40 @@ MB/s drops to KB/s below 1 MB/s. The owner wants the unit chosen to be the unit 
 - govulncheck v1.10.0: "No vulnerabilities found" for macOS and Windows, down from 1 reached (Go standard library)
   and 7 present but not reached (x/net) on `main` built with Go 1.27.3.
 - The built `mergelane-daemon` reports go1.27.4 and `minos 13.0`.
+
+## ADR-0074: app.asar lists what goes in, and the build checks it
+
+**Status:** Proposed (2026-11-23), the packaging fix the architecture audit found and the owner asked for.
+
+### Context
+
+- `electron-builder.yml`'s `files` only listed what to leave out, so everything else in `app/` went into `app.asar`.
+  0.6.0's archive held 217 MB of files, 135 MB of which the app never reads:
+  - the browser extension's uBO Lite build cache, `extension/.cache` (66 MB), and its Chrome and Firefox builds,
+    `extension/dist` (66 MB). The packaged app copies the extension from `Contents/Resources/browser-extension`
+    (`browsers.ts`, `bundledExtension`), which `extraResources` fills; the copy in the archive was unused;
+  - `e2e/`, Playwright's `test-results/`, `scripts/`, `patches/`, the tsbuildinfo files and test and build configs;
+  - `app/LICENSE`, Plexo's MIT notice, which also ships in `Contents/Resources/LICENSE` and, in full, in
+    `THIRD-PARTY-NOTICES.md`.
+- electron-builder 26.18 ("Application Contents"): when `files` has an include pattern, `**/*` is no longer
+  assumed; `package.json` and the production `node_modules` are always included, and in `node_modules` only
+  exclusions count.
+
+### Decision
+
+- `files` names what goes in: `out/**` (what electron-vite builds) and `resources/**` (the icons the main process
+  imports), less `resources/bin` and `resources/bin-win`. The koffi and WebRTC exclusions stay.
+- `scripts/check-package.mjs`, the `afterPack` hook (it replaces `check-torrent-package.mjs` and keeps its WebRTC
+  check), fails the build when the archive holds anything at its top other than `package.json`, `node_modules`,
+  `out` and `resources`, or holds the media tools or the WebRTC packages. A folder added to `app/` later stays out
+  of the app, and if a rule ever lets one in, the build says which.
+- `electron-builder.win.yml` extends these rules, so the same holds for the Windows builds.
+
+### Verification
+
+- `scripts/check-package.test.mjs` (node:test): 8 tests, 100% of `check-package.mjs`'s lines, branches and
+  functions. Run against 0.6.0's archive, the check rejects it, naming those files.
+- A Mac build with the new rules: `app.asar` 30.9 MB, down from 214.8 MB in 0.6.0 (135 MB from this change; the
+  rest from moving the window's libraries to devDependencies). The app bundle is 571 MB, down from 782 MB.
+- `scripts/ci/package-test.sh --local` on that DMG passes: signatures, metadata, bundled programs, and the app
+  reaches ready.

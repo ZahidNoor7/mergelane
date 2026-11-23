@@ -38,6 +38,22 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Packaging: app.asar holds only what the app loads (2026-11-23, branch `packaging-asar-files`)
+
+- From the architecture audit. 0.6.0's `app.asar` held 135 MB the app never reads: the extension's uBO Lite build
+  cache and a second copy of its builds (the app loads them from `Contents/Resources/browser-extension`), `e2e/`,
+  `test-results/`, `scripts/`, `patches/`, tsbuildinfo files, configs and `app/LICENSE` (also shipped outside).
+- `electron-builder.yml`'s `files` now lists what goes in (`out/**`, `resources/**` less the media tools); the
+  koffi and WebRTC exclusions stay. `electron-builder.win.yml` drops its now needless self-exclusion.
+- `scripts/check-package.mjs` replaces `check-torrent-package.mjs` as the `afterPack` hook: the build fails if the
+  archive holds anything but `package.json`, `node_modules`, `out` and `resources`, or the media tools or WebRTC
+  packages inside them (ADR-0074). A CI step runs its tests.
+- **Tests:** `scripts/check-package.test.mjs`, 8 tests, 100% lines, branches and functions; it rejects 0.6.0's
+  archive. Mac DMG built into scratch: `app.asar` 30.9 MB (0.6.0: 214.8 MB), app 571 MB (782 MB), DMG 246 MB
+  (291 MB). `scripts/ci/package-test.sh --local` passes: the app reaches ready, the owner's Mergelane untouched,
+  `~/Downloads` unchanged.
+- **Not run:** the Windows build (deferred until the macOS work is done); the same rules and check apply to it.
+
 ### Dependency upgrades: the daemon's Go modules (2026-11-23, branch `deps-go-modules`)
 
 - golang.org/x/net v0.56.0 → v0.63.0, golang.org/x/sys v0.46.0 → v0.50.0, gVisor `go` branch 2026-07-01

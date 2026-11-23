@@ -66,6 +66,9 @@ function fakeRoot(script = SCRIPT) {
     writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'mergelane-daemon.exe'), `daemon ${arch}`)
     writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'wintun.dll'), `wintun ${arch}`)
   }
+  mkdirSync(join(root, 'shared', 'fixtures', 'daemon-api'), { recursive: true })
+  writeFileSync(join(root, 'shared', 'fixtures', 'browser-pipe.json'), '{"examples":[]}')
+  writeFileSync(join(root, 'shared', 'fixtures', 'daemon-api', 'status.json'), '{}')
   return root
 }
 
@@ -288,11 +291,27 @@ describe('buildKit', () => {
     assert.equal(readFileSync(join(out, CMD_NAME), 'utf8'), cmdFile())
     assert.match(readFileSync(join(out, 'README.txt'), 'utf8'), /commit abc1234 on 2026-11-12/)
     assert.equal(logged.length, kit.programs.length)
+    // The tests find the shared fixtures where they would in the repository: three folders up.
+    for (const file of ['browser-pipe.json', join('daemon-api', 'status.json')]) {
+      const shipped = join(out, 'go', 'shared', 'fixtures', file)
+      assert.equal(readFileSync(shipped, 'utf8'), readFileSync(join(root, 'shared', 'fixtures', file), 'utf8'))
+      const program = kit.programs.find((p) => p.package === 'internal/api')
+      assert.equal(join(dirname(join(out, program.path)), '..', '..', '..', 'shared', 'fixtures', file), shipped)
+    }
 
     assert.equal(zipFile, join(dirname(out), 'mergelane-windows-kit.zip'))
     const zip = calls.find((c) => c.file === 'zip')
     assert.deepEqual(zip.args, ['-r', '-X', '-q', zipFile, 'windows-kit'])
     assert.equal(zip.options.cwd, dirname(out))
+  })
+
+  it('refuses without the shared fixtures the Go tests read', async () => {
+    const root = fakeRoot()
+    rmSync(join(root, 'shared'), { recursive: true })
+    await assert.rejects(
+      buildKit({ root, out: join(freshDir('dist'), 'windows-kit'), runner: fakeRunner().runner, zip: false }),
+      /no shared fixtures at .*, which the Go tests read/
+    )
   })
 
   it('leaves out packages without Windows tests, keeps "until" only where given, and notes a dirty checkout', async () => {

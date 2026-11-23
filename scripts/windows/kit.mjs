@@ -335,6 +335,14 @@ export async function buildKit({
     }
   }
 
+  // Some tests read the repository's shared fixtures three folders up from their package (../../../shared/fixtures,
+  // as from daemon/<cmd|internal>/<name>). From go/<chip>/<cmd|internal>/<name> in the kit, that is go/shared.
+  if (programs.length > 0) {
+    const fixtures = join(root, 'shared', 'fixtures')
+    if (!existsSync(fixtures)) throw new UsageError(`no shared fixtures at ${fixtures}, which the Go tests read`)
+    cpSync(fixtures, join(out, 'go', 'shared', 'fixtures'), { recursive: true })
+  }
+
   const appEntries = []
   if (apps) {
     for (const arch of arches) {

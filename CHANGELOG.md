@@ -23,6 +23,9 @@ All notable changes to Mergelane are recorded here. The format follows
   are now sealed in the Keychain without holding up the app, and the ones saved by earlier versions still open.
 - **Mergelane takes about 76 MB less disk space.** The libraries its window is drawn with were already built into
   the app, but a second, unused copy shipped beside them. That copy is gone.
+- **And about 135 MB less again.** The app carried a second copy of the browser extension, the extension's build
+  files, and Mergelane's own tests, none of which it uses. Only what the app runs is packed now, and the build
+  fails if anything else gets in.
 
 ## [0.6.0] - 2026-11-17
 

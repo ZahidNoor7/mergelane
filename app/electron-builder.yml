@@ -2,15 +2,18 @@ appId: io.github.zahidnoor7.mergelane
 productName: Mergelane
 # Shown in the macOS About window and Finder's Get Info.
 copyright: Copyright © 2026 Mergelane contributors
-afterPack: scripts/check-torrent-package.mjs
+# Fails the build if app.asar holds anything outside what `files` lets in (ADR-0074).
+afterPack: scripts/check-package.mjs
 directories:
   buildResources: build
+# app.asar holds only what the app loads: the code electron-vite builds (out/) and the icons that code imports
+# (resources/). electron-builder adds package.json and the production node_modules whatever this list says
+# ("Application Contents", electron-builder 26.18). Naming what goes in, not what stays out, keeps every other
+# folder out by default: 0.6.0 shipped the extension's build cache and a second copy of its builds (132 MB; the
+# app loads them from Contents/Resources/browser-extension), the e2e tests and Playwright's test-results.
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - 'out/**'
+  - 'resources/**'
   # koffi ships prebuilds for every OS; each build keeps only the one it loads (network/deviceBinding.ts pins
   # per-link sockets with IP_BOUND_IF on macOS, IP_UNICAST_IF on Windows). ${os} is "mac" or "win", so the
   # second name is win32_x64 or win32_arm64 on Windows and matches nothing on macOS, which keeps
@@ -21,7 +24,6 @@ files:
   # the native WebRTC polyfill; don't ship its unused native binaries.
   - '!node_modules/node-datachannel/**'
   - '!node_modules/webrtc-polyfill/**'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # yt-dlp, FFmpeg and Deno ship through extraResources below, not inside app.asar.
   - '!resources/bin/**'
   - '!resources/bin-win/**'

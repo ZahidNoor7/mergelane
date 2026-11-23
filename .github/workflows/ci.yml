@@ -74,6 +74,9 @@ jobs:
       # must keep 90% of its lines covered, or the run fails.
       - name: Renderer unit tests, 90% line coverage per covered file
         run: npm run test:unit:coverage
+      # The afterPack check that keeps app.asar to what the app loads (ADR-0074).
+      - name: Test the package contents check
+        run: node --test --experimental-test-coverage --test-coverage-include='scripts/check-package.mjs' --test-coverage-lines=90 scripts/check-package.test.mjs
 
   app-e2e-smoke:
     runs-on: xcode-27

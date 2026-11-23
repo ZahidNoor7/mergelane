@@ -5,7 +5,6 @@
 # doMergeConfigs). In node_modules only exclusions count, so these only take away.
 extends: ./electron-builder.yml
 files:
-  - '!electron-builder.win.yml'
   # The shared rule keeps darwin_arm64 too; Windows loads win32_x64 or win32_arm64.
   - '!node_modules/koffi/build/koffi/darwin_arm64/**'
   # node-gyp-build loads build/Release before prebuilds/, and on the Mac build/Release holds this Mac's own

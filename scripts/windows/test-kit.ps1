@@ -57,6 +57,11 @@ function Limit-Line([string]$Line) {
     return $Line.Substring(0, $MaxLineLength) + '...'
 }
 
+# A GitHub-hosted runner (.github/workflows/windows-test.yml, ADR-0075): a throwaway virtual machine that runs
+# everything as administrator with User Account Control off (GitHub's docs, "Administrative privileges"). Only
+# there does the kit run with administrator rights; the report says so. Both variables are GitHub's own.
+$OnRunner = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')
+
 function Test-Elevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -501,7 +506,7 @@ Write-Host 'Mergelane once with a test profile.'
 Write-Host 'It needs no administrator rights and changes no settings.'
 Write-Host ''
 
-if (Test-Elevated) {
+if ((Test-Elevated) -and -not $OnRunner) {
     Write-Host 'This window has administrator rights, which the kit doesn''t want.' -ForegroundColor Yellow
     Write-Host 'Close it, then double-click "Run test kit.cmd" again (not "Run as administrator").' -ForegroundColor Yellow
     exit 2
@@ -559,6 +564,8 @@ $report = [ordered]@{
     powershell      = $PSVersionTable.PSVersion.ToString()
     executionPolicy = (Get-ExecutionPolicy).ToString()
     smartAppControl = $smartAppControl
+    elevated        = [bool](Test-Elevated)
+    onRunner        = [bool]$OnRunner
     markOfTheWeb    = Test-MarkOfTheWeb $PSCommandPath
     downloads       = $downloads
     programs        = $programs

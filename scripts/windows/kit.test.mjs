@@ -407,7 +407,12 @@ describe('test-kit.ps1 (static checks; it runs only on Windows)', () => {
 
   it("needs Windows PowerShell 5.1, stops with administrator rights, and checks each program's SHA-256", () => {
     assert.match(SCRIPT, /^#Requires -Version 5\.1$/m)
-    assert.match(SCRIPT, /if \(Test-Elevated\) \{[\s\S]*?exit 2/)
+    // Only a GitHub-hosted runner, which runs everything as administrator, gets past that (ADR-0075).
+    assert.match(SCRIPT, /if \(\(Test-Elevated\) -and -not \$OnRunner\) \{[\s\S]*?exit 2/)
+    assert.ok(
+      SCRIPT.includes("$OnRunner = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')")
+    )
+    assert.match(SCRIPT, /elevated {8}= \[bool\]\(Test-Elevated\)/)
     assert.match(SCRIPT, /Get-FileHash -LiteralPath \$exe -Algorithm SHA256/)
     assert.match(SCRIPT, /\(Get-Value \$Kit 'kit'\) -ne 1/)
   })
@@ -662,6 +667,12 @@ describe('the System merge test (W5)', () => {
     assert.ok(at('if (Get-HelperService) {') < yes)
     assert.ok(at('if (-not (Test-Internet)) {') < install)
     assert.ok(yes < install)
+    // Nobody types YES on a GitHub-hosted runner (ADR-0075); everywhere else the owner still must.
+    const runner = at(
+      "if (($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')) {"
+    )
+    assert.ok(runner < at("$answer = Read-Host 'Type YES to start, or anything else to stop'"))
+    assert.ok(runner < yes)
     // The removal is in the last finally block, after the install, and checks what must be gone.
     const final = ADMIN_SCRIPT.lastIndexOf('} finally {')
     assert.ok(install < final)

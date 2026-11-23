@@ -38,6 +38,33 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades, phase 4: Electron 45 (2026-11-23, branch `deps-4-electron45`)
+
+- **First, on Electron 44 (own commit):** safeStorage's synchronous calls, deprecated in 45 and removed in 46, are
+  gone. The browser sign-in kept with a download (`downloadManager.ts`) and the news server's password
+  (`nzb/usenetServer.ts`) now go through `shared/sealing.ts` and `main/secrets.ts`, using
+  `isAsyncEncryptionAvailable`, `encryptStringAsync` and `decryptStringAsync`. Electron documents that
+  `decryptStringAsync` opens what `encryptString` sealed. A download's sign-in is re-sealed from memory on every
+  save; a password sealed under a replaced key (`shouldReEncrypt`) is written back re-sealed. `viewOf` is now async.
+  The audit had counted only the download manager's calls; the Usenet password had four more.
+- **Then:** Electron 44.11.5 → 45.4.1 (Chromium 156, Node 24.22.3); `allowScripts` follows. None of 45's other
+  breaking changes reach the app: the preload only requires `electron`, `window.open` is always denied, nothing
+  uses screen capture, content tracing or raw file descriptors inside the asar. electron-vite 6 has no Electron 45
+  entry yet and builds for its newest, 44 (Node 24.18, Chrome 152), which 45 runs.
+- **Not documented by Electron:** whether the synchronous `decryptString` of an older Mergelane opens what
+  `encryptStringAsync` seals. Going back to 0.6 after this version may cost the saved sign-ins and the news server's
+  password (entered again); nothing else.
+- **Tests:**
+  - New Vitest: `sealing.test.ts`, 8 tests; `sealing.ts` 100% statements, branches and functions, on the per-file
+    list. All: 65 files, 628 passed.
+  - New e2e, each passing on the old synchronous code and the new: `recovery.spec.ts` "a browser sign-in is kept
+    sealed on disk, and sent again after a relaunch"; `nzb.spec.ts` "a password sealed by an earlier Mergelane still
+    opens after updating" (seals the old way, relaunches, downloads with it).
+  - Playwright, full suite on Electron 45 (6.0 min): 833 passed, 5 skipped, 1 failed: `nzb.spec.ts:234`, the
+    failure already on `main`. `~/Downloads` untouched.
+  - Unpacked Mac build: `codesign --verify --deep --strict` passes, Electron 45.4.1, koffi `darwin_arm64`, all 14
+    Electron binaries `minos 13.0`. `npm audit`: 11, unchanged.
+
 ### Dependency upgrades, phase 3b: Vite 8 (2026-11-23, branch `deps-3b-vite8`)
 
 - **Done:** Vite 7.3.8 → 8.3.8 (Rolldown and Oxc instead of esbuild and Rollup), electron-vite 5.0.0 → 6.0.0,

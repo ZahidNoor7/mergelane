@@ -15,6 +15,8 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- **Electron 45** (Chromium 156, Node.js 24.22), up from Electron 44. Saved sign-ins and your news server's password
+  are now sealed in the Keychain without holding up the app, and the ones saved by earlier versions still open.
 - **Mergelane takes about 76 MB less disk space.** The libraries its window is drawn with were already built into
   the app, but a second, unused copy shipped beside them. That copy is gone.
 

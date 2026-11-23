@@ -1,7 +1,8 @@
 import { join } from 'node:path'
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import type { UsenetServer, UsenetServerInput } from '../../../shared/types'
 import { readJson, updateJson } from '../../jsonFile'
+import { canSealHere, sealText, unsealText } from '../../secrets'
 
 /** The news server, with what only the main process may see: its password. */
 export interface UsenetServerConfig extends Omit<UsenetServer, 'hasPassword' | 'passwordInMemory'> {
@@ -20,13 +21,6 @@ function serverPath(): string {
 
 /** The password, when this computer has no keychain to seal it with: kept until Mergelane quits. */
 let inMemory: string | undefined
-
-/** As for the browser's cookies (see sealBrowser in downloadManager.ts): never written in the
- * clear, and on Linux without a keyring, not written at all. */
-function canSeal(): boolean {
-  if (!safeStorage.isEncryptionAvailable()) return false
-  return !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
-}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -63,20 +57,32 @@ export async function loadUsenetServer(): Promise<UsenetServerConfig | null> {
   const server = checkedServer(saved)
   if (!server || !isRecord(saved)) return null
   let password = inMemory ?? ''
-  if (typeof saved.password === 'string' && canSeal()) {
-    try {
-      password = safeStorage.decryptString(Buffer.from(saved.password, 'base64'))
-    } catch {
-      // Sealed by another keychain (a restored profile, say): it has to be entered again.
-    }
+  // As for the browser's cookies (see sealBrowser in downloadManager.ts): never written in the
+  // clear, and on Linux without a keyring, not written at all. Sealed by another keychain (a
+  // restored profile, say), it opens to nothing here and has to be entered again.
+  const opened = typeof saved.password === 'string' ? await unsealText(saved.password) : undefined
+  if (opened) {
+    password = opened.text
+    if (opened.reseal) await resealPassword(saved.password as string, password)
   }
   return { ...server, password }
 }
 
+/** Seals `password` again under the keychain's current key, in place of `old`; left as it is if
+ * the file has changed since or the keychain refuses (it still opens with the old key). */
+async function resealPassword(old: string, password: string): Promise<void> {
+  const sealed = await sealText(password)
+  if (sealed === undefined) return
+  await updateJson(serverPath(), (current) =>
+    isRecord(current) && current.password === old ? { ...current, password: sealed } : current
+  ).catch(() => {})
+}
+
 /** As the window may see it. */
-export function viewOf(server: UsenetServerConfig): UsenetServer {
+export async function viewOf(server: UsenetServerConfig): Promise<UsenetServer> {
   const { password, ...rest } = server
-  return { ...rest, hasPassword: password !== '', ...(!canSeal() && { passwordInMemory: true }) }
+  const sealable = await canSealHere()
+  return { ...rest, hasPassword: password !== '', ...(!sealable && { passwordInMemory: true }) }
 }
 
 /** Whether NZBs download from Usenet: on until switched off, which takes a server set up. */
@@ -104,14 +110,8 @@ export async function serverFromInput(input: UsenetServerInput): Promise<UsenetS
 export async function saveUsenetServer(input: UsenetServerInput): Promise<UsenetServer> {
   const server = await serverFromInput(input)
   const { password, ...rest } = server
-  let sealed: string | undefined
-  if (canSeal() && password) {
-    try {
-      sealed = safeStorage.encryptString(password).toString('base64')
-    } catch {
-      // The keychain refused: kept for this session instead.
-    }
-  }
+  // No keychain, or it refused: kept for this session instead.
+  const sealed = password ? await sealText(password) : undefined
   inMemory = sealed === undefined ? password || undefined : undefined
   await updateJson(serverPath(), (current) => {
     // No password given and none to seal: the stored one stays, for a session that can unseal it

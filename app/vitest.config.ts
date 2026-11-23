@@ -148,7 +148,9 @@ export const COVERED = [
   // ADR-0070: the Dashboard's total speed, all apps, and the glass lens.
   'src/shared/interfaceCounters.ts',
   'src/renderer/src/components/GlassLens.tsx',
-  'src/renderer/src/hooks/useNetworkTraffic.ts'
+  'src/renderer/src/hooks/useNetworkTraffic.ts',
+  // Electron 45: secrets sealed with safeStorage's asynchronous calls.
+  'src/shared/sealing.ts'
 ]
 
 export default defineConfig({

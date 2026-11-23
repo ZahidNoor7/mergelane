@@ -57,6 +57,18 @@ function Limit-Line([string]$Line) {
     return $Line.Substring(0, $MaxLineLength) + '...'
 }
 
+# A check's result is the one ordered table it returns. Anything else a command inside it let fall into the output
+# is named and dropped, so it can't swell the report (on GitHub's runners one did, and ConvertTo-Json ran out of
+# memory).
+function Select-Result($Output) {
+    $result = $null
+    foreach ($item in @($Output)) {
+        if ($item -is [System.Collections.Specialized.OrderedDictionary]) { $result = $item; continue }
+        if ($null -ne $item) { Write-Host "  (left out of the report: a $($item.GetType().FullName))" }
+    }
+    return $result
+}
+
 # A GitHub-hosted runner (.github/workflows/windows-test.yml, ADR-0075): a throwaway virtual machine that runs
 # everything as administrator with User Account Control off (GitHub's docs, "Administrative privileges"). Only
 # there does the kit run with administrator rights; the report says so. Both variables are GitHub's own.
@@ -538,7 +550,7 @@ $downloadsBefore = Get-FolderSnapshot $downloadsFolder
 $programs = @()
 foreach ($program in @($Kit.programs)) {
     Write-Host "Running $($program.id) ..."
-    $outcome = Invoke-GoProgram $program $chip.arch $build
+    $outcome = Select-Result (Invoke-GoProgram $program $chip.arch $build)
     Write-Host "  $($outcome.status)"
     $programs += , $outcome
 }
@@ -547,7 +559,7 @@ $apps = @()
 foreach ($app in @(Get-Value $Kit 'apps')) {
     if ($null -eq $app) { continue }
     Write-Host "Installing, opening and uninstalling Mergelane ($($app.arch)) ..."
-    $outcome = Invoke-AppCheck $app $chip.arch $build
+    $outcome = Select-Result (Invoke-AppCheck $app $chip.arch $build)
     Write-Host "  $($outcome.status)"
     $apps += , $outcome
 }

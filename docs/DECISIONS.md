@@ -2479,10 +2479,11 @@ Amends ADR-0020 (CI paused) for this one workflow, which runs only when started 
 
 ### Verification
 
-- Run 45244608271 (before the SOCKS5 fix), both chips: the kit's 13 Go programs pass; Mergelane installs, opens
-  (window, browser bridge, both helpers say the version, Open with for .torrent and .nzb) and uninstalls cleanly;
-  the Downloads folder is unchanged; the System merge test passes every step (service, Wintun adapter, capture
-  routes, internet while merging, the helper killed and restarted by Windows with its routes removed, merging left
-  off after the crash, nothing left after removal).
-- macOS: `go test -race ./...` passes (14 packages, 83.7%); vet and staticcheck pass for macOS and Windows x64 and
+- Run 45251499528 (`windows-ci`), both chips: the daemon's Go tests pass natively (the kit's 13 packages) and as the
+  kit's 13 programs; Mergelane installs, opens (window, browser bridge, both helpers say the version, Open with for
+  .torrent and .nzb) and uninstalls cleanly; the Downloads folder is unchanged; the report says `elevated` and
+  `onRunner`; the System merge test passes every step (service, Wintun adapter, capture routes, internet while
+  merging, the helper killed and restarted by Windows with its routes removed, merging left off after the crash,
+  nothing left after removal).
+- macOS: `go test -race ./...` passes (14 packages, 83.8%); vet and staticcheck pass for macOS and Windows x64 and
   arm64; the kit scripts' tests pass (96).

@@ -5,6 +5,14 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Electron 44.11.5**, up from 44.4.4. It fixes two Electron security advisories: pointer-lock permission requests
+  that could be credited to the wrong frame (GHSA-x562-297c-g43g), and the compromised eMudhra intermediate
+  certificates (GHSA-jr5w-w6x2-84p9).
+- Newer patch and minor versions of the libraries Mergelane is built with, which clear advisories in its build
+  tools. Nothing you can see changes.
+
 ## [0.6.0] - 2026-11-17
 
 Your Mac's total speed on the Dashboard, a menu under the menu bar icon, and speeds in the unit you choose,

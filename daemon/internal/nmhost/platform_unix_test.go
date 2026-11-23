@@ -48,3 +48,31 @@ func TestParentApp(t *testing.T) {
 		t.Errorf("ParentApp(missing) = %q, want empty", got)
 	}
 }
+
+// runCommand only runs on macOS (OpenApp, platform_unix.go).
+func TestRunCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		argv    []string
+		wantErr string // "" means success
+	}{
+		{"success", []string{"/usr/bin/true"}, ""},
+		{"failure without output", []string{"/usr/bin/false"}, "/usr/bin/false: exit status 1"},
+		{"failure with output", []string{"/bin/sh", "-c", "echo nope >&2; exit 3"}, "/bin/sh: exit status 3: nope"},
+		{"missing program", []string{"/nonexistent/open"}, "/nonexistent/open"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := runCommand(context.Background(), tt.argv)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("err = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("err = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}

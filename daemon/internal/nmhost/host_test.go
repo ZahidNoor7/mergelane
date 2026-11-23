@@ -23,11 +23,10 @@ const (
 	pong         = `{"ok":true,"app":"mergelane","version":"1.2.3","api":2}`
 )
 
-// socketPath returns a socket path in a fresh directory under /tmp: macOS's per-user $TMPDIR is too
-// long for sun_path (104 bytes in <sys/un.h>).
+// socketPath returns a socket path in a fresh directory under socketBase.
 func socketPath(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "nmh")
+	dir, err := os.MkdirTemp(socketBase(), "nmh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,33 +209,6 @@ func TestSleep(t *testing.T) {
 	}
 	if time.Since(start) > time.Second {
 		t.Error("cancelled sleep did not return promptly")
-	}
-}
-
-func TestRunCommand(t *testing.T) {
-	tests := []struct {
-		name    string
-		argv    []string
-		wantErr string // "" means success
-	}{
-		{"success", []string{"/usr/bin/true"}, ""},
-		{"failure without output", []string{"/usr/bin/false"}, "/usr/bin/false: exit status 1"},
-		{"failure with output", []string{"/bin/sh", "-c", "echo nope >&2; exit 3"}, "/bin/sh: exit status 3: nope"},
-		{"missing program", []string{"/nonexistent/open"}, "/nonexistent/open"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := runCommand(context.Background(), tt.argv)
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("err = %v, want nil", err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("err = %v, want it to contain %q", err, tt.wantErr)
-			}
-		})
 	}
 }
 

@@ -3,7 +3,9 @@
 package nmhost
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -51,3 +53,16 @@ var openArgv = []string{"/usr/bin/open", "-g", "-b", BundleID}
 // OpenApp asks Launch Services to start Mergelane.app in the background. It returns once open(1) has
 // handed the launch over, not when the app is ready.
 func OpenApp(ctx context.Context) error { return runCommand(ctx, openArgv) }
+
+// runCommand runs argv without a shell. Its output is captured, never sent to the host's stdout, and
+// is part of the error when the command fails.
+func runCommand(ctx context.Context, argv []string) error {
+	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput()
+	if err != nil {
+		if msg := bytes.TrimSpace(out); len(msg) > 0 {
+			return fmt.Errorf("%s: %w: %s", argv[0], err, msg)
+		}
+		return fmt.Errorf("%s: %w", argv[0], err)
+	}
+	return nil
+}

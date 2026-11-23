@@ -6,13 +6,7 @@
 // stdout carries only protocol frames. Everything else, logs included, goes to stderr.
 package nmhost
 
-import (
-	"bytes"
-	"context"
-	"fmt"
-	"os/exec"
-	"strings"
-)
+import "strings"
 
 const (
 	// ProtocolVersion is the "v" of every request line sent to the app. 3 added "browser" (M3.4b).
@@ -48,17 +42,4 @@ func OptionsFromEnv(args []string, getenv func(string) string) Options {
 		SocketPath: SocketPath(getenv),
 		NoLaunch:   getenv(EnvNoLaunch) == "1",
 	}
-}
-
-// runCommand runs argv without a shell. Its output is captured, never sent to the host's stdout, and
-// is part of the error when the command fails.
-func runCommand(ctx context.Context, argv []string) error {
-	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput()
-	if err != nil {
-		if msg := bytes.TrimSpace(out); len(msg) > 0 {
-			return fmt.Errorf("%s: %w: %s", argv[0], err, msg)
-		}
-		return fmt.Errorf("%s: %w", argv[0], err)
-	}
-	return nil
 }

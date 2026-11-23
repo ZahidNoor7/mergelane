@@ -20,7 +20,7 @@ const pong = `{"ok":true,"app":"mergelane","version":"t","api":2}`
 // with pong, sending each request line it received to got.
 func app(t *testing.T) (path string, got <-chan string) {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "nmh")
+	dir, err := os.MkdirTemp(socketBase(), "nmh")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -123,8 +122,8 @@ func TestClientWithoutADaemon(t *testing.T) {
 }
 
 func TestRootCommandsRefuseOtherUsers(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("running as root")
+	if elevated() {
+		t.Skip("running as " + adminWord)
 	}
 	for _, cmd := range []string{"run", "cleanup", "install", "uninstall"} {
 		if code, _, errOut := run(cmd, "-uid", "501"); code != 1 || errOut == "" {

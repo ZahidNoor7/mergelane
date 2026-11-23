@@ -38,6 +38,32 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades, phase 1: security and safe updates (2026-11-23, branch `deps-1-safe`)
+
+- **Plan:** the owner approved a five-phase dependency upgrade plan on 2026-11-23 (audit doc shared in chat). This is
+  phase 1: patch and minor updates only, no source changes.
+- **Done:** Electron 44.4.4 → 44.11.5 (fixes GHSA-x562-297c-g43g and GHSA-jr5w-w6x2-84p9), electron-builder 26.18.0,
+  Vite 7.3.8 (five dev-server advisories), Vitest and coverage 5.1.1, React 19.3.1, Tailwind 4.3.5, Base UI 1.9.0,
+  lucide-react 1.78.0, zustand 5.1.0, cn 0.3.3, koffi 2.16.4, fast-check, jsdom, user-event, `@types/chrome`, the
+  Prettier ESLint config; transitive refresh of typescript-eslint 8.73.0, zod 4.6.7, fast-uri 3.1.9,
+  source-map-js 1.2.4 and ip-address 10.7.6. The `allowScripts` entries follow the new Electron and koffi versions
+  (koffi 2.16.4's install script was blocked until then).
+- **`npm audit`:** 24 → 11 (high 10 → 5). Left: `ip` inside WebTorrent's tracker client (no fixed release) and
+  electron-builder's own transitive `undici`, `minimatch` and friends (build machine only).
+- **Held back from this phase:** Playwright stays at 1.63.0. 1.65.1 ships Chromium 159, which upgrades
+  `http://www.youtube.com` to HTTPS, so `extensionMedia.spec.ts` "a YouTube video goes by its page" fails with
+  `ERR_SSL_PROTOCOL_ERROR` (proved by swapping only Playwright). Moved to phase 2 with a test that serves HTTPS.
+- **Tests:**
+  - typecheck, lint and `format:check`: clean.
+  - Vitest: 64 files, 620 passed (same as before the upgrade); 98.76% statements.
+  - Playwright, full suite: 829 passed, 5 skipped, 3 failed. Two schedule tests (`scheduleQueue.spec.ts:309`,
+    `:359`) timed out while the Mac was under heavy load (the run took 14.8 min instead of 6.6); alone they pass
+    6 of 6. `nzb.spec.ts:234` fails the same way on the original `main` dependencies (its "Download again" locator
+    matches two buttons), so it was already broken before this phase; not fixed here.
+  - macOS package: built, `codesign --verify --deep --strict` passes, Electron 44.11.5, koffi `darwin_arm64`
+    present, minimum macOS 13.0. Not run: the packaging test (quarantine; never on the owner's Mac) and the Windows
+    build and test kit (needs the owner's laptop).
+
 ### The menu bar: the whole Mac's speeds, download and upload, and a menu (2026-11-17, branch `menu-bar-system-speed`)
 
 - **Done (ADR-0066):** the owner asked why the menu bar showed no speed: it only showed Mergelane's own downloads.

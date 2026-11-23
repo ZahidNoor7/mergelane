@@ -46,10 +46,10 @@ func fromMessages(msgs []route.Message, name func(index int) string) []Route {
 	return out
 }
 
-// fromMessage ignores rm.Err on purpose: x/net (v0.56.0, route_classic.go) reads it from bytes 28-32 of
-// the header, which in darwin's struct rt_msghdr (<net/route.h>) is rtm_use, not rtm_errno (24-28). So
-// on a table dump Err is the route's use count, and skipping messages with Err set would hide exactly the
-// busy routes, such as another VPN's 0/1.
+// fromMessage ignores rm.Err on purpose: x/net (v0.56.0 to v0.63.0, route_classic.go) reads it from bytes
+// 28-32 of the header, which in darwin's struct rt_msghdr (<net/route.h>) is rtm_use, not rtm_errno (24-28).
+// So on a table dump Err is the route's use count, and skipping messages with Err set would hide exactly
+// the busy routes, such as another VPN's 0/1.
 func fromMessage(rm *route.RouteMessage, name func(index int) string) (Route, bool) {
 	if len(rm.Addrs) <= syscall.RTAX_DST {
 		return Route{}, false

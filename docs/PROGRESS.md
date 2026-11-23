@@ -38,6 +38,22 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades: the daemon's Go modules (2026-11-23, branch `deps-go-modules`)
+
+- golang.org/x/net v0.56.0 → v0.63.0, golang.org/x/sys v0.46.0 → v0.50.0, gVisor `go` branch 2026-07-01
+  (`69c2d17aea96`, tun2socks v2.7.0's pin) → 2026-11-23 head (`83df8eae069e`). tun2socks stays at v2.7.0, its
+  newest; it builds against the new gVisor unchanged.
+- gVisor's head declares `go 1.27.3`, so the `go` line is now 1.27.3; `toolchain go1.27.4` added for GO-2026-6859
+  (ADR-0073). `go mod tidy` also marks go-winio and wireguard as direct, which the Windows code imports.
+- x/net's `route` and `publicsuffix` packages, the two the daemon uses, are byte-identical between v0.56.0 and
+  v0.63.0, so `rib`'s `rtm_use` workaround still holds (comment updated). gVisor's TCP stack had five months of
+  fixes (SACK, RACK, delayed ACKs, keepalive locks); the engine's gVisor tests pass on it.
+- **Tests:** `go build`, `go vet`, staticcheck v0.8.2 for macOS arm64 and Windows x64/arm64; `go test -race ./...`
+  14 packages pass (83.7% statements, unchanged code). govulncheck v1.10.0: none, macOS and Windows. Daemon binary:
+  go1.27.4, `minos 13.0`.
+- **Not run:** the simulated-network and local-root suites (CI paused; no root tests on the owner's Mac), and the
+  Windows kit on the laptop. Those are where a gVisor behaviour change would show.
+
 ### Dependency upgrades, phase 4: Electron 45 (2026-11-23, branch `deps-4-electron45`)
 
 - **First, on Electron 44 (own commit):** safeStorage's synchronous calls, deprecated in 45 and removed in 46, are

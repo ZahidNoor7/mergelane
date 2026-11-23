@@ -12,6 +12,10 @@ All notable changes to Mergelane are recorded here. The format follows
   certificates (GHSA-jr5w-w6x2-84p9).
 - Newer patch and minor versions of the libraries Mergelane is built with, which clear advisories in its build
   tools. Nothing you can see changes.
+- **The system-wide helper is built with Go 1.27.4** and newer networking libraries (gVisor's network stack,
+  golang.org/x/net 0.63, golang.org/x/sys 0.50). Go 1.27.4 fixes a crash in Go's web server (GO-2026-6859), which
+  the helper uses only for its optional, local-only profiler; the x/net update clears seven advisories in code the
+  helper doesn't use.
 
 ### Changed
 

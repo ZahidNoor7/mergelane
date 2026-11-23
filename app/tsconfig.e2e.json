@@ -10,9 +10,8 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ESNext", "DOM"],
-    "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["./src/shared/*"]
     }
   }
 }

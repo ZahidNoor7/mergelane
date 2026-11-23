@@ -38,6 +38,20 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades, phase 3a: TypeScript 6 (2026-11-23, branch `deps-3a-typescript6`)
+
+- **Done:** TypeScript 5.9.3 → 6.0.3 (typescript-eslint 8.73 accepts `<6.1.0`). The only errors were TS5101 on
+  `baseUrl`, deprecated in 6.0 and gone in 7.0. Removed `baseUrl` from `tsconfig.json`, `tsconfig.node.json`,
+  `tsconfig.web.json` and `tsconfig.e2e.json`; `paths` now start with `./`, which resolves against each
+  tsconfig's own folder (TypeScript 4.1+), the same folder `baseUrl: "."` named. No `ignoreDeprecations`. The other
+  6.0 default changes (`strict` on, `types` = `[]`, `rootDir` = `.`) produced no errors: every config already sets
+  `strict`, and the node and e2e configs inherit `types: ["node"]`.
+- **Tests:**
+  - typecheck (node, web, e2e, extension), lint and `format:check`: clean. Vitest: 64 files, 620 passed; 98.76%.
+  - Playwright, full suite: 829 passed, 5 skipped, 3 failed. `nzb.spec.ts:234` is the failure already on `main`.
+    `torrent.spec.ts:50` and `:243` hit their time limit while the Mac's load average was over 60; alone they pass
+    6 of 6.
+
 ### Dependency upgrades, phase 2: small changes (2026-11-23, branch `deps-2-minor`)
 
 - **Done:**

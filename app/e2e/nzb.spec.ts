@@ -411,6 +411,41 @@ async function indexerFor(server: NewsServer): Promise<{ link: string; close: ()
 }
 
 test.describe('Usenet settings', () => {
+  test('a password sealed by an earlier Mergelane still opens after updating', async ({
+    mergelane
+  }) => {
+    // Mergelane up to 0.6 sealed with safeStorage's synchronous calls; this version opens with
+    // the asynchronous ones (Electron 45 deprecates the synchronous calls, 46 removes them, and
+    // this test with them).
+    const sealable = await mergelane.evaluateMain(
+      ({ safeStorage }) => safeStorage.isEncryptionAvailable(),
+      null
+    )
+    test.skip(!sealable, 'no keychain here to seal the password with')
+
+    const server = await newsServer({ username: 'reader', password: 'right' })
+    const password = await mergelane.evaluateMain(
+      ({ safeStorage }, text) => safeStorage.encryptString(text).toString('base64'),
+      'right'
+    )
+    await writeFile(
+      join(mergelane.dirs.userData, 'usenet-server.json'),
+      JSON.stringify({
+        host: '127.0.0.1',
+        port: server.port,
+        tls: false,
+        username: 'reader',
+        connections: 2,
+        password
+      })
+    )
+    await mergelane.relaunch()
+    expect(await mergelane.api.usenetServer()).toMatchObject({ hasPassword: true })
+
+    await mergelane.start(await nzbOnDisk(server), server.expectedSha())
+    await mergelane.waitForNzbStatus('completed', 30_000)
+  })
+
   test('the switch in Speed & data limits is saved with the server and kept on restart', async ({
     mergelane
   }) => {

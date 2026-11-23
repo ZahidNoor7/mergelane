@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { app, Notification, powerSaveBlocker, safeStorage, shell } from 'electron'
+import { app, Notification, powerSaveBlocker, shell } from 'electron'
 import { scheduleWindow } from '../../shared/downloadSchedule'
 import { nextStartCheck, parseWhen } from '../../shared/startAt'
 import { IpcChannels } from '../../shared/ipc-channels'
@@ -84,6 +84,7 @@ import {
 } from './nzb/nzbFile'
 import { NzbTransfer } from './nzb/nzbTransfer'
 import { loadUsenetServer, USENET_OFF, usenetEnabled } from './nzb/usenetServer'
+import { sealText, unsealText } from '../secrets'
 import { StreamDestination } from './stream/streamDestination'
 import {
   planStreamBlocks,
@@ -209,42 +210,33 @@ type PersistedDownload = PersistedDownloadBase & {
 } & SavedBlocks
 
 /** Cookies are never written in the clear. Without a keychain (Linux falls back to a fixed key)
- * they aren't saved at all, and a download resumed after a restart goes without them. */
-function sealBrowser(browser: BrowserContext): string | undefined {
-  if (!safeStorage.isEncryptionAvailable()) return undefined
-  if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') {
-    return undefined
-  }
-  // The keychain can refuse; the download is still saved, it just won't keep the sign-in.
-  try {
-    return safeStorage.encryptString(JSON.stringify(browser)).toString('base64')
-  } catch {
-    return undefined
-  }
-}
+ * they aren't saved at all, and a download resumed after a restart goes without them. The
+ * keychain can refuse too; the download is still saved, it just won't keep the sign-in. Sealed
+ * again from memory on every save, so a key Electron has replaced is never used for long. */
+const sealBrowser = (browser: BrowserContext): Promise<string | undefined> =>
+  sealText(JSON.stringify(browser))
 
-function unsealBrowser(sealed: string): BrowserContext | undefined {
+async function unsealBrowser(sealed: string): Promise<BrowserContext | undefined> {
+  const opened = await unsealText(sealed)
+  if (!opened) return undefined
   try {
-    return (
-      browserContextFrom(JSON.parse(safeStorage.decryptString(Buffer.from(sealed, 'base64')))) ??
-      undefined
-    )
+    return browserContextFrom(JSON.parse(opened.text)) ?? undefined
   } catch {
     return undefined
   }
 }
 
 /** A finished download drops its cookies: nothing will ask the server for it again. */
-function savedRequest(
+async function savedRequest(
   runtime: DownloadRuntime
-): Pick<PersistedDownloadBase, 'requestPayload' | 'browser'> {
+): Promise<Pick<PersistedDownloadBase, 'requestPayload' | 'browser'>> {
   if ((runtime.kind !== 'http' && runtime.kind !== 'stream') || !runtime.requestPayload.browser) {
     return { requestPayload: runtime.requestPayload }
   }
   const { browser, ...requestPayload } = runtime.requestPayload
   return {
     requestPayload,
-    browser: runtime.state.status === 'completed' ? undefined : sealBrowser(browser)
+    browser: runtime.state.status === 'completed' ? undefined : await sealBrowser(browser)
   }
 }
 
@@ -1139,7 +1131,7 @@ export class DownloadManager {
     const requestPayload: StartDownloadRequest =
       (persisted.requestPayload.kind === 'http' || persisted.requestPayload.kind === 'stream') &&
       typeof persisted.browser === 'string'
-        ? { ...persisted.requestPayload, browser: unsealBrowser(persisted.browser) }
+        ? { ...persisted.requestPayload, browser: await unsealBrowser(persisted.browser) }
         : persisted.requestPayload
     const saved: SavedBlocks = { progress: persisted.progress, complete: persisted.complete }
     let state: DownloadState
@@ -2814,6 +2806,9 @@ export class DownloadManager {
         // checkpoint owns the flag; other saves must leave its place reserved.
         if (routineCheckpoint) runtime.checkpointQueued = false
         if (runtime.removed) return
+        // Sealing waits on the keychain: done first, so the snapshot below is taken in one go.
+        const request = await savedRequest(runtime)
+        if (runtime.removed) return
         const dir = this.downloadDir(runtime.state.id)
         const path = this.manifestPath(runtime.state.id)
         const temporaryPath = `${path}.tmp`
@@ -2853,7 +2848,7 @@ export class DownloadManager {
           partialPath: runtime.file.path,
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,
-          ...savedRequest(runtime),
+          ...request,
           customTrackers: runtime.kind === 'torrent' ? runtime.customTrackers : undefined
         }
         if (['downloading', 'paused', 'queued'].includes(runtime.state.status)) {

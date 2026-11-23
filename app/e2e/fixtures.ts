@@ -17,6 +17,7 @@ import {
 import type { IpcContract } from '../src/shared/ipc-contract'
 import { applyDownloadUpdate } from '../src/shared/downloadUpdate'
 import type {
+  BrowserContext,
   DownloadState,
   DownloadWhen,
   DownloadStatus,
@@ -98,6 +99,8 @@ interface StartOptions {
   selectedFiles?: number[]
   /** New download's When (ADR-0044): left out, it starts now. */
   when?: DownloadWhen
+  /** For an http download: the browser's sign-in, as the extension hands one over. */
+  browser?: BrowserContext
 }
 
 interface Tracked {
@@ -284,7 +287,12 @@ export class MergelaneApp {
           }
         : probe.kind === 'nzb'
           ? { ...common, kind: 'nzb', nzbHash: probe.nzb.hash }
-          : { ...common, kind: 'http', streamsPerNetwork: options.streamsPerNetwork }
+          : {
+              ...common,
+              kind: 'http',
+              streamsPerNetwork: options.streamsPerNetwork,
+              ...(options.browser && { browser: options.browser })
+            }
     )
     this.tracked.set(id, { expectedSha, destBefore, destinationDir })
     return id

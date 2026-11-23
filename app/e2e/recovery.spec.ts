@@ -29,6 +29,57 @@ test.describe('restart @smoke', () => {
     await mergelane.api.resumeDownload(id)
     await mergelane.waitForHttpStatus('completed')
   })
+
+  test('a browser sign-in is kept sealed on disk, and sent again after a relaunch', async ({
+    mergelane,
+    serve,
+    dirs
+  }) => {
+    const sealable = await mergelane.evaluateMain(
+      ({ safeStorage }) => safeStorage.isAsyncEncryptionAvailable(),
+      null
+    )
+    test.skip(!sealable, 'no keychain here to seal the sign-in with')
+
+    const secret = 'kept-across-restarts'
+    const origin = await serve({ size: SIZE })
+    const reached = origin.hold(10 * BLOCK + 500)
+    const id = await mergelane.start(origin.url(), origin.sha256, {
+      connections: 2,
+      browser: {
+        cookies: [
+          {
+            name: 'session',
+            value: secret,
+            domain: '127.0.0.1',
+            hostOnly: true,
+            path: '/',
+            secure: false
+          }
+        ],
+        userAgent: 'MergelaneTest/1'
+      }
+    })
+    await reached
+    const sentBefore = origin.chunkRequests()
+    expect(sentBefore.length).toBeGreaterThan(0)
+    for (const request of sentBefore) expect(request.cookie).toBe(`session=${secret}`)
+
+    await mergelane.quit()
+    origin.release()
+    // On disk it is sealed: the cookie's value is nowhere in the clear.
+    const manifest = await readFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'utf-8')
+    expect(manifest).not.toContain(secret)
+    expect(typeof JSON.parse(manifest).browser).toBe('string')
+
+    await mergelane.launch()
+    const seen = origin.log.length
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
+    const sentAfter = origin.chunkRequests().filter((request) => request.n > seen)
+    expect(sentAfter.length).toBeGreaterThan(0)
+    for (const request of sentAfter) expect(request.cookie).toBe(`session=${secret}`)
+  })
 })
 
 test.describe('crash (SIGKILL) and recover @smoke', () => {

@@ -2362,3 +2362,36 @@ MB/s drops to KB/s below 1 MB/s. The owner wants the unit chosen to be the unit 
   other unit appears. Brought back, the old drop to KB/s below 1 MB/s made it fail; with this rule it passes.
 - `speedText.test.ts` (every unit only ever in itself, at slow and fast speeds, and the pair) and `format.spec.ts`
   (axes in each unit).
+
+## ADR-0073: The daemon follows gVisor's `go` branch and pins a patched Go toolchain
+
+**Status:** Proposed (2026-11-23), in the Go module update the owner approved with the dependency plan.
+
+### Context
+
+- gVisor is built with Bazel. For Go users it keeps a synthetic `go` branch that standard `go` tooling can build
+  (gVisor README, "Using `go get`": `go get gvisor.dev/gvisor/pkg/tcpip/...@go`). The daemon already used a
+  commit of that branch, the same one tun2socks v2.7.0 requires.
+- The `go` branch head of 2026-11-23 declares `go 1.27.3`, so `go get` raised the daemon's `go` line from 1.27.
+- With x/net v0.63.0, x/sys v0.50.0 and that gVisor, govulncheck still reported one advisory the daemon's code
+  reaches: GO-2026-6859, an HTTP/1 server crash in `net/http`, fixed in Go 1.27.4. The daemon's only HTTP server
+  is the `-pprof` profiler: off by default and loopback only.
+
+### Decision
+
+- gVisor is updated to the `go` branch head, as its README says. A commit closer to the weekly release tag was
+  tried first; the Go proxy timed out fetching it, so it could not be pinned.
+- `daemon/go.mod` gets `toolchain go1.27.4` (`go get toolchain@go1.27.4`). With the default `GOTOOLCHAIN=auto`,
+  the `go` command downloads that release and checks it against the Go checksum database before it builds, so the
+  shipped daemon has the fixed standard library even on a Mac with Go 1.27.3 installed. CI's `setup-go` reads the
+  same file (`go-version-file: daemon/go.mod`).
+- The `go` line stays at what the dependencies require (1.27.3); the `toolchain` line moves with Go's security
+  releases.
+
+### Verification
+
+- `go build`, `go vet` and staticcheck v0.8.2 pass for macOS arm64 and Windows x64 and arm64.
+- `go test -race ./...`: 14 packages pass.
+- govulncheck v1.10.0: "No vulnerabilities found" for macOS and Windows, down from 1 reached (Go standard library)
+  and 7 present but not reached (x/net) on `main` built with Go 1.27.3.
+- The built `mergelane-daemon` reports go1.27.4 and `minos 13.0`.

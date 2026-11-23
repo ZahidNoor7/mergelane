@@ -38,6 +38,33 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades, phase 2: small changes (2026-11-23, branch `deps-2-minor`)
+
+- **Done:**
+  - Playwright 1.63.0 → 1.65.1 (Chromium 159). `extensionMedia.spec.ts` now serves the YouTube stand-in over HTTPS
+    with a throwaway self-signed certificate made by `openssl` in the test's temp folder; the test browser ignores
+    certificate errors. Chromium 159 switches `http://www.youtube.com` to HTTPS before the request leaves, so the
+    plain-HTTP stand-in could no longer be reached. Only `www.youtube.com` moved; every assertion is unchanged.
+  - `cn` 0.3.3 → 0.5.2. Its merge changes (bg gradients, `px`/`ps`/`pe`, custom `animate-*`) touch no class
+    combination in the renderer: `animate-in` and `animate-out` sit under different variants.
+  - `eslint-plugin-react-refresh` 0.5.8 (no lint changes), `@types/node` 24.19.2 (Electron 44 bundles Node 24).
+  - `@base-ui/react`, `lucide-react`, `date-fns`, `react-day-picker`, `class-variance-authority`, `cn` and `zustand`
+    moved to `devDependencies`: only the Vite-bundled renderer uses them, so electron-builder no longer copies them
+    into `app.asar`. Measured on an unpacked Mac build: `node_modules` in the asar 111 MB → 35 MB, the asar
+    205 MB → 171 MB.
+- **Held back:** Prettier stays at 3.9.6. 3.10.1 moves the doc comments of the `DashErrorCode` union
+  (`media/dash/errors.ts`) onto the wrong members; recheck at the next Prettier release.
+- **Not in this phase:** the rest of the asar is the `files`-rule leak from the architecture audit (`extension/`
+  twice, 149 MB; `e2e/`; tsbuildinfo files). It needs an `electron-builder.yml` change, not a dependency change.
+- **Tests:**
+  - typecheck, lint and `format:check`: clean. Vitest: 64 files, 620 passed; 98.76% statements.
+  - `extensionMedia.spec.ts` alone on Playwright 1.65.1: 13 passed.
+  - Playwright, full suite: 827 passed, 5 skipped, 5 failed. `nzb.spec.ts:234` is the failure already on `main`.
+    The other four (`scheduleQueue.spec.ts:145`, `:330`, `:359`, `routing.spec.ts:49`) hit their 1-minute timeout
+    while the Mac's load average was 27 to 44 on 10 cores; alone they pass 12 of 12. These schedule and routing
+    tests are load-sensitive: they also timed out in phase 1's slow run.
+  - `npm audit`: 11 (6 moderate, 5 high), unchanged from phase 1. `~/Downloads` untouched (191 entries before and after).
+
 ### Dependency upgrades, phase 1: security and safe updates (2026-11-23, branch `deps-1-safe`)
 
 - **Plan:** the owner approved a five-phase dependency upgrade plan on 2026-11-23 (audit doc shared in chat). This is

@@ -2432,3 +2432,57 @@ MB/s drops to KB/s below 1 MB/s. The owner wants the unit chosen to be the unit 
   rest from moving the window's libraries to devDependencies). The app bundle is 571 MB, down from 782 MB.
 - `scripts/ci/package-test.sh --local` on that DMG passes: signatures, metadata, bundled programs, and the app
   reaches ready.
+
+## ADR-0075: Windows is tested on GitHub's Windows machines while there is no Windows PC
+
+**Status:** Owner, 2026-11-23: "i dont have a windows machine at the moment can you do your own testing", then chose
+GitHub's Windows machines over a local virtual machine or waiting, and said "merge #104" to add the workflow.
+Amends ADR-0020 (CI paused) for this one workflow, which runs only when started by hand.
+
+### Context
+
+- The Windows test kit (ADR-0054) had never run: the owner's laptop run was still pending.
+- GitHub's standard runners are free and unlimited for public repositories (docs: "Billing for GitHub Actions"),
+  for Windows on x64 (`windows-latest`, Windows Server 2025) and on arm64 (`windows-11-arm`, Windows 11).
+- They run everything as administrator with User Account Control off (docs: "Administrative privileges"). The kit
+  refuses administrator rights, and the System merge test waits for a typed YES.
+- GitHub starts a `workflow_dispatch` workflow only if its file is on the default branch (docs: "Manually running a
+  workflow"); a run then uses the branch named with `--ref`.
+
+### Decision
+
+- `.github/workflows/windows-test.yml` (on `main` through #104): a macOS job builds one kit per chip as `release.yml`
+  builds the release; a Windows job per chip runs the daemon's Go tests from the source, the kit, its report reader
+  and the System merge test; the kits are deleted when the run ends, the reports kept for 14 days.
+- Only where `GITHUB_ACTIONS` is `true` and `RUNNER_ENVIRONMENT` is `github-hosted`: the kit runs with administrator
+  rights and says so in its report (`elevated`, `onRunner`), and the System merge test starts without the YES. On a
+  PC both behave as before; `kit.test.mjs` checks the conditions.
+- Tests that show a normal user refused skip when elevated (`elevated()` asks `platform.IsAdmin`; `os.Geteuid` is -1
+  on Windows). The laptop, as a normal user, still has to show those.
+
+### What the first runs found (all fixed)
+
+- **The kit:** it stopped on a process path read twice while the process quit; its report crashed with
+  `OutOfMemoryException`, because Windows PowerShell 5.1's `Get-Content` adds provider properties to each line and
+  its `ConvertTo-Json` writes them out (Microsoft's `ConvertTo-Json` page: PowerShell 7.2 stopped that); its Go
+  programs couldn't find `shared/fixtures`. `Read-Lines` uses `File.ReadAllLines`, results keep only their table,
+  and the kit ships the fixtures at `go/shared/fixtures`.
+- **Go tests that assumed macOS** in files with no build tag: `/usr/bin/true` and `/bin/sh`, sockets in `/tmp`,
+  Unix permissions and error words, root checks. They moved to `!windows` files, use Windows' own words, or skip
+  when elevated; the nmhost command test talks to a real named pipe on Windows. `runCommand` moved, unchanged, to
+  `platform_unix.go`, its only user. New: `TestPrepareSecuresTheDirectory` checks the Windows state folder's owner,
+  protected DACL and entries against `StateDirSDDL`.
+- **One race in the code:** the SOCKS5 server refused an unsupported command before reading the rest of the request
+  and closed with it unread, so Windows reset the connection and could discard the refusal (failed once on x64).
+  `refuseEarly` closes the sending side first and drops what was sent. The shipped helper doesn't serve SOCKS5, so
+  users never met it.
+
+### Verification
+
+- Run 45244608271 (before the SOCKS5 fix), both chips: the kit's 13 Go programs pass; Mergelane installs, opens
+  (window, browser bridge, both helpers say the version, Open with for .torrent and .nzb) and uninstalls cleanly;
+  the Downloads folder is unchanged; the System merge test passes every step (service, Wintun adapter, capture
+  routes, internet while merging, the helper killed and restarted by Windows with its routes removed, merging left
+  off after the crash, nothing left after removal).
+- macOS: `go test -race ./...` passes (14 packages, 83.7%); vet and staticcheck pass for macOS and Windows x64 and
+  arm64; the kit scripts' tests pass (96).

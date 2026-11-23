@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -15,6 +16,11 @@ import (
 
 // defaultDial reaches the app's Unix socket.
 var defaultDial = dialUnix
+
+func dialUnix(ctx context.Context, path string) (net.Conn, error) {
+	var d net.Dialer
+	return d.DialContext(ctx, "unix", path)
+}
 
 // ParentApp returns the executable of process pid, the browser that started the host, as ps(1)
 // reports it (its full path on macOS), or "" when it can't be read. It runs /bin/ps without a shell,

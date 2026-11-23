@@ -38,6 +38,21 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Windows tested on GitHub's Windows machines (2026-11-23, branch `windows-ci`)
+
+- The owner has no Windows PC for now, so the Windows test kit ran for the first time on GitHub's free Windows
+  machines, x64 (Windows Server 2025) and arm64 (Windows 11), through a hand-started workflow,
+  `windows-test.yml` (ADR-0075; on `main` through #104). CI otherwise stays paused.
+- **Proven on real Windows, both chips:** Mergelane installs, opens, its browser bridge answers, both helpers say the
+  version, Open with lists it for .torrent and .nzb, and it uninstalls cleanly; the System merge test passes every
+  step, crash recovery and clean removal included; the daemon's Go tests pass (the kit's 13 packages, natively and
+  as kit programs); the Downloads folder is never touched.
+- **Fixed on the way:** three kit bugs (a process path read twice, a report too big for Windows PowerShell 5.1's
+  ConvertTo-Json, fixtures not shipped); Go tests that assumed macOS; one SOCKS5 race (unused by the shipped
+  helper). Details in ADR-0075.
+- **Still the laptop's:** the tests that show a normal user refused (the runners are administrators), the
+  hardware run (several networks, unplug, sleep, VPN), the look by eye, and saving the news server password.
+
 ### Packaging: app.asar holds only what the app loads (2026-11-23, branch `packaging-asar-files`)
 
 - From the architecture audit. 0.6.0's `app.asar` held 135 MB the app never reads: the extension's uBO Lite build

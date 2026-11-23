@@ -7,8 +7,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -23,17 +21,6 @@ const (
 	pong         = `{"ok":true,"app":"mergelane","version":"1.2.3","api":2}`
 )
 
-// socketPath returns a socket path in a fresh directory under socketBase.
-func socketPath(t *testing.T) string {
-	t.Helper()
-	dir, err := os.MkdirTemp(socketBase(), "nmh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	return filepath.Join(dir, "browser.sock")
-}
-
 // fakeApp stands in for Mergelane.app's browser socket. It records each request line and lets
 // respond answer it; the connection is closed when respond returns.
 type fakeApp struct {
@@ -47,10 +34,7 @@ type fakeApp struct {
 
 func startApp(t *testing.T, path string, respond func(conn net.Conn, line []byte)) *fakeApp {
 	t.Helper()
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ln := listenApp(t, path)
 	a := &fakeApp{ln: ln, respond: respond}
 	a.wg.Add(1)
 	go a.serve()
@@ -104,10 +88,10 @@ func testHost(t *testing.T, opts Options) (*Host, *bytes.Buffer) {
 	t.Helper()
 	log := new(bytes.Buffer)
 	opts.Log = log
-	// The tests serve the app on a Unix socket, which Windows 10 1803 and later have too; the
-	// Windows named pipe has its own tests (platform_windows_test.go).
+	// The tests serve the app the way it serves itself here (listenApp): a Unix socket on macOS, a
+	// named pipe on Windows, dialed as the host dials it.
 	if opts.Dial == nil {
-		opts.Dial = dialUnix
+		opts.Dial = defaultDial
 	}
 	if opts.Launch == nil {
 		opts.Launch = func(context.Context) error {
@@ -365,21 +349,15 @@ func TestHandleRelaysTheAppsAnswer(t *testing.T) {
 }
 
 func TestHandleUnavailable(t *testing.T) {
-	stale := socketPath(t) // a socket file nobody listens on, as after an app crash: ECONNREFUSED
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: stale, Net: "unix"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	l.SetUnlinkOnClose(false)
-	l.Close()
+	stale := staleApp(t)
 
 	tests := []struct {
 		name string
 		path string
 		msg  string
 	}{
-		{"ping, no socket file", "/tmp/nmh-missing/browser.sock", `{"type":"ping"}`},
-		{"add, no socket file", "/tmp/nmh-missing/browser.sock", `{"type":"add","request":{"url":"https://example.com/secret-token"}}`},
+		{"ping, no socket file", missingApp, `{"type":"ping"}`},
+		{"add, no socket file", missingApp, `{"type":"add","request":{"url":"https://example.com/secret-token"}}`},
 		{"confirm, stale socket", stale, `{"type":"confirm","token":"t"}`},
 		{"health, stale socket", stale, `{"type":"health"}`},
 		{"unknown type, stale socket", stale, `{"type":"surprise"}`},
@@ -469,7 +447,7 @@ func TestHandleWake(t *testing.T) {
 func TestHandleWakeStopsWhenCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h, _ := testHost(t, Options{
-		SocketPath: "/tmp/nmh-missing/browser.sock",
+		SocketPath: missingApp,
 		NoLaunch:   true,
 		Sleep: func(ctx context.Context, d time.Duration) error {
 			cancel()
@@ -649,7 +627,7 @@ func TestRunStreamErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h, _ := testHost(t, Options{SocketPath: "/tmp/nmh-missing/browser.sock"})
+			h, _ := testHost(t, Options{SocketPath: missingApp})
 			var out bytes.Buffer
 			err := h.Run(context.Background(), bytes.NewReader(tt.in), &out)
 			if !errors.Is(err, tt.wantErr) { // errors.Is(nil, nil) is true
@@ -664,7 +642,7 @@ func TestRunStreamErrors(t *testing.T) {
 
 func TestRunStopsWhenStdoutFails(t *testing.T) {
 	boom := errors.New("broken pipe")
-	h, _ := testHost(t, Options{SocketPath: "/tmp/nmh-missing/browser.sock"})
+	h, _ := testHost(t, Options{SocketPath: missingApp})
 	err := h.Run(context.Background(), bytes.NewReader(stream([]byte(`{}`), []byte(`{}`))), failingWriter{boom})
 	if !errors.Is(err, boom) {
 		t.Errorf("err = %v, want broken pipe", err)

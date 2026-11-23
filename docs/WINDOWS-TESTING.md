@@ -7,6 +7,8 @@ Claude builds everything on the owner's Mac and can't run Windows code. So Windo
   and the Windows test kit's own tests.
 - **On the owner's Windows laptop:** the Windows test kit. The owner runs it and pastes its report back into the
   chat.
+- **On GitHub's Windows machines** (ADR-0075), while the owner has no Windows PC: `windows-test.yml` runs the same
+  kit on Windows Server 2025 (x64) and Windows 11 (arm64). See "On GitHub's Windows machines" below.
 
 ## The Windows test kit
 
@@ -170,6 +172,33 @@ connected (Wi-Fi and a phone over USB) and nothing else downloading, open Networ
   network" on, one network carries it; with System merge off, the view says to turn it on and Start test is off;
 - a test uses up to 200 MB per network, which counts against the phone's plan.
 
+### On GitHub's Windows machines (ADR-0075)
+
+`.github/workflows/windows-test.yml` runs only when started by hand (CI stays paused, ADR-0020):
+
+```sh
+gh workflow run windows-test.yml --ref <branch>
+gh run watch <run id>
+gh run download <run id> -p 'reports-*'
+node scripts/windows/report.mjs reports-x64/report.txt
+```
+
+- **A macOS job** builds the installers, the helpers and the Go test programs as `release.yml` does, and packs one
+  kit per chip. The Windows FFmpeg is cached by its manifests and build scripts.
+- **A Windows job per chip** (`windows-latest`, `windows-11-arm`) runs the daemon's Go tests from the source, then the
+  kit (`test-kit.ps1`), reads its report with `report.mjs`, and runs the System merge test (`system-merge-test.ps1`,
+  input `system-merge`, on by default). Each machine is thrown away after its job, so the System merge test's
+  network changes can't outlive it.
+- **The reports** (`report.txt`, `system-merge-report.txt`, the native `go-test.txt`, the Go programs' output and the
+  app's logs) are kept for 14 days as `reports-x64` and `reports-arm64`. The kits themselves are deleted when the run
+  ends.
+
+GitHub's machines run everything as administrator with User Account Control off (GitHub's docs, "Administrative
+privileges"). Only there (`GITHUB_ACTIONS` is `true` and `RUNNER_ENVIRONMENT` is `github-hosted`) the kit runs
+anyway and its report says `elevated` and `onRunner`, and the System merge test starts without the typed YES. The
+tests that show a normal user being refused skip when elevated. What they check (install, run and cleanup refusing a
+normal user) still needs a normal user's PC: the laptop.
+
 ### Adding Go packages
 
 `GO_PACKAGES` in `scripts/windows/kit.mjs` lists the daemon packages the kit runs. Add a package once it builds
@@ -185,4 +214,4 @@ the API's tests run over the named pipe on Windows.
   running on the Mac.
 - **x64 programs on an arm64 PC** run only on Windows 11 (emulation); on Windows 10 on Arm the kit skips them.
 - **The PowerShell scripts are checked statically on the Mac**, not run, until PowerShell 7 is installed here
-  (the owner's decision). Their first real run is on the laptop.
+  (the owner's decision). They first ran for real on GitHub's Windows machines (ADR-0075).

@@ -38,6 +38,27 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Dependency upgrades, phase 3b: Vite 8 (2026-11-23, branch `deps-3b-vite8`)
+
+- **Done:** Vite 7.3.8 → 8.3.8 (Rolldown and Oxc instead of esbuild and Rollup), electron-vite 5.0.0 → 6.0.0,
+  `@vitejs/plugin-react` 5.2.0 → 6.3.0, upgraded together (plugin-react 6 requires Vite 8). No config change:
+  neither `electron.vite.config.ts`, `vitest.config.ts` nor `extension/build.mjs` uses `rollupOptions`, `esbuild`
+  options or object `manualChunks`, and the extension source has no `import.meta`. esbuild is no longer installed,
+  so its two `allowScripts` entries are gone.
+- **Build output:** main bundle 710 KB → 785 KB and renderer JS 2.05 MB → 2.09 MB, both unminified as before; the
+  growth is Rolldown's output style. The same packages stay external (koffi, WebTorrent, parse-torrent,
+  fs-chunk-store, bittorrent-peerid, still loaded with `import()`). The extension builds the same files; its JS is
+  about 15% larger.
+- **Found on the way:** the local `extension/dist/chrome` holds `_metadata/generated_indexed_rulesets/`, which Chrome
+  writes when the e2e tests load the unpacked extension. It is packed into the app with the rest of `extension/`
+  (the `files`-rule leak noted in phase 2).
+- **Tests:**
+  - typecheck, lint and `format:check`: clean. Vitest (now on Vite 8): 64 files, 620 passed; 98.76%.
+  - Playwright, full suite (5.4 min, quiet machine): 830 passed, 5 skipped, 2 failed. `nzb.spec.ts:234` is the
+    failure already on `main`. `clipboardOffer.spec.ts:146` failed in its clean-up check: the real clipboard held
+    HTML without the raw Apple HTML type, and Electron adds `<meta charset='utf-8'>` when that HTML is written back
+    (the test's own comment notes this). It depends on what the clipboard holds; run again, it passes 6 of 6.
+
 ### Dependency upgrades, phase 3a: TypeScript 6 (2026-11-23, branch `deps-3a-typescript6`)
 
 - **Done:** TypeScript 5.9.3 → 6.0.3 (typescript-eslint 8.73 accepts `<6.1.0`). The only errors were TS5101 on

@@ -180,9 +180,13 @@ function Test-CanRun([string]$ProgramArch, [string]$Chip, [int]$Build) {
     return ($Chip -eq 'arm64' -and $ProgramArch -eq 'x64' -and $Build -ge 22000)
 }
 
+# Plain strings, read with .NET: Windows PowerShell 5.1's Get-Content adds PSPath, PSDrive, PSProvider and more to
+# each line, and its ConvertTo-Json writes those out (Microsoft's ConvertTo-Json page: only PowerShell 7.2 and later
+# leave a string's extended properties out). Lines of a Go test's coverage file swelled the report until
+# ConvertTo-Json ran out of memory on GitHub's runners.
 function Read-Lines([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return @() }
-    return @(Get-Content -LiteralPath $Path -Encoding UTF8)
+    return @([IO.File]::ReadAllLines($Path, (New-Object Text.UTF8Encoding($false))))
 }
 
 function Invoke-GoProgram($Program, [string]$Chip, [int]$Build) {

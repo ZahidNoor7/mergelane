@@ -119,7 +119,10 @@ jobs:
       - name: Go tests on Windows
         working-directory: daemon
         shell: pwsh
-        run: go test -count=1 ./... 2>&1 | Tee-Object -FilePath ../kit/go-test.txt
+        # The packages the kit runs (GO_PACKAGES in scripts/windows/kit.mjs); the rest are macOS-only.
+        run: |
+          $packages = node -e "import('../scripts/windows/kit.mjs').then(m => console.log(m.GO_PACKAGES.map(p => './' + p.pkg).join(' ')))"
+          go test -count=1 @($packages -split ' ') 2>&1 | Tee-Object -FilePath ../kit/go-test.txt
         continue-on-error: true
       - name: About this machine
         shell: pwsh

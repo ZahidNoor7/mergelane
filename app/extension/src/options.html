@@ -2,61 +2,116 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Mergelane extension options</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mergelane extension settings</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
-      main {
-        max-width: 720px;
+      /* Laid out as the app's Settings screen (SettingsScreen.tsx): a header with the screen's name
+         and a line under it, the sections as a segmented control, then SettingsGroups. The two
+         sections are this page and uBO Lite's settings page, which ubol-theme.css draws the same way
+         and whose own nav links back here (scripts/adblock/ubol.mjs). */
+      body {
+        min-height: 100vh;
+      }
+      main,
+      footer {
+        width: min(680px, 100%);
         margin: 0 auto;
-        padding: 40px 20px 64px;
+        padding-inline: 20px;
+      }
+      /* Whether the extension reaches Mergelane: the one thing to know before any setting. */
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        padding: 0 4px 0 12px;
+        border-radius: 999px;
+        background: var(--card);
+        box-shadow: inset 0 0 0 1px var(--border);
+        font-size: 12.5px;
+        font-weight: 580;
+      }
+      .status:not(:has(button:not([hidden]))) {
+        padding-right: 12px;
+      }
+      .status[data-state='update'] {
+        background: var(--color-warning-bg);
+        box-shadow: inset 0 0 0 1px var(--color-warning-border);
+        color: var(--color-warning);
+      }
+      .status button {
+        height: 26px;
+        padding: 0 11px;
+        font-size: 12px;
+      }
+
+      main {
         display: flex;
         flex-direction: column;
         gap: 28px;
+        padding-block: 24px 8px;
       }
-      /* Settings' header in the app: the screen's name, and a line under it. */
-      header {
+      .group-head {
         display: flex;
-        align-items: center;
-        gap: 14px;
+        flex-direction: column;
+        gap: 2px;
         padding: 0 4px;
       }
-      header img {
-        width: 36px;
-        height: 36px;
+      .group-head p,
+      .after {
+        max-width: 64ch;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--text-2);
       }
-      header .grow {
-        gap: 1px;
-      }
-      h1 {
-        font-size: 18px;
-        line-height: 1.25;
-        font-weight: 680;
-        letter-spacing: -0.015em;
-      }
-      header .muted {
-        font-size: 12px;
+      .after {
+        padding: 0 4px;
         color: var(--text-3);
       }
       .row > .grow {
         flex-basis: 224px;
       }
-      .controls {
+
+      /* A setting that depends on the row above it: indented under its label. */
+      .sub {
+        padding: 0 0 12px;
+        border-top: none !important;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 8px;
+        gap: 8px 10px;
+        font-size: 12.5px;
+        color: var(--text-2);
+      }
+      .sub label {
+        flex: 0 1 auto;
+      }
+      .sub:has(input:disabled) label,
+      .sub:has(input:disabled) .unit {
+        color: var(--text-3);
       }
       #min-mb {
-        width: 76px;
+        width: 72px;
         text-align: right;
+        font-variant-numeric: tabular-nums;
       }
+
+      /* Mergelane's own switch for capture, when it is off there: says why nothing is captured. */
+      .notice.inline {
+        margin: 0 0 12px;
+        border-top: none !important;
+      }
+
       #add-site {
+        display: flex;
         flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
+        gap: 8px;
+        padding: 14px 0;
       }
-      #add-site .muted {
-        font-size: 12.5px;
-        line-height: 1.5;
+      #add-site label {
+        font-size: 13.5px;
+        font-weight: 600;
       }
       .field {
         display: flex;
@@ -65,8 +120,10 @@
       #site {
         flex: 1;
       }
+      #site[aria-invalid='true'] {
+        box-shadow: inset 0 0 0 1.5px var(--color-warning);
+      }
       #site-error {
-        padding: 0 4px;
         font-size: 12.5px;
         color: var(--color-warning);
       }
@@ -84,154 +141,236 @@
         gap: 10px;
         min-height: 44px;
         padding: 6px 0;
-        font: 12.5px var(--mono);
       }
       #sites li + li {
         border-top: 1px solid var(--rule);
+      }
+      #sites li svg {
+        color: var(--text-3);
       }
       #sites li span {
         flex: 1;
         min-width: 0;
         overflow-wrap: anywhere;
-      }
-      #sites button {
-        height: 28px;
-        padding: 0 12px;
-        font: 580 12.5px var(--sans);
+        font: 12.5px var(--mono);
       }
       #no-sites {
-        font-size: 12.5px;
-      }
-      #connection-row .title {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
+        padding: 14px 0;
+        font-size: 12.5px;
+        color: var(--text-2);
       }
-      .links {
+      #no-sites svg {
+        color: var(--text-3);
+      }
+
+      /* A row that is a way into another page: the whole row is the link, as in the app. */
+      a.row {
+        color: inherit;
+        text-decoration: none;
+        margin: 0 -16px;
+        padding-inline: 16px;
+        border-radius: 14px;
+        transition: background-color 100ms ease-out;
+      }
+      a.row:hover {
+        background: var(--hover);
+        text-decoration: none;
+      }
+      a.row:active {
+        background: color-mix(in oklab, var(--color-accent) 10%, var(--card));
+      }
+      a.row:focus-visible {
+        outline-offset: -2px;
+      }
+      a.row .chevron {
+        color: var(--text-3);
+        flex-shrink: 0;
+      }
+
+      footer {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 6px 16px;
-        padding: 0 4px;
+        padding-block: 20px 40px;
         font-size: 12px;
         color: var(--text-3);
+      }
+      footer a {
+        color: var(--text-2);
+      }
+      footer a:hover {
+        color: var(--color-accent);
+      }
+
+      @media (max-width: 480px) {
+        main,
+        footer {
+          padding-inline: 16px;
+        }
+        .status {
+          justify-self: stretch;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
-      <header>
-        <img src="icons/icon-128.png" alt="" />
-        <div class="grow">
-          <h1>Mergelane</h1>
-          <div class="muted">Extension options</div>
-        </div>
-      </header>
+    <!-- Icons: Lucide (ISC), as the app uses them. -->
+    <svg hidden>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path d="M12 17V3" />
+        <path d="m6 11 6 6 6-6" />
+        <path d="M19 21H5" />
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path
+          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+        />
+      </symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+        <path d="M2 12h20" />
+      </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24">
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+    </svg>
 
-      <section class="group">
-        <h2 class="group-title">Capture</h2>
+    <header class="page-top">
+      <div class="page-top-inner">
+        <div class="brand">
+          <img src="icons/icon-128.png" alt="" />
+          <div>
+            <h1>Mergelane extension</h1>
+            <p>Settings for this browser</p>
+          </div>
+        </div>
+        <div class="status" id="status" data-state="checking">
+          <span class="dot" id="dot"></span>
+          <span id="connection" role="status">Checking for Mergelane…</span>
+          <button type="button" id="open-mergelane" hidden>Open Mergelane</button>
+        </div>
+        <nav class="sections" aria-label="Extension settings">
+          <a href="options.html" aria-current="page"
+            ><svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>Downloads</a
+          >
+          <a href="dashboard.html" id="to-blocking"
+            ><svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>Ad blocking</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="group" aria-labelledby="capture-title">
+        <div class="group-head">
+          <h2 class="group-title" id="capture-title">Capture</h2>
+        </div>
         <div class="card">
           <label class="row" for="capture">
             <span class="grow">
               <span class="title">Capture downloads</span>
-              <span class="muted"
-                >Every download this browser starts opens in Mergelane. If Mergelane isn’t open, the
-                browser keeps it.</span
-              >
+              <span class="muted" id="capture-hint"></span>
             </span>
-            <input type="checkbox" role="switch" class="switch" id="capture" />
+            <input
+              type="checkbox"
+              role="switch"
+              class="switch"
+              id="capture"
+              aria-describedby="capture-hint"
+            />
           </label>
-          <div class="row">
-            <label class="grow" for="skip-small">
+          <div class="notice inline" id="app-off" hidden>
+            Sending downloads is off in Mergelane’s Settings › Browser extensions, so the browser
+            keeps them until it is turned on there.
+          </div>
+          <label class="row" for="skip-small">
+            <span class="grow">
               <span class="title">Skip small files</span>
-              <span class="muted">Files smaller than this stay in the browser.</span>
-            </label>
-            <span class="controls">
-              <input
-                type="number"
-                id="min-mb"
-                min="1"
-                step="1"
-                aria-label="Minimum size in megabytes"
-              />
-              <span class="muted">MB</span>
-              <input type="checkbox" role="switch" class="switch" id="skip-small" />
+              <span class="muted">Small files stay in the browser, which saves them quickly.</span>
             </span>
+            <input type="checkbox" role="switch" class="switch" id="skip-small" />
+          </label>
+          <div class="sub">
+            <label for="min-mb">Smaller than</label>
+            <input type="number" id="min-mb" min="1" step="1" inputmode="numeric" />
+            <span class="unit">MB</span>
           </div>
         </div>
       </section>
 
-      <section class="group">
-        <h2 class="group-title">Sites that keep their downloads</h2>
+      <section class="group" aria-labelledby="sites-title">
+        <div class="group-head">
+          <h2 class="group-title" id="sites-title">Sites that keep their downloads</h2>
+          <p>
+            Downloads from these sites, and their subdomains, stay in the browser. Right-click ›
+            Download with Mergelane still works on them.
+          </p>
+        </div>
         <div class="card">
-          <form class="row" id="add-site">
-            <span class="muted"
-              >Downloads from these sites and their subdomains stay in the browser. Right-click ›
-              Download with Mergelane still works on them.</span
-            >
+          <form id="add-site" novalidate>
+            <label for="site">Add a site</label>
             <span class="field">
               <input
                 type="text"
                 id="site"
                 placeholder="example.com"
-                aria-label="Site to add"
                 class="mono"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="site-error"
               />
               <button type="submit">Add</button>
             </span>
-            <span id="site-error" role="alert" hidden>That isn’t a site name.</span>
+            <span id="site-error" role="alert" hidden>
+              That isn’t a site name. Type one like example.com.
+            </span>
           </form>
-          <ul id="sites"></ul>
-          <div class="row muted" id="no-sites">
-            No sites yet. Every site’s downloads go to Mergelane.
+          <ul id="sites" aria-label="Sites that keep their downloads"></ul>
+          <div id="no-sites">
+            <svg class="icon" aria-hidden="true"><use href="#i-globe" /></svg>
+            No sites yet, so every site’s downloads go to Mergelane.
           </div>
         </div>
       </section>
 
-      <section class="group">
-        <h2 class="group-title">Ad blocking</h2>
+      <section class="group" aria-labelledby="blocking-title">
+        <div class="group-head">
+          <h2 class="group-title" id="blocking-title">Ad blocking</h2>
+          <p>
+            Ads and trackers are blocked on every site. To allow them on one site, use the toolbar
+            button there.
+          </p>
+        </div>
         <div class="card">
-          <div class="row">
+          <a class="row" href="dashboard.html" id="open-blocking">
             <span class="grow">
-              <span class="title">Block ads and trackers</span>
-              <span class="muted"
-                >On for every site. Turn it off for one site from the toolbar button. Filter lists,
-                the blocking level and your own filters are in the ad-blocking settings.</span
-              >
+              <span class="title">Ad-blocking settings</span>
+              <span class="muted">Blocking level, filter lists and your own filters</span>
             </span>
-            <button type="button" id="open-blocking">Ad-blocking settings</button>
-          </div>
-          <div class="row muted">
-            Ad blocking is uBO Lite by Raymond Hill and contributors, GPL-3.0. Its filter lists are
-            the ones in this version of the extension; they update with Mergelane.
-          </div>
+            <svg class="icon chevron" aria-hidden="true"><use href="#i-chevron" /></svg>
+          </a>
         </div>
+        <p class="after">
+          Ad blocking is uBO Lite by Raymond Hill and contributors, GPL-3.0. Its filter lists are
+          the ones in this version of the extension; they update with Mergelane.
+        </p>
       </section>
-
-      <section class="group">
-        <h2 class="group-title">Connection</h2>
-        <div class="card">
-          <div class="row" id="connection-row">
-            <span class="grow">
-              <span class="title"
-                ><span class="dot" id="dot"></span><span id="connection">…</span></span
-              >
-            </span>
-            <button type="button" id="open-mergelane" hidden>Open Mergelane</button>
-          </div>
-        </div>
-      </section>
-
-      <div class="links">
-        <span id="version"></span>
-        <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
-          >Website</a
-        >
-        <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
-          >GitHub</a
-        >
-      </div>
     </main>
+
+    <footer>
+      <span id="version"></span>
+      <a href="https://github.com/ZahidNoor7/mergelane" target="_blank" rel="noreferrer"
+        >Source code</a
+      >
+      <a href="https://github.com/ZahidNoor7/mergelane/issues" target="_blank" rel="noreferrer"
+        >Report a problem</a
+      >
+    </footer>
     <script src="options.js"></script>
   </body>
 </html>

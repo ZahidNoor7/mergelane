@@ -157,7 +157,14 @@ Write-Host '  - it removes the helper again, whatever happened.'
 Write-Host 'Turn any VPN off first: System merge refuses to start next to one.'
 Write-Host 'If your internet stops and does not come back, restart the PC: the helper''s routes never outlive a restart.'
 Write-Host ''
-$answer = Read-Host 'Type YES to start, or anything else to stop'
+# On a GitHub-hosted runner (windows-test.yml, ADR-0075), a throwaway virtual machine with nobody at the keyboard,
+# the workflow that starts it stands in for the YES. Both variables are GitHub's own.
+if (($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')) {
+    $answer = 'YES'
+    Write-Host 'GitHub-hosted runner: starting without asking.'
+} else {
+    $answer = Read-Host 'Type YES to start, or anything else to stop'
+}
 if ($answer -cne 'YES') {
     Write-Host 'Stopped. Nothing was changed.'
     exit 0

@@ -102,11 +102,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/windows
+          sparse-checkout: |
+            scripts/windows
+            daemon
+            shared/fixtures
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: kit-${{ matrix.arch }}
           path: kit
+      # The daemon's Go tests from the source, on Windows itself, where the shared fixtures exist (the kit's
+      # programs run outside the repository).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: daemon/go.mod
+          cache: false
+      - name: Go tests on Windows
+        working-directory: daemon
+        shell: pwsh
+        # The packages the kit runs (GO_PACKAGES in scripts/windows/kit.mjs); the rest are macOS-only.
+        run: |
+          $packages = node -e "import('../scripts/windows/kit.mjs').then(m => console.log(m.GO_PACKAGES.map(p => './' + p.pkg).join(' ')))"
+          go test -count=1 @($packages -split ' ') 2>&1 | Tee-Object -FilePath ../kit/go-test.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: About this machine
         shell: pwsh
         run: |
@@ -114,6 +131,7 @@ jobs:
           "user: $(whoami)"
           powershell.exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString(); (Get-CimInstance Win32_OperatingSystem).Caption'
       - name: Run the test kit
+        if: ${{ !cancelled() }}
         shell: cmd
         run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File kit\test-kit.ps1
       - name: Read the kit's report
@@ -132,6 +150,9 @@ jobs:
           path: |
             kit/report.txt
             kit/system-merge-report.txt
+            kit/go-test.txt
+            kit/results/**/*.txt
+            kit/results/**/*.log
           retention-days: 14
           if-no-files-found: warn
 

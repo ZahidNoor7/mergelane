@@ -57,6 +57,23 @@ function Limit-Line([string]$Line) {
     return $Line.Substring(0, $MaxLineLength) + '...'
 }
 
+# A check's result is the one ordered table it returns. Anything else a command inside it let fall into the output
+# is named and dropped, so it can't swell the report (on GitHub's runners one did, and ConvertTo-Json ran out of
+# memory).
+function Select-Result($Output) {
+    $result = $null
+    foreach ($item in @($Output)) {
+        if ($item -is [System.Collections.Specialized.OrderedDictionary]) { $result = $item; continue }
+        if ($null -ne $item) { Write-Host "  (left out of the report: a $($item.GetType().FullName))" }
+    }
+    return $result
+}
+
+# A GitHub-hosted runner (.github/workflows/windows-test.yml, ADR-0075): a throwaway virtual machine that runs
+# everything as administrator with User Account Control off (GitHub's docs, "Administrative privileges"). Only
+# there does the kit run with administrator rights; the report says so. Both variables are GitHub's own.
+$OnRunner = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')
+
 function Test-Elevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -163,9 +180,13 @@ function Test-CanRun([string]$ProgramArch, [string]$Chip, [int]$Build) {
     return ($Chip -eq 'arm64' -and $ProgramArch -eq 'x64' -and $Build -ge 22000)
 }
 
+# Plain strings, read with .NET: Windows PowerShell 5.1's Get-Content adds PSPath, PSDrive, PSProvider and more to
+# each line, and its ConvertTo-Json writes those out (Microsoft's ConvertTo-Json page: only PowerShell 7.2 and later
+# leave a string's extended properties out). Lines of a Go test's coverage file swelled the report until
+# ConvertTo-Json ran out of memory on GitHub's runners.
 function Read-Lines([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return @() }
-    return @(Get-Content -LiteralPath $Path -Encoding UTF8)
+    return @([IO.File]::ReadAllLines($Path, (New-Object Text.UTF8Encoding($false))))
 }
 
 function Invoke-GoProgram($Program, [string]$Chip, [int]$Build) {
@@ -347,8 +368,11 @@ function Test-AppWindow($Result, [string]$Exe, [string]$ProfileDir) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         }
     }
+    # Path is read once per process: a process still quitting can lose it between two reads (seen on GitHub's
+    # Windows runners, where the second read failed on a null path).
     $left = @(Get-Process -Name 'Mergelane' -ErrorAction SilentlyContinue | Where-Object {
-            $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
+            $path = $_.Path
+            $path -and $path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)
         })
     foreach ($leftover in $left) { Stop-Process -Id $leftover.Id -Force -ErrorAction SilentlyContinue }
     $Result.leftRunning = $left.Count
@@ -501,7 +525,7 @@ Write-Host 'Mergelane once with a test profile.'
 Write-Host 'It needs no administrator rights and changes no settings.'
 Write-Host ''
 
-if (Test-Elevated) {
+if ((Test-Elevated) -and -not $OnRunner) {
     Write-Host 'This window has administrator rights, which the kit doesn''t want.' -ForegroundColor Yellow
     Write-Host 'Close it, then double-click "Run test kit.cmd" again (not "Run as administrator").' -ForegroundColor Yellow
     exit 2
@@ -530,7 +554,7 @@ $downloadsBefore = Get-FolderSnapshot $downloadsFolder
 $programs = @()
 foreach ($program in @($Kit.programs)) {
     Write-Host "Running $($program.id) ..."
-    $outcome = Invoke-GoProgram $program $chip.arch $build
+    $outcome = Select-Result (Invoke-GoProgram $program $chip.arch $build)
     Write-Host "  $($outcome.status)"
     $programs += , $outcome
 }
@@ -539,7 +563,7 @@ $apps = @()
 foreach ($app in @(Get-Value $Kit 'apps')) {
     if ($null -eq $app) { continue }
     Write-Host "Installing, opening and uninstalling Mergelane ($($app.arch)) ..."
-    $outcome = Invoke-AppCheck $app $chip.arch $build
+    $outcome = Select-Result (Invoke-AppCheck $app $chip.arch $build)
     Write-Host "  $($outcome.status)"
     $apps += , $outcome
 }
@@ -559,6 +583,8 @@ $report = [ordered]@{
     powershell      = $PSVersionTable.PSVersion.ToString()
     executionPolicy = (Get-ExecutionPolicy).ToString()
     smartAppControl = $smartAppControl
+    elevated        = [bool](Test-Elevated)
+    onRunner        = [bool]$OnRunner
     markOfTheWeb    = Test-MarkOfTheWeb $PSCommandPath
     downloads       = $downloads
     programs        = $programs

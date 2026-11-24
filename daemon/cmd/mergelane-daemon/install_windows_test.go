@@ -10,6 +10,9 @@ import (
 // Run as a normal user (the kit), install and uninstall refuse before touching anything, and say so in
 // the report the app reads.
 func TestInstallAndUninstallNeedAdministrator(t *testing.T) {
+	if elevated() {
+		t.Skip("running as administrator: install would go ahead")
+	}
 	dir := t.TempDir()
 	for _, cmd := range []string{"install", "uninstall"} {
 		report := filepath.Join(dir, cmd+".txt")

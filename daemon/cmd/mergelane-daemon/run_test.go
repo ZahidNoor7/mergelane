@@ -561,7 +561,7 @@ func TestRunDaemonStartReason(t *testing.T) {
 }
 
 func TestCmdRunRefusesWithoutRoot(t *testing.T) {
-	if os.Geteuid() == 0 {
+	if elevated() {
 		t.Skip("running as root: this would start the real daemon")
 	}
 	code, _, errOut := run("run", "-state-dir", t.TempDir(), "-socket", "/tmp/mergelane-no-such-socket")
@@ -615,7 +615,7 @@ func TestRunDaemonFailures(t *testing.T) {
 		{
 			name:  "not root",
 			setup: func(_ *testing.T, h *harness) { h.root = false },
-			want:  "run must run as root",
+			want:  "run must run as " + adminWord,
 		},
 		{
 			name:  "another daemon holds the lock",
@@ -627,7 +627,7 @@ func TestRunDaemonFailures(t *testing.T) {
 			setup: func(t *testing.T, h *harness) {
 				h.cfg.logFile = filepath.Join(t.TempDir(), "missing", "d.log")
 			},
-			want: "no such file or directory",
+			want: noSuchFile,
 		},
 		{
 			name: "pprof refuses the address",
@@ -646,7 +646,7 @@ func TestRunDaemonFailures(t *testing.T) {
 				}
 				h.cfg.stateDir = filepath.Join(file, "state")
 			},
-			want: "not a directory",
+			want: notADirectory,
 		},
 		{
 			name:   "discovery fails",

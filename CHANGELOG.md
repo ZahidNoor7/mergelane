@@ -5,33 +5,35 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-24
+
+A smaller, up-to-date Mergelane: about 210 MB less on disk, Electron 45 and Go 1.27.4 underneath, and browser
+extension settings that look like the rest of Mergelane.
+
+### Changed
+
+- **Mergelane takes about 210 MB less disk space.** The app carried a second, unused copy of the libraries its
+  window is drawn with, a second copy of the browser extension, the extension's build files and Mergelane's own
+  tests. Only what the app runs is packed now, and the build fails if anything else gets in.
+- **The browser extension's settings look like Mergelane's,** and its two pages are one place: Downloads and Ad
+  blocking sit at the top of both, and each opens the other in the same tab. The ad-blocking settings use
+  Mergelane's fonts, colours and controls. The extension's own page shows at the top whether it reaches Mergelane,
+  and says when Mergelane's settings have turned off sending downloads. The extension is now 1.2.0.
+- **Electron 45** (Chromium 156, Node.js 24.22), up from Electron 44. Saved sign-ins and your news server's password
+  are sealed in the Keychain without holding up the app, and the ones saved by earlier versions still open.
+
 ### Security
 
-- **Electron 44.11.5**, up from 44.4.4. It fixes two Electron security advisories: pointer-lock permission requests
-  that could be credited to the wrong frame (GHSA-x562-297c-g43g), and the compromised eMudhra intermediate
-  certificates (GHSA-jr5w-w6x2-84p9).
-- Newer patch and minor versions of the libraries Mergelane is built with, which clear advisories in its build
-  tools. Nothing you can see changes.
+- **Electron 45 includes the fixes for two Electron advisories:** pointer-lock permission requests that could be
+  credited to the wrong frame (GHSA-x562-297c-g43g), and the compromised eMudhra intermediate certificates
+  (GHSA-jr5w-w6x2-84p9).
 - **The system-wide helper is built with Go 1.27.4** and newer networking libraries (gVisor's network stack,
   golang.org/x/net 0.63, golang.org/x/sys 0.50). Go 1.27.4 fixes a crash in Go's web server (GO-2026-6859), which
   the helper uses only for its optional, local-only profiler; the x/net update clears seven advisories in code the
   helper doesn't use.
-- **Release builds use Node.js 24**, whose npm runs install scripts only for the few packages Mergelane lists as
-  needing them. Builds on Node.js 22 ran every package's install scripts.
-
-### Changed
-
-- **The extension's settings look like Mergelane's,** and its two pages are one place: Downloads and Ad blocking
-  sit at the top of both, and each opens the other in the same tab. The ad-blocking settings now use Mergelane's
-  fonts, colours and controls. The extension's own page shows whether it reaches Mergelane at the top, and says
-  when Mergelane's settings have turned off sending downloads.
-- **Electron 45** (Chromium 156, Node.js 24.22), up from Electron 44. Saved sign-ins and your news server's password
-  are now sealed in the Keychain without holding up the app, and the ones saved by earlier versions still open.
-- **Mergelane takes about 76 MB less disk space.** The libraries its window is drawn with were already built into
-  the app, but a second, unused copy shipped beside them. That copy is gone.
-- **And about 135 MB less again.** The app carried a second copy of the browser extension, the extension's build
-  files, and Mergelane's own tests, none of which it uses. Only what the app runs is packed now, and the build
-  fails if anything else gets in.
+- **Newer versions of the libraries Mergelane is built with,** which clear advisories in its build tools, and
+  release builds on Node.js 24, whose npm runs install scripts only for the few packages Mergelane lists as needing
+  them. Nothing you can see changes.
 
 ## [0.6.0] - 2026-11-17
 

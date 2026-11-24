@@ -38,6 +38,13 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### Release 0.7.0 (2026-11-24, branch `release-0.7.0`)
+
+- Version 0.7.0 (the extension 1.2.0), with the dependency upgrades (#97 to #103), the smaller app.asar, Node.js 24
+  builds (#107) and the extension's settings (#108). Changelog section written for users.
+- Next: merge, then `scripts/release/local-release.mjs --version 0.7.0` on `main`, and `--upload` for a draft the
+  owner publishes (docs/RELEASING.md). Windows stays a preview: the laptop checks in ADR-0075 are still to do.
+
 ### The extension's settings pages read as one (2026-11-24, branch `extension-options-ui`)
 
 - Mergelane's options page and uBO Lite's settings page share one header, with Downloads and Ad blocking as

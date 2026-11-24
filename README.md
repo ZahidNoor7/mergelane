@@ -20,7 +20,7 @@ internet connection your computer has at the same time: Wi-Fi, Ethernet, and a t
 - **Everyday:** your speeds in the menu bar and a menu under its icon (over full-screen apps too), Open at login, a notification when a download finishes, offering links you copy (off
   by default), seven themes with Liquid Glass, and updates from GitHub that it downloads and checks for you.
 
-> **Status: beta (0.6.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
+> **Status: beta (0.7.x).** Releases are on the [Releases page](https://github.com/ZahidNoor7/mergelane/releases).
 > Windows is a preview from 0.4.0 (below). The Safari extension and the 1.0 hardening come next. See
 > `docs/PROGRESS.md` for the details.
 

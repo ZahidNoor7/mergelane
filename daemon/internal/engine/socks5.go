@@ -24,6 +24,20 @@ func socksReply(c net.Conn, rep byte) {
 	c.Write([]byte{0x05, rep, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 }
 
+// refuseEarly answers rep to a request whose rest may still be unread, and closes so the client gets the answer.
+// Closing with bytes left unread makes Windows reset the connection, which can throw the answer away before the
+// client reads it (seen on GitHub's Windows runners, ADR-0075). So the sending side closes first, after the answer,
+// and whatever the client already sent is read and dropped (a second at most) before the socket closes.
+func refuseEarly(c net.Conn, rep byte) {
+	socksReply(c, rep)
+	if tc, ok := c.(*net.TCPConn); ok {
+		tc.CloseWrite()
+		tc.SetReadDeadline(time.Now().Add(time.Second))
+		io.Copy(io.Discard, io.LimitReader(tc, 64<<10))
+	}
+	c.Close()
+}
+
 func (b *Balancer) handleSocks5(c net.Conn) {
 	c.SetDeadline(time.Now().Add(15 * time.Second))
 
@@ -50,8 +64,7 @@ func (b *Balancer) handleSocks5(c net.Conn) {
 		return
 	}
 	if req[1] != 0x01 { // CONNECT only; UDP ASSOCIATE comes with the TUN front-end
-		socksReply(c, repCmdUnsupported)
-		c.Close()
+		refuseEarly(c, repCmdUnsupported)
 		return
 	}
 	var host string
@@ -83,8 +96,7 @@ func (b *Balancer) handleSocks5(c net.Conn) {
 		}
 		host = net.IP(a[:]).String()
 	default:
-		socksReply(c, repAtypUnsupported)
-		c.Close()
+		refuseEarly(c, repAtypUnsupported)
 		return
 	}
 	var p [2]byte

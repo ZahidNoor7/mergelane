@@ -66,6 +66,9 @@ function fakeRoot(script = SCRIPT) {
     writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'mergelane-daemon.exe'), `daemon ${arch}`)
     writeFileSync(join(root, 'daemon', 'bin', `win-${arch}`, 'wintun.dll'), `wintun ${arch}`)
   }
+  mkdirSync(join(root, 'shared', 'fixtures', 'daemon-api'), { recursive: true })
+  writeFileSync(join(root, 'shared', 'fixtures', 'browser-pipe.json'), '{"examples":[]}')
+  writeFileSync(join(root, 'shared', 'fixtures', 'daemon-api', 'status.json'), '{}')
   return root
 }
 
@@ -288,11 +291,27 @@ describe('buildKit', () => {
     assert.equal(readFileSync(join(out, CMD_NAME), 'utf8'), cmdFile())
     assert.match(readFileSync(join(out, 'README.txt'), 'utf8'), /commit abc1234 on 2026-11-12/)
     assert.equal(logged.length, kit.programs.length)
+    // The tests find the shared fixtures where they would in the repository: three folders up.
+    for (const file of ['browser-pipe.json', join('daemon-api', 'status.json')]) {
+      const shipped = join(out, 'go', 'shared', 'fixtures', file)
+      assert.equal(readFileSync(shipped, 'utf8'), readFileSync(join(root, 'shared', 'fixtures', file), 'utf8'))
+      const program = kit.programs.find((p) => p.package === 'internal/api')
+      assert.equal(join(dirname(join(out, program.path)), '..', '..', '..', 'shared', 'fixtures', file), shipped)
+    }
 
     assert.equal(zipFile, join(dirname(out), 'mergelane-windows-kit.zip'))
     const zip = calls.find((c) => c.file === 'zip')
     assert.deepEqual(zip.args, ['-r', '-X', '-q', zipFile, 'windows-kit'])
     assert.equal(zip.options.cwd, dirname(out))
+  })
+
+  it('refuses without the shared fixtures the Go tests read', async () => {
+    const root = fakeRoot()
+    rmSync(join(root, 'shared'), { recursive: true })
+    await assert.rejects(
+      buildKit({ root, out: join(freshDir('dist'), 'windows-kit'), runner: fakeRunner().runner, zip: false }),
+      /no shared fixtures at .*, which the Go tests read/
+    )
   })
 
   it('leaves out packages without Windows tests, keeps "until" only where given, and notes a dirty checkout', async () => {
@@ -407,7 +426,12 @@ describe('test-kit.ps1 (static checks; it runs only on Windows)', () => {
 
   it("needs Windows PowerShell 5.1, stops with administrator rights, and checks each program's SHA-256", () => {
     assert.match(SCRIPT, /^#Requires -Version 5\.1$/m)
-    assert.match(SCRIPT, /if \(Test-Elevated\) \{[\s\S]*?exit 2/)
+    // Only a GitHub-hosted runner, which runs everything as administrator, gets past that (ADR-0075).
+    assert.match(SCRIPT, /if \(\(Test-Elevated\) -and -not \$OnRunner\) \{[\s\S]*?exit 2/)
+    assert.ok(
+      SCRIPT.includes("$OnRunner = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')")
+    )
+    assert.match(SCRIPT, /elevated {8}= \[bool\]\(Test-Elevated\)/)
     assert.match(SCRIPT, /Get-FileHash -LiteralPath \$exe -Algorithm SHA256/)
     assert.match(SCRIPT, /\(Get-Value \$Kit 'kit'\) -ne 1/)
   })
@@ -520,7 +544,7 @@ describe('the app in the kit', () => {
     for (const line of SCRIPT.split('\n').filter((l) => /Stop-Process/.test(l))) {
       assert.match(line, /\$process\.Id|\$leftover\.Id/, line)
     }
-    assert.match(SCRIPT, /\$_\.Path\.StartsWith\(\$appDir/)
+    assert.match(SCRIPT, /\$path = \$_\.Path\s+\$path -and \$path\.StartsWith\(\$appDir/)
   })
 
   it('the script asks the browser bridge on the pipe the app names (shared/fixtures/browser-pipe.json)', () => {
@@ -662,6 +686,12 @@ describe('the System merge test (W5)', () => {
     assert.ok(at('if (Get-HelperService) {') < yes)
     assert.ok(at('if (-not (Test-Internet)) {') < install)
     assert.ok(yes < install)
+    // Nobody types YES on a GitHub-hosted runner (ADR-0075); everywhere else the owner still must.
+    const runner = at(
+      "if (($env:GITHUB_ACTIONS -eq 'true') -and ($env:RUNNER_ENVIRONMENT -eq 'github-hosted')) {"
+    )
+    assert.ok(runner < at("$answer = Read-Host 'Type YES to start, or anything else to stop'"))
+    assert.ok(runner < yes)
     // The removal is in the last finally block, after the install, and checks what must be gone.
     const final = ADMIN_SCRIPT.lastIndexOf('} finally {')
     assert.ok(install < final)

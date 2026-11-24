@@ -22,7 +22,7 @@ exact builds we use, why, and what their licences ask of us.
 | Licence of the program we ship | GPL version 3 or later (yt-dlp's own code is Unlicense) | **LGPL version 2.1 or later** |
 | Source on each Mergelane release | `yt-dlp-2026.10.26-source.tar.gz` | `ffmpeg-9.0.2-source.tar.xz` and `ffmpeg-9.0.2-build-ffmpeg.sh` |
 
-To fetch and build them (on an Apple silicon Mac, with Node.js 22 or later, as in CI, and the Xcode command line
+To fetch and build them (on an Apple silicon Mac, with Node.js 24 or later, as in CI, and the Xcode command line
 tools, which the FFmpeg build needs: clang and make):
 
 ```sh

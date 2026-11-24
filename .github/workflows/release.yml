@@ -65,12 +65,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # Node 22, as in ci.yml. Set up before the checks, because the first check is a Node script.
+      # Node 24, as in ci.yml: npm 11 enforces package.json's allowScripts, so only the packages listed
+      # there run install scripts (npm 10, in Node 22, ignores that list). Set up before the checks,
+      # because the first check is a Node script.
       # No dependency cache: a release installs everything fresh, so nothing saved by an earlier run
       # can reach it. (package-manager-cache is setup-node's automatic cache; it is turned off.)
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24
           package-manager-cache: false
 
       # The release-notes script's own tests, with the 90% line-coverage floor. They also check that

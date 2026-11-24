@@ -70,7 +70,7 @@ for (const [browser, manifest] of Object.entries(manifests)) {
   const dir = join(out, browser)
   await mkdir(dir, { recursive: true })
   await cp(scripts, dir, { recursive: true })
-  for (const file of ['popup.html', 'options.html', 'ui.css']) {
+  for (const file of ['popup.html', 'options.html', 'ui.css', 'ubol-theme.css']) {
     await cp(join(root, 'src', file), join(dir, file))
   }
   await cp(join(root, 'icons'), join(dir, 'icons'), { recursive: true })

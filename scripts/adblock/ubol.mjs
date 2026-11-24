@@ -10,7 +10,7 @@
 //
 // Its files stay where uBO Lite puts them (js/, rulesets/, css/, ...): they refer to each other by
 // absolute paths such as /js/scripting/css-api.js. Mergelane's own files (background.js, popup.html,
-// options.html, ui.css, icons/, fonts/) don't clash with any of them; uBO Lite's popup.html is the
+// options.html, ui.css, ubol-theme.css, icons/, fonts/) don't clash with any of them; uBO Lite's popup.html is the
 // only one left out, for Mergelane's popup, which shows uBO Lite's per-site switch itself.
 //
 // Node.js built-ins only, plus the download helpers the media tools use.
@@ -139,6 +139,23 @@ export async function copyBuild(from, to) {
   }
 }
 
+/** The settings pages' header (ui.css .page-top), as options.html draws it, with Ad blocking as the
+ * current section. Its icons are Lucide's (ISC), as the app's. */
+export const PAGE_HEADER = `    <div class="page-top-inner">
+        <div class="brand">
+            <img src="icons/icon-128.png" alt="">
+            <div>
+                <h1>Mergelane extension</h1>
+                <p>Settings for this browser</p>
+            </div>
+        </div>
+        <nav class="sections" aria-label="Extension settings">
+            <a href="options.html"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>Downloads</a>
+            <a href="dashboard.html" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Ad blocking</a>
+        </nav>
+    </div>
+`
+
 /**
  * Mergelane's changes to uBO Lite's files. Each `find` must occur exactly once, so an update of the
  * pinned build that moves one of them stops the build instead of shipping it unchanged.
@@ -165,6 +182,26 @@ export const PATCHES = [
     find: 'alt="uBO Lite"',
     replace: 'alt="Mergelane"',
     why: "The settings page shows Mergelane's mark (img/ublock.svg is replaced by it)."
+  },
+  {
+    file: 'dashboard.html',
+    find: '<link rel="stylesheet" href="css/develop.css">\n',
+    replace:
+      '<link rel="stylesheet" href="css/develop.css">\n' +
+      '<link rel="stylesheet" href="ubol-theme.css">\n',
+    why: "The settings page in Mergelane's look (extension/src/ubol-theme.css), after uBO Lite's own styles."
+  },
+  {
+    file: 'dashboard.html',
+    find: '<header>\n',
+    replace: `<header>\n${PAGE_HEADER}`,
+    why: "The extension's settings pages share one header: Mergelane's name, and Downloads and Ad blocking as sections that link to each other (options.html has the same)."
+  },
+  {
+    file: 'js/dashboard.js',
+    find: "dom.attr('a', 'target', '_blank');",
+    replace: "dom.attr('a:not(.sections a)', 'target', '_blank');",
+    why: "uBO Lite opens every link on its settings page in a new tab; the header's sections move between the extension's two settings pages in the same tab, as the app's do."
   }
 ]
 

@@ -21,6 +21,10 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Changed
 
+- **The extension's settings look like Mergelane's,** and its two pages are one place: Downloads and Ad blocking
+  sit at the top of both, and each opens the other in the same tab. The ad-blocking settings now use Mergelane's
+  fonts, colours and controls. The extension's own page shows whether it reaches Mergelane at the top, and says
+  when Mergelane's settings have turned off sending downloads.
 - **Electron 45** (Chromium 156, Node.js 24.22), up from Electron 44. Saved sign-ins and your news server's password
   are now sealed in the Keychain without holding up the app, and the ones saved by earlier versions still open.
 - **Mergelane takes about 76 MB less disk space.** The libraries its window is drawn with were already built into

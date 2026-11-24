@@ -199,14 +199,27 @@ test('the settings page opens as Mergelane, with uBO Lite credited', async () =>
   await expect(
     options.getByText(/uBO Lite by Raymond Hill and contributors, GPL-3\.0/)
   ).toBeVisible()
-  const opened = browser.waitForEvent('page')
-  await options.getByRole('button', { name: 'Ad-blocking settings' }).click()
-  const dashboard = watchErrors(await opened)
-  await dashboard.waitForLoadState()
-  expect(dashboard.url()).toBe(`chrome-extension://${CHROME_EXTENSION_ID}/dashboard.html`)
-  await expect(dashboard).toHaveTitle(/Mergelane/)
-  await expect(dashboard.locator('img[alt="Mergelane"]')).toHaveCount(1)
-  await dashboard.close()
+  // The two settings pages are one place: each links to the other in the same tab, under the same
+  // header, and uBO Lite's page is drawn in Mergelane's look (ubol-theme.css).
+  await options.getByRole('link', { name: /Ad-blocking settings/ }).click()
+  await expect(options).toHaveURL(`chrome-extension://${CHROME_EXTENSION_ID}/dashboard.html`)
+  await expect(options).toHaveTitle(/Mergelane/)
+  await expect(options.locator('img[alt="Mergelane"]')).toHaveCount(1)
+  const sections = options.getByRole('navigation', { name: 'Extension settings' })
+  await expect(sections.getByRole('link', { name: 'Ad blocking' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  )
+  expect(
+    await options.evaluate(() => getComputedStyle(document.body).fontFamily.startsWith('Archivo'))
+  ).toBe(true)
+  await sections.getByRole('link', { name: 'Downloads' }).click()
+  await expect(options).toHaveURL(`chrome-extension://${CHROME_EXTENSION_ID}/options.html`)
+  await expect(
+    options
+      .getByRole('navigation', { name: 'Extension settings' })
+      .getByRole('link', { name: 'Downloads' })
+  ).toHaveAttribute('aria-current', 'page')
   await options.close()
 })
 

@@ -38,6 +38,15 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### The extension's settings pages read as one (2026-11-24, branch `extension-options-ui`)
+
+- Mergelane's options page and uBO Lite's settings page share one header, with Downloads and Ad blocking as
+  sections that link to each other, and uBO Lite's page is drawn in Mergelane's look (ADR-0076).
+- Mergelane's page: the connection beside the name, the small-file size under its switch, a notice when Mergelane's
+  own setting stops sending downloads, an inline error for a mistyped site.
+- Tests: `options.test.ts` (19, `options.ts` 100%), `ubol.test.mjs` (28), `extensionAdblock.spec.ts` (10) and
+  `extension.spec.ts` (4) pass.
+
 ### Builds use Node.js 24 (2026-11-24, branch `ci-node-24`)
 
 - `windows` (with #105, the Windows test fixes) merged into `main` through #106; both branches are level at

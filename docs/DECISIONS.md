@@ -2487,3 +2487,44 @@ Amends ADR-0020 (CI paused) for this one workflow, which runs only when started 
   nothing left after removal).
 - macOS: `go test -race ./...` passes (14 packages, 83.8%); vet and staticcheck pass for macOS and Windows x64 and
   arm64; the kit scripts' tests pass (96).
+
+## ADR-0076: The extension's two settings pages read as one
+
+**Status:** Owner, 2026-11-24: asked for a better settings screen for the browser extension, showing both Mergelane's
+options page and uBO Lite's settings page, then chose "Both pages" over Mergelane's page only.
+
+### Context
+
+- The extension has two settings pages: Mergelane's own (`options.html`: capture, sites, the connection) and uBO
+  Lite's (`dashboard.html`: filtering mode, filter lists, custom filters), which ADR-0063 merges in at build time.
+- They looked like two products: uBO Lite's page has its own fonts, colours, square buttons and tabs, and the only
+  way between them was a button that opened uBO Lite's page in a new tab, with no way back.
+- Mergelane's page showed whether it reached Mergelane only at the bottom, put the size field for small files before
+  the switch it depends on, and had two footer links to the same address.
+
+### Decision
+
+- **One header on both pages,** drawn as the app's Settings screen draws its own (`ui.css` `.page-top`): the name,
+  then Downloads and Ad blocking as the app's segmented control. They are links between the two pages, in the same
+  tab. uBO Lite's own tabs (Settings, Filter lists, Custom filters, About) sit under it as a second row.
+- **Mergelane's page** shows the connection beside the name, with Open Mergelane when it is closed. The small-file
+  size sits under its switch. Capture's explanation changes with the switch. A notice appears when Mergelane's own
+  Settings › Browser extensions has stopped sending downloads. The sites field has a visible label and says what
+  is wrong inline. The ad-blocking row is a link to uBO Lite's page.
+- **uBO Lite's page in Mergelane's look** through `extension/src/ubol-theme.css`, linked after uBO Lite's own
+  stylesheets. It maps uBO Lite's colour and size custom properties to the app's tokens, and draws its tabs, mode
+  cards, checkboxes, buttons and fields as the app's components. uBO Lite's markup, wording and behaviour are
+  unchanged apart from three new patches in `scripts/adblock/ubol.mjs`: the stylesheet link, the shared header,
+  and `dashboard.js` leaving the header's two links in the same tab (it opens every other link in a new one).
+- As every patch, each must find its text exactly once, so an update of the pinned build that moves one stops the
+  build. The stylesheet can't fail the build that way: a uBO Lite update that renames a class would only lose that
+  part of the look, so each update of the pin is looked at on both pages, light and dark.
+
+### Verification
+
+- `options.test.ts`: 19 tests on the page's real markup, 100% of `options.ts` (now in Vitest's covered list).
+- `ubol.test.mjs`: the three patches apply to a stand-in build and to the pinned builds in the cache (28 tests,
+  `ubol.mjs` 100% of lines).
+- `extensionAdblock.spec.ts`: the settings test now follows the link to uBO Lite's page in the same tab, checks the
+  shared header and Mergelane's font there, and goes back through Downloads; all 10 tests pass, with no errors on
+  the extension's pages. `extension.spec.ts` (the popup, which shares `ui.css`) passes, 4 tests.

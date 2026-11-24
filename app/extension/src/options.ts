@@ -1,27 +1,37 @@
 import { api } from './api'
 import { ASK } from './ask'
-import { reach } from './mergelane'
-import { loadSettings, ownChange, saveSettings, siteOf } from './settings'
+import { reach, type Reach } from './mergelane'
+import { loadAppRules, loadSettings, ownChange, saveSettings, siteOf } from './settings'
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
 
-async function render(): Promise<void> {
-  const settings = await loadSettings()
+/** How long Mergelane gets to open before the page asks again whether it is there. */
+export const WAKE_RECHECK_MS = 4000
+
+export async function render(): Promise<void> {
+  const [settings, app] = await Promise.all([loadSettings(), loadAppRules()])
   element<HTMLInputElement>('capture').checked = settings.capture
+  element('capture-hint').textContent = settings.capture
+    ? 'Every download this browser starts opens in Mergelane. If Mergelane isn’t open, the browser keeps it.'
+    : 'Off: the browser keeps every download. Right-click › Download with Mergelane still sends a link.'
+  element('app-off').hidden = !settings.capture || app.capture
+
   element<HTMLInputElement>('skip-small').checked = settings.skipSmall
   const minimum = element<HTMLInputElement>('min-mb')
-  minimum.value = String(settings.minMegabytes)
+  // Not while it is being typed in: a save would put the stored value back under the cursor.
+  if (document.activeElement !== minimum) minimum.value = String(settings.minMegabytes)
   minimum.disabled = !settings.skipSmall
 
   const list = element('sites')
   list.replaceChildren(
     ...settings.sites.map((site) => {
       const item = document.createElement('li')
+      item.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-globe" /></svg>'
       const name = document.createElement('span')
       name.textContent = site
       const remove = document.createElement('button')
       remove.type = 'button'
-      remove.className = 'ghost'
+      remove.className = 'ghost small'
       remove.textContent = 'Remove'
       remove.setAttribute('aria-label', `Remove ${site}`)
       remove.addEventListener('click', () => {
@@ -34,16 +44,22 @@ async function render(): Promise<void> {
   element('no-sites').hidden = settings.sites.length > 0
 }
 
-async function renderConnection(): Promise<void> {
+const CONNECTION: Record<Reach, { tone: string; text: string }> = {
+  ok: { tone: 'ok', text: 'Connected to Mergelane' },
+  update: { tone: 'warn', text: 'Update Mergelane to use this extension' },
+  closed: { tone: '', text: 'Mergelane isn’t open' }
+}
+
+export async function renderConnection(): Promise<void> {
   const reached = await reach()
-  element('dot').className = `dot ${reached === 'ok' ? 'ok' : reached === 'update' ? 'warn' : ''}`
-  element('connection').textContent =
-    reached === 'ok'
-      ? 'Connected to Mergelane'
-      : reached === 'update'
-        ? 'Update Mergelane to use this extension'
-        : 'Mergelane isn’t open'
-  element('open-mergelane').hidden = reached !== 'closed'
+  const { tone, text } = CONNECTION[reached]
+  element('status').dataset.state = reached
+  element('dot').className = `dot ${tone}`
+  element('connection').textContent = text
+  const open = element<HTMLButtonElement>('open-mergelane')
+  open.hidden = reached !== 'closed'
+  open.disabled = false
+  open.textContent = 'Open Mergelane'
 }
 
 element<HTMLInputElement>('capture').addEventListener('change', (event) => {
@@ -53,31 +69,39 @@ element<HTMLInputElement>('skip-small').addEventListener('change', (event) => {
   void saveSettings({ skipSmall: (event.target as HTMLInputElement).checked })
 })
 element<HTMLInputElement>('min-mb').addEventListener('change', (event) => {
-  const megabytes = Math.round(Number((event.target as HTMLInputElement).value))
+  const field = event.target as HTMLInputElement
+  const megabytes = Math.round(Number(field.value))
   if (megabytes >= 1) void saveSettings({ minMegabytes: megabytes })
-  else void render()
+  else {
+    field.blur()
+    void render()
+  }
 })
 
+const siteField = element<HTMLInputElement>('site')
+function showSiteError(shown: boolean): void {
+  element('site-error').hidden = !shown
+  if (shown) siteField.setAttribute('aria-invalid', 'true')
+  else siteField.removeAttribute('aria-invalid')
+}
+siteField.addEventListener('input', () => showSiteError(false))
 element<HTMLFormElement>('add-site').addEventListener('submit', async (event) => {
   event.preventDefault()
-  const input = element<HTMLInputElement>('site')
-  const site = siteOf(input.value)
-  element('site-error').hidden = site !== null || input.value.trim() === ''
+  const site = siteOf(siteField.value)
+  showSiteError(site === null && siteField.value.trim() !== '')
   if (!site) return
   const { sites } = await loadSettings()
   if (!sites.includes(site)) await saveSettings({ sites: [...sites, site] })
-  input.value = ''
+  siteField.value = ''
 })
 
-element('open-mergelane').addEventListener('click', () => {
+element<HTMLButtonElement>('open-mergelane').addEventListener('click', (event) => {
+  const button = event.currentTarget as HTMLButtonElement
+  button.disabled = true
+  button.textContent = 'Opening…'
   void api.runtime
     .sendMessage({ what: ASK, wakeMergelane: true })
-    .then(() => setTimeout(renderConnection, 4000))
-})
-
-// uBO Lite's own settings page (ADR-0063): lists, the default blocking level, custom filters.
-element('open-blocking').addEventListener('click', () => {
-  void api.tabs.create({ url: api.runtime.getURL('dashboard.html') })
+    .then(() => setTimeout(() => void renderConnection(), WAKE_RECHECK_MS))
 })
 
 element('version').textContent = `Extension ${api.runtime.getManifest().version}`

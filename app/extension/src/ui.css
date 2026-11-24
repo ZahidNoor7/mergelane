@@ -347,6 +347,114 @@ input:disabled {
   line-height: 1.5;
 }
 
+/* The settings pages' header (options.html, and uBO Lite's settings page through ubol-theme.css), as
+   the app's Settings screen draws its own: the name and a line under it, then the sections as the
+   app's segmented control (ui/toggle-group.tsx), here links between the two pages. */
+.page-top {
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+}
+.page-top-inner {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding: 20px 20px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px 16px;
+}
+/* The sections keep one place on both pages: their own line under the name. */
+.page-top-inner > .sections {
+  grid-column: 1 / -1;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.brand img {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.brand h1 {
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+.brand p {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.sections {
+  display: flex;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.sections a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 580;
+  text-decoration: none;
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out,
+    scale 100ms ease-out;
+}
+.sections a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.sections a:active {
+  scale: 0.97;
+}
+.sections a[aria-current='page'] {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-raise);
+}
+.sections a[aria-current='page'] svg {
+  color: var(--color-accent);
+}
+/* Lucide's icons (ISC), drawn as the app draws them. */
+svg.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (max-width: 480px) {
+  .page-top-inner {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 16px;
+  }
+  .sections {
+    width: 100%;
+  }
+  .sections a {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
 /* As main.css does: nothing slides or stretches, and the pressed state still shows, as a dim. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -356,7 +464,8 @@ input:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
-  button:active:not(:disabled, [aria-disabled='true']) {
+  button:active:not(:disabled, [aria-disabled='true']),
+  .sections a:active {
     scale: none;
     opacity: 0.75;
   }

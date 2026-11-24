@@ -1,0 +1,340 @@
+/* uBO Lite's settings page (dashboard.html) in Mergelane's look (ADR-0063), so the extension's two
+   settings pages read as one. scripts/adblock/ubol.mjs links this file after uBO Lite's own
+   stylesheets and puts the settings pages' header (ui.css .page-top) above uBO Lite's tabs.
+
+   Only the look changes: uBO Lite's markup, wording and behaviour stay its own. Its colours are
+   custom properties (css/default.css), so most of this maps them to the app's tokens; the rest
+   draws its tabs, cards, checkboxes and buttons as the app's components. */
+@import url('ui.css');
+
+/* uBO Lite sets .dark or .light on the root (js/theme.js) and keys some colours to them: each is
+   named so these come later at the same specificity and win. */
+:root,
+:root.light,
+:root.dark,
+:root.mobile {
+  --font-family: var(--sans);
+  --font-size: 13px;
+  --font-size-smaller: 12.5px;
+  --font-size-xsmall: 11.5px;
+  --font-size-larger: 14px;
+  --monospace-size: 12px;
+  --button-font-size: 13px;
+
+  --surface-0: var(--card);
+  --surface-1: var(--bg);
+  --surface-2: var(--sunken);
+  --surface-3: var(--switch-off);
+  --ink-1: var(--text);
+  --ink-2: var(--text-2);
+  --ink-3: var(--text-3);
+  --ink-4: var(--text-3);
+  --border-1: var(--border);
+  --border-2: var(--border);
+  --border-3: var(--control);
+  --border-4: var(--control);
+  --hr-ink: var(--rule);
+
+  --accent-surface-1: var(--color-accent);
+  --accent-ink-1: var(--color-accent-onsolid);
+  --link-ink: var(--color-accent);
+  --link-hover-ink: var(--color-accent);
+  --subtil-ink: var(--color-accent);
+
+  --button-ink: var(--text);
+  --button-surface: var(--secondary);
+  --button-border-radius: 999px;
+  --button-preferred-ink: var(--color-accent-onsolid);
+  --button-preferred-surface: var(--color-accent);
+  --button-disabled-surface: var(--secondary);
+  --button-disabled-filter: opacity(45%);
+
+  --checkbox-size: 16px;
+  --checkbox-ink: var(--control);
+  --checkbox-checked-ink: var(--color-accent);
+  --checkbox-disabled-filter: opacity(45%);
+  --checkbox-margin-end: 10px;
+
+  --dashboard-tab-ink: var(--text-2);
+  --dashboard-tab-active-ink: var(--text);
+  --dashboard-tab-hover-surface: transparent;
+  --dashboard-tab-hover-border: var(--border);
+  --dashboard-tab-focus-surface: var(--hover);
+  --dashboard-highlight-surface-rgb: 0 0 0;
+  --dashboard-happy-green: var(--color-accent);
+  --filtering-mode-slider-background: var(--border);
+  --filtering-mode-button-size: 44px;
+  --notice-ink: var(--color-accent-onsolid);
+  --notice-surface: var(--color-accent);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 var(--sans);
+}
+
+/* The header: Mergelane's, then uBO Lite's tabs as a second row of sections, underlined as the app
+   underlines a current tab. */
+body > header {
+  width: 100%;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+}
+body > header > :not(.page-top-inner) {
+  box-sizing: border-box;
+  width: min(680px, 100%);
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+#dashboard-nav {
+  gap: 4px;
+  border-bottom: none;
+}
+#dashboard-nav .logo {
+  display: none;
+}
+#dashboard-nav > .tabButton {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 10px 9px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+  font: 580 13px var(--sans);
+  letter-spacing: 0;
+  scale: none;
+}
+#dashboard-nav > .tabButton:hover {
+  background: transparent;
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+#dashboard-nav > .tabButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+body[data-pane='settings'] #dashboard-nav .tabButton[data-pane='settings'],
+body[data-pane='rulesets'] #dashboard-nav .tabButton[data-pane='rulesets'],
+body[data-pane='filters'] #dashboard-nav .tabButton[data-pane='filters'],
+body[data-pane='develop'] #dashboard-nav .tabButton[data-pane='develop'],
+body[data-pane='about'] #dashboard-nav .tabButton[data-pane='about'] {
+  border-bottom: 2px solid var(--color-accent);
+  color: var(--text);
+}
+header [data-pane-related] p {
+  margin: 0 0 12px;
+}
+
+/* The panes: the width and rhythm of the extension's own settings page. */
+body > section,
+body section[data-pane='filters'] {
+  box-sizing: border-box;
+  width: min(680px, 100%);
+  padding: 8px 20px 40px;
+}
+body > section h3 {
+  margin: 24px 0 4px;
+  padding: 0 4px;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+body > section > div > p,
+body > section > div > h3 + p {
+  margin: 0 0 8px;
+  padding: 0 4px;
+  max-width: 64ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+hr {
+  border-top-color: var(--rule);
+}
+a:not(.fa-icon):hover {
+  text-decoration: underline;
+}
+
+/* The filtering modes: the app's selectable cards, the chosen one ringed in the accent. */
+#defaultFilteringMode {
+  gap: 10px;
+  margin-top: 10px;
+}
+.filteringModeCard {
+  border: none;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition:
+    background-color 100ms ease-out,
+    box-shadow 100ms ease-out;
+}
+.filteringModeCard:hover {
+  background: var(--hover);
+}
+.filteringModeCard:has(.radio > [type='radio']:checked) {
+  background: color-mix(in oklab, var(--color-accent) 7%, var(--card));
+  box-shadow: inset 0 0 0 1.5px var(--color-accent);
+}
+.filteringModeCard:has(:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.filteringModeCard > div {
+  padding: 12px 14px;
+}
+.filteringModeCard > div:first-of-type {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.filteringModeCard > div:nth-of-type(2) {
+  padding-block: 4px;
+}
+.filteringModeCard > div:nth-of-type(3) {
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.filteringModeButton {
+  border-radius: 999px;
+  background: transparent;
+}
+.filteringModeButton > div {
+  border-width: 3px;
+  scale: 0.6;
+}
+.filteringModeSlider span[data-level] {
+  border-radius: 999px;
+  height: 18%;
+}
+@media (max-width: 480px) {
+  /* One card under another, each as tall as its own text. */
+  #defaultFilteringMode {
+    grid: auto-flow / 1fr;
+  }
+}
+
+/* Behaviour: each setting a row, its explanation under it, in one card. */
+section[data-pane='settings'] > div:has(> p > label > .checkbox) {
+  display: flex;
+  flex-direction: column;
+}
+section[data-pane='settings'] > div > p:has(> label > .checkbox) {
+  margin: 0;
+  padding: 12px 16px;
+  max-width: none;
+  background: var(--card);
+  box-shadow:
+    inset 1px 0 var(--border),
+    inset -1px 0 var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+section[data-pane='settings'] > div > h3 + p:has(> label > .checkbox),
+section[data-pane='settings'] > div > :not(p) + p:has(> label > .checkbox) {
+  margin-top: 8px;
+  border-radius: 14px 14px 0 0;
+  box-shadow:
+    inset 1px 0 var(--border),
+    inset -1px 0 var(--border),
+    inset 0 1px var(--border);
+}
+section[data-pane='settings'] > div > p:has(> label > .checkbox) + p:has(> label > .checkbox) {
+  border-top: 1px solid var(--rule);
+}
+section[data-pane='settings']
+  > div
+  > p:has(> label > .checkbox):not(:has(+ p > label > .checkbox)) {
+  border-radius: 0 0 14px 14px;
+  box-shadow:
+    inset 1px 0 var(--border),
+    inset -1px 0 var(--border),
+    inset 0 -1px var(--border);
+}
+section[data-pane='settings'] > div > p:has(> label > .checkbox) > label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+label + legend {
+  margin: 2px 0 0 26px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* The app's checkbox (ui/checkbox.tsx): a rounded square, filled with the accent when ticked. */
+.checkbox > input[type='checkbox'] + svg {
+  border: 1.5px solid var(--control);
+  border-radius: 5px;
+  background: var(--card);
+  stroke-width: 3;
+}
+.checkbox > input[type='checkbox']:checked + svg {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  stroke: var(--color-accent-onsolid);
+}
+.checkbox:has(:focus-visible),
+.radio:has(:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Buttons: the app's capsules. uBO Lite's hover layer gives way to the app's hover colour. */
+button > .hover {
+  display: none;
+}
+button,
+button.iconified {
+  min-height: 32px;
+  height: auto;
+  padding: 0 14px;
+  gap: 6px;
+}
+button.iconified > .fa-icon {
+  font-size: 13px;
+}
+section[data-pane='settings'] p:has(button) {
+  gap: 8px;
+  padding: 0 4px;
+}
+button.preferred:not(.disabled):not([disabled]) {
+  box-shadow: none;
+}
+
+/* Fields: the app's capsule field. */
+input[type='search'],
+input[type='url'],
+select {
+  font: inherit;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--control);
+}
+textarea,
+.cm-container {
+  border-radius: 12px;
+}
+details > summary {
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  body > header > :not(.page-top-inner),
+  body > section {
+    padding-inline: 16px;
+  }
+}

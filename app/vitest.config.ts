@@ -134,6 +134,8 @@ export const COVERED = [
   // ADR-0063: the browser extension's ad blocking (uBO Lite) and the settings it shares storage with.
   'extension/src/adblock.ts',
   'extension/src/settings.ts',
+  // The extension's settings page, redrawn as the app's Settings (options.html).
+  'extension/src/options.ts',
   // ADR-0064: the speed test's numbers and its saved history, and its view in Networks.
   'src/shared/speedTest.ts',
   'src/renderer/src/utils/speedTest.ts',

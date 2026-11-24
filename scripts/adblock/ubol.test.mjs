@@ -35,6 +35,7 @@ import {
   mergeInto,
   mergeManifest,
   patchText,
+  PAGE_HEADER,
   PATCHES,
   pinProblems,
   SERVICE_WORKER
@@ -135,7 +136,11 @@ async function fakeBuild(dir, browser = 'chrome') {
     'export function toggleToolbarIcon(tabId) {\n    setIcon(tabId);\n}\n'
   )
   await writeFile(join(dir, 'js', 'background.js'), '// uBO Lite\n')
-  await writeFile(join(dir, 'dashboard.html'), '<img src="img/ublock.svg" alt="uBO Lite">\n')
+  await writeFile(join(dir, 'js', 'dashboard.js'), "dom.attr('a', 'target', '_blank');\n")
+  await writeFile(
+    join(dir, 'dashboard.html'),
+    '<link rel="stylesheet" href="css/develop.css">\n<header>\n<img src="img/ublock.svg" alt="uBO Lite">\n'
+  )
   await writeFile(join(dir, 'popup.html'), 'theirs\n')
   await writeFile(join(dir, 'README.md'), 'readme\n')
   await writeFile(join(dir, 'META-INF', 'cose.sig'), 'sig\n')
@@ -315,7 +320,19 @@ describe('patches', () => {
       await readFile(join(dir, 'js', 'action.js'), 'utf-8'),
       /toggleToolbarIcon\(tabId\) \{\n.*\n.*\n {4}return;\n/
     )
-    assert.match(await readFile(join(dir, 'dashboard.html'), 'utf-8'), /alt="Mergelane"/)
+    const dashboard = await readFile(join(dir, 'dashboard.html'), 'utf-8')
+    assert.match(dashboard, /alt="Mergelane"/)
+    assert.match(
+      dashboard,
+      /href="css\/develop\.css">\n<link rel="stylesheet" href="ubol-theme\.css">\n/
+    )
+    assert.ok(dashboard.includes(`<header>\n${PAGE_HEADER}`))
+    assert.match(PAGE_HEADER, /<a href="options\.html">.*Downloads<\/a>/)
+    assert.match(PAGE_HEADER, /<a href="dashboard\.html" aria-current="page">.*Ad blocking<\/a>/)
+    assert.match(
+      await readFile(join(dir, 'js', 'dashboard.js'), 'utf-8'),
+      /dom\.attr\('a:not\(\.sections a\)', 'target', '_blank'\);/
+    )
     for (const patch of PATCHES) assert.ok(patch.why.length > 0, patch.file)
   })
   test("the pinned builds take every patch, when they're in the cache", async (t) => {

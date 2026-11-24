@@ -179,7 +179,7 @@ You can also paste any direct download link into **New download** without the ex
 
 ## Building from source
 
-You need a Mac with Apple silicon, Node.js 22, Go 1.27 and the Xcode command line tools. Builds are made and tested
+You need a Mac with Apple silicon, Node.js 24, Go 1.27 and the Xcode command line tools. Builds are made and tested
 on macOS 27; the app they make runs on macOS 13 or later.
 
 ```sh

@@ -195,8 +195,9 @@ preflight() {
   done
   if command -v node >/dev/null 2>&1; then
     local nv
+    # 24, as CI: npm 11 enforces package.json's allowScripts; npm 10 (Node 22) ignores it.
     nv=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null)
-    [ "${nv:-0}" -ge 22 ] 2>/dev/null || refuse "needs Node.js 22 or later (found $(node --version 2>/dev/null))"
+    [ "${nv:-0}" -ge 24 ] 2>/dev/null || refuse "needs Node.js 24 or later (found $(node --version 2>/dev/null))"
   fi
   [ -d "$REPO/app/node_modules/koffi" ] || refuse "app/node_modules is missing (the netsim self-test loads koffi from it): run 'npm ci' in app/"
   if selected app; then

@@ -38,7 +38,16 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
-### Windows tested on GitHub's Windows machines (2026-11-23, branch `windows-ci`)
+### Builds use Node.js 24 (2026-11-24, branch `ci-node-24`)
+
+- `windows` (with #105, the Windows test fixes) merged into `main` through #106; both branches are level at
+  `8742ceb`.
+- `ci.yml`, `release.yml` and `youtube-live.yml` move from Node 22 to Node 24, as `windows-test.yml` already was.
+  npm 11 (Node 24) blocks dependency install scripts except those listed in `allowScripts` in `app/package.json`;
+  npm 10 (Node 22) ignores that list, so a release built on Node 22 would have run every package's install scripts.
+- `scripts/ci/local-root.sh` now refuses Node older than 24, with two new tests in `local-root.test.sh` (36 pass);
+  README, `app/README.md` and `docs/MEDIA-TOOLS.md` say Node.js 24.
+
 
 - The owner has no Windows PC for now, so the Windows test kit ran for the first time on GitHub's free Windows
   machines, x64 (Windows Server 2025) and arm64 (Windows 11), through a hand-started workflow,

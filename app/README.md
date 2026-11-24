@@ -4,7 +4,7 @@ The Electron app: download engine, torrents, Usenet, scheduler, limits, renderer
 It started as an import of [Plexo](https://github.com/anmolkapil/plexo) (MIT, Copyright (c) 2026 Anmol Kapil);
 see `../docs/UPSTREAM.md` for the exact commit and what Mergelane changed.
 
-Requirements: the app runs on macOS 13 or later on Apple silicon. Building it needs Node.js 22 or later (builds are
+Requirements: the app runs on macOS 13 or later on Apple silicon. Building it needs Node.js 24 or later (builds are
 made and tested on macOS 27).
 
 ```sh

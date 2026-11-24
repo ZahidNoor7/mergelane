@@ -16,6 +16,8 @@ All notable changes to Mergelane are recorded here. The format follows
   golang.org/x/net 0.63, golang.org/x/sys 0.50). Go 1.27.4 fixes a crash in Go's web server (GO-2026-6859), which
   the helper uses only for its optional, local-only profiler; the x/net update clears seven advisories in code the
   helper doesn't use.
+- **Release builds use Node.js 24**, whose npm runs install scripts only for the few packages Mergelane lists as
+  needing them. Builds on Node.js 22 ran every package's install scripts.
 
 ### Changed
 

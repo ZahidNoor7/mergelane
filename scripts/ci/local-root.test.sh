@@ -48,6 +48,17 @@ stub dnctl 'exit 0'
 stub pfctl 'exit 0'
 # The fake Mac runs the oldest macOS Mergelane supports (ADR-0065), unless a test says otherwise.
 stub sw_vers 'echo "${STUB_MACOS:-13.0}"'
+# node is the real one, except that STUB_NODE (a major version) answers the runner's version check.
+REAL_NODE=$(command -v node)
+export REAL_NODE
+stub node '
+if [ -n "${STUB_NODE:-}" ]; then
+  case "$*" in
+    *process.versions.node*) echo "$STUB_NODE"; exit 0 ;;
+    --version) echo "v$STUB_NODE.0.0"; exit 0 ;;
+  esac
+fi
+exec "$REAL_NODE" "$@"'
 
 # The fake helper answers like mergelane-daemon 0.1.0 does.
 cat >"$T/helper" <<'EOF'
@@ -124,7 +135,7 @@ lacks() {
 }
 reset() {
   unset STUB_ROUTES STUB_SCUTIL STUB_IFACES STUB_PROCS STUB_LOADED STUB_MERGE STUB_HELPER_DOWN FAKE_PLIST FAKE_HELPER \
-    STUB_MACOS
+    STUB_MACOS STUB_NODE
   rm -rf "$T/backup" "$T/support"
 }
 
@@ -183,6 +194,15 @@ reset
 export STUB_MACOS=27.2.1
 runner --dry-run
 expect "a newer macOS passes the version check" 0 "all checks passed"
+reset
+export STUB_NODE=22
+runner --dry-run
+expect "a Node.js older than 24 is refused (npm 10 ignores allowScripts)" 2 \
+  "NOT STARTING. Nothing was changed." "needs Node.js 24 or later (found v22.0.0)"
+reset
+export STUB_NODE=24
+runner --dry-run
+expect "Node.js 24 passes the version check" 0 "all checks passed"
 reset
 STUB_ROUTES=$VPN
 runner --dry-run

@@ -12,7 +12,7 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 command -v node >/dev/null || {
-  echo "local-ci: Node.js is not on PATH (CI uses Node.js 22)" >&2
+  echo "local-ci: Node.js is not on PATH (CI uses Node.js 24)" >&2
   exit 2
 }
 exec node "$HERE/local.mjs" "$@"

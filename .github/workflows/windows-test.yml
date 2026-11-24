@@ -35,8 +35,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Node 24: npm 11 reads package.json's allowScripts, which keeps install scripts the app doesn't want from
-      # running (npm 10, in Node 22, ignores that list).
+      # Node 24, as in ci.yml and release.yml: npm 11 enforces package.json's allowScripts (npm 10, in Node 22,
+      # ignores that list).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24

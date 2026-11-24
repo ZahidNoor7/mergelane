@@ -90,11 +90,6 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-func dialUnix(ctx context.Context, path string) (net.Conn, error) {
-	var d net.Dialer
-	return d.DialContext(ctx, "unix", path)
-}
-
 // sleep waits for d, or until ctx is done.
 func sleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)

@@ -38,6 +38,23 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 1: crash-safe resume (2026-11-26, branch `crash-safe-resume`)
+
+- The plan for nine features from the redesign prototype is merged (`docs/plans/2026-11-new-features-plan.md`, #110).
+  The owner parked the wireless iPhone lane (D3: no Apple Developer account). Phase 1 started.
+- **Done in this branch (ADR-0077):** progress saved every 2 s (adaptive on slow drives), data then map, each
+  flushed, and the folder too; a save cut off at its rename is read from its temporary file; `session.json` tells a
+  crash from a quit; after a crash, running and queued downloads carry on in their order; the recovery note on
+  Downloads, "progress saved N s ago" in the details, and Settings › Downloads › "If something goes wrong".
+- Correction to the plan: no koffi call is needed for `F_FULLFSYNC`; Node's `FileHandle.sync()` already uses it on
+  macOS (libuv v1.52.1).
+- Tests: 679 unit tests pass (new `recovery.test.ts`, `journal.test.ts`, `RecoveredBanner.test.tsx`,
+  `SafetySettings.test.tsx`; every new file 100%). Full e2e: 837 passed, 5 skipped, 0 failed. The chaos suite found
+  that a resumed download wasn't saved at once; fixed. `nzb.spec.ts`'s wrong-password test failed on `main` too
+  (two "Download again" buttons); its locator now names the exact one.
+- Next in Phase 1: expired-link recovery, then sleep and the end of the queue with the rest of torrent file choice.
+- Open for the owner: D1, D2, D4 to D13 (D5 and D6 matter for this branch's copy and behaviour after a quit).
+
 ### Release 0.7.0 (2026-11-24, branch `release-0.7.0`)
 
 - Version 0.7.0 (the extension 1.2.0), with the dependency upgrades (#97 to #103), the smaller app.asar, Node.js 24

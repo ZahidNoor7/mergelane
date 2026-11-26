@@ -80,7 +80,7 @@ The first draft had a Phase 4 for the iPhone. It is gone: the owner parked that 
 | 2 | iPhone wireless lane (parked, D3) | iPhone over USB appears as an ordinary network (Personal Hotspot over USB). Per-network proxy support exists (`connectThroughProxy`, `network/routes.ts:162-260`; `NetworkPreference.proxy`), the shape a relayed lane needs. | — | Everything else: iOS app, Mac-side peer-to-peer listener, pairing, wire protocol, lane type. |
 | 3 | Download history | `download/history.ts`: `userData/history.json`, newest first, `MAX_ENTRIES = 500`, finished downloads only (`FinishedDownload`, `types.ts:457-471`), `missing` worked out when listed. `listHistory` IPC and `historyChanged` push (`ipc-channels.ts:15,27`). `moveToHistory` (`downloadManager.ts:1059-1105`). | Only finished downloads; removing one from history removes it everywhere (`removeFromHistory`). No search, filters, retention or clear. | A History place, cancelled and removed downloads, SHA-256, retention, re-download from history, a store that scales past 500. |
 | 4 | Duplicate detection | `failedMatch(probe)` (`downloadManager.ts:1803-1821`) matches a failed HTTP download by size, file name and strong ETag, offered as "Resume it" (`NewDownloadDialog.tsx:389-403`). | Covers failed downloads only, and only to resume them. | Matching against finished or running downloads; published SHA-256; a setting; torrent infoHash matching (`start()`, `downloadManager.ts:1360-1385`, does not check). |
-| 5 | Crash-safe resume | Manifest per download, `userData/downloads/<id>/manifest.json`, `PersistedDownload` version 7 (`downloadManager.ts:185-210`). The staging file is fsynced (`downloadFile.ts:37-44`) before the manifest is written to `.tmp` and renamed (`downloadManager.ts:2854-2859`). The block snapshot is taken before the fsync, so the map never claims bytes that were not flushed. Stale `.tmp` removed at launch (`:998`). | Checkpoint only every `CHECKPOINT_INTERVAL_MS = 15_000` (`:257`), so a crash can refetch about 15 s. `filehandle.sync()` is `fsync(2)`; Apple's `fsync(2)` man page says it does not flush the drive's cache and that `F_FULLFSYNC` does. The manifest file and its folder are not fsynced. Downloads that were running come back paused (`:1227-1231`). | Crash detection (a crash and a clean quit look the same), the recovery note, auto-resume after a crash. |
+| 5 | Crash-safe resume | Manifest per download, `userData/downloads/<id>/manifest.json`, `PersistedDownload` version 7 (`downloadManager.ts:185-210`). The staging file is fsynced (`downloadFile.ts:37-44`) before the manifest is written to `.tmp` and renamed (`downloadManager.ts:2854-2859`). The block snapshot is taken before the fsync, so the map never claims bytes that were not flushed. Stale `.tmp` removed at launch (`:998`). | Checkpoint only every `CHECKPOINT_INTERVAL_MS = 15_000` (`:257`), so a crash can refetch about 15 s. The staging file's flush is already a full one on macOS (corrected at build time: libuv's `uv__fs_fsync` uses `F_FULLFSYNC`). The manifest file and its folder are not flushed. Downloads that were running come back paused (`:1227-1231`). | Crash detection (a crash and a clean quit look the same), the recovery note, auto-resume after a crash. |
 | 6 | Expired-link recovery | `LINK_REFUSED` (`shared/errors.ts:5`) recognises 401/403/404/410/416 on a range request; the renderer derives `linkExpired()` (`renderer/src/utils/format.ts:262-264`) and shows a fix action (`downloadActions.ts:48`). `relink`/`replaceLink` (`downloadManager.ts:1709-1775`) re-probes, needs the same size and range support, compares sampled bytes with the disk (`compareWithDisk` `:1777-1799`), swaps the URL and resumes. `FixLinkDialog.tsx`. The browser path offers to resume a matching failed download (`browserBridge.ts:303-310`). | Expiry is noticed only after 5 strikes on every network (`httpTransfer.ts:1130-1136`, `downloadManager.ts:2612-2616`). There is no "expired" state, only `error` (`DownloadStatus`, `types.ts:145-146`). `relink` does not update the stored `etag`/`lastModified`. The browser match needs a strong ETag. | Signed-URL detection, the inspector panel in the prototype's copy, automatic hand-off from the extension, the refusal messages. |
 | 7 | Sleep prevention | `keepAwake()` starts `powerSaveBlocker('prevent-app-suspension')` while anything downloads and stops it after (`downloadManager.ts:2053-2069`), called on every `pushUpdate` (`:2709`). Electron's docs: that type "Keeps system active but allows screen to be turned off". | Always on: no setting. | "When the queue finishes": no queue-finished event (`pump`, `:720-739`, never reports an empty queue), no sleep or shut-down code anywhere, no countdown. |
 | 8 | Speed reports | Per-download bytes per network, `startedAt`, `completedAt`, `totalPausedMs`, peak (`types.ts:288-361`). Current day, week and month bytes per network in `userData/network-usage.json` (`network/limits.ts:41-104`). | Those periods reset when they roll over (`rollPeriods`, `limits.ts:217-228`): no history. | A per-day store, time saved, the Reports section, the Monday notification, CSV export. |
@@ -110,7 +110,7 @@ Other facts that shape the plan:
 
 | Piece | Process | New or changed files |
 |---|---|---|
-| Crash journal and recovery | main | `download/downloadManager.ts` (checkpoint), new `main/session.ts` (crash marker), `download/downloadFile.ts` (full sync), `network/deviceBinding.ts`-style koffi call for `F_FULLFSYNC`; pure rules in new `shared/recovery.ts` |
+| Crash journal and recovery | main | `download/downloadManager.ts` (checkpoint), new `main/session.ts` (crash marker), new `main/durableFile.ts` (flushed writes); pure rules in new `shared/recovery.ts` and `shared/journal.ts` |
 | Expired links | main, extension | `download/httpTransfer.ts`, `download/downloadManager.ts`, `shared/errors.ts`, new `shared/linkExpiry.ts`, `main/browserBridge.ts` |
 | Sleep and queue end | main | `download/downloadManager.ts` (queue-finished), new `main/power.ts` (sleep and shut down per platform); pure countdown in new `shared/queueEnd.ts` |
 | Torrent files | renderer | `components/TorrentFiles.tsx`; tree building in new `shared/torrentTree.ts` |
@@ -122,7 +122,7 @@ Other facts that shape the plan:
 ### New libraries
 
 None. SQLite comes from Node's built-in `node:sqlite` (D4). Hashing uses `node:crypto` in a `worker_threads`
-worker. `F_FULLFSYNC` uses koffi, already a runtime dependency (`app/package.json:41`).
+worker. Full flushes need nothing new: Node's `FileHandle.sync()` already uses `F_FULLFSYNC` on macOS.
 
 ### Data model
 
@@ -518,10 +518,11 @@ seconds. On the next launch, downloads that were running resume, and a note says
    (paused/queued ones save on change, as today).
 2. **Order of a checkpoint** (keeps today's correct order, adds the missing flushes):
    1. snapshot the block frontiers (`saveBlocks`, already before the flush);
-   2. flush the staging file with a full sync: on macOS `fcntl(fd, F_FULLFSYNC)` via koffi (Apple's `fsync(2)` man
-      page: "Mac OS X provides the F_FULLFSYNC fcntl. The F_FULLFSYNC fcntl asks the drive to flush all buffered data
-      to permanent storage"), falling back to `fsync` if it fails; on Windows `FileHandle.sync()`
-      (`FlushFileBuffers`);
+   2. flush the staging file with a full sync: `FileHandle.sync()`, which on macOS libuv turns into
+      `fcntl(fd, F_FULLFSYNC)`, then F_BARRIERFSYNC, then `fsync` (libuv v1.52.1 `src/unix/fs.c`, `uv__fs_fsync`;
+      Apple's `fsync(2)` man page: "The F_FULLFSYNC fcntl asks the drive to flush all buffered data to permanent
+      storage"). **Correction at build time:** the first draft planned a koffi call; it isn't needed. On Windows it
+      is `FlushFileBuffers`;
    3. write `manifest.json.tmp`, flush it the same way, `rename` over `manifest.json`;
    4. flush the folder (open it read-only and `fsync`, macOS only; Windows has no directory fsync and `rename` there
       is already retried, `jsonFile.ts:27-37`).
@@ -537,10 +538,11 @@ seconds. On the next launch, downloads that were running resume, and a note says
    (heartbeat bytes - saved bytes)`. After a power cut the heartbeat itself may be stale; then report from the
    manifests' `savedAt` only and say less ("picked up from the last save").
 5. **Resume after a crash.** `restoreOne` (`:1227-1231`) restores running downloads as `paused` today. After a crash,
-   restore those with `wasRunning: true` (new manifest field) as `queued`, so `pump` restarts them in order. After a
-   clean quit, keep today's behaviour (paused) unless they were running when the user quit: D6.
-6. **Manifest version 8:** adds `wasRunning?: boolean` and `fullSyncAt?: number`. `restorePersistedDownloads`
-   accepts 7 and 8; 7 is read with `wasRunning` from `state.status`. No rewrite of old files until their next save.
+   restore those whose last save says `downloading` as `queued`, ahead of those that were `queued`, which keep their
+   order; `pump` restarts them. After a clean quit, keep today's behaviour (paused): D6.
+6. **No new manifest version (as built).** The last save's own `state.status` says whether a download was running,
+   so version 7 stays. A save cut off at its rename is read from its flushed `manifest.json.tmp` instead of a
+   `manifest.prev.json`.
 7. **"Reopens by itself."** The prototype's overlay says Mergelane reopens by itself after a crash. Nothing can
    relaunch an app after `kill -9` or a power cut without a launchd job; CLAUDE.md rules out `SMAppService`, and a
    LaunchAgent is a system change. Proposal: recover at the next launch (and at login if "Open at login" is on), and
@@ -550,8 +552,7 @@ seconds. On the next launch, downloads that were running resume, and a note says
 
 ### Edge cases
 
-`.tmp` left behind (removed at launch, already); manifest corrupt (fall back to the previous good one: keep
-`manifest.prev.json` from the last rename); staging file shorter than the map (already handled, `:1266-1277`);
+`.tmp` left behind (removed at launch, already; read first when the manifest is garbled or missing, as built); staging file shorter than the map (already handled, `:1266-1277`);
 external disk unplugged (checkpoint fails soft, download pauses); split segments (in memory, refetched, counted in
 `lostBytes`).
 
@@ -867,7 +868,7 @@ active), went with feature 2. They are in the appendix.
 ## Risks
 
 - **Data loss in the journal.** A map that claims unflushed bytes would publish a corrupt file. Mitigations: snapshot
-  before flush (already), `F_FULLFSYNC` for data and manifest, folder flush, previous-manifest fallback, the
+  before flush (already), `F_FULLFSYNC` for data and manifest, folder flush, the temporary-manifest fallback, the
   property test over torn writes, end-to-end hash comparison in e2e, and the existing sampled-bytes checks on resume.
   The cost of flushing every 2 s is measured before the interval is fixed.
 - **Privacy of history.** History holds every link and file name. It stays on the computer: `mergelane.db` in
@@ -890,7 +891,8 @@ active), went with feature 2. They are in the appendix.
 - Node.js 24 `node:sqlite`: nodejs.org/docs/latest-v24.x/api/sqlite.html (release candidate, no flag). Local check:
   `DatabaseSync` runs in Electron 45.4.1 (Node 24.22.3) with `ELECTRON_RUN_AS_NODE=1`.
 - Node.js 24 `filehandle.sync()`: refers to POSIX `fsync(2)`; no mention of `F_FULLFSYNC` (fs.html). libuv:
-  `uv_fs_fsync` "Equivalent to fsync(2)" (docs.libuv.org).
+  `uv_fs_fsync` "Equivalent to fsync(2)" (docs.libuv.org). libuv's source, v1.52.1 `src/unix/fs.c`
+  (`uv__fs_fsync`), shows the Apple branch uses `F_FULLFSYNC` first (read when building Phase 1).
 - Apple `fsync(2)` and `pmset(8)` man pages, read on the owner's Mac.
 - Electron `powerSaveBlocker` and `powerMonitor`: electronjs.org/docs/latest.
 - WebTorrent: webtorrent.io/docs (`file.select`, `file.deselect`, `torrent.deselect`, `deselect` option; the page is

@@ -2528,3 +2528,67 @@ options page and uBO Lite's settings page, then chose "Both pages" over Mergelan
 - `extensionAdblock.spec.ts`: the settings test now follows the link to uBO Lite's page in the same tab, checks the
   shared header and Mergelane's font there, and goes back through Downloads; all 10 tests pass, with no errors on
   the extension's pages. `extension.spec.ts` (the popup, which shares `ui.css`) passes, 4 tests.
+
+## ADR-0077: Progress is saved every 2 seconds, flushed to the drive, and a crash resumes what was running
+
+**Status:** Owner, 2026-11-26: approved Phase 1 of `docs/plans/2026-11-new-features-plan.md` (feature 5, crash-safe
+resume). The details below are the plan's recommendations; D6 (resuming after a clean quit too) is still open and
+is not part of this decision.
+
+### Context
+
+- A running download saved its chunk map every 15 s. A crash, a force quit or a power cut could lose up to 15 s of
+  data, which was then fetched again.
+- The chunk data was flushed before the map was written, and the map was written through a temporary file and a
+  rename, so the map never claimed bytes that weren't on disk. But the map's own file and its folder were not
+  flushed, so a power cut could still lose or garble the rename.
+- After any restart, downloads came back paused: a crash and a quit looked the same, and the user had to resume
+  each one.
+- On macOS, Node's `FileHandle.sync()` already asks the drive to flush its own cache. libuv's `uv__fs_fsync` (src/
+  unix/fs.c, v1.52.1, the version in Electron 45's Node 24.22.3) calls `fcntl(F_FULLFSYNC)`, then F_BARRIERFSYNC,
+  then `fsync`. Apple's `fsync(2)` man page says plain `fsync` would not flush the drive's cache. No koffi call is
+  needed.
+
+### Decision
+
+- **Every 2 seconds** while a download runs (`shared/recovery.ts`, `CHECKPOINT_MS`), and four times as long as the
+  last save took on a drive that is slow to flush, up to 15 s. A run that starts or resumes saves at once too, so a
+  crash in its first seconds still finds it running (`chaos.spec.ts` found this: Pause, Resume, then a crash
+  brought it back paused).
+- **In this order** (`shared/journal.ts`): take the map as it stands, flush the data, write the map to
+  `manifest.json.tmp` and flush it, rename it over `manifest.json`, flush the folder (macOS; Windows can't open a
+  folder for this). A property test with a model of a drive that loses unflushed writes checks the order
+  (`journal.test.ts`).
+- **A save cut off at its rename** leaves a garbled or missing manifest and a whole temporary file. The launch reads
+  the temporary file then, instead of discarding the download.
+- **Crash or quit:** `session.json` in userData says whether the last launch quit cleanly. It is written (flushed)
+  at launch with `cleanExit: false`, and with `cleanExit: true` only after a quit has paused and saved every
+  download. While anything downloads, a heartbeat notes each download's bytes every second (not flushed). With no
+  record, a save that still says "downloading" counts as a crash.
+- **After a crash,** downloads that were running take their turns again from their last save, ahead of those that
+  were waiting, which keep their places. Paused ones stay paused. After a quit, nothing changes: they come back
+  paused, as before (D6 open).
+- **The note:** Downloads shows "Mergelane recovered after quitting unexpectedly", with how many downloads were
+  picked up, how long before it quit their last save was, and how much is fetched again, from the heartbeat. When
+  the heartbeat didn't survive (a power cut), it leaves the numbers out. The inspector shows "progress saved N s
+  ago" while a download runs. Settings › Downloads › "If something goes wrong" says progress is saved every 2
+  seconds, always on.
+- **Not done:** Mergelane doesn't reopen by itself after a crash, as the prototype's overlay says. Nothing can
+  relaunch an app after `kill -9` or a power cut without a launchd job, which CLAUDE.md rules out (plan D5).
+
+### Consequences
+
+- About 10–20 ms of flushing per save on the owner's internal SSD (measured: 7–17 ms for 80 MB of data, 9–15 ms for
+  the map and folder), so about 1% of the time. Slower drives save less often.
+- Tests that expected a killed download to come back paused now expect it to carry on: `recovery.spec.ts`,
+  `hedge.spec.ts` (its kill case) and `chaos.spec.ts` (its crash step, which now expects a download that was running
+  to carry on, and a paused one to stay paused).
+
+### Verification
+
+- Unit: `recovery.test.ts` and `journal.test.ts` (100% of `recovery.ts` and `journal.ts`), `RecoveredBanner.test.tsx`,
+  `SafetySettings.test.tsx`, and a new inspector test for "progress saved N s ago" (100% of each changed renderer
+  file except `DownloadsScreen.tsx`, 98.9% of lines).
+- e2e (`recovery.spec.ts`): a killed download resumes by itself and the note shows; saves arrive at most 2.6 s apart
+  and a crash refetches less than 5 s of data; the queue carries on in its order after a crash; a save cut off at its
+  rename is read from its temporary file; a clean quit leaves no note.

@@ -417,11 +417,18 @@ app.on('before-quit', (event) => {
     app.exit(0)
   }, 3000)
 
-  void downloadManager.suspendAll().finally(() => {
-    clearTimeout(forceQuitTimeout)
-    quitAfterSuspending = true
-    app.exit(0)
-  })
+  const manager = downloadManager
+  // Marked clean only once everything is paused and saved: a quit cut short by the timeout reads
+  // as a crash at the next launch, which then resumes what was running (main/session.ts).
+  void manager
+    .suspendAll()
+    .then(() => manager.endSession())
+    .catch(() => {})
+    .finally(() => {
+      clearTimeout(forceQuitTimeout)
+      quitAfterSuspending = true
+      app.exit(0)
+    })
 })
 
 app.on('window-all-closed', () => {

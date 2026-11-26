@@ -25,6 +25,8 @@ test.describe('restart @smoke', () => {
     expect(restored?.id).toBe(id)
     expect(restored?.status).toBe('paused')
     expect(restored?.bytesDownloaded).toBeGreaterThan(0)
+    // A quit is no crash: nothing to recover, nothing said.
+    expect(await mergelane.api.recovery()).toBeNull()
 
     await mergelane.api.resumeDownload(id)
     await mergelane.waitForHttpStatus('completed')
@@ -98,14 +100,89 @@ test.describe('crash (SIGKILL) and recover @smoke', () => {
       origin.release()
       await mergelane.launch()
 
+      // It was running, so it carries on by itself from its last save (ADR-0077).
       const restored = await mergelane.currentHttp()
       expect(restored?.id).toBe(id)
-      expect(restored?.status).toBe('paused')
+      expect(['queued', 'downloading', 'completed']).toContain(restored?.status)
+      expect(await mergelane.api.recovery()).toMatchObject({ count: 1 })
+      await expect(
+        mergelane.page.getByRole('status', {
+          name: 'Mergelane recovered after quitting unexpectedly'
+        })
+      ).toContainText('1 download picked up from the last save')
 
-      await mergelane.api.resumeDownload(id)
       await mergelane.waitForHttpStatus('completed')
     })
   }
+
+  test('progress is saved every 2 seconds, so a crash fetches only seconds again', async ({
+    mergelane,
+    serve
+  }) => {
+    // 256 KB a second in all: 64 blocks take about 16 s, long enough to watch the saves.
+    const RATE = 256 * 1024
+    const origin = await serve({ size: 64 * BLOCK, sharedBytesPerSecond: RATE })
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
+    await mergelane.waitUntil((state) => state.bytesDownloaded > 12 * BLOCK, 30_000)
+
+    // Each save is at most a checkpoint (2 s) old, and they keep coming.
+    const first = await mergelane.waitUntil(
+      (state) => state.savedAt !== undefined && Date.now() - state.savedAt < 2_600
+    )
+    const later = await mergelane.waitUntil(
+      (state) => (state.savedAt ?? 0) > (first.savedAt ?? 0) && Date.now() - state.savedAt! < 2_600,
+      5_000
+    )
+    expect(later.savedAt! - first.savedAt!).toBeLessThan(4_000)
+
+    await mergelane.kill()
+    await mergelane.launch()
+    const note = await mergelane.api.recovery()
+    expect(note?.count).toBe(1)
+    if (note?.agoMs !== undefined) expect(note.agoMs).toBeLessThan(3_000)
+    if (note?.lostBytes !== undefined) expect(note.lostBytes).toBeLessThan(4 * RATE)
+
+    await mergelane.waitForHttpStatus('completed', 60_000)
+    expect((await mergelane.byId(id))?.status ?? 'completed').toBe('completed')
+    // Everything the server sent, less the file itself and the probes: what was fetched twice.
+    // Saved every 15 s, as before, this could reach 15 s of data; every 2 s it stays near 2 s.
+    const sent = origin.log.reduce((sum, entry) => sum + entry.bytesSent, 0)
+    const probes = origin.log
+      .filter((entry) => !origin.chunkRequests().includes(entry))
+      .reduce((sum, entry) => sum + entry.bytesSent, 0)
+    expect(sent - probes - 64 * BLOCK).toBeLessThan(5 * RATE)
+  })
+
+  test('the queue carries on after a crash, in its order', async ({ mergelane, serve }) => {
+    await mergelane.api.updateSettings({ downloadsAtOnce: 1 })
+    const origin = await serve({ size: SIZE })
+    const reached = origin.hold(6 * BLOCK)
+    const first = await mergelane.start(origin.url('/first.bin'), origin.sha256)
+    await reached
+    const second = await mergelane.start(origin.url('/second.bin'), origin.sha256)
+    expect((await mergelane.byId(second))?.status).toBe('queued')
+    // waitUntil follows the newest download; the first one is looked up by its id.
+    await expect
+      .poll(async () => (await mergelane.byId(first))?.bytesDownloaded ?? 0)
+      .toBeGreaterThan(0)
+
+    await mergelane.kill()
+    // Held again, so the first can be seen running before the second's turn.
+    const again = origin.hold(20 * BLOCK)
+    await mergelane.launch()
+    await again
+    expect((await mergelane.byId(first))?.status).toBe('downloading')
+    expect(await mergelane.byId(second)).toMatchObject({ status: 'queued' })
+    expect((await mergelane.byId(second))?.held).toBeFalsy()
+    expect(await mergelane.api.recovery()).toMatchObject({ count: 1 })
+
+    origin.release()
+    await expect
+      .poll(async () => (await mergelane.api.listDownloads()).length, { timeout: 30_000 })
+      .toBe(0)
+    const finished = await mergelane.api.listHistory()
+    expect(finished.map((entry) => entry.fileName).sort()).toEqual(['first.bin', 'second.bin'])
+  })
 })
 
 test.describe('persisted state on disk @smoke', () => {
@@ -123,6 +200,26 @@ test.describe('persisted state on disk @smoke', () => {
     origin.release()
     return { id, origin }
   }
+
+  test('a save cut off at its rename is read from its temporary file', async ({
+    mergelane,
+    serve,
+    dirs
+  }) => {
+    // A power cut between writing a save and renaming it into place: the manifest is garbled and
+    // the flushed temporary file beside it is whole and newer.
+    const { id } = await pausedDownload(mergelane, serve)
+    await mergelane.quit()
+    const manifest = join(dirs.userData, 'downloads', id, 'manifest.json')
+    await cp(manifest, `${manifest}.tmp`)
+    await writeFile(manifest, '{"version": 7, "sta')
+    await mergelane.launch()
+
+    expect((await mergelane.currentHttp())?.id).toBe(id)
+    expect(existsSync(`${manifest}.tmp`)).toBe(false)
+    await mergelane.api.resumeDownload(id)
+    await mergelane.waitForHttpStatus('completed')
+  })
 
   test('a corrupt manifest does not stop the app from starting', async ({
     mergelane,

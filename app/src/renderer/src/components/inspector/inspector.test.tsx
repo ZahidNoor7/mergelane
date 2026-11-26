@@ -218,7 +218,9 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     updateSettings: vi.fn(() => Promise.resolve()),
-    setDownloadNetwork: vi.fn(() => Promise.resolve())
+    setDownloadNetwork: vi.fn(() => Promise.resolve()),
+    // The list's recovery note: no crash here (RecoveredBanner.test.tsx has its own).
+    recovery: vi.fn(() => Promise.resolve(null))
   } as unknown as typeof window.mergelane
   useAppStore.setState({ interfaces: [iface('en0', 'Wi-Fi')], homeDir: '/Users/test' })
 })
@@ -233,6 +235,28 @@ afterEach(() => {
 })
 
 describe('Inspector, running', () => {
+  it('says how long ago its progress was saved, ticking each second, only while downloading', async () => {
+    vi.useFakeTimers({ now: NOW })
+    const saved = download({ id: 'saved', savedAt: NOW - 1_400 })
+    const { unmount } = show(<Inspector download={saved} />)
+    const fragment = screen.getByText('· progress saved 1 s ago')
+    expect(fragment.getAttribute('title')).toBe(
+      'Progress is saved every 2 seconds, so a crash, a force quit or a power cut loses at most a few seconds.'
+    )
+    // Quiet: it ticks, but isn't announced every second.
+    expect(fragment.closest('[aria-live], [role="status"]')).toBeNull()
+    await act(async () => {
+      vi.advanceTimersByTime(3_000)
+    })
+    expect(screen.getByText('· progress saved 4 s ago')).toBeTruthy()
+    unmount()
+    const paused = show(<Inspector download={{ ...saved, status: 'paused' } as DownloadState} />)
+    expect(screen.queryByText(/progress saved/)).toBeNull()
+    paused.unmount()
+    show(<Inspector download={download({ id: 'fresh' })} />)
+    expect(screen.queryByText(/progress saved/)).toBeNull()
+  })
+
   it('heads with the file, where it comes from and goes, and what can be done', async () => {
     show(<Inspector download={running} />)
     expect(screen.getByRole('heading', { level: 2, name: 'Holiday film.mkv' })).toBeTruthy()

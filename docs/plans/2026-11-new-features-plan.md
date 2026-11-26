@@ -1,7 +1,8 @@
 # Plan: nine new features from the redesign prototype
 
 Status: proposal, 2026-11-26. Nothing here is built yet. Decisions marked **Owner** need an answer before the work
-they block starts. Updated the same day: the owner parked the wireless iPhone lane (feature 2, D3).
+they block starts. Updated the same day: the owner parked the wireless iPhone lane (feature 2, D3), then took every
+other recommendation (D1, D2, D4 to D13).
 
 ## Where the acceptance criteria come from
 
@@ -841,7 +842,11 @@ Each phase is one milestone branch with small PRs, e2e and unit tests in the sam
 
 ## Open questions and decisions
 
-| # | Question | Recommendation |
+**All decided, owner, 2026-11-26:** "go ahead with your recommendations". Each answer below is the
+recommendation it was given, now the decision. D1 is done (`design-system/mergelane/redesign/prototype-features.html`);
+D5 and D6 are built (ADR-0077).
+
+| # | Question | Decision |
 |---|---|---|
 | D1 | Save the newer prototype (version `1795691890-d752`) into the repository as the reference for these features? | Yes: `design-system/mergelane/redesign/prototype-features.html` with its SHA-256, README updated. |
 | D2 | Build every feature free and drop the plan gating, badges and upgrade prompts in the prototype? | Yes, as CLAUDE.md requires. |

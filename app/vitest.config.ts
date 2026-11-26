@@ -166,7 +166,10 @@ export const COVERED = [
   // Sleep and the end of the queue (feature 7): the rules, the commands, the notice and the rows.
   'src/shared/queueEnd.ts',
   'src/shared/powerCommand.ts',
-  'src/renderer/src/components/QueueEnd.tsx'
+  'src/renderer/src/components/QueueEnd.tsx',
+  // Choosing a torrent's files (feature 9): its folders, and the list.
+  'src/shared/torrentTree.ts',
+  'src/renderer/src/components/TorrentFiles.tsx'
 ]
 
 export default defineConfig({

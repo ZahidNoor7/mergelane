@@ -20,6 +20,12 @@ All notable changes to Mergelane are recorded here. The format follows
   finishes". A 60-second countdown comes first, which you can cancel, and apps with unsaved work can still stop a
   shutdown. Keeping the Mac awake while downloading is now a setting there too (on by default).
 
+### Changed
+
+- **Choosing a torrent's files is quicker.** The list shows each folder inside the torrent with its own tick, says how
+  many files are chosen and their size as you go, and has a Videos only button. A download's details say that pieces
+  shared with a skipped file are still fetched.
+
 ## [0.7.0] - 2026-11-24
 
 A smaller, up-to-date Mergelane: about 210 MB less on disk, Electron 45 and Go 1.27.4 underneath, and browser

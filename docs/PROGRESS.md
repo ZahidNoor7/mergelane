@@ -38,6 +38,16 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 1: choosing a torrent's files (2026-11-26, branch `torrent-files`, on `sleep-queue-end`)
+
+- **Done (plan feature 9):** the design's TorrentFiles in New download and a download's details: "All files" with how
+  many are chosen and their size, Videos only, each folder inside the torrent with its own tick
+  (`shared/torrentTree.ts`), progress bars as it runs, "Choose at least one file.", and the note on shared pieces. The
+  engine was already there (`torrent/files.ts`, `chooseTorrentFiles`).
+- Tests: 748 unit tests pass (new `torrentTree`, `TorrentFiles` tests); a new `torrent.spec.ts` test opens a .torrent,
+  uses Videos only and downloads just the videos.
+- **Phase 1 is complete** (#111, #112, #113 and this PR). Next: Phase 2, the history store and duplicates.
+
 ### New features, Phase 1: sleep and the end of the queue (2026-11-26, branch `sleep-queue-end`, on `expired-links`)
 
 - **Done (ADR-0079):** "Keep the Mac awake while downloading" and "When the queue finishes" (Do nothing, Sleep, Shut

@@ -173,7 +173,12 @@ export const COVERED = [
   // Download history (Phase 2, ADR-0080): what is shown and kept, the place and its settings.
   'src/shared/history.ts',
   'src/renderer/src/screens/HistoryScreen.tsx',
-  'src/renderer/src/components/HistorySettings.tsx'
+  'src/renderer/src/components/HistorySettings.tsx',
+  // Duplicates (ADR-0081): a site's published SHA-256, the match rules, the notice and its lookup.
+  'src/shared/digests.ts',
+  'src/shared/duplicates.ts',
+  'src/renderer/src/components/DuplicateNotice.tsx',
+  'src/renderer/src/hooks/useDuplicate.ts'
 ]
 
 export default defineConfig({

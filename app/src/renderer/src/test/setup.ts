@@ -29,6 +29,7 @@ const initialState: InitialState = {
   keepAwake: true,
   afterQueue: 'nothing',
   historyKeep: 'forever',
+  duplicateCheck: 'both',
   captureRules: DEFAULT_CAPTURE_RULES,
   routing: DEFAULT_ROUTING
 }

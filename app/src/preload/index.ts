@@ -3,6 +3,7 @@ import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { BrowserId } from '../shared/browsers'
 import type { QueueEnd } from '../shared/queueEnd'
+import type { DuplicateQuery } from '../shared/duplicates'
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from '../shared/speedTest'
 import type { UpdateChannel } from '../shared/releases'
@@ -55,6 +56,7 @@ const mergelaneApi = {
   listDownloads: () => invoke('listDownloads'),
   listHistory: () => invoke('listHistory'),
   historyEntries: () => invoke('historyEntries'),
+  findDuplicate: (query: DuplicateQuery) => invoke('findDuplicate', query),
   historyLink: (id: string) => invoke('historyLink', id),
   revealHistoryEntry: (id: string) => invoke('revealHistoryEntry', id),
   forgetHistory: () => invoke('forgetHistory'),

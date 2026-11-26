@@ -139,7 +139,10 @@ beforeEach(() => {
     freeSpace: vi.fn(() => Promise.resolve(100 * MB)),
     networkUsage: vi.fn(() => Promise.resolve({})),
     updateSettings: vi.fn(() => Promise.resolve()),
-    dismissLink: vi.fn(() => Promise.resolve())
+    dismissLink: vi.fn(() => Promise.resolve()),
+    // Nothing had already, unless a test says (ADR-0081).
+    findDuplicate: vi.fn(() => Promise.resolve(null)),
+    revealHistoryEntry: vi.fn(() => Promise.resolve(true))
   }
   window.mergelane = { ...window.mergelane, ...bridge } as unknown as typeof window.mergelane
   useAppStore.setState({
@@ -162,6 +165,36 @@ afterEach(() => {
 })
 
 describe('New download, a link', () => {
+  it('warns of a file already had, and offers to download it again', async () => {
+    bridge.findDuplicate = vi.fn(() =>
+      Promise.resolve({
+        id: 'had',
+        how: 'link' as const,
+        live: false,
+        name: 'a.zip',
+        host: 'example.com',
+        size: 10 * MB,
+        completedAt: Date.now() - 60_000,
+        path: '/Users/test/Downloads/a.zip'
+      })
+    )
+    window.mergelane = { ...window.mergelane, ...bridge } as unknown as typeof window.mergelane
+    open()
+    await userEvent
+      .setup()
+      .type(screen.getByRole('textbox', { name: 'Link' }), 'https://example.com/a.zip')
+    expect(
+      await screen.findByText('You already have this file', {}, { timeout: 2000 })
+    ).toBeTruthy()
+    expect(bridge.findDuplicate).toHaveBeenLastCalledWith({
+      kind: 'http',
+      url: HTTP.finalUrl,
+      name: HTTP.suggestedFileName,
+      size: HTTP.totalBytes
+    })
+    expect(screen.getByRole('button', { name: 'Download again' })).toBeTruthy()
+  })
+
   it('opens as a sheet, checks a link typed in, and starts it', async () => {
     open()
     expect(dialog()).toBeTruthy()

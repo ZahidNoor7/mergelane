@@ -23,6 +23,7 @@ import { themeOnPlatform, type ThemeId } from '@shared/themes'
 import type { MenuBarSpeedText } from '@shared/menuBarPanel'
 import type { AfterQueue } from '@shared/queueEnd'
 import type { HistoryKeep } from '@shared/history'
+import type { DuplicateCheck } from '@shared/duplicates'
 import { fadeTheme } from '../theme/appearance'
 import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
 
@@ -199,6 +200,9 @@ interface AppStore {
   /** Persisted — Settings › Downloads › Keep download history (ADR-0080). */
   historyKeep: HistoryKeep
   setHistoryKeep: (keep: HistoryKeep) => void
+  /** Persisted — Settings › Downloads › Warn before downloading something you already have. */
+  duplicateCheck: DuplicateCheck
+  setDuplicateCheck: (check: DuplicateCheck) => void
   /** A link the user copied, offered for download; null when there's none. Kept in memory only. */
   copiedLink: string | null
   /** From main, as the user switched to Mergelane. Passed over when it's already being added or
@@ -502,6 +506,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setHistoryKeep: (historyKeep) => {
     set({ historyKeep })
     persist({ historyKeep: historyKeep === 'forever' ? undefined : historyKeep })
+  },
+  duplicateCheck: initial.duplicateCheck,
+  setDuplicateCheck: (duplicateCheck) => {
+    set({ duplicateCheck })
+    persist({ duplicateCheck: duplicateCheck === 'both' ? undefined : duplicateCheck })
   },
 
   offerCopiedLinks: initial.offerCopiedLinks,

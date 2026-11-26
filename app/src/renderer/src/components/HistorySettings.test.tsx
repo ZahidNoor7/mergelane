@@ -69,6 +69,25 @@ describe('Duplicates and history', () => {
     ).toBeTruthy()
   })
 
+  it('warns of a link or a file already had, unless set otherwise, and saves the choice', async () => {
+    await show()
+    const warn = screen.getByRole('group', { name: 'Duplicate warning' })
+    expect(
+      within(warn).getByRole('button', { name: 'Link or file' }).getAttribute('aria-pressed')
+    ).toBe('true')
+    expect(
+      screen.getByText(/the SHA-256 the site publishes matches the file you have/)
+    ).toBeTruthy()
+    await userEvent.click(within(warn).getByRole('button', { name: 'Same link' }))
+    expect(useAppStore.getState().duplicateCheck).toBe('link')
+    expect(updateSettings).toHaveBeenLastCalledWith({ duplicateCheck: 'link' })
+    expect(screen.getByText('When the link matches one in your history.')).toBeTruthy()
+    await userEvent.click(within(warn).getByRole('button', { name: 'Off' }))
+    expect(screen.getByText('No warning.')).toBeTruthy()
+    await userEvent.click(within(warn).getByRole('button', { name: 'Link or file' }))
+    expect(updateSettings).toHaveBeenLastCalledWith({ duplicateCheck: undefined })
+  })
+
   it('clears what is no longer in the list, after a second click, and says so', async () => {
     await show()
     expect(

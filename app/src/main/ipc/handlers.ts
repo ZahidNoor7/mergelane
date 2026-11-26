@@ -21,7 +21,11 @@ import {
 } from '../../shared/types'
 import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
+import { findDuplicate, isDuplicateCheck, worthAskingForDigest } from '../../shared/duplicates'
+import { plainLink } from '../../shared/history'
+import { siblingDigest } from '../download/siblingDigest'
 import {
+  duplicateCandidates,
   forgetHistory,
   historyEntries,
   historyFile,
@@ -254,6 +258,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         keepAwake: settings.keepAwake !== false,
         afterQueue: settings.afterQueue ?? 'nothing',
         historyKeep: settings.historyKeep ?? 'forever',
+        duplicateCheck: settings.duplicateCheck ?? 'both',
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined,
@@ -282,6 +287,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         keepAwake: true,
         afterQueue: 'nothing',
         historyKeep: 'forever',
+        duplicateCheck: 'both',
         captureRules: DEFAULT_CAPTURE_RULES,
         routing: DEFAULT_ROUTING
       } satisfies InitialState
@@ -358,6 +364,24 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('listDownloads', async () => manager.listDownloads())
 
   handle('listHistory', async () => listHistory())
+  // Before a download starts (ADR-0081): one already had, by its link, or the same file elsewhere.
+  handle('findDuplicate', async (_event, query) => {
+    const settings = await loadSettings()
+    const mode = isDuplicateCheck(settings.duplicateCheck) ? settings.duplicateCheck : 'both'
+    if (mode === 'off') return null
+    const finished = await duplicateCandidates({
+      link: plainLink(query.url),
+      name: query.name,
+      infoHash: query.infoHash
+    }).catch(() => [])
+    const candidates = [...manager.liveCandidates(), ...finished]
+    const published =
+      query.publishedSha256 ??
+      (worthAskingForDigest(candidates, query, mode)
+        ? await siblingDigest(query.url, query.name)
+        : undefined)
+    return findDuplicate(candidates, { ...query, publishedSha256: published }, mode)
+  })
   // History (ADR-0080): the window lists the unfinished ones in the list itself, live.
   handle('historyEntries', async () => historyEntries(manager.liveIds()))
   handle('historyLink', async (_event, id) => (await historyLink(id)) ?? null)

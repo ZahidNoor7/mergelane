@@ -11,7 +11,10 @@ import { seededBytes } from './origin'
 const SIZE = 32 * BLOCK
 
 test.describe('restart @smoke', () => {
-  test('normal quit mid-download → relaunch paused → resume', async ({ mergelane, serve }) => {
+  test('normal quit mid-download → relaunch → it carries on by itself', async ({
+    mergelane,
+    serve
+  }) => {
     const origin = await serve({ size: SIZE })
     const reached = origin.hold(10 * BLOCK + 500)
     const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
@@ -21,13 +24,28 @@ test.describe('restart @smoke', () => {
     origin.release()
     await mergelane.launch()
 
+    // It was running when Mergelane quit, so it carries on (plan D6, ADR-0077).
     const restored = await mergelane.currentHttp()
     expect(restored?.id).toBe(id)
-    expect(restored?.status).toBe('paused')
+    expect(['queued', 'downloading', 'completed']).toContain(restored?.status)
     expect(restored?.bytesDownloaded).toBeGreaterThan(0)
     // A quit is no crash: nothing to recover, nothing said.
     expect(await mergelane.api.recovery()).toBeNull()
+    await mergelane.waitForHttpStatus('completed')
+  })
 
+  test('one the user paused stays paused across a quit', async ({ mergelane, serve }) => {
+    const origin = await serve({ size: SIZE })
+    const reached = origin.hold(10 * BLOCK + 500)
+    const id = await mergelane.start(origin.url(), origin.sha256, { connections: 2 })
+    await reached
+    await mergelane.api.pauseDownload(id)
+    await mergelane.waitForHttpStatus('paused')
+
+    await mergelane.quit()
+    origin.release()
+    await mergelane.launch()
+    expect((await mergelane.currentHttp())?.status).toBe('paused')
     await mergelane.api.resumeDownload(id)
     await mergelane.waitForHttpStatus('completed')
   })
@@ -74,9 +92,9 @@ test.describe('restart @smoke', () => {
     expect(manifest).not.toContain(secret)
     expect(typeof JSON.parse(manifest).browser).toBe('string')
 
-    await mergelane.launch()
+    // Counted before the relaunch: it carries on by itself as soon as it opens (plan D6).
     const seen = origin.log.length
-    await mergelane.api.resumeDownload(id)
+    await mergelane.launch()
     await mergelane.waitForHttpStatus('completed')
     const sentAfter = origin.chunkRequests().filter((request) => request.n > seen)
     expect(sentAfter.length).toBeGreaterThan(0)

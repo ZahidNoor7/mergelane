@@ -168,6 +168,8 @@ interface RuntimeFields {
   fileChoices: number
   /** How long its last routine save took: a slow drive is saved to less often (checkpointDelay). */
   lastSaveMs?: number
+  /** Paused by a quit, not by the user: saved so the next launch carries it on (resumeAtLaunch). */
+  resumeAtLaunch?: boolean
 }
 
 interface HttpDownloadRuntime extends RuntimeFields, HttpTransferTarget {
@@ -202,6 +204,9 @@ interface PersistedDownloadBase {
   /** Kept apart from requestPayload, sealed (see sealBrowser). */
   browser?: string
   customTrackers?: string[]
+  /** It was running when Mergelane quit, which paused it: it carries on at the next launch
+   * (ADR-0077, plan D6). Unset for one the user paused. */
+  resumeAtLaunch?: boolean
 }
 
 type PersistedState =
@@ -1014,7 +1019,11 @@ export class DownloadManager {
     /** What each one's save said, by download: what tells a crash and what it cost. */
     const found = new Map<
       DownloadRuntime,
-      Omit<RestoredDownload, 'savedBytes'> & { wasQueued: boolean; queuedAt?: number }
+      Omit<RestoredDownload, 'savedBytes'> & {
+        wasQueued: boolean
+        pausedByQuit: boolean
+        queuedAt?: number
+      }
     >()
     await Promise.all(
       entries.map(async (id) => {
@@ -1050,6 +1059,7 @@ export class DownloadManager {
               id,
               wasDownloading: persisted.state.status === 'downloading',
               wasQueued: persisted.state.status === 'queued',
+              pausedByQuit: persisted.resumeAtLaunch === true,
               queuedAt: persisted.state.queuedAt,
               savedAt: persisted.savedAt
             })
@@ -1075,9 +1085,9 @@ export class DownloadManager {
         .map((runtime) => this.removePersistedDownload(runtime, false))
     )
 
-    // After a crash, the downloads that were running, and those waiting their turn, take their turns
-    // again from their last save, in their old order (ADR-0077). After a quit they stay as the quit
-    // left them: paused.
+    // The downloads that were running when Mergelane stopped, crashed or quit, and those waiting
+    // their turn, take their turns again from their last save, in their old order (ADR-0077, plan
+    // D6). One the user paused stays paused. Only a crash gets the note.
     const unfinished = kept.filter((runtime) => runtime.state.status !== 'completed')
     const note = recoveryNote(
       this.session?.previous,
@@ -1088,26 +1098,25 @@ export class DownloadManager {
         return [{ id, wasDownloading, savedAt, savedBytes: runtime.state.bytesDownloaded }]
       })
     )
-    if (note) {
-      this.recovery = note
-      const waiting = unfinished.filter(
-        (runtime) => found.get(runtime)?.wasQueued && runtime.state.status === 'paused'
-      )
-      const running = unfinished
-        .filter(
-          (runtime) => found.get(runtime)?.wasDownloading && runtime.state.status === 'paused'
-        )
-        .sort((a, b) => a.state.startedAt - b.state.startedAt)
-      // The running ones go first, as they were; the waiting ones keep their places behind them.
-      const first = Math.min(Date.now(), ...waiting.map((r) => found.get(r)?.queuedAt ?? Infinity))
-      running.forEach((runtime, index) => {
-        runtime.state.status = 'queued'
-        runtime.state.queuedAt = first - running.length + index
+    this.recovery = note ?? null
+    const waiting = unfinished.filter(
+      (runtime) => found.get(runtime)?.wasQueued && runtime.state.status === 'paused'
+    )
+    const running = unfinished
+      .filter((runtime) => {
+        const save = found.get(runtime)
+        return (save?.wasDownloading || save?.pausedByQuit) && runtime.state.status === 'paused'
       })
-      for (const runtime of waiting) {
-        runtime.state.status = 'queued'
-        runtime.state.queuedAt = found.get(runtime)?.queuedAt ?? runtime.state.startedAt
-      }
+      .sort((a, b) => a.state.startedAt - b.state.startedAt)
+    // The running ones go first, as they were; the waiting ones keep their places behind them.
+    const first = Math.min(Date.now(), ...waiting.map((r) => found.get(r)?.queuedAt ?? Infinity))
+    running.forEach((runtime, index) => {
+      runtime.state.status = 'queued'
+      runtime.state.queuedAt = first - running.length + index
+    })
+    for (const runtime of waiting) {
+      runtime.state.status = 'queued'
+      runtime.state.queuedAt = found.get(runtime)?.queuedAt ?? runtime.state.startedAt
     }
 
     await Promise.all(
@@ -2451,9 +2460,11 @@ export class DownloadManager {
     clearTimeout(this.startTimer)
     await Promise.all(
       [...this.runtimes.values()].map(async (runtime) => {
-        if (runtime.state.status === 'downloading')
+        if (runtime.state.status === 'downloading') {
+          // Paused by the quit, not by the user: the next launch carries it on (plan D6).
+          runtime.resumeAtLaunch = true
           await this.pause(runtime.state.id, runtime.state.scheduled === true)
-        else {
+        } else {
           if (runtime.scheduleStopping) await runtime.runPromise
           await this.persistNow(runtime)
         }
@@ -2958,7 +2969,8 @@ export class DownloadManager {
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,
           ...request,
-          customTrackers: runtime.kind === 'torrent' ? runtime.customTrackers : undefined
+          customTrackers: runtime.kind === 'torrent' ? runtime.customTrackers : undefined,
+          ...(runtime.resumeAtLaunch && { resumeAtLaunch: true })
         }
         const started = Date.now()
         await ensureDirectory(dir)

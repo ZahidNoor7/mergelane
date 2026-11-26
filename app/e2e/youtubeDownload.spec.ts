@@ -272,8 +272,8 @@ test.describe('YouTube downloads @smoke', () => {
     server.release()
     await mergelane.relaunch()
     const restored = expectStream((await mergelane.byId(id))!)
-    expect(restored.status).toBe('paused')
-    await mergelane.api.resumeDownload(id)
+    // It was running when Mergelane quit, so it carries on by itself (plan D6, ADR-0077).
+    expect(['queued', 'downloading', 'completed']).toContain(restored.status)
     const done = expectStream(await mergelane.waitForStatus('completed'))
     expect(fake.calls(ID.card).length).toBe(asked + 1)
     expect(

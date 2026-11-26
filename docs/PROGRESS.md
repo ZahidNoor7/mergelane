@@ -49,11 +49,13 @@ Last updated: 2026-11-11
 - Correction to the plan: no koffi call is needed for `F_FULLFSYNC`; Node's `FileHandle.sync()` already uses it on
   macOS (libuv v1.52.1).
 - Tests: 679 unit tests pass (new `recovery.test.ts`, `journal.test.ts`, `RecoveredBanner.test.tsx`,
-  `SafetySettings.test.tsx`; every new file 100%). Full e2e: 837 passed, 5 skipped, 0 failed. The chaos suite found
+  `SafetySettings.test.tsx`; every new file 100%). Full e2e: 838 passed, 5 skipped, 0 failed. The chaos suite found
   that a resumed download wasn't saved at once; fixed. `nzb.spec.ts`'s wrong-password test failed on `main` too
   (two "Download again" buttons); its locator now names the exact one.
 - Next in Phase 1: expired-link recovery, then sleep and the end of the queue with the rest of torrent file choice.
-- Open for the owner: D1, D2, D4 to D13 (D5 and D6 matter for this branch's copy and behaviour after a quit).
+- Owner, 2026-11-26: "go ahead with your recommendations": every plan decision is taken (D1, D2, D4 to D13). Built
+  here: D6 (downloads running at a quit carry on too, a paused one stays paused) and D1 (the new prototype saved as
+  `design-system/mergelane/redesign/prototype-features.html`). D5 was already so.
 
 ### Release 0.7.0 (2026-11-24, branch `release-0.7.0`)
 

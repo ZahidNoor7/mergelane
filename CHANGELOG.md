@@ -8,9 +8,9 @@ All notable changes to Mergelane are recorded here. The format follows
 ### Added
 
 - **Downloads survive crashes, force quits and power cuts with seconds lost, not minutes.** Progress is saved every
-  2 seconds, and each save is flushed to the drive before it counts. If Mergelane quits unexpectedly, the downloads
-  that were running carry on by themselves the next time it opens, from their last save, and a note at the top of
-  Downloads says how many came back and how much is fetched again. A download's details show when its progress was
+  2 seconds, and each save is flushed to the drive before it counts. Downloads that were running when Mergelane
+  quit, or crashed, carry on by themselves the next time it opens, from their last save; ones you paused stay
+  paused. After a crash, a note at the top of Downloads says how many came back and how much is fetched again. A download's details show when its progress was
   last saved, and Settings › Downloads › "If something goes wrong" says it is always on.
 
 ## [0.7.0] - 2026-11-24

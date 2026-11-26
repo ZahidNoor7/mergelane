@@ -94,11 +94,10 @@ class Restart implements fc.AsyncCommand<Model, Real> {
 
     const state = await real.app.current()
     expect(state?.id, 'the download survives the restart').toBe(real.id)
-    // After a quit, anything unfinished comes back paused. After a crash, one that was running
-    // carries on by itself (ADR-0077), and a paused one stays paused. One that finished (possibly
-    // in the instant between the last look and the kill) stays completed — the final byte check
-    // covers that case.
-    const resumes = this.how === 'crash' && model.phase === 'running'
+    // After a crash or a quit, one that was running carries on by itself (ADR-0077, plan D6), and
+    // a paused one stays paused. One that finished (possibly in the instant between the last look
+    // and the kill) stays completed — the final byte check covers that case.
+    const resumes = model.phase === 'running'
     const expected = resumes ? ['queued', 'downloading', 'completed'] : ['paused', 'completed']
     expect(expected, `status after ${this.how}`).toContain(state?.status)
     model.phase =

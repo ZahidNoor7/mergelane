@@ -154,13 +154,12 @@ test.describe('speed test @smoke', () => {
     await mergelane.api.speedTestStart({ scope: 'link', networkIds: ['a'] })
     await expect.poll(async () => (await mergelane.byId(running))?.status).toBe('queued')
 
-    // A quit pauses what was running (lifecycle.spec.ts); one added to the queue still waits.
+    // What was running, or waiting for the test, carries on after a quit (plan D6, ADR-0077); one
+    // added to the queue still waits.
     await mergelane.relaunch()
-    await expect.poll(async () => (await mergelane.byId(running))?.status).toBe('paused')
     expect(await mergelane.byId(held)).toMatchObject({ status: 'queued', held: true })
     expect(await mergelane.api.speedTestLive()).toBeNull()
-    // Nothing is held any more: resumed, it downloads.
-    await mergelane.api.resumeDownload(running)
+    // Nothing is held any more: it downloads, with no click.
     await expect.poll(async () => (await mergelane.byId(running))?.status).toBe('downloading')
   })
 

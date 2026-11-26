@@ -2532,8 +2532,8 @@ options page and uBO Lite's settings page, then chose "Both pages" over Mergelan
 ## ADR-0077: Progress is saved every 2 seconds, flushed to the drive, and a crash resumes what was running
 
 **Status:** Owner, 2026-11-26: approved Phase 1 of `docs/plans/2026-11-new-features-plan.md` (feature 5, crash-safe
-resume). The details below are the plan's recommendations; D6 (resuming after a clean quit too) is still open and
-is not part of this decision.
+resume), then took the plan's recommendations, including D5 (recover at the next launch, no relaunching) and D6
+(downloads running at a quit carry on too).
 
 ### Context
 
@@ -2565,9 +2565,9 @@ is not part of this decision.
   at launch with `cleanExit: false`, and with `cleanExit: true` only after a quit has paused and saved every
   download. While anything downloads, a heartbeat notes each download's bytes every second (not flushed). With no
   record, a save that still says "downloading" counts as a crash.
-- **After a crash,** downloads that were running take their turns again from their last save, ahead of those that
-  were waiting, which keep their places. Paused ones stay paused. After a quit, nothing changes: they come back
-  paused, as before (D6 open).
+- **After a crash or a quit,** downloads that were running take their turns again from their last save, ahead of
+  those that were waiting, which keep their places (D6). A quit marks the ones it pauses (`resumeAtLaunch` in the
+  manifest), so a download the user paused stays paused. Only a crash shows the note.
 - **The note:** Downloads shows "Mergelane recovered after quitting unexpectedly", with how many downloads were
   picked up, how long before it quit their last save was, and how much is fetched again, from the heartbeat. When
   the heartbeat didn't survive (a power cut), it leaves the numbers out. The inspector shows "progress saved N s
@@ -2580,9 +2580,13 @@ is not part of this decision.
 
 - About 10–20 ms of flushing per save on the owner's internal SSD (measured: 7–17 ms for 80 MB of data, 9–15 ms for
   the map and folder), so about 1% of the time. Slower drives save less often.
-- Tests that expected a killed download to come back paused now expect it to carry on: `recovery.spec.ts`,
-  `hedge.spec.ts` (its kill case) and `chaos.spec.ts` (its crash step, which now expects a download that was running
-  to carry on, and a paused one to stay paused).
+- Tests that expected a download to come back paused after a kill or a quit now expect it to carry on, each still
+  checking what it was written for: `recovery.spec.ts` (kill, quit, and the sealed sign-in sent again),
+  `hedge.spec.ts` (kill), `streamDownload.spec.ts` and `youtubeDownload.spec.ts` (quit: nothing fetched twice, the
+  segment sizes read from the save), `torrent.spec.ts` (quit: pieces not fetched again, measured against the bytes
+  the save holds; the chosen files kept), `speedTestUi.spec.ts` (a quit during a speed test: nothing stays held) and
+  `chaos.spec.ts` (its restart step: a running download carries on, a paused one stays paused). A new test checks
+  that one the user paused stays paused across a quit.
 
 ### Verification
 

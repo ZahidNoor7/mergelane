@@ -21,6 +21,14 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(exponent === 0 ? 0 : 1)} ${UNITS[exponent]}`
 }
 
+/** How far a download is, as a whole percent. 100% only once every byte is in: rounding 99.6% up
+ * would claim a 10 GB file was done with 40 MB still to go. */
+export function formatPercent(bytesDownloaded: number, totalBytes: number): number {
+  if (totalBytes <= 0) return 0
+  if (bytesDownloaded >= totalBytes) return 100
+  return Math.min(99, Math.round((bytesDownloaded / totalBytes) * 100))
+}
+
 /** The three units a speed is shown in (ADR-0071). */
 export const SPEED_UNITS: readonly SpeedUnit[] = ['kb', 'bytes', 'bits']
 

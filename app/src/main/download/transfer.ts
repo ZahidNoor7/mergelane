@@ -19,6 +19,7 @@ import type {
 import type { NetworkMonitor } from '../network/interfaces'
 import type { Limits } from '../network/limits'
 import type { DownloadFile } from './downloadFile'
+import type { FileVersion } from './fileVersion'
 import type { NzbDestination } from './nzb/nzbDestination'
 import type { StreamDestination } from './stream/streamDestination'
 import type { TorrentDestination } from './torrent/torrentDestination'
@@ -47,6 +48,9 @@ export interface Transfer {
   wake(pick: (networkId: string) => boolean, reconnect: (networkId: string) => boolean): void
   /** The computer woke from sleep: every judgement made by the clock starts over. */
   systemResumed(now: number): void
+  /** A fresh link to the same file, its bytes compared already: its labels are this download's
+   * version too (ADR-0078). Only HTTP downloads have one. */
+  acceptVersion?(version: FileVersion): void
 }
 
 /** The parts of a download a transfer works on. The manager owns them; this is the same object. */
@@ -110,6 +114,9 @@ export interface TransferHost {
   /** The manager's reconcile: networks first, then the transfer's own. */
   reconcile(): void
   failDownload(message: string, discard?: boolean): void
+  /** The link stopped working (shared/linkExpiry.ts): the download waits for a fresh one. A host
+   * without it fails the download instead. */
+  expireLink?(message: string): void
   failNetwork(network: DownloadNetwork, message: string): void
   scheduleUpdate(): void
   getProxyForInterface?(networkId: string): ProxyConfig | undefined

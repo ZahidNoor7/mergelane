@@ -38,6 +38,16 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 1: expired-link recovery (2026-11-26, branch `expired-links`, on `crash-safe-resume`)
+
+- **Done (ADR-0078):** a link refused (401/403/410) in a row stops the download at once at its progress (2 refusals for
+  a signed link, 3 on every network otherwise); the fresh-link panel in its details; a fresh link checked as before,
+  refused with the design's message when it is another file, its ETag kept; "Same file … Continuing from N%"; from
+  the browser, the download carries on by itself, behind "Pick up fresh links from the browser".
+- `formatPercent` moved to `shared/speedText.ts`, so the main process and the window round alike.
+- Tests: 712 unit tests pass (new `linkExpiry`, `FreshLink`, `format` tests); `expiredLink.spec.ts` (5 tests).
+- Next in Phase 1: sleep and the end of the queue, and the rest of torrent file choice.
+
 ### New features, Phase 1: crash-safe resume (2026-11-26, branch `crash-safe-resume`)
 
 - The plan for nine features from the redesign prototype is merged (`docs/plans/2026-11-new-features-plan.md`, #110).

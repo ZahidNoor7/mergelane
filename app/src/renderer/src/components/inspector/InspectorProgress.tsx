@@ -29,6 +29,7 @@ import { SplitBar } from '../SplitBar'
 import { ThroughputChart } from '../ThroughputChart'
 import { TorrentFiles } from '../TorrentFiles'
 import { UsenetServerButton } from '../UsenetServerDialog'
+import { RelinkedNote } from './FreshLink'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SectionTitle, Stat } from './parts'
@@ -158,6 +159,7 @@ export function InspectorProgress({ download }: { download: DownloadState }): Re
 
   return (
     <>
+      <RelinkedNote download={download} />
       {isQueued && !scheduleWindow.allowed && scheduleMessage && (
         <p className="rounded-[12px] bg-sunken px-3 py-2.5 text-[12.5px] leading-snug text-ink-2">
           {scheduleMessage}

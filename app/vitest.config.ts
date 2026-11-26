@@ -158,7 +158,11 @@ export const COVERED = [
   'src/shared/journal.ts',
   'src/shared/recovery.ts',
   'src/renderer/src/components/RecoveredBanner.tsx',
-  'src/renderer/src/components/SafetySettings.tsx'
+  'src/renderer/src/components/SafetySettings.tsx',
+  // Expired-link recovery (feature 6): the rules, the fresh-link panel and its note.
+  'src/shared/linkExpiry.ts',
+  'src/renderer/src/components/inspector/FreshLink.tsx',
+  'src/renderer/src/utils/format.ts'
 ]
 
 export default defineConfig({

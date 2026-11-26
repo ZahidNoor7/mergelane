@@ -362,6 +362,9 @@ interface DownloadStateBase {
   /** When its progress was last saved to disk, in ms since the epoch: chunk data and chunk map
    * together (shared/journal.ts). Unset until the first save of this launch. */
   savedAt?: number
+  /** What needs the user, beyond the error: its link stopped working (shared/linkExpiry.ts,
+   * ADR-0078). Cleared when it runs again. */
+  problem?: { kind: 'link-expired'; at: number }
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }
@@ -377,6 +380,12 @@ export interface HttpDownloadState extends DownloadStateBase {
   /** The disk can't keep up: most streams are waiting for their writes (see concurrency.ts). */
   diskLimited?: boolean
   fromBrowser?: string
+  /** The page the browser was on when it handed the download over: where a fresh link is got
+   * again (ADR-0078). */
+  pageUrl?: string
+  /** Its link was replaced with a fresh one to the same file, which it carried on from at
+   * `fromBytes` (ADR-0078). */
+  relinked?: { at: number; fromBytes: number }
 }
 
 export interface TorrentDownloadState extends DownloadStateBase {
@@ -691,6 +700,9 @@ export interface AppSettings {
   /** Only ever saved as true: a link copied elsewhere is offered when the user switches to
    * Mergelane, which reads the clipboard to see it, only once turned on (ADR-0043). */
   offerCopiedLinks?: boolean
+  /** Only ever saved as false: a download the browser hands over again, whose link had stopped
+   * working, carries on from its fresh link unless turned off (ADR-0078). */
+  catchFreshLinks?: boolean
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -768,6 +780,7 @@ export interface InitialState {
   menuBarSpeedText: MenuBarSpeedText
   notifyWhenDone: boolean
   offerCopiedLinks: boolean
+  catchFreshLinks: boolean
   captureRules: CaptureRules
   routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
@@ -828,7 +841,9 @@ export interface PendingLink {
   from?: string
   signedInTo?: string
   /** A failed download this looks like the same file as, for the user to resume instead. */
-  resumes?: { id: string; fileName: string }
+  /** `expired`: that download's link had stopped working, so it was matched on name and size
+   * alone (ADR-0078). */
+  resumes?: { id: string; fileName: string; expired?: boolean }
 }
 
 export interface StartTorrentDownloadRequest extends StartDownloadRequestBase {

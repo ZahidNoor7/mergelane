@@ -29,6 +29,7 @@ import {
   type HttpTransferTarget
 } from './transfer'
 import { ConnectionError, NoCompatibleRouteError, StreamConnection } from '../network/routes'
+import { isRefusal, linkStopped, signedLink } from '../../shared/linkExpiry'
 
 /** Why an attempt was called off by the manager rather than by a pause or a failure. */
 type AbortReason = 'refresh' | 'lost'
@@ -320,6 +321,10 @@ export class HttpTransfer implements Transfer {
   /** By network id: until when the server asked (Retry-After) not to be sent new requests over
    * it. */
   private holdUntil = new Map<string, number>()
+  /** Refusals (401, 403, 410) in a row, on any network, since bytes last arrived; and the networks
+   * that had them. What tells a link that stopped working (shared/linkExpiry.ts). */
+  private refusals = 0
+  private refusedNetworks = new Set<string>()
   /** Decides how many streams each network runs; kept for the whole download, so a pause and
    * resume doesn't forget what it has found out. */
   private concurrency: ConcurrencyController | null
@@ -436,6 +441,14 @@ export class HttpTransfer implements Transfer {
     this.aheadByBlock.clear()
     this.reconciled.clear()
     this.disk.reset()
+    this.refusals = 0
+    this.refusedNetworks.clear()
+  }
+
+  acceptVersion(version: FileVersion): void {
+    if (compareVersion(this.acceptedVersions, version).kind !== 'same') {
+      this.acceptedVersions.push(version)
+    }
   }
 
   systemResumed(now: number): void {
@@ -837,6 +850,9 @@ export class HttpTransfer implements Transfer {
     // re-fetches bytes the other already has.
     const gained = advanceBlock(block, networkId, position)
     if (gained === 0) return 0
+    // Bytes came in: whatever was refused, the link still works.
+    this.refusals = 0
+    this.refusedNetworks.clear()
     if (stream) stream.bytesDownloaded += gained
     this.network(networkId).bytesDownloaded += gained
     // This runs on every completed writer callback, so it folds the delta in rather than re-summing
@@ -1086,6 +1102,29 @@ export class HttpTransfer implements Transfer {
       this.letGo(chunk, self, attempt, deliveredNothing)
       this.host.failNetwork(network, message)
       return 'stop'
+    }
+
+    // A link that stopped working (expired, signed out) is refused on every request, by every
+    // network: once that is plain, the download stops at its progress and waits for a fresh link
+    // (ADR-0078), rather than spend every stream's retries first.
+    if (error instanceof HttpStatusError && isRefusal(error.status)) {
+      this.refusals += 1
+      this.refusedNetworks.add(network.id)
+      const stopped = linkStopped({
+        status: error.status,
+        signed: signedLink(this.runtime.requestPayload.url),
+        count: this.refusals,
+        networks: this.refusedNetworks.size,
+        usable: this.runtime.state.networks.filter(
+          (candidate) =>
+            candidate.enabled && (candidate.status === 'on' || candidate.status === 'unreachable')
+        ).length
+      })
+      if (stopped) {
+        if (this.host.expireLink) this.host.expireLink(message)
+        else this.host.failDownload(message)
+        return this.finishStopped(chunk, self, attempt)
+      }
     }
 
     // What the server's answer says about the network: a connection failing while the whole

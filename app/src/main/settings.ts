@@ -154,6 +154,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   }
   if (parsed.notifyWhenDone === false) settings.notifyWhenDone = false
   if (parsed.offerCopiedLinks === true) settings.offerCopiedLinks = true
+  if (parsed.catchFreshLinks === false) settings.catchFreshLinks = false
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
   if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'
   if (parsed.updateBackgroundDownload === true) settings.updateBackgroundDownload = true

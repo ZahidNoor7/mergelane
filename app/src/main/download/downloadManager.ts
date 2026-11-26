@@ -49,6 +49,8 @@ import {
 } from '../../shared/types'
 import { routeFor } from '../../shared/routing'
 import { saveCheckpoint } from '../../shared/journal'
+import { fileNameOfLink, LINK_EXPIRED_MESSAGE } from '../../shared/linkExpiry'
+import { formatPercent } from '../../shared/speedText'
 import {
   checkpointDelay,
   recoveryNote,
@@ -872,6 +874,7 @@ export class DownloadManager {
       downloadsOn: (networkId) => this.httpDownloadsOn(networkId),
       reconcile: () => this.reconcile(runtime),
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
+      expireLink: () => this.expireLink(runtime),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
       scheduleUpdate: () => this.scheduleUpdate(runtime),
       getProxyForInterface: (networkId) => this.networkPreferences[networkId]?.proxy
@@ -1544,7 +1547,8 @@ export class DownloadManager {
         startedAt: Date.now(),
         ...(requestPayload.browser && {
           fromBrowser: requestPayload.browser.name ?? 'your browser'
-        })
+        }),
+        ...(requestPayload.browser?.referer && { pageUrl: requestPayload.browser.referer })
       }
       runtime = this.newHttpRuntime(
         state,
@@ -1793,7 +1797,7 @@ export class DownloadManager {
   async relink(
     id: string,
     url: string,
-    given?: { probe?: HttpProbeResult; browser?: BrowserContext }
+    given?: { probe?: HttpProbeResult; browser?: BrowserContext; announce?: boolean }
   ): Promise<void> {
     const runtime = this.runtimes.get(id)
     if (runtime?.kind !== 'http') throw new Error('Only web downloads support replacing a link.')
@@ -1822,7 +1826,7 @@ export class DownloadManager {
     runtime: HttpDownloadRuntime,
     url: string,
     replaceable: () => boolean,
-    given?: { probe?: HttpProbeResult; browser?: BrowserContext }
+    given?: { probe?: HttpProbeResult; browser?: BrowserContext; announce?: boolean }
   ): Promise<void> {
     // A fresh link from the same site usually needs the same sign-in, so the old one carries over
     // unless the browser sent a new one.
@@ -1831,6 +1835,13 @@ export class DownloadManager {
     if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
     const { totalBytes } = runtime.state
     if ((probe.totalBytes ?? 0) !== totalBytes) {
+      // Another name as well as another size: plainly another file (the design's FreshLinkPanel).
+      const named = probe.suggestedFileName || fileNameOfLink(probe.finalUrl)
+      if (named && named !== runtime.requestPayload.suggestedFileName) {
+        throw new Error(
+          `That link is for ${named}, not this download. Add it as a new download instead.`
+        )
+      }
       throw new Error(
         `That link is to a different file: ${formatGigabytes(probe.totalBytes ?? 0)}, not ${formatGigabytes(totalBytes)}`
       )
@@ -1853,9 +1864,27 @@ export class DownloadManager {
     if (!replaceable()) throw new Error('The download changed while its new link was checked.')
     runtime.requestPayload.url = probe.finalUrl
     runtime.requestPayload.browser = browser
+    // The fresh link's labels, so its answers read as the version this download is of.
+    runtime.requestPayload.etag = probe.etag
+    runtime.requestPayload.lastModified = probe.lastModified
+    runtime.transfer.acceptVersion?.({
+      etag: probe.etag,
+      lastModified: probe.lastModified,
+      totalBytes: probe.totalBytes ?? totalBytes
+    })
     runtime.state.url = probe.finalUrl
+    runtime.state.relinked = { at: Date.now(), fromBytes: runtime.state.bytesDownloaded }
     await this.persistNow(runtime)
     this.resume(runtime.state.id)
+    // Handed over by the browser, with no dialog to say so: a notification does.
+    if (given?.announce) {
+      const percent = formatPercent(runtime.state.bytesDownloaded, totalBytes)
+      this.notify(
+        'Carrying on with the fresh link',
+        `${runtime.state.fileName}: same file, so it continues from ${percent}%.`,
+        runtime.state.id
+      )
+    }
   }
 
   private async compareWithDisk(
@@ -1882,24 +1911,30 @@ export class DownloadManager {
     }
   }
 
-  /** A failed download this link looks like the same file as: same name, size and strong ETag.
-   * Only a suggestion for the user, who decides; relink then compares the bytes. */
-  failedMatch(probe: HttpProbeResult): { id: string; fileName: string } | undefined {
+  /** A failed download this link looks like the same file as: same name and size, and the same
+   * strong ETag unless its link stopped working (a fresh signed link often comes with another).
+   * `expired` says which. relink compares the bytes either way, before anything is written. */
+  failedMatch(
+    probe: HttpProbeResult
+  ): { id: string; fileName: string; expired: boolean } | undefined {
     const strong = (etag: string | null): etag is string => etag !== null && !/^W\//i.test(etag)
-    if (!strong(probe.etag) || !probe.totalBytes) return undefined
-    const etag = normalizeEtag(probe.etag)
+    if (!probe.totalBytes) return undefined
     for (const runtime of this.runtimes.values()) {
       if (runtime.kind !== 'http' || runtime.state.status !== 'error') continue
       const { requestPayload: request, state } = runtime
       if (
-        state.resumable !== false &&
-        state.totalBytes === probe.totalBytes &&
-        request.suggestedFileName === probe.suggestedFileName &&
-        strong(request.etag) &&
-        normalizeEtag(request.etag) === etag
+        state.resumable === false ||
+        state.totalBytes !== probe.totalBytes ||
+        request.suggestedFileName !== probe.suggestedFileName
       ) {
-        return { id: state.id, fileName: state.fileName }
+        continue
       }
+      const expired = state.problem?.kind === 'link-expired'
+      const sameTag =
+        strong(probe.etag) &&
+        strong(request.etag) &&
+        normalizeEtag(request.etag) === normalizeEtag(probe.etag)
+      if (expired || sameTag) return { id: state.id, fileName: state.fileName, expired }
     }
     return undefined
   }
@@ -1981,6 +2016,7 @@ export class DownloadManager {
     runtime.state.startAt = undefined
     runtime.state.error = undefined
     runtime.state.resumable = undefined
+    runtime.state.problem = undefined
     runtime.pausedForNoNetwork = undefined
     // Paused by switching off every network: resuming switches back on the one switched off
     // last if it is still there, or else the first one present.
@@ -2628,6 +2664,14 @@ export class DownloadManager {
       this.notify('Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
     }
     this.stopRun(runtime)
+  }
+
+  /** Its link stopped working (shared/linkExpiry.ts): it stops where it is, its progress kept, and
+   * waits in Needs attention for a fresh link (ADR-0078). */
+  private expireLink(runtime: DownloadRuntime): void {
+    if (runtime.state.status !== 'downloading') return
+    runtime.state.problem = { kind: 'link-expired', at: Date.now() }
+    this.failDownload(runtime, LINK_EXPIRED_MESSAGE)
   }
 
   /** The server keeps refusing requests over this network: it stops being used until the user

@@ -300,7 +300,9 @@ test.describe('edge cases', () => {
     origin.setRule(() => ({ status: 403 }))
     origin.release()
     const failed = await mergelane.waitUntil((state) => state.status === 'error', 30_000)
-    expect(failed.error).toMatch(/status 403/)
+    // Seen as a link that stopped working, not a failure (ADR-0078).
+    expect(failed.problem?.kind).toBe('link-expired')
+    expect(failed.error).toBe('The link stopped working. Paste a fresh one to carry on.')
     const kept = failed.bytesDownloaded
     expect(kept).toBeGreaterThan(0)
 

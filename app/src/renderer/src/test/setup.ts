@@ -25,6 +25,7 @@ const initialState: InitialState = {
   menuBarSpeedText: 'auto',
   notifyWhenDone: true,
   offerCopiedLinks: false,
+  catchFreshLinks: true,
   captureRules: DEFAULT_CAPTURE_RULES,
   routing: DEFAULT_ROUTING
 }

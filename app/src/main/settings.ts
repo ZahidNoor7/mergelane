@@ -18,6 +18,7 @@ import { sanitizeRole } from '../shared/networkRoles'
 import { sanitizeRouting } from '../shared/routing'
 import { isAfterQueue } from '../shared/queueEnd'
 import { isHistoryKeep } from '../shared/history'
+import { isDuplicateCheck } from '../shared/duplicates'
 import { speedTestServer } from '../shared/speedTest'
 import { isThemeId, validThemeSource } from '../shared/themes'
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '../shared/downloadSchedule'
@@ -163,6 +164,9 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   }
   if (isHistoryKeep(parsed.historyKeep) && parsed.historyKeep !== 'forever') {
     settings.historyKeep = parsed.historyKeep
+  }
+  if (isDuplicateCheck(parsed.duplicateCheck) && parsed.duplicateCheck !== 'both') {
+    settings.duplicateCheck = parsed.duplicateCheck
   }
   if (parsed.updateAutoCheck === false) settings.updateAutoCheck = false
   if (parsed.updateChannel === 'beta') settings.updateChannel = 'beta'

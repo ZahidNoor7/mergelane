@@ -14,6 +14,7 @@ export const IpcChannels = {
   listDownloads: 'download:list',
   listHistory: 'history:list',
   historyEntries: 'history:entries',
+  findDuplicate: 'history:find-duplicate',
   historyLink: 'history:link',
   revealHistoryEntry: 'history:reveal',
   forgetHistory: 'history:forget',

@@ -78,6 +78,10 @@ export interface OriginOptions {
   bytesPerSecond?: number
   /** A speed limit every response shares, as on a full link: another connection gets nothing. */
   sharedBytesPerSecond?: number
+  /** More headers on every answer: a published digest (Repr-Digest), say. */
+  headers?: Record<string, string>
+  /** Text answers by path, instead of the file: a `.sha256` file beside it, say. */
+  texts?: Record<string, string>
 }
 
 /** Deterministic bytes, so a failing seed reproduces the exact same file. */
@@ -228,6 +232,14 @@ export class Origin {
       res.writeHead(302, { Location: fault.redirect }).end()
       return
     }
+    const text = this.options.texts?.[new URL(request.path, 'http://origin').pathname]
+    if (text !== undefined) {
+      entry.status = 200
+      entry.bytesSent = Buffer.byteLength(text)
+      res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Length': entry.bytesSent })
+      res.end(text)
+      return
+    }
 
     // The app's probes are never held — only real transfers are.
     const holdable = !isProbe(request.range)
@@ -242,6 +254,7 @@ export class Origin {
     const total = content.length
     const headers: Record<string, string | number> = {}
     if (etag) headers['ETag'] = etag
+    Object.assign(headers, this.options.headers)
     if (this.lastModified) headers['Last-Modified'] = this.lastModified
     if (this.options.contentDisposition) {
       headers['Content-Disposition'] = this.options.contentDisposition

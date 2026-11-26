@@ -163,7 +163,9 @@ test.describe('YouTube downloads @smoke', () => {
     expect(done.url).toBe(watch(ID.card))
     expect(done.destinationPath).toBe(join(dirs.dest, 'Test card.mp4'))
     expect(done.bytesDownloaded).toBe(sizes['v120.mp4'] + sizes['a.m4a'])
-    expect(await readdir(dirs.dest)).toEqual(['Test card.mp4'])
+    // The staging folder goes just after the finished state is flushed to the drive (ADR-0077),
+    // which a progress update can beat to the window by a moment.
+    await expect.poll(() => readdir(dirs.dest), { timeout: 5_000 }).toEqual(['Test card.mp4'])
     const media = await inspect(done.destinationPath)
     expect([media.video, media.audio, media.size]).toEqual([['h264'], ['aac'], '160x120'])
     expect(media.duration).toBeGreaterThan(YT_SECONDS - 1)

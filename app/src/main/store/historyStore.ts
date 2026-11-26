@@ -9,6 +9,7 @@ import {
   type HistoryEntry,
   type HistoryKeep
 } from '../../shared/history'
+import type { DuplicateCandidate } from '../../shared/duplicates'
 import type { DownloadState, FinishedDownload } from '../../shared/types'
 import { readJson } from '../jsonFile'
 import { sealText, unsealText } from '../secrets'
@@ -42,6 +43,8 @@ interface Row {
   in_list: number
   path: string
   finished: string | null
+  sha256: string | null
+  info_hash: string | null
 }
 
 /** Links opened this launch, by download: unsealing asks the keychain each time. */
@@ -168,14 +171,14 @@ async function writeFinished(entry: FinishedDownload): Promise<void> {
 }
 
 /** A download started (or found at launch, from before history): it is in History from now on. */
-export async function recordStart(state: DownloadState): Promise<void> {
+export async function recordStart(state: DownloadState, infoHash?: string): Promise<void> {
   await opened()
   const fields = await linkFields(state.id, state.url)
   database()
     .prepare(
       `INSERT OR IGNORE INTO downloads (id, kind, name, link, link_sealed, link_full, host, size,
-         started_at, path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         started_at, path, info_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       state.id,
@@ -187,8 +190,47 @@ export async function recordStart(state: DownloadState): Promise<void> {
       fields.host,
       state.totalBytes,
       state.startedAt,
-      state.destinationPath
+      state.destinationPath,
+      infoHash ?? null
     )
+}
+
+/** A finished file's SHA-256, once worked out (ADR-0081). */
+export async function recordSha256(id: string, sha256: string): Promise<void> {
+  await opened()
+  database().prepare('UPDATE downloads SET sha256 = ? WHERE id = ?').run(sha256, id)
+}
+
+/** The finished downloads, still on disk, that a new one could be the same as: by its link, its
+ * file name, or its info hash (shared/duplicates.ts decides). Newest first. */
+export async function duplicateCandidates(query: {
+  link: string
+  name: string
+  infoHash?: string
+}): Promise<DuplicateCandidate[]> {
+  await opened()
+  const rows = database()
+    .prepare(
+      `SELECT * FROM downloads WHERE ended = 'completed' AND (link = ? OR name = ? OR info_hash = ?)
+       ORDER BY completed_at DESC LIMIT 50`
+    )
+    .all(query.link, query.name, query.infoHash ?? '') as unknown as Row[]
+  const present = await Promise.all(rows.map((row) => exists(row.path)))
+  return rows
+    .filter((_, index) => present[index])
+    .map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      name: row.name,
+      link: row.link,
+      host: row.host,
+      size: row.size,
+      live: false,
+      path: row.path,
+      ...(row.completed_at !== null && { completedAt: row.completed_at }),
+      ...(row.sha256 && { sha256: row.sha256 }),
+      ...(row.info_hash && { infoHash: row.info_hash })
+    }))
 }
 
 /** A test run can hold a finished download's save here, to act while it is pending

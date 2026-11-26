@@ -81,7 +81,8 @@ test.describe('stream downloads @smoke', () => {
     expect(done.quality).toBe('240p')
     expect(done.fileName).toBe('video.mp4')
     expect(done.bytesDownloaded).toBe(done.totalBytes)
-    expect(await readdir(dirs.dest)).toEqual(['video.mp4'])
+    // Its staging folder goes just after the finished state is flushed (see youtubeDownload.spec).
+    await expect.poll(() => readdir(dirs.dest), { timeout: 5_000 }).toEqual(['video.mp4'])
     expect(existsSync(stale)).toBe(false)
 
     const media = await inspect(done.destinationPath)
@@ -111,7 +112,8 @@ test.describe('stream downloads @smoke', () => {
     const paths = server.segments().map((entry) => entry.path)
     expect(paths.some((path) => /\/(init|chunk)-0[-.]/.test(path))).toBe(false)
     expect(paths.filter((path) => /\/(init|chunk)-1[-.]/.test(path))).toHaveLength(9)
-    expect(await readdir(dirs.dest)).toEqual(['video.mp4'])
+    // Its staging folder goes just after the finished state is flushed (see youtubeDownload.spec).
+    await expect.poll(() => readdir(dirs.dest), { timeout: 5_000 }).toEqual(['video.mp4'])
   })
 
   test('the quality picked in New download is the one downloaded', async ({ mergelane, dirs }) => {

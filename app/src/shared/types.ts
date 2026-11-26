@@ -1,6 +1,7 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
 import type { AfterQueue } from './queueEnd'
 import type { HistoryKeep } from './history'
+import type { DuplicateCheck } from './duplicates'
 import type { BrowserContact, BrowserId, ExtensionKind } from './browsers'
 import type { CaptureRules } from './captureRules'
 import type { MenuBarSpeedText } from './menuBarPanel'
@@ -47,6 +48,9 @@ interface ProbeResultBase {
 
 export interface HttpProbeResult extends ProbeResultBase {
   kind: 'http'
+  /** The SHA-256 the server publishes for the whole file, as lowercase hex (shared/digests.ts,
+   * ADR-0081). */
+  publishedSha256?: string
 }
 
 export interface TorrentProbeResult extends ProbeResultBase {
@@ -711,6 +715,9 @@ export interface AppSettings {
   afterQueue?: Exclude<AfterQueue, 'nothing'>
   /** Settings › Downloads › Keep download history; missing is Forever (ADR-0080). */
   historyKeep?: Exclude<HistoryKeep, 'forever'>
+  /** Settings › Downloads › Warn before downloading something you already have; missing is Link
+   * or file (ADR-0081). */
+  duplicateCheck?: Exclude<DuplicateCheck, 'both'>
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -792,6 +799,7 @@ export interface InitialState {
   keepAwake: boolean
   afterQueue: AfterQueue
   historyKeep: HistoryKeep
+  duplicateCheck: DuplicateCheck
   captureRules: CaptureRules
   routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */

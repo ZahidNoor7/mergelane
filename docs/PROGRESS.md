@@ -38,6 +38,17 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 2: duplicate detection (2026-11-26, branch `duplicates`, on `history-store`)
+
+- **Done (ADR-0081, plan feature 4):** New download warns about the same link (finished or still downloading), the
+  same file from another site whose published SHA-256 (`Repr-Digest`, `Digest` or a `.sha256` file beside it) matches
+  the one worked out when it finished, and the same torrent by its info hash; the button reads Download again; the
+  setting Off / Same link / Link or file. History schema 2 keeps each finished file's SHA-256 and each torrent's info
+  hash.
+- Tests: new `digests`, `duplicates`, `DuplicateNotice`, `useDuplicate` unit tests, and new cases in
+  `NewDownloadDialog` and `HistorySettings`; `duplicates.spec.ts` (7 tests).
+- Next in Phase 2: daily usage recording.
+
 ### New features, Phase 2: download history (2026-11-26, branch `history-store`)
 
 - Phase 1 merged into `main` (#111 to #114). Phase 2 started.

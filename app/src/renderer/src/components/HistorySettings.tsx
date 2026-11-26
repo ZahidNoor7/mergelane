@@ -1,3 +1,4 @@
+import type { DuplicateCheck } from '@shared/duplicates'
 import { HISTORY_KEEP, type HistoryKeep } from '@shared/history'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -9,7 +10,19 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 // Settings › Downloads › "Duplicates and history" (the design's HistorySettings; ADR-0080): how
 // long History keeps what is no longer in the list, and forgetting it now.
 
+const DUPLICATE_CHOICES: { value: DuplicateCheck; label: string; hint: string }[] = [
+  { value: 'off', label: 'Off', hint: 'No warning.' },
+  { value: 'link', label: 'Same link', hint: 'When the link matches one in your history.' },
+  {
+    value: 'both',
+    label: 'Link or file',
+    hint: 'When the link matches, or the same file is offered from another site: same name and size, and the SHA-256 the site publishes matches the file you have.'
+  }
+]
+
 export function HistorySettings(): React.JSX.Element {
+  const duplicateCheck = useAppStore((store) => store.duplicateCheck)
+  const setDuplicateCheck = useAppStore((store) => store.setDuplicateCheck)
   const keep = useAppStore((store) => store.historyKeep)
   const setKeep = useAppStore((store) => store.setHistoryKeep)
   const [removed, setRemoved] = useState(0)
@@ -36,6 +49,24 @@ export function HistorySettings(): React.JSX.Element {
 
   return (
     <SettingsGroup title="Duplicates and history">
+      <SettingRow
+        label="Warn before downloading something you already have"
+        hint={DUPLICATE_CHOICES.find((choice) => choice.value === duplicateCheck)?.hint}
+      >
+        <ToggleGroup
+          aria-label="Duplicate warning"
+          value={[duplicateCheck]}
+          onValueChange={(values) => {
+            if (values[0] !== undefined) setDuplicateCheck(values[0] as DuplicateCheck)
+          }}
+        >
+          {DUPLICATE_CHOICES.map((choice) => (
+            <ToggleGroupItem key={choice.value} value={choice.value}>
+              {choice.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingRow>
       <SettingRow
         label="Keep download history"
         hint="History is stored only on this computer. Removing a download from the list doesn’t remove it from history."

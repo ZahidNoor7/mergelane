@@ -2737,3 +2737,58 @@ D4 (Node's `node:sqlite`), D7 (Download again opens New download) and D13 (links
   and 30 days forgets only what's out of the list; the file is 0600 and holds no signed query in the clear; a damaged
   file is set aside. `removal.spec.ts` now holds the save at the store's test gate instead of history.json's rename;
   the Telegram test in `recovery.spec.ts` hands its old entries over through history.json, the import.
+
+## ADR-0081: A warning before downloading something already had: the same link, or the same file by its SHA-256
+
+**Status:** Owner, 2026-11-26: approved Phase 2 of `docs/plans/2026-11-new-features-plan.md` and its recommendations,
+D8 (the same torrent by its info hash) and D9 (name and size alone never warn).
+
+### Context
+
+- The plan's feature 4: New download says when a link is one the user already has, or is downloading, so they don't
+  fetch the same file twice. The design's `findDuplicate` and `DuplicateNotice`.
+- History (ADR-0080) now keeps every download started, so there is something to compare with.
+
+### Decision
+
+- **The rules** (`shared/duplicates.ts`, pure). The candidates are the downloads unfinished in the list, and the
+  finished ones in History whose file is still where it was saved; the newest wins.
+  - **Same link:** the same link without its query, or the same site and file name. Links are compared without their
+    query because History keeps them that way (ADR-0080) and a signed link's query changes each time; a fresh signed
+    link to the same file on the same site is the same link, which the design's "same host and file name" rule says
+    anyway.
+  - **Same torrent:** the same info hash, whatever link or trackers it came by (D8).
+  - **Same file from another site** (setting "Link or file" only, HTTP only): the same name and size, another site, and
+    the SHA-256 that site publishes equals the one Mergelane worked out when it finished. A name and size match alone
+    never warns (D9).
+- **Mergelane's own SHA-256:** worked out when an HTTP or stream download finishes, in a worker thread
+  (`main/download/fileHash.ts`, 1 MiB reads), and kept in History (`downloads.sha256`, schema 2). A torrent or NZB
+  folder has none.
+- **What a site publishes** (`shared/digests.ts`), checked against the RFCs:
+  - `Repr-Digest` (RFC 9530), `sha-256=:<base64>:`. It covers "the entire selected representation data", so a range
+    response's still gives the whole file's, which is what the probe gets.
+  - `Digest` (RFC 3230, SHA-256 from RFC 5843) is obsoleted by RFC 9530 and was implemented inconsistently, so it is
+    taken only when it says SHA-256 and decodes to 32 bytes, or to the 64 hex characters RFC 5843's own example uses.
+  - A `.sha256` file beside the link (`main/download/siblingDigest.ts`): the digest alone, `sha256sum` lines and BSD
+    `SHA256 (name) = …` lines; where lines name files, only this file's counts. Asked for only when a finished file of
+    the same name and size came from another site, so the extra request is rare. One `GET`, http or https only, no
+    cookies, 5 seconds, at most 16 KiB read.
+- **Where it is asked:** New download asks the main process (`history:find-duplicate`) once its link is checked,
+  rather than the plan's `ProbeResult.duplicate`, so the same answer serves a pasted link, one from the browser, and a
+  torrent, and the setting is read where it is kept.
+- **The notice** (`DuplicateNotice.tsx`, `role="status"`, caution colours): "This is already downloading" / "It's in
+  your list, N% done." with Show in list, or "You already have this file" / "Downloaded … to …, size." with Show in
+  Finder; then "Same link." or "Same file from {host}: the name and size match, and so does the SHA-256 this site
+  publishes." The button reads Download again. A link that resumes a stopped download shows no notice: that one says
+  it resumes.
+- **The setting:** Settings › Downloads › "Duplicates and history", "Warn before downloading something you already
+  have": Off, Same link, Link or file (the default).
+
+### Verification
+
+- Unit: `digests.test.ts` and `duplicates.test.ts` (100% of lines), `DuplicateNotice.test.tsx`, `useDuplicate.test.tsx`,
+  and new cases in `NewDownloadDialog.test.tsx` and `HistorySettings.test.tsx`.
+- e2e (`duplicates.spec.ts`): the same link finished (Download again) and still downloading (Show in list); the same
+  file from another site by `Repr-Digest`, and by a `.sha256` file, and not by one naming another file; the same name
+  and size with nothing published is no duplicate; Off says nothing and Same link ignores another site's copy; the same
+  torrent by its info hash.

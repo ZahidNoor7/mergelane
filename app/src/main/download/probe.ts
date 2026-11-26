@@ -1,3 +1,4 @@
+import { publishedSha256 } from '../../shared/digests'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { basename, isAbsolute } from 'node:path'
@@ -319,6 +320,16 @@ export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promis
     suggestedFileName,
     contentType: headerValue(response.headers, 'content-type') ?? null,
     etag: perRange ? null : (headerValue(response.headers, 'etag') ?? null),
-    lastModified: headerValue(response.headers, 'last-modified') ?? null
+    lastModified: headerValue(response.headers, 'last-modified') ?? null,
+    ...publishedOf(response.headers)
   }
+}
+
+/** The SHA-256 the server publishes for the whole file, if it does (ADR-0081). */
+function publishedOf(headers: Headers): { publishedSha256?: string } {
+  const sha256 = publishedSha256({
+    reprDigest: headerValue(headers, 'repr-digest'),
+    digest: headerValue(headers, 'digest')
+  })
+  return sha256 ? { publishedSha256: sha256 } : {}
 }

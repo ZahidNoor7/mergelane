@@ -70,11 +70,14 @@ import {
   findInHistory,
   pruneHistory,
   recordRemoved,
+  recordSha256,
   recordStart,
   removeFromHistory
 } from '../store/historyStore'
 import { closeDatabase } from '../store/database'
-import { isHistoryKeep, type HistoryKeep } from '../../shared/history'
+import { hashFile } from './fileHash'
+import type { DuplicateCandidate } from '../../shared/duplicates'
+import { hostOf, isHistoryKeep, plainLink, type HistoryKeep } from '../../shared/history'
 import { testKnobs, testRecord, testStreamsPerNetwork } from '../testKnobs'
 import { otherPagesListening, sendToOtherPages } from '../otherPages'
 import { DownloadFile } from './downloadFile'
@@ -418,6 +421,13 @@ const isNotFound = (error: unknown): boolean =>
   (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 
 /** A manifest this version writes, for the download in folder `id`. */
+/** A torrent download's info hash, what tells the same torrent again (ADR-0081). */
+function infoHashOf(runtime: DownloadRuntime): string | undefined {
+  return runtime.kind === 'torrent' && runtime.requestPayload.kind === 'torrent'
+    ? runtime.requestPayload.infoHash
+    : undefined
+}
+
 function isCurrentManifest(value: unknown, id: string): value is PersistedDownload {
   const manifest = value as Partial<PersistedDownload> | null
   return manifest?.version === 7 && manifest.state?.id === id
@@ -1174,7 +1184,7 @@ export class DownloadManager {
         else {
           await this.persistNow(runtime)
           // One started before history was kept gets its entry now (ADR-0080).
-          void recordStart(runtime.state).catch(() => {})
+          void recordStart(runtime.state, infoHashOf(runtime)).catch(() => {})
         }
       })
     )
@@ -1228,6 +1238,36 @@ export class DownloadManager {
     await this.removePersistedDownload(runtime, false)
     this.updateTaskbarProgress()
     this.historyChanged()
+    // One file: its SHA-256 worked out now, for telling a duplicate later (ADR-0081). A folder (a
+    // torrent's, an NZB's) has none to compare with what a site publishes.
+    if (runtime.kind === 'http' || runtime.kind === 'stream') {
+      const { id, destinationPath } = runtime.state
+      void hashFile(destinationPath)
+        .then((sha256) => recordSha256(id, sha256))
+        .catch(() => {})
+    }
+  }
+
+  /** The downloads in the list, unfinished, that a new one could be the same as (ADR-0081). */
+  liveCandidates(): DuplicateCandidate[] {
+    return [...this.runtimes.values()]
+      .filter((runtime) => ['downloading', 'paused', 'queued'].includes(runtime.state.status))
+      .sort((a, b) => b.state.startedAt - a.state.startedAt)
+      .map((runtime) => {
+        const { state } = runtime
+        const infoHash = infoHashOf(runtime)
+        return {
+          id: state.id,
+          kind: state.kind,
+          name: state.fileName,
+          link: plainLink(state.url),
+          host: hostOf(state.url),
+          size: state.totalBytes,
+          live: true,
+          percent: formatPercent(state.bytesDownloaded, state.totalBytes),
+          ...(infoHash && { infoHash })
+        }
+      })
   }
 
   private historyChanged(): void {
@@ -1607,7 +1647,7 @@ export class DownloadManager {
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
     // In History from now on, whatever becomes of it (ADR-0080).
-    void recordStart(runtime.state).catch(() => {})
+    void recordStart(runtime.state, infoHashOf(runtime)).catch(() => {})
     this.pushUpdate(runtime)
     if (room) this.begin(runtime)
     if (when?.kind === 'at') this.armStartTimer()

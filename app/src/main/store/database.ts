@@ -36,7 +36,12 @@ const MIGRATIONS: readonly string[] = [
    );
    CREATE INDEX downloads_started ON downloads(started_at DESC);
    CREATE INDEX downloads_link ON downloads(link);
-   CREATE INDEX downloads_name_size ON downloads(name, size);`
+   CREATE INDEX downloads_name_size ON downloads(name, size);`,
+  // 2: what tells a duplicate (ADR-0081): a finished file's SHA-256, and a torrent's info hash.
+  `ALTER TABLE downloads ADD COLUMN sha256 TEXT;
+   ALTER TABLE downloads ADD COLUMN info_hash TEXT;
+   CREATE INDEX downloads_sha ON downloads(sha256);
+   CREATE INDEX downloads_hash ON downloads(info_hash);`
 ]
 
 export const SCHEMA_VERSION = MIGRATIONS.length

@@ -7,6 +7,7 @@ import type { NetworkActivity } from './networkActivity'
 import type { RecoveryNote } from './recovery'
 import type { QueueEnd } from './queueEnd'
 import type { HistoryEntry } from './history'
+import type { DuplicateMatch, DuplicateQuery } from './duplicates'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
 import type { UpdateChannel } from './releases'
 import type {
@@ -58,6 +59,8 @@ export interface IpcContract {
   listHistory: { args: []; result: FinishedDownload[] }
   /** History (ADR-0080): every download started, but the unfinished ones still in the list. */
   historyEntries: { args: []; result: HistoryEntry[] }
+  /** Before a download starts: one already had (ADR-0081), as Settings › Downloads asks. */
+  findDuplicate: { args: [query: DuplicateQuery]; result: DuplicateMatch | null }
   /** An entry's whole link, opened from the keychain; null for one History no longer has. */
   historyLink: { args: [id: string]; result: string | null }
   /** Shows an entry's file in its folder; false when it isn't there. */

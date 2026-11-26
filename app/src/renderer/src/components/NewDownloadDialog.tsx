@@ -47,6 +47,8 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { TorrentFileList } from './TorrentFiles'
+import { DuplicateNotice } from './DuplicateNotice'
+import { useDuplicate } from '../hooks/useDuplicate'
 import { UsenetServerDialog } from './UsenetServerDialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { NetworkEditPopover } from './NetworkEditPopover'
@@ -251,6 +253,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   }, [url, dropLink])
 
   const ready = probe.status === 'ready' ? probe.result : null
+  // Had already (ADR-0081): said under the link, and the button says it downloads it again.
+  const duplicate = useDuplicate(ready, ready?.suggestedFileName ?? '')
   const torrent = ready?.kind === 'torrent' ? ready.torrent : null
   const nzb = ready?.kind === 'nzb' ? ready.nzb : null
   const stream = ready?.kind === 'stream' ? ready.stream : null
@@ -335,7 +339,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           ? 'Add to scheduled queue'
           : full || when === 'queue'
             ? 'Add to queue'
-            : 'Download'
+            : duplicate
+              ? 'Download again'
+              : 'Download'
   // What the schedule does to the time picked: it wins, so the download waits for its hours.
   const startAtNote = startAt !== null ? startAtScheduleNote(schedule, startAt) : null
 
@@ -614,6 +620,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               .join(', ')}
           </p>
         )}
+
+        {duplicate && !shownLink?.resumes && <DuplicateNotice match={duplicate} />}
 
         {shownLink?.resumes && (
           <div className="flex items-center gap-3 rounded-[12px] bg-sunken px-3 py-2.5 text-[12.5px] shadow-[inset_0_0_0_1px_var(--border-subtle)]">

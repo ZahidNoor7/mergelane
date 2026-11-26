@@ -68,7 +68,10 @@ beforeEach(() => {
     updateSettings: vi.fn(() => Promise.resolve()),
     loginItem: vi.fn(() => Promise.resolve({ on: false, status: 'unavailable' })),
     usenetServer,
-    chooseDestinationFolder: vi.fn(() => Promise.resolve('/Users/test/Films'))
+    chooseDestinationFolder: vi.fn(() => Promise.resolve('/Users/test/Films')),
+    // Downloads › Duplicates and history: nothing in History here (HistorySettings.test.tsx).
+    historyEntries: vi.fn(() => Promise.resolve([])),
+    onHistoryChanged: vi.fn(() => () => {})
   } as unknown as typeof window.mergelane
   useAppStore.setState({
     screen: 'settings',

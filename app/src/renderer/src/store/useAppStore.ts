@@ -22,6 +22,7 @@ import type { CaptureRules } from '@shared/captureRules'
 import { themeOnPlatform, type ThemeId } from '@shared/themes'
 import type { MenuBarSpeedText } from '@shared/menuBarPanel'
 import type { AfterQueue } from '@shared/queueEnd'
+import type { HistoryKeep } from '@shared/history'
 import { fadeTheme } from '../theme/appearance'
 import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
 
@@ -37,7 +38,7 @@ export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /** The window's places (the sidebar's): the downloads, the dashboard, the networks or settings. */
-export type Screen = 'downloads' | 'dashboard' | 'networks' | 'settings'
+export type Screen = 'downloads' | 'dashboard' | 'networks' | 'history' | 'settings'
 
 /** Settings' sections. */
 export type SettingsSection = 'general' | 'appearance' | 'downloads' | 'extensions' | 'updates'
@@ -195,6 +196,9 @@ interface AppStore {
   /** Persisted — Settings › General › When the queue finishes (ADR-0079). */
   afterQueue: AfterQueue
   setAfterQueue: (afterQueue: AfterQueue) => void
+  /** Persisted — Settings › Downloads › Keep download history (ADR-0080). */
+  historyKeep: HistoryKeep
+  setHistoryKeep: (keep: HistoryKeep) => void
   /** A link the user copied, offered for download; null when there's none. Kept in memory only. */
   copiedLink: string | null
   /** From main, as the user switched to Mergelane. Passed over when it's already being added or
@@ -493,6 +497,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setAfterQueue: (afterQueue) => {
     set({ afterQueue })
     persist({ afterQueue: afterQueue === 'nothing' ? undefined : afterQueue })
+  },
+  historyKeep: initial.historyKeep,
+  setHistoryKeep: (historyKeep) => {
+    set({ historyKeep })
+    persist({ historyKeep: historyKeep === 'forever' ? undefined : historyKeep })
   },
 
   offerCopiedLinks: initial.offerCopiedLinks,

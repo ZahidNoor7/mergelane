@@ -7,6 +7,12 @@ All notable changes to Mergelane are recorded here. The format follows
 
 ### Added
 
+- **History: every download you've started, in one place.** A new History place in the sidebar lists every download,
+  including ones you removed from the list or stopped, says when a file was moved or deleted, and downloads anything
+  again from its link. Search by name, site or link, and show only what's on disk, out of the list or missing. It
+  stays on this Mac; Settings › Downloads says how long it's kept (forever, a year or 30 days) and can clear it. Signed
+  links are kept sealed in your keychain.
+
 - **Downloads survive crashes, force quits and power cuts with seconds lost, not minutes.** Progress is saved every
   2 seconds, and each save is flushed to the drive before it counts. Downloads that were running when Mergelane
   quit, or crashed, carry on by themselves the next time it opens, from their last save; ones you paused stay

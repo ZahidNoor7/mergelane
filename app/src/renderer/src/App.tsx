@@ -17,6 +17,7 @@ import { useUpdates } from './hooks/useUpdates'
 import { useTrayStatus } from './hooks/useTrayStatus'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { DownloadsPlace } from './screens/DownloadsPlace'
+import { HistoryScreen } from './screens/HistoryScreen'
 import { NetworksScreen } from './screens/NetworksScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { useAppStore } from './store/useAppStore'
@@ -31,6 +32,8 @@ function CurrentScreen(): React.JSX.Element {
     <DashboardScreen />
   ) : screen === 'networks' ? (
     <NetworksScreen />
+  ) : screen === 'history' ? (
+    <HistoryScreen />
   ) : screen === 'settings' ? (
     <SettingsScreen />
   ) : (

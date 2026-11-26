@@ -1,5 +1,6 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
 import type { AfterQueue } from './queueEnd'
+import type { HistoryKeep } from './history'
 import type { BrowserContact, BrowserId, ExtensionKind } from './browsers'
 import type { CaptureRules } from './captureRules'
 import type { MenuBarSpeedText } from './menuBarPanel'
@@ -708,6 +709,8 @@ export interface AppSettings {
   keepAwake?: boolean
   /** Settings › General › When the queue finishes; missing is Do nothing (ADR-0079). */
   afterQueue?: Exclude<AfterQueue, 'nothing'>
+  /** Settings › Downloads › Keep download history; missing is Forever (ADR-0080). */
+  historyKeep?: Exclude<HistoryKeep, 'forever'>
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -788,6 +791,7 @@ export interface InitialState {
   catchFreshLinks: boolean
   keepAwake: boolean
   afterQueue: AfterQueue
+  historyKeep: HistoryKeep
   captureRules: CaptureRules
   routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */

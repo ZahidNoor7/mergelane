@@ -169,7 +169,11 @@ export const COVERED = [
   'src/renderer/src/components/QueueEnd.tsx',
   // Choosing a torrent's files (feature 9): its folders, and the list.
   'src/shared/torrentTree.ts',
-  'src/renderer/src/components/TorrentFiles.tsx'
+  'src/renderer/src/components/TorrentFiles.tsx',
+  // Download history (Phase 2, ADR-0080): what is shown and kept, the place and its settings.
+  'src/shared/history.ts',
+  'src/renderer/src/screens/HistoryScreen.tsx',
+  'src/renderer/src/components/HistorySettings.tsx'
 ]
 
 export default defineConfig({

@@ -10,6 +10,7 @@ describe('platformWords', () => {
     expect(platformWords('darwin')).toMatchObject({
       thisComputer: 'this Mac',
       revealLabel: 'Show in Finder',
+      fileManager: 'Finder',
       statusArea: 'the menu bar',
       settingsShortcut: '⌘,',
       adminPrompt: 'Your Mac asks for your administrator password.',
@@ -24,6 +25,7 @@ describe('platformWords', () => {
       appearanceSource: 'Windows',
       system: 'Windows',
       revealLabel: 'Show in File Explorer',
+      fileManager: 'File Explorer',
       statusArea: 'the notification area',
       settingsShortcut: 'Ctrl+,',
       adminPrompt: 'Windows asks for an administrator’s permission.',

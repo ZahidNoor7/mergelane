@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   Gauge,
   HardDrive,
+  History,
   LayoutDashboard,
   Settings,
   Unplug,
@@ -48,7 +49,9 @@ type Place = Screen
 const PLACES: { id: Exclude<Place, 'settings'>; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'downloads', label: 'Downloads', icon: ArrowDownToLine },
-  { id: 'networks', label: 'Networks', icon: Waypoints }
+  { id: 'networks', label: 'Networks', icon: Waypoints },
+  // Every download ever started (ADR-0080).
+  { id: 'history', label: 'History', icon: History }
 ]
 
 /** Where the window is: the dashboard, or the downloads (the list, and a download's details). */

@@ -5,27 +5,19 @@ import { BLOCK, expect, test, treeSha, type MergelaneApp } from './fixtures'
 import { seededBytes } from './origin'
 import { named, Swarm } from './torrentSwarm'
 
-/** Hold the actual history save, rather than relying on a quick click landing in its window. */
+/** Hold the actual history save, rather than relying on a quick click landing in its window. The
+ * history store waits at its test gate (main/store/historyStore.ts) while one is set. */
 async function holdHistoryWrite(mergelane: MergelaneApp): Promise<void> {
   await mergelane.evaluateMain(() => {
-    const fs = process.getBuiltinModule('node:fs/promises')
-    const { basename } = process.getBuiltinModule('node:path')
-    const original = fs.rename
     const globals = globalThis as Record<string, unknown>
     let release!: () => void
     const held = new Promise<void>((resolve) => {
       release = resolve
     })
+    globals.__mergelaneHistoryGate = { held, reached: () => (globals.__historyHeld = true) }
     globals.__releaseHistory = () => {
-      fs.rename = original
+      delete globals.__mergelaneHistoryGate
       release()
-    }
-    fs.rename = async (...args: Parameters<typeof original>) => {
-      if (basename(String(args[1])) === 'history.json') {
-        globals.__historyHeld = true
-        await held
-      }
-      return original(...args)
     }
   }, null)
 }

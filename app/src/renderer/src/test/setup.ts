@@ -28,6 +28,7 @@ const initialState: InitialState = {
   catchFreshLinks: true,
   keepAwake: true,
   afterQueue: 'nothing',
+  historyKeep: 'forever',
   captureRules: DEFAULT_CAPTURE_RULES,
   routing: DEFAULT_ROUTING
 }

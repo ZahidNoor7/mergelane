@@ -30,6 +30,7 @@ import { DiagnosticsSettings } from '../components/DiagnosticsSettings'
 import { onWindows, words } from '../platformWords'
 import { ExtensionSettings } from '../components/ExtensionSettings'
 import { OnThisMacSettings } from '../components/OnThisMacSettings'
+import { HistorySettings } from '../components/HistorySettings'
 import { SafetySettings } from '../components/SafetySettings'
 import { SettingRow, SettingsGroup } from '../components/settingsParts'
 import { UpdateSettings } from '../components/UpdateSettings'
@@ -651,6 +652,7 @@ function DownloadSettings(): React.JSX.Element {
       </SettingsGroup>
 
       <SafetySettings />
+      <HistorySettings />
 
       <SettingsGroup title="Usenet">
         <SettingRow

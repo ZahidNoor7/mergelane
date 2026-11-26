@@ -65,7 +65,16 @@ import { byRole, networkStatuses, roleOf } from '../../shared/networkRoles'
 import { mergeTrackers, normalizeTrackerUrl } from '../../shared/torrentTrackers'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
-import { addToHistory, findInHistory, removeFromHistory } from './history'
+import {
+  addToHistory,
+  findInHistory,
+  pruneHistory,
+  recordRemoved,
+  recordStart,
+  removeFromHistory
+} from '../store/historyStore'
+import { closeDatabase } from '../store/database'
+import { isHistoryKeep, type HistoryKeep } from '../../shared/history'
 import { testKnobs, testRecord, testStreamsPerNetwork } from '../testKnobs'
 import { otherPagesListening, sendToOtherPages } from '../otherPages'
 import { DownloadFile } from './downloadFile'
@@ -489,6 +498,9 @@ export class DownloadManager {
   private recovery: RecoveryNote | null = null
   /** Settings › General › Keep the computer awake while downloading (ADR-0079). */
   private keepAwakeOn = true
+  /** Settings › Downloads › Keep download history (ADR-0080). */
+  private historyKeep: HistoryKeep = 'forever'
+  private pruneTimer?: NodeJS.Timeout
   /** Settings › General › When the queue finishes (ADR-0079). */
   private afterQueue: AfterQueue = 'nothing'
   /** The countdown to sleep or shut down, once the queue has finished; null when there is none. */
@@ -583,6 +595,15 @@ export class DownloadManager {
     this.networkPreferences = settings.networkPreferences ?? {}
     this.notifyWhenDone = settings.notifyWhenDone !== false
     this.keepAwakeOn = settings.keepAwake !== false
+    const keep = isHistoryKeep(settings.historyKeep) ? settings.historyKeep : 'forever'
+    // At launch, whenever the setting changes, and once a day: what's past it is forgotten.
+    if (keep !== this.historyKeep || !this.pruneTimer) {
+      this.historyKeep = keep
+      void this.pruneHistoryNow()
+      clearInterval(this.pruneTimer)
+      this.pruneTimer = setInterval(() => void this.pruneHistoryNow(), 86_400_000)
+      this.pruneTimer.unref()
+    }
     this.afterQueue = isAfterQueue(settings.afterQueue) ? settings.afterQueue : 'nothing'
     // Turned to Do nothing while a countdown runs: it stops.
     if (this.afterQueue === 'nothing' && this.queueEnd) this.cancelQueueEnd()
@@ -1150,7 +1171,11 @@ export class DownloadManager {
         this.runtimes.set(runtime.state.id, runtime)
         // Finished before the relaunch (or found to be): history keeps it from here.
         if (runtime.state.status === 'completed') await this.moveToHistory(runtime)
-        else await this.persistNow(runtime)
+        else {
+          await this.persistNow(runtime)
+          // One started before history was kept gets its entry now (ADR-0080).
+          void recordStart(runtime.state).catch(() => {})
+        }
       })
     )
   }
@@ -1581,6 +1606,8 @@ export class DownloadManager {
     runtime.state.scheduled = this.downloadSchedule?.enabled || undefined
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
+    // In History from now on, whatever becomes of it (ADR-0080).
+    void recordStart(runtime.state).catch(() => {})
     this.pushUpdate(runtime)
     if (room) this.begin(runtime)
     if (when?.kind === 'at') this.armStartTimer()
@@ -2434,10 +2461,11 @@ export class DownloadManager {
       this.pausedInSession.delete(id)
       await this.removePersistedDownload(runtime)
       this.updateTaskbarProgress()
-      if (runtime.state.status === 'completed') {
-        await removeFromHistory([id])
-        this.historyChanged()
-      }
+      // Out of the list, never out of History (ADR-0080): a finished one stays as it is, an
+      // unfinished one as stopped, its partial file gone.
+      if (runtime.state.status === 'completed') await removeFromHistory([id])
+      else await recordRemoved(runtime.state).catch(() => {})
+      this.historyChanged()
       return
     }
     // A finished one, from history.
@@ -2495,6 +2523,27 @@ export class DownloadManager {
    * every download; a quit that never gets here reads as a crash at the next launch. */
   async endSession(): Promise<void> {
     await this.session?.end()
+    clearInterval(this.pruneTimer)
+    closeDatabase()
+  }
+
+  private async pruneHistoryNow(): Promise<void> {
+    const forgotten = await pruneHistory(this.historyKeep).catch(() => 0)
+    if (forgotten > 0) this.historyChanged()
+  }
+
+  /** Ids of the downloads in the list unfinished: History leaves those to the window. */
+  liveIds(): Set<string> {
+    return new Set(
+      [...this.runtimes.values()]
+        .filter((runtime) => runtime.state.status !== 'completed')
+        .map((runtime) => runtime.state.id)
+    )
+  }
+
+  /** Lets the window refresh History after it changed it (Clear history). */
+  historyUpdated(): void {
+    this.historyChanged()
   }
 
   /** Each downloading download's bytes so far, by id: what the session's heartbeat notes. */

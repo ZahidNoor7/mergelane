@@ -369,6 +369,8 @@ test.describe('persisted state on disk @smoke', () => {
     await mergelane.start(done.url(), done.sha256)
     const finished = await mergelane.waitForStatus('completed')
     const { id } = await pausedDownload(mergelane, serve, 42)
+    // History as this version keeps it, for the old build's history.json below.
+    const history = await mergelane.api.listHistory()
     await mergelane.quit()
     const root = join(dirs.userData, 'downloads')
 
@@ -411,11 +413,16 @@ test.describe('persisted state on disk @smoke', () => {
     )
     await writeFile(staging, seededBytes(BLOCK, 43))
 
-    // A finished Telegram download in history, newest first, its file still on disk.
+    // A finished Telegram download in history, newest first, its file still on disk, as that build
+    // kept history: in history.json, which this version brings in once (ADR-0080).
     const historyPath = join(dirs.userData, 'history.json')
-    const history = JSON.parse(await readFile(historyPath, 'utf-8'))
     expect(history.map((entry: { id: string }) => entry.id)).toEqual([finished.id])
-    const { peakStreams: omittedPeak, ...finishedEntry } = history[0]
+    const {
+      peakStreams: omittedPeak,
+      missing: omittedMissing,
+      ...finishedEntry
+    } = history[0] as (typeof history)[number] & { peakStreams?: number }
+    void omittedMissing
     void omittedPeak
     const finishedId = '00000000-0000-4000-8000-000000000013'
     const photo = join(dirs.dest, 'shot.jpg')
@@ -467,10 +474,12 @@ test.describe('persisted state on disk @smoke', () => {
     await mergelane.api.resumeDownload(id)
     await mergelane.waitForHttpStatus('completed')
     await expect
-      .poll(async () =>
-        JSON.parse(await readFile(historyPath, 'utf-8')).map((entry: { id: string }) => entry.id)
-      )
+      .poll(async () => (await mergelane.api.listHistory()).map((entry) => entry.id))
       .toEqual([id, finished.id])
+    // Never brought in: History has no trace of it either.
+    expect((await mergelane.api.historyEntries()).map((entry) => entry.id)).not.toContain(
+      finishedId
+    )
   })
 
   test('a staging file cut short while the app was closed is fetched again', async ({

@@ -26,6 +26,8 @@ const initialState: InitialState = {
   notifyWhenDone: true,
   offerCopiedLinks: false,
   catchFreshLinks: true,
+  keepAwake: true,
+  afterQueue: 'nothing',
   captureRules: DEFAULT_CAPTURE_RULES,
   routing: DEFAULT_ROUTING
 }

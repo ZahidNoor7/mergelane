@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'ele
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { BrowserId } from '../shared/browsers'
+import type { QueueEnd } from '../shared/queueEnd'
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from '../shared/speedTest'
 import type { UpdateChannel } from '../shared/releases'
@@ -75,6 +76,9 @@ const mergelaneApi = {
   relinkDownload: (downloadId: string, url: string) => invoke('relinkDownload', downloadId, url),
   recovery: () => invoke('recovery'),
   dismissRecovery: () => invoke('dismissRecovery'),
+  queueEnd: () => invoke('queueEnd'),
+  cancelQueueEnd: () => invoke('cancelQueueEnd'),
+  endQueueNow: () => invoke('endQueueNow'),
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
@@ -176,6 +180,12 @@ const mergelaneApi = {
   },
 
   /** A network dropped or came back, or the day's fastest merged speed rose. */
+  /** The countdown to sleep or shut down started, or stopped (null), ADR-0079. */
+  onQueueEndChanged: (callback: (end: QueueEnd | null) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, end: QueueEnd | null): void => callback(end)
+    ipcRenderer.on(IpcChannels.queueEndChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.queueEndChanged, listener)
+  },
   onNetworkActivity: (callback: (activity: NetworkActivity) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, activity: NetworkActivity): void =>
       callback(activity)

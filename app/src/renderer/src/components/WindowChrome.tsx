@@ -24,6 +24,7 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { UpdateNotice } from './UpdateNotice'
 import { HelperUpdateNotice } from './HelperUpdateNotice'
+import { AwakeLine } from './QueueEnd'
 import { CopiedLinkOffer } from './CopiedLinkOffer'
 import { onWindows, words } from '../platformWords'
 import appIcon from '../assets/brand/icon-128.png'
@@ -256,6 +257,7 @@ export function Sidebar(): React.JSX.Element {
           <UpdateNotice />
           <HelperUpdateNotice />
           {schedule && <p className={cn('text-[12px] leading-snug text-ink-2', pad)}>{schedule}</p>}
+          <AwakeLine className={pad} />
           {free !== null && (
             <p className={cn('flex items-center gap-1.5 text-[12px] text-ink-3', pad)}>
               <HardDrive aria-hidden className="size-3.5" />

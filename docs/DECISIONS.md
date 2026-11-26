@@ -2646,3 +2646,45 @@ expired-link recovery) and the plan's recommendations.
   refusing every third request is no expired link; from the browser, the download carries on by itself and the
   notification says so; with the setting off, it is offered in New download. `download.spec.ts`'s expired-link test now
   checks the new message and `problem` instead of "status 403". Full suite: 843 passed, 5 skipped, 0 failed.
+
+## ADR-0079: Keeping the computer awake is a setting; the end of the queue can sleep or shut it down
+
+**Status:** Owner, 2026-11-26: approved Phase 1 of `docs/plans/2026-11-new-features-plan.md` (feature 7) and the plan's
+recommendations, D10 included.
+
+### Context
+
+- Mergelane already held a `powerSaveBlocker('prevent-app-suspension')` while anything downloaded ("Keeps system
+  active but allows screen to be turned off", Electron's docs), with no way to turn it off.
+- Nothing happened when the queue finished, and nothing in the app could sleep or shut the computer down.
+
+### Decision
+
+- **Settings › General › "On this Mac":** "Keep the Mac awake while downloading" (on unless turned off) and "When the
+  queue finishes": Do nothing (the default), Sleep or Shut down. "PC" on Windows.
+- **The end of the queue** (`shared/queueEnd.ts`): a run that ends by itself (finished or failed) with nothing left
+  to come on its own — nothing running, nothing waiting for a turn — starts a 60-second countdown. One waiting for a
+  time or for the schedule's hours doesn't hold it up; the notice says when it starts (plan D10). A pause, a cancel
+  or the setting set to Do nothing starts none; a download starting during it, Cancel, or turning the setting to Do
+  nothing stops it. The computer stays awake through it.
+- **The notice** (the design's `QueueDoneNotice`): "The queue is done", the seconds left, Cancel and "Sleep now" /
+  "Shut down now"; a notification too, for a closed window. The sidebar says "Keeping this Mac awake[, then sleep]".
+- **Asking the system politely** (`shared/powerCommand.ts`, `main/power.ts`):
+  - macOS sleep: `pmset sleepnow`.
+  - macOS shut down: the kAEShutDown Apple event (`'aevt'`/`'shut'`, AERegistry.h) to loginwindow, through
+    osascript. Apple's QA1134: such a shutdown "can be cancelled by running applications". The app gains
+    `com.apple.security.automation.apple-events` and `NSAppleEventsUsageDescription`. Apple's docs don't say how
+    macOS treats an Apple event sent by osascript on an app's behalf, so this must be checked on a built app.
+  - Windows sleep: `Application.SetSuspendState(Suspend, false, false)` through PowerShell ("false to cause Windows
+    to send a suspend request to every application").
+  - Windows shut down: `shutdown /s /t 0`, never `/f`, and never a time-out above 0, which "implies /f".
+  - When the system refuses, a notification says so and what to do.
+
+### Verification
+
+- Unit: `queueEnd.test.ts` and `powerCommand.test.ts` (100%), `QueueEnd.test.tsx` (100% of lines).
+- e2e (`queueEnd.spec.ts`, with a 3-second countdown and the power action recorded, never run): the last download
+  done counts down and asks for sleep; Cancel stops it; no countdown while work is left or after a pause; a download
+  starting stops it; Do nothing asks nothing.
+- **Not verified, for the owner:** sleep and shut down on a built app, on the Mac (including the Automation prompt) and
+  on the Windows laptop, with an unsaved document open for the shutdown.

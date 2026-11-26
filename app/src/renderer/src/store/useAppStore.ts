@@ -21,6 +21,7 @@ import { NO_FILTERS, type DownloadFilters } from '@shared/downloadFilters'
 import type { CaptureRules } from '@shared/captureRules'
 import { themeOnPlatform, type ThemeId } from '@shared/themes'
 import type { MenuBarSpeedText } from '@shared/menuBarPanel'
+import type { AfterQueue } from '@shared/queueEnd'
 import { fadeTheme } from '../theme/appearance'
 import type { DailyFastest, NetworkActivity, NetworkEvent } from '@shared/networkActivity'
 
@@ -188,6 +189,12 @@ interface AppStore {
    * unless turned off. */
   catchFreshLinks: boolean
   setCatchFreshLinks: (on: boolean) => void
+  /** Persisted — Settings › General › Keep the computer awake while downloading (ADR-0079). */
+  keepAwake: boolean
+  setKeepAwake: (on: boolean) => void
+  /** Persisted — Settings › General › When the queue finishes (ADR-0079). */
+  afterQueue: AfterQueue
+  setAfterQueue: (afterQueue: AfterQueue) => void
   /** A link the user copied, offered for download; null when there's none. Kept in memory only. */
   copiedLink: string | null
   /** From main, as the user switched to Mergelane. Passed over when it's already being added or
@@ -476,6 +483,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCatchFreshLinks: (catchFreshLinks) => {
     set({ catchFreshLinks })
     persist({ catchFreshLinks: catchFreshLinks ? undefined : false })
+  },
+  keepAwake: initial.keepAwake,
+  setKeepAwake: (keepAwake) => {
+    set({ keepAwake })
+    persist({ keepAwake: keepAwake ? undefined : false })
+  },
+  afterQueue: initial.afterQueue,
+  setAfterQueue: (afterQueue) => {
+    set({ afterQueue })
+    persist({ afterQueue: afterQueue === 'nothing' ? undefined : afterQueue })
   },
 
   offerCopiedLinks: initial.offerCopiedLinks,

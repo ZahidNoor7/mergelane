@@ -87,6 +87,9 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDownloadsFolderUsageDescription: Mergelane saves downloaded files to your Downloads folder.
+    # Asked once, the first time Settings › General › When the queue finishes shuts the Mac down
+    # (ADR-0079). Apple: required "if your app uses APIs that send Apple events".
+    - NSAppleEventsUsageDescription: Mergelane asks your Mac to shut down when the download queue finishes, if you chose that in Settings.
     # Magnet links, .torrent and .nzb files can be opened with Mergelane, as one choice among
     # others: it's never made the default over a client the user already has (LSHandlerRank).
     # mergelane:// is Mergelane's own scheme, so registering it takes nothing from another app.

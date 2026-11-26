@@ -51,6 +51,8 @@ import { routeFor } from '../../shared/routing'
 import { saveCheckpoint } from '../../shared/journal'
 import { fileNameOfLink, LINK_EXPIRED_MESSAGE } from '../../shared/linkExpiry'
 import { formatPercent } from '../../shared/speedText'
+import { isAfterQueue, queueEndAfter, type AfterQueue, type QueueEnd } from '../../shared/queueEnd'
+import { powerDown } from '../power'
 import {
   checkpointDelay,
   recoveryNote,
@@ -485,6 +487,13 @@ export class DownloadManager {
   private session?: Session
   /** After a crash: what the Downloads screen says about it, until dismissed. */
   private recovery: RecoveryNote | null = null
+  /** Settings › General › Keep the computer awake while downloading (ADR-0079). */
+  private keepAwakeOn = true
+  /** Settings › General › When the queue finishes (ADR-0079). */
+  private afterQueue: AfterQueue = 'nothing'
+  /** The countdown to sleep or shut down, once the queue has finished; null when there is none. */
+  private queueEnd: QueueEnd | null = null
+  private queueEndTimer?: NodeJS.Timeout
   /** How many downloads may run at once; the rest wait, queued (see pump). */
   private downloadsAtOnce = DOWNLOADS_AT_ONCE.default
   /** The Usenet switch, as last saved: while it's off, queued NZBs wait rather than start. */
@@ -573,6 +582,11 @@ export class DownloadManager {
     const previousPreferences = this.networkPreferences
     this.networkPreferences = settings.networkPreferences ?? {}
     this.notifyWhenDone = settings.notifyWhenDone !== false
+    this.keepAwakeOn = settings.keepAwake !== false
+    this.afterQueue = isAfterQueue(settings.afterQueue) ? settings.afterQueue : 'nothing'
+    // Turned to Do nothing while a countdown runs: it stops.
+    if (this.afterQueue === 'nothing' && this.queueEnd) this.cancelQueueEnd()
+    this.keepAwake()
     this.routing = settings.routing ?? DEFAULT_ROUTING
     this.downloadSchedule = settings.downloadSchedule
     this.scheduleLoaded = true
@@ -2018,6 +2032,8 @@ export class DownloadManager {
     runtime.state.resumable = undefined
     runtime.state.problem = undefined
     runtime.pausedForNoNetwork = undefined
+    // Something to do again: the queue hasn't finished after all.
+    this.cancelQueueEnd()
     // Paused by switching off every network: resuming switches back on the one switched off
     // last if it is still there, or else the first one present.
     if (!networks.some((network) => network.enabled)) {
@@ -2179,10 +2195,13 @@ export class DownloadManager {
     const running = [...this.runtimes.values()].some(
       (runtime) => runtime.state.status === 'downloading'
     )
+    // While something downloads, unless turned off (ADR-0079); and through the countdown at the
+    // queue's end, so the computer doesn't fall asleep on its own first.
+    const wanted = (running && this.keepAwakeOn) || this.queueEnd !== null
     try {
-      if (running && this.awakeBlocker === null) {
+      if (wanted && this.awakeBlocker === null) {
         this.awakeBlocker = powerSaveBlocker.start('prevent-app-suspension')
-      } else if (!running && this.awakeBlocker !== null) {
+      } else if (!wanted && this.awakeBlocker !== null) {
         powerSaveBlocker.stop(this.awakeBlocker)
         this.awakeBlocker = null
       }
@@ -2631,6 +2650,7 @@ export class DownloadManager {
           runtime.state.id
         )
       }
+      this.runEnded()
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
@@ -2662,8 +2682,79 @@ export class DownloadManager {
     // Switched off by the user, who needs no telling; the download's error still says so.
     if (message !== USENET_OFF) {
       this.notify('Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
+      this.runEnded()
     }
     this.stopRun(runtime)
+  }
+
+  /** A run ended by itself, finished or failed: if it was the last of the queue, and Settings ask
+   * for it, the countdown to sleep or shut down starts (shared/queueEnd.ts). A pause or a cancel is
+   * the user's, and starts none. */
+  private runEnded(): void {
+    if (this.suspending || this.queueEnd) return
+    const end = queueEndAfter(
+      this.afterQueue,
+      [...this.runtimes.values()].map((runtime) => runtime.state),
+      Date.now()
+    )
+    if (!end) return
+    // A test runs a shorter countdown.
+    if (testKnobs.queueEndMs) end.endsAt = Date.now() + testKnobs.queueEndMs
+    this.queueEnd = end
+    this.keepAwake()
+    this.queueEndChanged()
+    const device = process.platform === 'win32' ? 'PC' : 'Mac'
+    this.notify(
+      'The queue is done',
+      `Your ${device} will ${end.action === 'sleep' ? 'sleep' : 'shut down'} in 60 seconds. Open Mergelane to cancel.`
+    )
+    this.queueEndTimer = setTimeout(() => void this.endQueueNow(), end.endsAt - Date.now())
+  }
+
+  /** The countdown under way, if any: the window's notice. */
+  currentQueueEnd(): QueueEnd | null {
+    return this.queueEnd
+  }
+
+  /** Cancel in the notice, a download starting, or the setting turned to Do nothing. */
+  cancelQueueEnd(): void {
+    clearTimeout(this.queueEndTimer)
+    this.queueEndTimer = undefined
+    if (!this.queueEnd) return
+    this.queueEnd = null
+    this.keepAwake()
+    this.queueEndChanged()
+  }
+
+  /** The countdown ran out, or Sleep now / Shut down now: the computer is asked to. */
+  async endQueueNow(): Promise<void> {
+    const end = this.queueEnd
+    clearTimeout(this.queueEndTimer)
+    this.queueEndTimer = undefined
+    if (!end) return
+    this.queueEnd = null
+    this.keepAwake()
+    this.queueEndChanged()
+    try {
+      await powerDown(end.action)
+    } catch {
+      const device = process.platform === 'win32' ? 'PC' : 'Mac'
+      this.notify(
+        end.action === 'sleep'
+          ? `Your ${device} didn’t go to sleep`
+          : `Your ${device} didn’t shut down`,
+        end.action === 'sleep'
+          ? 'The system refused. Mergelane stays on; put it to sleep yourself.'
+          : 'The system refused, or an app stopped it. Allow Mergelane in System Settings › Privacy & Security › Automation, or shut down yourself.'
+      )
+    }
+  }
+
+  private queueEndChanged(): void {
+    const window = this.getWindow()
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(IpcChannels.queueEndChanged, this.queueEnd)
+    }
   }
 
   /** Its link stopped working (shared/linkExpiry.ts): it stops where it is, its progress kept, and

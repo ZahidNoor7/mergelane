@@ -5,6 +5,7 @@ import type { MenuBarCommand, MenuBarPanelData } from './menuBarPanel'
 import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
 import type { RecoveryNote } from './recovery'
+import type { QueueEnd } from './queueEnd'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
 import type { UpdateChannel } from './releases'
 import type {
@@ -28,6 +29,7 @@ import type {
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, magnetCheckStatus, historyChanged,
  * linkReceived, updateStateChanged, showUpdates, networkActivityChanged, saveDiagnosticsRequested, showPlace,
+ * queueEndChanged,
  * trayStatusChanged, speedTestLiveChanged and speedTestFinished) — one source of truth for
  * both mergelaneApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
@@ -89,6 +91,10 @@ export interface IpcContract {
    * dismissed (shared/recovery.ts). */
   recovery: { args: []; result: RecoveryNote | null }
   dismissRecovery: { args: []; result: void }
+  /** The countdown to sleep or shut down once the queue finished (ADR-0079); null when none. */
+  queueEnd: { args: []; result: QueueEnd | null }
+  cancelQueueEnd: { args: []; result: void }
+  endQueueNow: { args: []; result: void }
   setDownloadNetwork: { args: [id: string, networkId: string, enabled: boolean]; result: void }
   cancelDownload: { args: [id: string]; result: void }
   /** Removes a download, cancelling one under way. A finished one's file stays, unless

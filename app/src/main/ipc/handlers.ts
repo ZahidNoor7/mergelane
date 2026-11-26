@@ -245,6 +245,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         notifyWhenDone: settings.notifyWhenDone !== false,
         offerCopiedLinks: settings.offerCopiedLinks === true,
         catchFreshLinks: settings.catchFreshLinks !== false,
+        keepAwake: settings.keepAwake !== false,
+        afterQueue: settings.afterQueue ?? 'nothing',
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined,
@@ -270,6 +272,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         notifyWhenDone: true,
         offerCopiedLinks: false,
         catchFreshLinks: true,
+        keepAwake: true,
+        afterQueue: 'nothing',
         captureRules: DEFAULT_CAPTURE_RULES,
         routing: DEFAULT_ROUTING
       } satisfies InitialState
@@ -405,6 +409,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('relinkDownload', async (_event, id, url) => manager.relink(id, url))
   handle('recovery', () => manager.getRecovery())
   handle('dismissRecovery', async () => manager.dismissRecovery())
+  handle('queueEnd', async () => manager.currentQueueEnd())
+  handle('cancelQueueEnd', async () => manager.cancelQueueEnd())
+  handle('endQueueNow', () => manager.endQueueNow())
 
   handle('setDownloadNetwork', async (_event, id, networkId, enabled) => {
     await manager.setNetworkEnabled(id, networkId, enabled)

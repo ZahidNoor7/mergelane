@@ -11,5 +11,10 @@
          needs library validation disabled. -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
+    <!-- When the queue finishes, Settings can ask Mergelane to shut the Mac down: a kAEShutDown Apple
+         event to loginwindow (ADR-0079). Apple's docs: this entitlement lets a hardened-runtime app
+         "prompt the user for permission to send Apple events to other apps". -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
   </dict>
 </plist>

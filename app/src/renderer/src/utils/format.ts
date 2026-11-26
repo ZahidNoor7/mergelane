@@ -122,13 +122,8 @@ export function wantedBytes(download: DownloadState | FinishedDownload): number 
   )
 }
 
-export function formatPercent(bytesDownloaded: number, totalBytes: number): number {
-  if (totalBytes <= 0) return 0
-  // 100% only once every byte is in: rounding 99.6% up would claim a 10 GB file was done with
-  // 40 MB still to go.
-  if (bytesDownloaded >= totalBytes) return 100
-  return Math.min(99, Math.round((bytesDownloaded / totalBytes) * 100))
-}
+/** In shared/speedText.ts, where main says it too. */
+export { formatPercent } from '@shared/speedText'
 
 export function fileNameFromPath(path: string): string {
   return path.split(/[\\/]/).pop() ?? path
@@ -260,7 +255,9 @@ export { describeError }
  * download was resuming no longer exists, same as a 404/410 — retrying the same range would
  * just repeat the same 416 forever. */
 export function linkExpired(download: DownloadState): boolean {
-  return download.kind === 'http' && download.status === 'error' && linkRefused(download.error)
+  if (download.kind !== 'http' || download.status !== 'error') return false
+  // Seen as it happened (ADR-0078), or, for one saved before that, by what its error says.
+  return download.problem?.kind === 'link-expired' || linkRefused(download.error)
 }
 
 /** A stream's qualities as its picker lists them, best first: "1080p", "720p"… Two of one height

@@ -4,7 +4,8 @@ import {
   formatSpeed,
   formatSpeedPair,
   SPEED_UNIT_LABELS,
-  SPEED_UNITS
+  SPEED_UNITS,
+  formatPercent
 } from './speedText'
 
 // Shared by the window and the menu bar (ADR-0037), so both say the same thing.
@@ -110,5 +111,16 @@ describe('formatSpeedPair', () => {
   it('treats a missing or broken speed as nothing', () => {
     expect(formatSpeedPair(Number.NaN, -5, 'bytes')).toBe('↓0 ↑0 MB/s')
     expect(formatSpeedPair(Number.POSITIVE_INFINITY, 1e6, 'bytes')).toBe('↓0 ↑1.0 MB/s')
+  })
+})
+
+describe('how far a download is', () => {
+  it('rounds to a whole percent, never claiming 100% before the last byte', () => {
+    expect(formatPercent(0, 0)).toBe(0)
+    expect(formatPercent(37, 100)).toBe(37)
+    expect(formatPercent(374, 1000)).toBe(37)
+    expect(formatPercent(996, 1000)).toBe(99)
+    expect(formatPercent(1000, 1000)).toBe(100)
+    expect(formatPercent(1200, 1000)).toBe(100)
   })
 })

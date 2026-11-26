@@ -161,7 +161,7 @@ async function handle(line: string, gone: Promise<void>): Promise<BridgeReply> {
       const offer = typeof body.token === 'string' ? handoffs.get(body.token) : undefined
       if (!host || !offer || typeof body.token !== 'string') return { ok: false }
       handoffs.delete(body.token)
-      host.offer(offer)
+      void deliver(offer)
       return { ok: true }
     }
     default:
@@ -308,6 +308,31 @@ async function add(request: BridgeAddRequest, gone: Promise<void>): Promise<Brid
     signedInTo: signedInTo(request, probe),
     resumes: probe.kind === 'http' ? host.manager.failedMatch(probe) : undefined
   })
+}
+
+/** A download clicked again in the browser, whose link had stopped working, carries on from the
+ * fresh link, unless Settings › Downloads › "Pick up fresh links from the browser" is off
+ * (ADR-0078). Anything else, and one that turns out not to be the same file, is offered in New
+ * download for the user to decide. The browser's copy is gone by now (confirm comes after it). */
+async function deliver(offer: Offer): Promise<void> {
+  if (!host) return
+  const match = offer.resumes
+  if (match?.expired && offer.probe?.kind === 'http') {
+    const settings = await loadSettings()
+    if (settings.catchFreshLinks !== false) {
+      try {
+        await host.manager.relink(match.id, offer.probe.finalUrl, {
+          probe: offer.probe,
+          browser: offer.browser,
+          announce: true
+        })
+        return
+      } catch {
+        // Not the same file after all, or it changed meanwhile: offered as any link is.
+      }
+    }
+  }
+  host.offer(offer)
 }
 
 /** The page's site rather than the file's, which is often a CDN's: drive.google.com, not

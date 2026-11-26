@@ -184,6 +184,10 @@ interface AppStore {
   /** Persisted — Settings › Downloads › Offer links I copy (ADR-0043). Off unless turned on. */
   offerCopiedLinks: boolean
   setOfferCopiedLinks: (on: boolean) => void
+  /** Persisted — Settings › Downloads › Pick up fresh links from the browser (ADR-0078). On
+   * unless turned off. */
+  catchFreshLinks: boolean
+  setCatchFreshLinks: (on: boolean) => void
   /** A link the user copied, offered for download; null when there's none. Kept in memory only. */
   copiedLink: string | null
   /** From main, as the user switched to Mergelane. Passed over when it's already being added or
@@ -467,6 +471,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setNotifyWhenDone: (notifyWhenDone) => {
     set({ notifyWhenDone })
     persist({ notifyWhenDone: notifyWhenDone ? undefined : false })
+  },
+  catchFreshLinks: initial.catchFreshLinks,
+  setCatchFreshLinks: (catchFreshLinks) => {
+    set({ catchFreshLinks })
+    persist({ catchFreshLinks: catchFreshLinks ? undefined : false })
   },
 
   offerCopiedLinks: initial.offerCopiedLinks,

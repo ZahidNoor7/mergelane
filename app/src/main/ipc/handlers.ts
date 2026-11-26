@@ -244,6 +244,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         menuBarSpeedText: settings.menuBarSpeedText ?? 'auto',
         notifyWhenDone: settings.notifyWhenDone !== false,
         offerCopiedLinks: settings.offerCopiedLinks === true,
+        catchFreshLinks: settings.catchFreshLinks !== false,
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined,
@@ -268,6 +269,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         menuBarSpeedText: 'auto',
         notifyWhenDone: true,
         offerCopiedLinks: false,
+        catchFreshLinks: true,
         captureRules: DEFAULT_CAPTURE_RULES,
         routing: DEFAULT_ROUTING
       } satisfies InitialState

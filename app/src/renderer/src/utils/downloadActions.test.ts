@@ -87,6 +87,20 @@ describe('what else each download offers', () => {
     expect(manageAction(download({ status: 'error' }))).toBe('remove')
   })
 
+  it('one whose link stopped working, seen so or said so by its error, takes a fresh link', () => {
+    const stopped = download({
+      status: 'error',
+      bytesDownloaded: 5,
+      problem: { kind: 'link-expired', at: 1 }
+    })
+    expect(failureAction(stopped)).toBe('fix')
+    expect(
+      failureAction(download({ status: 'error', error: 'Unexpected status 410 for range request' }))
+    ).toBe('fix')
+    // Only a failed web download: one still running, or a torrent, isn't.
+    expect(failureAction(download({ problem: { kind: 'link-expired', at: 1 } }))).not.toBe('fix')
+  })
+
   it('a finished one opens, shows, goes from the list or to the Trash', () => {
     expect(headerActions(finished())).toEqual(['open', 'reveal'])
     expect(manageActions(finished())).toEqual(['remove', 'trash'])

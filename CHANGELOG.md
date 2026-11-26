@@ -12,6 +12,10 @@ All notable changes to Mergelane are recorded here. The format follows
   quit, or crashed, carry on by themselves the next time it opens, from their last save; ones you paused stay
   paused. After a crash, a note at the top of Downloads says how many came back and how much is fetched again. A download's details show when its progress was
   last saved, and Settings › Downloads › "If something goes wrong" says it is always on.
+- **A link that stops working no longer fails the download.** When a signed link expires mid-download, the download
+  stops at once where it got to and asks for a fresh link. Paste one in its details, or click the download again in
+  your browser, and it carries on from where it stopped, once Mergelane has checked it is the same file. A link to
+  another file is refused. "Pick up fresh links from the browser" in Settings › Downloads turns the browser part off.
 
 ## [0.7.0] - 2026-11-24
 

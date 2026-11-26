@@ -605,6 +605,24 @@ describe('Inspector, finished and failed', () => {
     ).toMatch(/1 pieces, uploaded 0 B/)
   })
 
+  it('one whose link stopped working asks for a fresh link instead of saying it failed', () => {
+    show(
+      <Inspector
+        download={download({
+          status: 'error',
+          error: 'The link stopped working. Paste a fresh one to carry on.',
+          problem: { kind: 'link-expired', at: NOW }
+        })}
+      />
+    )
+    expect(screen.getByRole('form', { name: 'The link expired at 40%' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Fresh link' })).toBeTruthy()
+    expect(screen.queryByText('Download failed')).toBeNull()
+    // How far it got and its old link stay below.
+    expect(screen.getByText('4.0 MB of 10.0 MB (40%)')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+  })
+
   it('a failed download says why, how far it got, and copies its link', async () => {
     const writeText = vi.fn(() => Promise.resolve())
     // After user-event's setup, which puts in a clipboard of its own.

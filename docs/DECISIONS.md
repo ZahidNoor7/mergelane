@@ -2596,3 +2596,53 @@ resume), then took the plan's recommendations, including D5 (recover at the next
 - e2e (`recovery.spec.ts`): a killed download resumes by itself and the note shows; saves arrive at most 2.6 s apart
   and a crash refetches less than 5 s of data; the queue carries on in its order after a crash; a save cut off at its
   rename is read from its temporary file; a clean quit leaves no note.
+
+## ADR-0078: A link that stops working stops the download at its progress; a fresh one carries it on
+
+**Status:** Owner, 2026-11-26: approved Phase 1 of `docs/plans/2026-11-new-features-plan.md` (feature 6,
+expired-link recovery) and the plan's recommendations.
+
+### Context
+
+- Signed links (S3, CloudFront, Google Cloud Storage, Azure, many sites' own) stop working after a while. Mid-download,
+  every request was then refused, and each stream spent its five strikes on each network before the download failed
+  with "This link no longer works".
+- A fresh link could already replace the old one (`relink`, from the Paste a new link dialog, or "Resume it" when the
+  browser handed over a link matching a failed download by name, size and strong ETag). It didn't keep the fresh
+  link's ETag or date, and a fresh signed link often comes with another ETag, so the browser rarely matched.
+
+### Decision
+
+- **Telling a link that stopped** (`shared/linkExpiry.ts`): a 401, 403 or 410 on a range request is a refusal; 404
+  isn't (a removed file, a typo). Refusals are counted in a row, on any network, and the count starts over whenever
+  bytes arrive. A signed link (a query key such as `X-Amz-Signature`, `Expires`, `Signature`, `sig`, `se`, `token`)
+  has stopped after 2 in a row; any other after 3 in a row on every network it can use, so a server that turns some
+  connections away with a 403, while the others keep receiving, isn't taken for one.
+- **Then** the download stops at once, its progress kept, and fails with "The link stopped working. Paste a fresh
+  one to carry on." and `problem: { kind: 'link-expired' }` on its state (no new status: it sits in Needs attention
+  with the other failed ones). Running again clears it.
+- **Its details** show the design's fresh-link panel: "The link expired at N%", where it carries on from, a field for
+  the fresh link, "Open the download page" when the browser said which page it came from, and, with the setting
+  on, that clicking it again in the browser works too. What isn't a link is refused there; everything else is checked
+  in the main process.
+- **Checking a fresh link** is as before (same size, range support, sampled bytes of what's downloaded), plus: a link
+  of another size whose file has another name too is refused as "That link is for {name}, not this download. Add it
+  as a new download instead."; the fresh link's ETag and date are kept and accepted as this download's version; and
+  `relinked` records where it carried on, which its details show for 10 s ("Same file: the size and the bytes already
+  downloaded match. Continuing from N%."). The prototype's "the server's file tag" is not what is checked, so the
+  copy says what is.
+- **From the browser:** a download handed over again matches one whose link stopped on its name and size alone (the
+  bytes are still compared before anything is written). With Settings › Downloads › "Pick up fresh links from the
+  browser" on (the default), it carries on by itself and a notification says so; off, or if the check fails, it is
+  offered in New download as before. No change to the bridge protocol.
+
+### Verification
+
+- Unit: `linkExpiry.test.ts` (100% of `linkExpiry.ts`), `FreshLink.test.tsx` (100% of lines of `FreshLink.tsx`),
+  `SafetySettings.test.tsx`, `format.test.ts` (`format.ts` joins the covered list, 100% of lines), a new inspector
+  test and a new `downloadActions` test.
+- e2e (`expiredLink.spec.ts`): a signed link refused mid-download stops it after fewer than 10 refusals and a fresh
+  one carries it on with nothing fetched twice; a link to another file is refused with the message above; a server
+  refusing every third request is no expired link; from the browser, the download carries on by itself and the
+  notification says so; with the setting off, it is offered in New download. `download.spec.ts`'s expired-link test now
+  checks the new message and `problem` instead of "status 403". Full suite: 843 passed, 5 skipped, 0 failed.

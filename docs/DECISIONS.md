@@ -2688,3 +2688,52 @@ recommendations, D10 included.
   starting stops it; Do nothing asks nothing.
 - **Not verified, for the owner:** sleep and shut down on a built app, on the Mac (including the Automation prompt) and
   on the Windows laptop, with an unsaved document open for the shutdown.
+
+## ADR-0080: Download history is kept in SQLite, every download started, until the setting's time
+
+**Status:** Owner, 2026-11-26: approved Phase 2 of `docs/plans/2026-11-new-features-plan.md` and its recommendations,
+D4 (Node's `node:sqlite`), D7 (Download again opens New download) and D13 (links sealed).
+
+### Context
+
+- History was `userData/history.json`: the last 500 finished downloads, the list's Finished group. Removing one from
+  the list forgot it; a cancelled or removed unfinished download was never kept.
+- The plan's History place needs every download ever started, searchable, kept for a time the user chooses.
+
+### Decision
+
+- **The store:** `userData/mergelane.db`, opened with Node's built-in `node:sqlite` (`DatabaseSync`; "Release
+  candidate" in Node 24, Electron 45's 24.22.3), one connection in the main process (`main/store/database.ts`). No new
+  dependency; the build keeps `require("node:sqlite")` as Node's own. Settings from sqlite.org: WAL ("does not work
+  over a network filesystem"; userData is local), `synchronous=FULL` (NORMAL "might roll back following a power
+  loss"), `secure_delete=ON`. Schema versions in `PRAGMA user_version`, each migration in a transaction. A file that
+  fails `quick_check`, or can't be opened, is renamed `mergelane.db.damaged-<time>` (with its -wal and -shm) and a new
+  one started. File mode 0600.
+- **What it keeps** (`main/store/historyStore.ts`): one row per download, written when it starts (or found at launch
+  from before), completed when it finishes, marked stopped when an unfinished one is removed from the list. Removing
+  a finished one from the list, or Clear finished, only takes it out of the list. The list's Finished group is the
+  finished rows still in the list (at most 500, the oldest leaving the list for History alone), as `listHistory`
+  returned before.
+- **Links:** the link is stored without its query (where signed links carry their signature); the whole link is
+  sealed with the keychain (`secrets.ts`), and kept as it is only when it has no query or the computer can't seal.
+  Download again and Copy link ask for the whole link (`history:link`).
+- **History place** (the design's `HistoryScreen`): every download, the unfinished ones in the list live from the
+  window's own state; search by name, site and link; All / On disk / Not in the list / File missing with counts;
+  groups by when; Download again (opens New download filled in, D7), Show in Finder, Copy link; "Kept …, only on this
+  Mac".
+- **Settings › Downloads › "Duplicates and history":** Keep download history (30 days, A year, Forever: the default)
+  and Clear history (forgets what's no longer in the list, then VACUUM). The time is applied at launch, when changed,
+  and daily; only entries no longer in the list are ever forgotten.
+- **Bringing history.json in:** once, at first open, then renamed `history.json.imported` (deleted in a later release).
+  Entries of kinds this version doesn't read (an old build's Telegram ones) are left out, as before.
+- **Diagnostics:** unchanged. The bundle lists the finished downloads in the list, their links cut to the host
+  (`shared/diagnostics.ts`); the database itself never goes in.
+
+### Verification
+
+- Unit: `history.test.ts` (100% of `shared/history.ts`), `HistoryScreen.test.tsx`, `HistorySettings.test.tsx`.
+- e2e (`history.spec.ts`): removed from the list it stays, and Download again gets the whole link; stopped, missing and
+  live entries say so; filters and search; Clear history forgets only what's out of the list; history.json brought in,
+  and 30 days forgets only what's out of the list; the file is 0600 and holds no signed query in the clear; a damaged
+  file is set aside. `removal.spec.ts` now holds the save at the store's test gate instead of history.json's rename;
+  the Telegram test in `recovery.spec.ts` hands its old entries over through history.json, the import.

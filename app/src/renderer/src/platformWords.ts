@@ -12,6 +12,8 @@ export interface PlatformWords {
   system: string
   /** The command that shows a file in the file manager. */
   revealLabel: string
+  /** "Finder" or "File Explorer". */
+  fileManager: string
   /** Where Mergelane's icon and speed sit: "the menu bar", or "the notification area". */
   statusArea: string
   /** The Settings shortcut, as the keyboard shows it. */
@@ -29,6 +31,7 @@ const MAC: PlatformWords = {
   appearanceSource: 'your Mac',
   system: 'macOS',
   revealLabel: 'Show in Finder',
+  fileManager: 'Finder',
   statusArea: 'the menu bar',
   settingsShortcut: '⌘,',
   adminPrompt: 'Your Mac asks for your administrator password.',
@@ -41,6 +44,7 @@ const WINDOWS: PlatformWords = {
   appearanceSource: 'Windows',
   system: 'Windows',
   revealLabel: 'Show in File Explorer',
+  fileManager: 'File Explorer',
   statusArea: 'the notification area',
   settingsShortcut: 'Ctrl+,',
   adminPrompt: 'Windows asks for an administrator’s permission.',

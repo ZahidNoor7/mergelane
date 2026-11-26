@@ -6,6 +6,7 @@ import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
 import type { RecoveryNote } from './recovery'
 import type { QueueEnd } from './queueEnd'
+import type { HistoryEntry } from './history'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
 import type { UpdateChannel } from './releases'
 import type {
@@ -55,6 +56,14 @@ export interface IpcContract {
   listDownloads: { args: []; result: DownloadUpdate[] }
   /** Finished downloads, newest first. One is forgotten with removeDownload. */
   listHistory: { args: []; result: FinishedDownload[] }
+  /** History (ADR-0080): every download started, but the unfinished ones still in the list. */
+  historyEntries: { args: []; result: HistoryEntry[] }
+  /** An entry's whole link, opened from the keychain; null for one History no longer has. */
+  historyLink: { args: [id: string]; result: string | null }
+  /** Shows an entry's file in its folder; false when it isn't there. */
+  revealHistoryEntry: { args: [id: string]; result: boolean }
+  /** Forgets every download no longer in the list; how many it forgot. */
+  forgetHistory: { args: []; result: number }
   /** Forgets every finished download; their files stay. */
   clearHistory: { args: []; result: void }
   /** Bytes each network has received and sent in its selected calendar period, by id (see NetworkPreference.dataLimit). */

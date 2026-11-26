@@ -17,7 +17,7 @@ import {
 import type { NetworkActivity } from '../shared/networkActivity'
 import type { DownloadUpdate } from '../shared/types'
 import { systemMergeSnapshot } from './daemon/daemon'
-import { listHistory } from './download/history'
+import { listHistory } from './store/historyStore'
 import { loadUsenetServer, viewOf } from './download/nzb/usenetServer'
 import { listActiveInterfaces } from './network/interfaces'
 import { loadSettings } from './settings'

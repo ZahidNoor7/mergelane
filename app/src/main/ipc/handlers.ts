@@ -21,7 +21,13 @@ import {
 } from '../../shared/types'
 import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
-import { listHistory } from '../download/history'
+import {
+  forgetHistory,
+  historyEntries,
+  historyFile,
+  historyLink,
+  listHistory
+} from '../store/historyStore'
 import { probeUrl } from '../download/probe'
 import { testUsenetServer } from '../download/nzb/nntp'
 import {
@@ -247,6 +253,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         catchFreshLinks: settings.catchFreshLinks !== false,
         keepAwake: settings.keepAwake !== false,
         afterQueue: settings.afterQueue ?? 'nothing',
+        historyKeep: settings.historyKeep ?? 'forever',
         captureRules: sanitizeCaptureRules(settings.captureRules),
         routing: settings.routing ?? DEFAULT_ROUTING,
         destinationDir: destinationExists ? destinationDir : undefined,
@@ -274,6 +281,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         catchFreshLinks: true,
         keepAwake: true,
         afterQueue: 'nothing',
+        historyKeep: 'forever',
         captureRules: DEFAULT_CAPTURE_RULES,
         routing: DEFAULT_ROUTING
       } satisfies InitialState
@@ -350,6 +358,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('listDownloads', async () => manager.listDownloads())
 
   handle('listHistory', async () => listHistory())
+  // History (ADR-0080): the window lists the unfinished ones in the list itself, live.
+  handle('historyEntries', async () => historyEntries(manager.liveIds()))
+  handle('historyLink', async (_event, id) => (await historyLink(id)) ?? null)
+  handle('revealHistoryEntry', async (_event, id) => {
+    const path = await historyFile(id)
+    if (path) shell.showItemInFolder(path)
+    return path !== undefined
+  })
+  handle('forgetHistory', async () => {
+    const forgotten = await forgetHistory()
+    manager.historyUpdated()
+    return forgotten
+  })
 
   handle('clearHistory', async () => manager.clearHistory())
 

@@ -38,6 +38,17 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 2: download history (2026-11-26, branch `history-store`)
+
+- Phase 1 merged into `main` (#111 to #114). Phase 2 started.
+- **Done (ADR-0080):** `userData/mergelane.db` on Node's `node:sqlite`; every download recorded from its start;
+  removing from the list keeps it in History; the History place (search, filters, groups, Download again, Show in
+  Finder, Copy link); Settings › Downloads › "Duplicates and history" (keep for 30 days, a year or forever; Clear
+  history); history.json brought in once; links' queries sealed.
+- Tests: new `history`, `HistoryScreen`, `HistorySettings` unit tests; `history.spec.ts` (6 tests); `removal.spec.ts`
+  and the Telegram test adapted to the new store.
+- Next in Phase 2: duplicate detection (SHA-256 on finish), then daily usage recording.
+
 ### New features, Phase 1: choosing a torrent's files (2026-11-26, branch `torrent-files`, on `sleep-queue-end`)
 
 - **Done (plan feature 9):** the design's TorrentFiles in New download and a download's details: "All files" with how

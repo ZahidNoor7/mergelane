@@ -252,7 +252,8 @@ test.describe('NZB downloads', () => {
     await expect(dialog).toBeHidden()
 
     // Nothing of it came in, so it starts over from its NZB, as any such download does.
-    await page.getByRole('button', { name: 'Download again' }).click()
+    // The details' button: the row has its own, named for the download ("Download again Test.Release").
+    await page.getByRole('button', { name: 'Download again', exact: true }).click()
     await expect(page.getByRole('textbox', { name: 'Link' })).toHaveValue(nzb)
     // Saved where the test looks, as the folder picker would choose it.
     await mergelane.evaluateMain(({ dialog }, dest) => {

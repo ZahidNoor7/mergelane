@@ -4,6 +4,7 @@ import type { TrafficRate } from './interfaceCounters'
 import type { MenuBarCommand, MenuBarPanelData } from './menuBarPanel'
 import type { TrayStatus } from './trayFlyout'
 import type { NetworkActivity } from './networkActivity'
+import type { RecoveryNote } from './recovery'
 import type { SpeedTestLive, SpeedTestRequest, SpeedTestRun } from './speedTest'
 import type { UpdateChannel } from './releases'
 import type {
@@ -84,6 +85,10 @@ export interface IpcContract {
   resumeDownload: { args: [id: string]; result: void }
   /** A fresh link to the same file, for a download whose link stopped working; it resumes. */
   relinkDownload: { args: [id: string, url: string]; result: void }
+  /** After a crash: what the Downloads screen says about it; null after a clean quit, or once
+   * dismissed (shared/recovery.ts). */
+  recovery: { args: []; result: RecoveryNote | null }
+  dismissRecovery: { args: []; result: void }
   setDownloadNetwork: { args: [id: string, networkId: string, enabled: boolean]; result: void }
   cancelDownload: { args: [id: string]; result: void }
   /** Removes a download, cancelling one under way. A finished one's file stays, unless

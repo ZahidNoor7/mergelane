@@ -1,7 +1,15 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Torrent, Wire } from 'webtorrent'
 import { expect, LAN_ADDRESS, test, treeSha } from './fixtures'
 import { seededBytes, sha256 } from './origin'
 import { named, Swarm } from './torrentSwarm'
+
+/** The bytes a download's last save holds, from its manifest. */
+async function savedBytes(userData: string, id: string): Promise<number> {
+  const manifest = await readFile(join(userData, 'downloads', id, 'manifest.json'), 'utf-8')
+  return (JSON.parse(manifest) as { state: { bytesDownloaded: number } }).state.bytesDownloaded
+}
 
 // Downloading torrents: every byte right, every peer on a network, and the networks' controls,
 // pause and relaunch working as they do for HTTP. The swarm is local (see torrentSwarm.ts); the
@@ -47,8 +55,9 @@ test.describe('torrent downloads @smoke', () => {
     expect(done.fileName).toBe('Album')
   })
 
-  test('pause, quit, relaunch and resume: the pieces already done aren’t fetched again', async ({
-    mergelane
+  test('quit, relaunch, and it carries on: the pieces already done aren’t fetched again', async ({
+    mergelane,
+    dirs
   }) => {
     const data = seededBytes(6 * MB, 31)
     const file = named(data, 'big.iso')
@@ -60,17 +69,15 @@ test.describe('torrent downloads @smoke', () => {
 
     const id = await mergelane.start(await swarm.torrentFileOnDisk(torrent), sha256(data))
     await mergelane.waitUntil((state) => state.bytesDownloaded >= 2 * MB, 30_000)
-    await mergelane.relaunch()
-    const paused = await mergelane.waitForTorrentStatus('paused')
-    expect(paused.bytesDownloaded).toBeGreaterThanOrEqual(2 * MB)
-
+    await mergelane.quit()
+    // What the quit saved, read before the relaunch carries it on by itself (plan D6).
+    const saved = await savedBytes(dirs.userData, id)
+    expect(saved).toBeGreaterThanOrEqual(2 * MB)
     const sentBefore = swarm.uploaded()
-    await mergelane.api.resumeDownload(id)
+    await mergelane.launch()
     await mergelane.waitForTorrentStatus('completed', 60_000)
     // What was missing, plus at most a few pieces each peer had half-sent when it stopped.
-    expect(swarm.uploaded() - sentBefore).toBeLessThanOrEqual(
-      data.length - paused.bytesDownloaded + 6 * PIECE
-    )
+    expect(swarm.uploaded() - sentBefore).toBeLessThanOrEqual(data.length - saved + 6 * PIECE)
   })
 })
 
@@ -123,9 +130,10 @@ test.describe('choosing files @smoke', () => {
     await mergelane.waitUntil((state) => state.bytesDownloaded >= 1 * MB, 30_000)
     const before = await mergelane.currentTorrent()
     await mergelane.relaunch()
-    const paused = await mergelane.waitForTorrentStatus('paused')
-    expect(paused.skippedBytes).toBe(before!.skippedBytes)
-    await mergelane.api.resumeDownload(id)
+    // It carries on by itself after the quit (plan D6), with the same files chosen.
+    const restored = await mergelane.currentTorrent()
+    expect(restored?.id).toBe(id)
+    expect(restored?.skippedBytes).toBe(before!.skippedBytes)
     await mergelane.waitForTorrentStatus('completed', 60_000)
   })
 

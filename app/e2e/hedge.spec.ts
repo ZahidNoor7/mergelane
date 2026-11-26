@@ -203,10 +203,14 @@ test.describe('splitting a block at the end @smoke', () => {
       } else {
         await mergelane.kill()
         await mergelane.launch()
-        expect((await mergelane.currentHttp())?.status).toBe('paused')
+        // A crash, not a pause: it carries on by itself from its last save (ADR-0077). The split's
+        // part was never saved, so it is fetched again either way.
+        expect(['queued', 'downloading', 'completed']).toContain(
+          (await mergelane.currentHttp())?.status
+        )
       }
 
-      await mergelane.api.resumeDownload(id)
+      if (stop === 'pause') await mergelane.api.resumeDownload(id)
       await mergelane.waitForHttpStatus('completed', 30_000)
     })
   }

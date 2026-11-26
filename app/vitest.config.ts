@@ -152,7 +152,13 @@ export const COVERED = [
   'src/renderer/src/components/GlassLens.tsx',
   'src/renderer/src/hooks/useNetworkTraffic.ts',
   // Electron 45: secrets sealed with safeStorage's asynchronous calls.
-  'src/shared/sealing.ts'
+  'src/shared/sealing.ts',
+  // Crash-safe resume (docs/plans/2026-11-new-features-plan.md, feature 5): the save order, the
+  // crash rules, the recovery note and the Settings row.
+  'src/shared/journal.ts',
+  'src/shared/recovery.ts',
+  'src/renderer/src/components/RecoveredBanner.tsx',
+  'src/renderer/src/components/SafetySettings.tsx'
 ]
 
 export default defineConfig({

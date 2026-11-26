@@ -5,7 +5,7 @@
 // its own FFmpeg.
 
 import { existsSync } from 'node:fs'
-import { readdir, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { StartStreamDownloadRequest } from '../src/shared/types'
 import { expect, expectStream, LAN_ADDRESS, test, type MergelaneApp } from './fixtures'
@@ -190,26 +190,33 @@ test.describe('stream downloads @smoke', () => {
   })
 
   test('quit mid-download, it picks up after a relaunch where it stopped', async ({
-    mergelane
+    mergelane,
+    dirs
   }) => {
     server.hold = (path) => segmentIndex(path) >= 3
     const id = await startStream(mergelane, server.url(PATHS.master))
     await waitFor(() => server.log.filter((entry) => entry.held && !entry.endedAt).length === 4)
+    const done6 = expectStream((await mergelane.byId(id))!)
+      .blocks.filter((block) => block.status === 'completed')
+      .map((block) => block.index)
+    expect(done6).toHaveLength(6)
     // Quitting pauses it and saves it: its segments' sizes too, which only the server could
     // tell it again.
     await mergelane.quit()
+    // Read from the save itself: once relaunched it carries on at once (plan D6), and a stream
+    // that starts again reads its playlist anew.
+    const manifest = JSON.parse(
+      await readFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'utf-8')
+    ) as { segmentLengths: (number | null)[] }
+    for (const index of done6) expect(manifest.segmentLengths[index]).not.toBeNull()
     const relaunchedAt = Date.now()
     server.release()
     await mergelane.relaunch()
-    const restored = expectStream((await mergelane.byId(id))!)
-    expect(restored.status).toBe('paused')
-    expect(restored.blocks.filter((block) => block.status === 'completed')).toHaveLength(6)
-    expect(
-      restored.blocks
-        .filter((block) => block.status === 'completed')
-        .every((block) => block.rangeEnd !== null)
-    ).toBe(true)
-    await mergelane.api.resumeDownload(id)
+    // It was running when Mergelane quit, so it carries on by itself (ADR-0077), from where it
+    // stopped: nothing it had is fetched again (below).
+    expect(['queued', 'downloading', 'completed']).toContain(
+      expectStream((await mergelane.byId(id))!).status
+    )
     const done = expectStream(await mergelane.waitForStatus('completed'))
     expect(
       server.segments().filter((entry) => entry.at >= relaunchedAt && segmentIndex(entry.path) < 3)

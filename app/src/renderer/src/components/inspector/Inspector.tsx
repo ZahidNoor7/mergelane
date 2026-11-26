@@ -1,5 +1,5 @@
 import { ChevronLeft, Folder, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { isFinished, type DownloadItem } from '../../utils/downloadActions'
 import { dirnameOf, sourceOf, toDisplayPath } from '../../utils/format'
@@ -13,6 +13,28 @@ import { InspectorActions } from './parts'
 // A download's details, from the final design (design-system/mergelane/redesign/prototype.html,
 // Inspector): beside the list in a wide window, in its place in a narrow one (with the way back).
 // It replaces the three download screens (downloading, complete, error), keeping all they showed.
+
+/** While it downloads: how long ago its progress was last saved (the design's SavedAgo). It ticks
+ * every second, quietly: not a live region, so a screen reader isn't told every second. */
+function SavedAgo({ download }: { download: DownloadItem }): React.JSX.Element | null {
+  const downloading = download.status === 'downloading'
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!downloading) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [downloading])
+  if (!downloading || download.savedAt === undefined) return null
+  const seconds = Math.max(1, Math.round((now - download.savedAt) / 1000))
+  return (
+    <span
+      className="shrink-0 whitespace-nowrap"
+      title="Progress is saved every 2 seconds, so a crash, a force quit or a power cut loses at most a few seconds."
+    >
+      · progress saved {seconds} s ago
+    </span>
+  )
+}
 
 export function Inspector({
   download,
@@ -72,6 +94,7 @@ export function Inspector({
                 ? 'Moved or deleted since'
                 : `${finished ? 'Saved to' : 'Saving to'} ${folder}`}
             </span>
+            <SavedAgo download={download} />
           </p>
         </div>
         {onClose && (

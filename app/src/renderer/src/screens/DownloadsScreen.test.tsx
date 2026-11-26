@@ -205,7 +205,9 @@ beforeEach(() => {
   window.mergelane = {
     ...window.mergelane,
     updateSettings: vi.fn(() => Promise.resolve()),
-    openNetworkSettings: vi.fn(() => Promise.resolve())
+    openNetworkSettings: vi.fn(() => Promise.resolve()),
+    // The list's recovery note: no crash here (RecoveredBanner.test.tsx has its own).
+    recovery: vi.fn(() => Promise.resolve(null))
   } as unknown as typeof window.mergelane
 })
 

@@ -32,6 +32,8 @@ export const IpcChannels = {
   pauseDownload: 'download:pause',
   resumeDownload: 'download:resume',
   relinkDownload: 'download:relink',
+  recovery: 'session:recovery',
+  dismissRecovery: 'session:dismiss-recovery',
   setDownloadNetwork: 'download:set-network',
   cancelDownload: 'download:cancel',
   removeDownload: 'download:remove',

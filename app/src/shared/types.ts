@@ -359,6 +359,9 @@ interface DownloadStateBase {
   /** The best combined speed held for a few seconds, so it only ever rises; unset until it has
    * run that long. A download done sooner gets the best speed it showed. */
   peakSpeedBytesPerSec?: number
+  /** When its progress was last saved to disk, in ms since the epoch: chunk data and chunk map
+   * together (shared/journal.ts). Unset until the first save of this launch. */
+  savedAt?: number
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }

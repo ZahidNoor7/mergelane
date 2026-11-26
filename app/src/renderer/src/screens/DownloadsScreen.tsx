@@ -14,6 +14,7 @@ import { useDownloadActions, useDownloadActionsState } from '../components/downl
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { MoreActionsMenu } from '../components/MoreActionsMenu'
+import { RecoveredBanner } from '../components/RecoveredBanner'
 import { networkStatusText } from '../components/networkStatus'
 import { ScheduleIndicator } from '../components/ScheduleIndicator'
 import { SpeedText } from '../components/SpeedText'
@@ -365,6 +366,7 @@ export function DownloadsScreen({
           <EmptyState />
         ) : (
           <div className="flex flex-col gap-4 px-3 pt-4 pb-6">
+            <RecoveredBanner />
             <div className="px-1.5">
               <Confluence
                 lanes={lanes.length > 0 ? lanes : PLACEHOLDER_LANES}

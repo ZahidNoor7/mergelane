@@ -73,6 +73,8 @@ const mergelaneApi = {
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),
   resumeDownload: (downloadId: string) => invoke('resumeDownload', downloadId),
   relinkDownload: (downloadId: string, url: string) => invoke('relinkDownload', downloadId, url),
+  recovery: () => invoke('recovery'),
+  dismissRecovery: () => invoke('dismissRecovery'),
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),

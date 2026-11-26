@@ -38,3 +38,18 @@ deliberately not copied.
 
 `app/src/renderer/src/theme/contrast.test.ts` applies these to the design's values before comparing them with
 `app/src/shared/themes.ts`, so any other difference still fails.
+
+## The new-features prototype (2026-11-26)
+
+`prototype-features.html` is a copy of a later version of the same claude.ai artifact, version `1795691890-d752`
+(SHA-256 `f7d76f75ef86d77e0b3d177872050120aaf472edcb5adabb57b29dc1cbbf77a9`), saved here by the owner's decision D1
+in `docs/plans/2026-11-new-features-plan.md`. It is the reference for that plan's features: the components, store
+actions and copy it names (`dropLink`, `HistoryScreen`, `findDuplicate`, `RecoveredBanner`, `FreshLinkPanel`,
+`AwakeSettings`, `ReportsSection`, `TorrentFiles` and the rest).
+
+- `prototype.html` stays the reference for the redesign itself (M3.1).
+- Not ported from this version, by the owner's decisions (plan D2, D3), and by CLAUDE.md (no servers, no paid
+  services, no accounts): plans, licences, the owner portal, plan badges, locks and upgrade prompts, and the wireless
+  iPhone lane (`CompanionPanel`).
+- As with the first copy, the prototype-only shims (CDN builds, stand-in store, simulated data and timers, the
+  prototype controls such as "Simulate a crash") are not ported.

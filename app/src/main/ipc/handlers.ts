@@ -401,6 +401,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   })
 
   handle('relinkDownload', async (_event, id, url) => manager.relink(id, url))
+  handle('recovery', () => manager.getRecovery())
+  handle('dismissRecovery', async () => manager.dismissRecovery())
 
   handle('setDownloadNetwork', async (_event, id, networkId, enabled) => {
     await manager.setNetworkEnabled(id, networkId, enabled)

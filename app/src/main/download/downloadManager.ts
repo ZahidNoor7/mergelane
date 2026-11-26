@@ -48,6 +48,15 @@ import {
   type TorrentTrackersResult
 } from '../../shared/types'
 import { routeFor } from '../../shared/routing'
+import { saveCheckpoint } from '../../shared/journal'
+import {
+  checkpointDelay,
+  recoveryNote,
+  type RecoveryNote,
+  type RestoredDownload
+} from '../../shared/recovery'
+import { flushFolder, writeFlushed } from '../durableFile'
+import { Session } from '../session'
 import { byRole, networkStatuses, roleOf } from '../../shared/networkRoles'
 import { mergeTrackers, normalizeTrackerUrl } from '../../shared/torrentTrackers'
 import { Limits } from '../network/limits'
@@ -157,6 +166,10 @@ interface RuntimeFields {
   peakReadings: { time: number; bytes: number }[]
   /** Changes asked of a torrent's choice of files, counted: only the latest applies. */
   fileChoices: number
+  /** How long its last routine save took: a slow drive is saved to less often (checkpointDelay). */
+  lastSaveMs?: number
+  /** Paused by a quit, not by the user: saved so the next launch carries it on (resumeAtLaunch). */
+  resumeAtLaunch?: boolean
 }
 
 interface HttpDownloadRuntime extends RuntimeFields, HttpTransferTarget {
@@ -191,6 +204,9 @@ interface PersistedDownloadBase {
   /** Kept apart from requestPayload, sealed (see sealBrowser). */
   browser?: string
   customTrackers?: string[]
+  /** It was running when Mergelane quit, which paused it: it carries on at the next launch
+   * (ADR-0077, plan D6). Unset for one the user paused. */
+  resumeAtLaunch?: boolean
 }
 
 type PersistedState =
@@ -252,9 +268,8 @@ const SET_ASIDE: ReadonlySet<NetworkStatus> = new Set(['off', 'routed', 'standby
 
 /** How often a running download takes stock (see run). */
 const TICK_MS = 500
-// Syncing a growing file can briefly monopolize a slow destination drive. Keep recovery
-// checkpoints independent of UI updates; pause and publication still force an immediate sync.
-const CHECKPOINT_INTERVAL_MS = 15_000
+// A running download's progress is saved every 2 seconds (shared/recovery.ts), less often on a
+// drive that is slow to flush. Pause and publication still save at once.
 
 // The peak is the best speed held this many seconds: longer than a start's burst (an ISP's burst
 // allowance, every connection ramping up at once), which isn't the line's speed.
@@ -464,6 +479,10 @@ export class DownloadManager {
   private networkPreferences: NetworkPreferences = {}
   /** The powerSaveBlocker keeping the computer awake while a download runs (see keepAwake). */
   private awakeBlocker: number | null = null
+  /** This launch's record of whether it quit cleanly (main/session.ts); set once restored. */
+  private session?: Session
+  /** After a crash: what the Downloads screen says about it, until dismissed. */
+  private recovery: RecoveryNote | null = null
   /** How many downloads may run at once; the rest wait, queued (see pump). */
   private downloadsAtOnce = DOWNLOADS_AT_ONCE.default
   /** The Usenet switch, as last saved: while it's off, queued NZBs wait rather than start. */
@@ -985,6 +1004,10 @@ export class DownloadManager {
   }
 
   private async restorePersistedDownloads(): Promise<void> {
+    // Read before anything is restored: whether the last launch quit cleanly decides whether the
+    // downloads it left running start again on their own.
+    this.session = await Session.open().catch(() => undefined)
+    this.session?.startHeartbeat(() => this.runningBytes())
     let entries: string[]
     try {
       entries = await readdir(this.downloadsRoot())
@@ -993,9 +1016,25 @@ export class DownloadManager {
     }
 
     const restored: DownloadRuntime[] = []
+    /** What each one's save said, by download: what tells a crash and what it cost. */
+    const found = new Map<
+      DownloadRuntime,
+      Omit<RestoredDownload, 'savedBytes'> & {
+        wasQueued: boolean
+        pausedByQuit: boolean
+        queuedAt?: number
+      }
+    >()
     await Promise.all(
       entries.map(async (id) => {
-        await rm(`${this.manifestPath(id)}.tmp`, { force: true }).catch(() => {})
+        const temporaryPath = `${this.manifestPath(id)}.tmp`
+        // A save writes and flushes its temporary file whole before renaming it into place. A
+        // power cut can stop it at the rename, which leaves the manifest garbled or missing and
+        // the temporary one complete and newer: then that is the one to read.
+        const temporary: unknown = await readFile(temporaryPath, 'utf-8')
+          .then((text) => JSON.parse(text) as unknown)
+          .catch(() => undefined)
+        await rm(temporaryPath, { force: true }).catch(() => {})
         let persisted: unknown
         try {
           persisted = JSON.parse(await readFile(this.manifestPath(id), 'utf-8'))
@@ -1003,17 +1042,28 @@ export class DownloadManager {
           // No manifest, or a garbled one: nothing can bring it back. Any other read error (a
           // drive not mounted, a permission) may pass, and is left for the next launch.
           if (error instanceof SyntaxError || isNotFound(error)) {
-            await this.discardUnrestorable(id, undefined)
+            if (isCurrentManifest(temporary, id)) persisted = temporary
+            else return this.discardUnrestorable(id, undefined)
+          } else {
+            return
           }
-          return
         }
         // Another version's, which this one doesn't read: rc.1–rc.9 kept parts in a folder of
         // their own (manifest version 2), later ones a different layout. Cleared, not kept forever.
         if (!isCurrentManifest(persisted, id)) return this.discardUnrestorable(id, persisted)
         try {
           const runtime = await this.restoreOne(id, persisted)
-          if (runtime) restored.push(runtime)
-          else await this.discardUnrestorable(id, persisted)
+          if (runtime) {
+            restored.push(runtime)
+            found.set(runtime, {
+              id,
+              wasDownloading: persisted.state.status === 'downloading',
+              wasQueued: persisted.state.status === 'queued',
+              pausedByQuit: persisted.resumeAtLaunch === true,
+              queuedAt: persisted.state.queuedAt,
+              savedAt: persisted.savedAt
+            })
+          } else await this.discardUnrestorable(id, persisted)
         } catch {
           // As above: left for a launch where it can be read.
         }
@@ -1034,6 +1084,40 @@ export class DownloadManager {
         .filter((runtime) => !kept.includes(runtime))
         .map((runtime) => this.removePersistedDownload(runtime, false))
     )
+
+    // The downloads that were running when Mergelane stopped, crashed or quit, and those waiting
+    // their turn, take their turns again from their last save, in their old order (ADR-0077, plan
+    // D6). One the user paused stays paused. Only a crash gets the note.
+    const unfinished = kept.filter((runtime) => runtime.state.status !== 'completed')
+    const note = recoveryNote(
+      this.session?.previous,
+      unfinished.flatMap((runtime) => {
+        const save = found.get(runtime)
+        if (!save) return []
+        const { id, wasDownloading, savedAt } = save
+        return [{ id, wasDownloading, savedAt, savedBytes: runtime.state.bytesDownloaded }]
+      })
+    )
+    this.recovery = note ?? null
+    const waiting = unfinished.filter(
+      (runtime) => found.get(runtime)?.wasQueued && runtime.state.status === 'paused'
+    )
+    const running = unfinished
+      .filter((runtime) => {
+        const save = found.get(runtime)
+        return (save?.wasDownloading || save?.pausedByQuit) && runtime.state.status === 'paused'
+      })
+      .sort((a, b) => a.state.startedAt - b.state.startedAt)
+    // The running ones go first, as they were; the waiting ones keep their places behind them.
+    const first = Math.min(Date.now(), ...waiting.map((r) => found.get(r)?.queuedAt ?? Infinity))
+    running.forEach((runtime, index) => {
+      runtime.state.status = 'queued'
+      runtime.state.queuedAt = first - running.length + index
+    })
+    for (const runtime of waiting) {
+      runtime.state.status = 'queued'
+      runtime.state.queuedAt = found.get(runtime)?.queuedAt ?? runtime.state.startedAt
+    }
 
     await Promise.all(
       kept.map(async (runtime) => {
@@ -1942,6 +2026,9 @@ export class DownloadManager {
     }
     runtime.transfer.reset()
     this.pushUpdate(runtime)
+    // Saved at once, not at the next checkpoint: a crash in the next 2 seconds should still find it
+    // running, and carry it on (ADR-0077), rather than paused by the save before the resume.
+    void this.persistNow(runtime)
 
     this.launch(runtime)
   }
@@ -2338,6 +2425,34 @@ export class DownloadManager {
     return false
   }
 
+  /** After a crash: what the Downloads screen says about it (shared/recovery.ts). Null after a
+   * clean quit, or once dismissed. */
+  async getRecovery(): Promise<RecoveryNote | null> {
+    await this.initialization
+    return this.recovery
+  }
+
+  dismissRecovery(): void {
+    this.recovery = null
+  }
+
+  /** Marks this launch as having quit cleanly. Called only once suspendAll has paused and saved
+   * every download; a quit that never gets here reads as a crash at the next launch. */
+  async endSession(): Promise<void> {
+    await this.session?.end()
+  }
+
+  /** Each downloading download's bytes so far, by id: what the session's heartbeat notes. */
+  private runningBytes(): Record<string, number> {
+    const running: Record<string, number> = {}
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.state.status === 'downloading') {
+        running[runtime.state.id] = runtime.state.bytesDownloaded
+      }
+    }
+    return running
+  }
+
   async suspendAll(): Promise<void> {
     await this.initialization
     this.suspending = true
@@ -2345,9 +2460,11 @@ export class DownloadManager {
     clearTimeout(this.startTimer)
     await Promise.all(
       [...this.runtimes.values()].map(async (runtime) => {
-        if (runtime.state.status === 'downloading')
+        if (runtime.state.status === 'downloading') {
+          // Paused by the quit, not by the user: the next launch carries it on (plan D6).
+          runtime.resumeAtLaunch = true
           await this.pause(runtime.state.id, runtime.state.scheduled === true)
-        else {
+        } else {
           if (runtime.scheduleStopping) await runtime.runPromise
           await this.persistNow(runtime)
         }
@@ -2779,13 +2896,16 @@ export class DownloadManager {
   private schedulePersistence(runtime: DownloadRuntime): void {
     if (this.suspending || runtime.removed || runtime.persistenceTimer || runtime.checkpointQueued)
       return
-    runtime.persistenceTimer = setTimeout(() => {
-      runtime.persistenceTimer = undefined
-      // One running and one waiting at most, however slow the disk: the waiting one takes the
-      // state when its turn comes, so nothing scheduled meanwhile is lost.
-      runtime.checkpointQueued = true
-      void this.persistNow(runtime, false, true)
-    }, CHECKPOINT_INTERVAL_MS)
+    runtime.persistenceTimer = setTimeout(
+      () => {
+        runtime.persistenceTimer = undefined
+        // One running and one waiting at most, however slow the disk: the waiting one takes the
+        // state when its turn comes, so nothing scheduled meanwhile is lost.
+        runtime.checkpointQueued = true
+        void this.persistNow(runtime, false, true)
+      },
+      checkpointDelay(runtime.lastSaveMs ?? 0)
+    )
   }
 
   private persistNow(
@@ -2849,14 +2969,25 @@ export class DownloadManager {
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,
           ...request,
-          customTrackers: runtime.kind === 'torrent' ? runtime.customTrackers : undefined
+          customTrackers: runtime.kind === 'torrent' ? runtime.customTrackers : undefined,
+          ...(runtime.resumeAtLaunch && { resumeAtLaunch: true })
         }
-        if (['downloading', 'paused', 'queued'].includes(runtime.state.status)) {
-          await runtime.file.sync()
-        }
+        const started = Date.now()
         await ensureDirectory(dir)
-        await writeFile(temporaryPath, JSON.stringify(persisted), 'utf-8')
-        await rename(temporaryPath, path)
+        // Data first, then the map, each flushed, so the map never claims bytes a power cut could
+        // take (shared/journal.ts).
+        await saveCheckpoint(
+          {
+            flushData: () => runtime.file.sync(),
+            writeTemporary: (text) => writeFlushed(temporaryPath, text),
+            replace: () => rename(temporaryPath, path),
+            flushFolder: () => flushFolder(dir)
+          },
+          JSON.stringify(persisted),
+          ['downloading', 'paused', 'queued'].includes(runtime.state.status)
+        )
+        runtime.state.savedAt = persisted.savedAt
+        if (routineCheckpoint) runtime.lastSaveMs = Date.now() - started
       })
     runtime.persistenceChain = operation.catch(() => {
       // Routine progress checkpoints are best-effort. Publication intent is required.

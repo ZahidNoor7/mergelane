@@ -105,6 +105,47 @@ test.describe('choosing files @smoke', () => {
     expect(done.pieces.filter((piece) => piece.status === 'skipped').length).toBeGreaterThan(0)
   })
 
+  test('New download lists the files; Videos only, then Download, fetches just the videos', async ({
+    mergelane,
+    dirs
+  }) => {
+    const files = [
+      named(seededBytes(300 * KB + 5, 101), 'one.mkv'),
+      named(seededBytes(200 * KB + 9, 102), 'two.mp4'),
+      named(seededBytes(40 * KB + 1, 103), 'notes.txt')
+    ]
+    const torrent = await swarm.seed(files, { folder: 'Pack', pieceLength: PIECE })
+    const path = await swarm.torrentFileOnDisk(torrent)
+    // Opened from the file manager, as macOS hands a .torrent over.
+    await mergelane.evaluateMain(
+      ({ app }, value) => app.emit('open-file', { preventDefault: () => undefined }, value),
+      path
+    )
+    const page = mergelane.page
+    const list = page.getByRole('group', { name: 'Files' })
+    await expect(list).toBeVisible({ timeout: 15_000 })
+    await expect(list).toContainText('3 of 3 files')
+    await list.getByRole('button', { name: 'Videos only' }).click()
+    await expect(list).toContainText('2 of 3 files')
+    await expect(list.getByRole('checkbox', { name: 'notes.txt' })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
+    // Saved where the test looks, as the folder picker would choose it.
+    await mergelane.evaluateMain(({ dialog }, dest) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dest] })) as never
+    }, dirs.dest)
+    await page
+      .getByText('Save to', { exact: true })
+      .locator('..')
+      .getByRole('button', { name: 'Change' })
+      .click()
+    await mergelane.expectNextDownload(shaOf([files[0], files[1]]))
+    await page.getByRole('button', { name: 'Download', exact: true }).click()
+    const done = await mergelane.waitForTorrentStatus('completed', 30_000)
+    expect(done.skippedBytes).toBeGreaterThan(0)
+  })
+
   test('the choice is kept through a quit, a relaunch and a resume', async ({ mergelane }) => {
     const files = album(1500 * KB, 71)
     let torrent = await swarm.seed(files, {

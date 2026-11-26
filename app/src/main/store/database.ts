@@ -3,8 +3,8 @@ import { chmodSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-// userData/mergelane.db: download history now, daily usage later (docs/plans/2026-11-new-features-plan.md,
-// ADR-0080). Node's built-in SQLite (node:sqlite, "Release candidate" in Node 24), one connection,
+// userData/mergelane.db: download history and daily usage (docs/plans/2026-11-new-features-plan.md,
+// ADR-0080, ADR-0082). Node's built-in SQLite (node:sqlite, "Release candidate" in Node 24), one connection,
 // in the main process only. SQLite's own docs (sqlite.org) for the settings below:
 // - journal_mode=WAL is "persistent" and "uses many fewer fsync() operations"; it "does not work over
 //   a network filesystem", and userData is always local.
@@ -41,7 +41,26 @@ const MIGRATIONS: readonly string[] = [
   `ALTER TABLE downloads ADD COLUMN sha256 TEXT;
    ALTER TABLE downloads ADD COLUMN info_hash TEXT;
    CREATE INDEX downloads_sha ON downloads(sha256);
-   CREATE INDEX downloads_hash ON downloads(info_hash);`
+   CREATE INDEX downloads_hash ON downloads(info_hash);`,
+  // 3: daily usage for Reports (ADR-0082): each network's bytes a day, the network's name and kind
+  // kept as it may be gone later; each day's time with traffic, time saved by merging and fastest
+  // merged speed; and each finished download's own active time and time saved.
+  `CREATE TABLE usage_days (
+     day TEXT NOT NULL,
+     network_id TEXT NOT NULL,
+     network_name TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     bytes INTEGER NOT NULL DEFAULT 0,
+     PRIMARY KEY (day, network_id)
+   );
+   CREATE TABLE usage_saved (
+     day TEXT PRIMARY KEY,
+     busy_ms INTEGER NOT NULL DEFAULT 0,
+     saved_ms INTEGER NOT NULL DEFAULT 0,
+     peak_bytes_per_sec INTEGER NOT NULL DEFAULT 0
+   );
+   ALTER TABLE downloads ADD COLUMN active_ms INTEGER;
+   ALTER TABLE downloads ADD COLUMN saved_ms INTEGER;`
 ]
 
 export const SCHEMA_VERSION = MIGRATIONS.length

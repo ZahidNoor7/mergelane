@@ -38,6 +38,15 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 2: daily usage recording (2026-11-26, branch `usage-recording`, on `duplicates`)
+
+- **Done (ADR-0082, plan feature 8's recording):** each day's bytes per network from what downloads receive
+  (`Limits.take`), the seconds with traffic, time saved by merging (the minute rule, D11) and the fastest merged speed,
+  in `mergelane.db` schema 3, written once a minute and at quit; each finished download's own active time and time
+  saved; `usage:report` for Reports to read.
+- Tests: new `usage.test.ts` (19 tests); `usage.spec.ts` (3 tests, passed 5 times over with two networks).
+- **Phase 2 is complete** with this PR (#115, #116 and this one). Next: Phase 3, handover and the Reports screen.
+
 ### New features, Phase 2: duplicate detection (2026-11-26, branch `duplicates`, on `history-store`)
 
 - **Done (ADR-0081, plan feature 4):** New download warns about the same link (finished or still downloading), the

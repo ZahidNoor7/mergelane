@@ -15,6 +15,7 @@ export const IpcChannels = {
   listHistory: 'history:list',
   historyEntries: 'history:entries',
   findDuplicate: 'history:find-duplicate',
+  usageReport: 'usage:report',
   historyLink: 'history:link',
   revealHistoryEntry: 'history:reveal',
   forgetHistory: 'history:forget',

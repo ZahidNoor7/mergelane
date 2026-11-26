@@ -62,6 +62,9 @@ export class Limits {
   private usage = freshUsage(Date.now())
   private saveTimer: NodeJS.Timeout | null = null
   readonly loaded: Promise<void>
+  /** Told of every byte a download receives, for the daily usage Reports reads (ADR-0082). Not
+   * uploads (countUpload) or speed tests (countUsage). */
+  onReceived: ((networkId: string, bytes: number, at: number) => void) | null = null
 
   /** `onLimitReached` is told when a network uses up its data for its selected period. */
   constructor(private readonly onLimitReached: () => void) {
@@ -123,6 +126,7 @@ export class Limits {
   take(networkId: string, bytes: number): number {
     const now = Date.now()
     this.count(networkId, bytes, now)
+    this.onReceived?.(networkId, bytes, now)
     return Math.max(
       this.total?.take(bytes, now) ?? 0,
       this.perNetwork.get(networkId)?.take(bytes, now) ?? 0

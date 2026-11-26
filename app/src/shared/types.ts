@@ -1,4 +1,5 @@
 import type { LinkEvent } from '../../../shared/daemon-api'
+import type { AfterQueue } from './queueEnd'
 import type { BrowserContact, BrowserId, ExtensionKind } from './browsers'
 import type { CaptureRules } from './captureRules'
 import type { MenuBarSpeedText } from './menuBarPanel'
@@ -703,6 +704,10 @@ export interface AppSettings {
   /** Only ever saved as false: a download the browser hands over again, whose link had stopped
    * working, carries on from its fresh link unless turned off (ADR-0078). */
   catchFreshLinks?: boolean
+  /** Only ever saved as false: the computer is kept awake while something downloads (ADR-0079). */
+  keepAwake?: boolean
+  /** Settings › General › When the queue finishes; missing is Do nothing (ADR-0079). */
+  afterQueue?: Exclude<AfterQueue, 'nothing'>
   /** Only ever saved as false: Mergelane checks for updates once a day unless turned off. */
   updateAutoCheck?: boolean
   /** Only ever saved as 'beta': Stable is the default. */
@@ -781,6 +786,8 @@ export interface InitialState {
   notifyWhenDone: boolean
   offerCopiedLinks: boolean
   catchFreshLinks: boolean
+  keepAwake: boolean
+  afterQueue: AfterQueue
   captureRules: CaptureRules
   routing: DownloadRouting
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */

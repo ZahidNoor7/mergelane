@@ -162,7 +162,11 @@ export const COVERED = [
   // Expired-link recovery (feature 6): the rules, the fresh-link panel and its note.
   'src/shared/linkExpiry.ts',
   'src/renderer/src/components/inspector/FreshLink.tsx',
-  'src/renderer/src/utils/format.ts'
+  'src/renderer/src/utils/format.ts',
+  // Sleep and the end of the queue (feature 7): the rules, the commands, the notice and the rows.
+  'src/shared/queueEnd.ts',
+  'src/shared/powerCommand.ts',
+  'src/renderer/src/components/QueueEnd.tsx'
 ]
 
 export default defineConfig({

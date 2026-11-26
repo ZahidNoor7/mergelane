@@ -16,6 +16,9 @@ All notable changes to Mergelane are recorded here. The format follows
   stops at once where it got to and asks for a fresh link. Paste one in its details, or click the download again in
   your browser, and it carries on from where it stopped, once Mergelane has checked it is the same file. A link to
   another file is refused. "Pick up fresh links from the browser" in Settings › Downloads turns the browser part off.
+- **When the queue finishes, your Mac can sleep or shut down.** Choose it in Settings › General › "When the queue
+  finishes". A 60-second countdown comes first, which you can cancel, and apps with unsaved work can still stop a
+  shutdown. Keeping the Mac awake while downloading is now a setting there too (on by default).
 
 ## [0.7.0] - 2026-11-24
 

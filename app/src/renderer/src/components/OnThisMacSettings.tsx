@@ -3,6 +3,7 @@ import type { LoginItemState } from '@shared/types'
 import { useEffect, useId, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { onWindows, words } from '../platformWords'
+import { AwakeSettings } from './QueueEnd'
 import { SettingRow, SettingsGroup } from './settingsParts'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
@@ -158,6 +159,7 @@ export function OnThisMacSettings(): React.JSX.Element {
       >
         <Switch id={notifyId} checked={notifyWhenDone} onCheckedChange={setNotifyWhenDone} />
       </SettingRow>
+      <AwakeSettings />
     </SettingsGroup>
   )
 }

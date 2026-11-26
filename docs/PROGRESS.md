@@ -38,6 +38,16 @@ Last updated: 2026-11-11
   - System merge UI e2e: 3 tests;
   - full smoke suite: 171 passed.
 
+### New features, Phase 1: sleep and the end of the queue (2026-11-26, branch `sleep-queue-end`, on `expired-links`)
+
+- **Done (ADR-0079):** "Keep the Mac awake while downloading" and "When the queue finishes" (Do nothing, Sleep, Shut
+  down) in Settings › General; a 60-second countdown after the last download ends by itself, with the notice and a
+  notification; macOS `pmset sleepnow` and the kAEShutDown Apple event, Windows SetSuspendState and `shutdown /s /t 0`.
+- Tests: 731 unit tests pass (new `queueEnd`, `powerCommand`, `QueueEnd` tests); `queueEnd.spec.ts` (5 tests).
+- **For the owner:** check sleep and shut down once on a built app, on the Mac (macOS may ask to let Mergelane
+  control loginwindow) and on Windows, with an unsaved document open for the shutdown.
+- Next in Phase 1: the rest of torrent file choice.
+
 ### New features, Phase 1: expired-link recovery (2026-11-26, branch `expired-links`, on `crash-safe-resume`)
 
 - **Done (ADR-0078):** a link refused (401/403/410) in a row stops the download at once at its progress (2 refusals for

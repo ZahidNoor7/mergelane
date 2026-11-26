@@ -3,6 +3,7 @@ import { CopiedLinkOffer } from './components/CopiedLinkOffer'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
+import { QueueDoneNotice } from './components/QueueEnd'
 import { CompactBar, Sidebar, SIDEBAR_FROM, WinTitleBar } from './components/WindowChrome'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
@@ -79,7 +80,10 @@ function App(): React.JSX.Element {
       <DownloadActionsProvider>
         <div
           ref={windowRef}
-          className={cn('ml-window flex h-full bg-window text-foreground', win && 'flex-col')}
+          className={cn(
+            'ml-window relative flex h-full bg-window text-foreground',
+            win && 'flex-col'
+          )}
         >
           {win ? (
             <>
@@ -97,6 +101,7 @@ function App(): React.JSX.Element {
           )}
           <NewDownloadDialog />
           <NetworkBindingDialog />
+          <QueueDoneNotice />
         </div>
       </DownloadActionsProvider>
     </TooltipProvider>

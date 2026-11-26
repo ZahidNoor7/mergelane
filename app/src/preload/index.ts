@@ -57,6 +57,7 @@ const mergelaneApi = {
   listHistory: () => invoke('listHistory'),
   historyEntries: () => invoke('historyEntries'),
   findDuplicate: (query: DuplicateQuery) => invoke('findDuplicate', query),
+  usageReport: (from: string) => invoke('usageReport', from),
   historyLink: (id: string) => invoke('historyLink', id),
   revealHistoryEntry: (id: string) => invoke('revealHistoryEntry', id),
   forgetHistory: () => invoke('forgetHistory'),

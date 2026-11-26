@@ -13,6 +13,10 @@ All notable changes to Mergelane are recorded here. The format follows
   stays on this Mac; Settings › Downloads says how long it's kept (forever, a year or 30 days) and can clear it. Signed
   links are kept sealed in your keychain.
 
+- **A daily record of what each network downloaded, for the reports coming next.** Mergelane now notes, each day,
+  how much each network brought in for your downloads and how much time merging saved. It stays on this Mac, in the
+  same file as your download history. Nothing shows it yet.
+
 - **A warning before you download something you already have.** New download says when a link is one you've
   downloaded before, or are downloading now, and offers Show in Finder or Show in list; the button then reads Download
   again. It also spots the same file offered by another site, when that site publishes the file's SHA-256, and the

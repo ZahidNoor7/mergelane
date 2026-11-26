@@ -75,6 +75,7 @@ import {
   removeFromHistory
 } from '../store/historyStore'
 import { closeDatabase } from '../store/database'
+import { UsageRecorder } from '../store/usageStore'
 import { hashFile } from './fileHash'
 import type { DuplicateCandidate } from '../../shared/duplicates'
 import { hostOf, isHistoryKeep, plainLink, type HistoryKeep } from '../../shared/history'
@@ -526,11 +527,14 @@ export class DownloadManager {
   private routing: DownloadRouting = DEFAULT_ROUTING
   /** Speed and data limits, for every download together. */
   readonly limits = new Limits(() => this.limitsChanged())
+  /** Each day's bytes per network and time saved by merging, for Reports (ADR-0082). */
+  readonly usage = new UsageRecorder((id) => this.networks.find(id))
 
   constructor(
     private getWindow: () => BrowserWindow | null,
     private networks: NetworkMonitor
   ) {
+    this.limits.onReceived = (networkId, bytes, at) => this.usage.received(networkId, bytes, at)
     this.initialization = Promise.all([
       this.restorePersistedDownloads(),
       this.limits.loaded,
@@ -2197,6 +2201,7 @@ export class DownloadManager {
    * that lost an address also drops its sockets, which may be bound to it. Chrome does the same
    * when its IP address changes (ERR_NETWORK_CHANGED). */
   networksChanged(): void {
+    this.usage.networksChanged(this.networks.current ?? [])
     const changed = new Set<string>()
     const moved = new Set<string>()
     const seen = new Map<string, string[]>()
@@ -2564,6 +2569,7 @@ export class DownloadManager {
   async endSession(): Promise<void> {
     await this.session?.end()
     clearInterval(this.pruneTimer)
+    this.usage.stop()
     closeDatabase()
   }
 

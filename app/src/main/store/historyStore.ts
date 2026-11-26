@@ -10,6 +10,7 @@ import {
   type HistoryKeep
 } from '../../shared/history'
 import type { DuplicateCandidate } from '../../shared/duplicates'
+import { activeTime, savedByMerging } from '../../shared/usage'
 import type { DownloadState, FinishedDownload } from '../../shared/types'
 import { readJson } from '../jsonFile'
 import { sealText, unsealText } from '../secrets'
@@ -136,15 +137,23 @@ async function writeFinished(entry: FinishedDownload): Promise<void> {
   void omitted
   const fields = await linkFields(entry.id, entry.url)
   const finished = JSON.stringify({ ...kept, url: fields.link })
+  const completedAt = entry.completedAt ?? Date.now()
+  // Its own time saved by merging, against the network that carried the most of it (ADR-0082).
+  const active = activeTime({ ...entry, completedAt })
+  const saved = savedByMerging(
+    active,
+    (entry.networks ?? []).map((network) => network.bytesDownloaded)
+  )
   database()
     .prepare(
       `INSERT INTO downloads (id, kind, name, link, link_sealed, link_full, host, size, started_at,
-         completed_at, ended, in_list, path, finished)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', 1, ?, ?)
+         completed_at, ended, in_list, path, finished, active_ms, saved_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', 1, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, name = excluded.name,
          link = excluded.link, link_sealed = excluded.link_sealed, link_full = excluded.link_full,
          host = excluded.host, size = excluded.size, completed_at = excluded.completed_at,
-         ended = 'completed', in_list = 1, path = excluded.path, finished = excluded.finished`
+         ended = 'completed', in_list = 1, path = excluded.path, finished = excluded.finished,
+         active_ms = excluded.active_ms, saved_ms = excluded.saved_ms`
     )
     .run(
       entry.id,
@@ -156,9 +165,11 @@ async function writeFinished(entry: FinishedDownload): Promise<void> {
       fields.host,
       entry.totalBytes,
       entry.startedAt,
-      entry.completedAt ?? Date.now(),
+      completedAt,
       entry.destinationPath,
-      finished
+      finished,
+      active,
+      saved
     )
   // Past the list's limit, the oldest leave the list (not History).
   database()

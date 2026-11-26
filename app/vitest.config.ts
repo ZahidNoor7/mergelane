@@ -178,7 +178,9 @@ export const COVERED = [
   'src/shared/digests.ts',
   'src/shared/duplicates.ts',
   'src/renderer/src/components/DuplicateNotice.tsx',
-  'src/renderer/src/hooks/useDuplicate.ts'
+  'src/renderer/src/hooks/useDuplicate.ts',
+  // Daily usage (ADR-0082): bytes per day and network, and the time merging saved.
+  'src/shared/usage.ts'
 ]
 
 export default defineConfig({

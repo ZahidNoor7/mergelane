@@ -2792,3 +2792,53 @@ D8 (the same torrent by its info hash) and D9 (name and size alone never warn).
   file from another site by `Repr-Digest`, and by a `.sha256` file, and not by one naming another file; the same name
   and size with nothing published is no duplicate; Off says nothing and Same link ignores another site's copy; the same
   torrent by its info hash.
+
+## ADR-0082: Daily usage is recorded now, for Reports later: bytes per network a day, and the time merging saved
+
+**Status:** Owner, 2026-11-26: approved Phase 2 of `docs/plans/2026-11-new-features-plan.md` and its recommendations,
+D11 (a day's time saved worked out minute by minute) and D12 ("Clear history" leaves reports alone).
+
+### Context
+
+- Reports (the plan's feature 8, Phase 3) show each network's share of what was downloaded each day, and the time
+  merging saved. They need weeks of real data on the day they ship, so the recording starts in Phase 2, with no screen
+  yet.
+- Every byte a download receives already goes through `network/limits.ts` (`take`), which counts it against the
+  network's data limit. Uploads (`countUpload`) and speed tests (`countUsage`) go through other calls.
+
+### Decision
+
+- **What is counted:** only what downloads receive, handed on by `Limits.take` (`onReceived`), so "Downloaded" means
+  what it says. Not uploads to torrent peers, not speed tests.
+- **Where:** `mergelane.db`, schema 3.
+  - `usage_days`: one row per local day and network, with its bytes and its name and kind. The name and kind are kept
+    because the network may be gone later; a renamed network keeps its id and takes the new name.
+  - `usage_saved`: one row a day, with the seconds that had traffic, the time merging saved, and the fastest merged
+    speed held for 5 seconds (the same as the Dashboard's "fastest today").
+- **When:** counted in memory (`shared/usage.ts` `UsageTally`, pure), written once a minute and at quit, in one
+  transaction (`main/store/usageStore.ts`). A crash loses at most a minute's count. A write that fails keeps its counts
+  for the next.
+- **Time saved**, "against your fastest single network": `time × (total ÷ busiest network's bytes − 1)`, zero when one
+  network carried everything.
+  - A finished download's own figure uses its active time, start to finish with pauses left out, and goes in
+    `downloads.active_ms` and `downloads.saved_ms`.
+  - A day's figure is worked out minute by minute over every download together, with the seconds that had traffic as
+    the time (D11). Adding up each download's own figure would count a minute once for each download running in it;
+    a minute's figure can never be more than the minute.
+- **Days** are local dates as counted. UTC offsets are whole minutes, so a minute never spans two days. When the clock
+  goes back, the minute being counted is closed and a new one started.
+- **Read:** `usage:report` gives every day from a date: what is written, plus what is counted but not yet written.
+  Reports will read it; nothing in the app shows it yet.
+- **Kept:** every row; one row per network per day is tiny. Clear history does not clear it (D12).
+
+### Verification
+
+- Unit: `usage.test.ts` (99% of `shared/usage.ts`): the formula, active time, local midnight, the minute rule with
+  overlapping downloads, the clock going back, the day's fastest, pending counts, putting back failed counts, and
+  merging with what was written.
+- e2e (`usage.spec.ts`), run 5 times over with two networks:
+  - a download over two networks is counted for today on each, with time saved, and written at quit, its own time
+    saved included;
+  - a later launch adds to the same day;
+  - Clear history leaves usage alone;
+  - a report from tomorrow is empty.

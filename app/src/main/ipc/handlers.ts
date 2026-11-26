@@ -173,7 +173,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     sendEverywhere(IpcChannels.networksChanged, list)
   })
   const manager = new DownloadManager(getWindow, networks)
-  setInterval(() => activity.sample(manager.totalSpeed()), 1000).unref()
+  setInterval(() => {
+    const speed = manager.totalSpeed()
+    activity.sample(speed)
+    manager.usage.sample(speed)
+  }, 1000).unref()
   registerDiagnostics({
     downloads: () => manager.listDownloads(),
     activity: () => activity.snapshot()
@@ -364,6 +368,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('listDownloads', async () => manager.listDownloads())
 
   handle('listHistory', async () => listHistory())
+  // Daily usage for Reports (ADR-0082): every day from `from`, as written and as counted since.
+  handle('usageReport', async (_event, from) => manager.usage.report(from))
   // Before a download starts (ADR-0081): one already had, by its link, or the same file elsewhere.
   handle('findDuplicate', async (_event, query) => {
     const settings = await loadSettings()
